@@ -1,0 +1,7 @@
+[package]
+name = "holo-cli"
+version = "0.1.0"
+authors = ["Michael Dougherty <michael.dougherty@holo.host>"]
+
+[dependencies]
+structopt = "0.2"
