@@ -7,6 +7,8 @@ authors = ["Michael Dougherty <michael.dougherty@holo.host>"]
 default-run = "holo-container"
 
 [dependencies]
+dirs = "1.0.4"
+
 holochain_agent = { git = "https://github.com/holochain/holochain-rust", branch = "develop" }
 holochain_cas_implementations = { git = "https://github.com/holochain/holochain-rust", branch = "develop" }
 holochain_core = { git = "https://github.com/holochain/holochain-rust", branch = "develop" }
