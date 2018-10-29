@@ -87,6 +87,7 @@ fn get_context(agent: Agent) -> HcResult<Context> {
     )
 }
 
+/// TODO: add entry to hosting app
 fn install_dna(dna_str: &str) -> Result<Dna, serde_json::Error> {
     let dna = Dna::from_json_str(dna_str)?;
     Ok(dna)
@@ -111,26 +112,27 @@ fn data_dir() -> io::Result<PathBuf> {
     Ok(dir)
 }
 
-
 fn main () -> io::Result<()> {
-    let host = Agent::from("hoster".to_string());
-    let context = get_context(host).unwrap();
-
-    let agents = ["agent1"].iter().map(|a| Agent::from(a.to_string()));
+    let host_agent = Agent::from("hoster".to_string());
 
     let dna = install_dna(
         include_str!("../sample/app1.dna.json")
     ).unwrap();
+    let dna_hash = dna.to_entry().address().to_string();
 
-    let holochains: HcDex = agents.map(|agent| {
-        let dna_hash = dna.to_entry().address().to_string();
+    let agents = ["agent1"].iter().map(|a| Agent::from(a.to_string()));
+    let mut holochains: HcDex = agents.map(|agent| {
         let agent_hash = agent.to_string();
         let context = get_context(agent).unwrap();
         let hc = create_holochain(&dna, context).unwrap();
-        ((agent_hash, dna_hash), RefCell::new(hc))
+        ((agent_hash, dna_hash.clone()), RefCell::new(hc))
     }).collect();
 
-    let server = ws_server::start_ws_server("3000", &holochains);
+    let host_context = get_context(host_agent.clone()).unwrap();
+    let host_hc = create_holochain(&dna, host_context).unwrap();
+    holochains.insert((host_agent.to_string(), dna_hash), RefCell::new(host_hc));
+
+    ws_server::start_ws_server("3000", &holochains).unwrap();
     Ok(())
 
 }
