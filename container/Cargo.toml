@@ -8,6 +8,11 @@ default-run = "holo-container"
 
 [dependencies]
 dirs = "1.0.4"
+jsonrpc-ws-server = { git = "https://github.com/paritytech/jsonrpc" }
+serde = "1.0"
+serde_derive = "1.0"
+serde_json = "1.0"
+ws = "0.7.9"
 
 holochain_agent = { git = "https://github.com/holochain/holochain-rust", branch = "develop" }
 holochain_cas_implementations = { git = "https://github.com/holochain/holochain-rust", branch = "develop" }
@@ -15,3 +20,4 @@ holochain_core = { git = "https://github.com/holochain/holochain-rust", branch =
 holochain_core_api = { git = "https://github.com/holochain/holochain-rust", branch = "develop" }
 holochain_core_types = { git = "https://github.com/holochain/holochain-rust", branch = "develop" }
 holochain_dna = { git = "https://github.com/holochain/holochain-rust", branch = "develop" }
+# holochain_zome = { git = "https://github.com/holochain/holochain-rust", branch = "develop" }
