@@ -16,6 +16,7 @@ extern crate ws;
 mod ws_server;
 
 use std::{
+    cell::RefCell,
     collections::HashMap,
     fs,
     io,
@@ -86,12 +87,9 @@ fn get_context(agent: Agent) -> HcResult<Context> {
     )
 }
 
-fn install_dna(dna_str: &str, context: Context) -> HolochainResult<(Dna, Holochain)> {
-    let dna = Dna::from_json_str(include_str!("../sample/app1.dna.json"))
-        .map_err(|err| HolochainError::ErrorGeneric(err.to_string()))
-        .map_err(HolochainInstanceError::from)?;
-    let hc = create_holochain(&dna, context)?.into();
-    Ok((dna, hc))
+fn install_dna(dna_str: &str) -> Result<Dna, serde_json::Error> {
+    let dna = Dna::from_json_str(dna_str)?;
+    Ok(dna)
 }
 
 fn create_holochain(dna: &Dna, context: Context) -> HolochainResult<Holochain> {
@@ -118,11 +116,10 @@ fn main () -> io::Result<()> {
     let host = Agent::from("hoster".to_string());
     let context = get_context(host).unwrap();
 
-    let agents = ["agent1", "agent2", "agent3"].iter().map(|a| Agent::from(a.to_string()));
+    let agents = ["agent1"].iter().map(|a| Agent::from(a.to_string()));
 
-    let (dna, hc) = install_dna(
-        include_str!("../sample/app1.dna.json"),
-        context
+    let dna = install_dna(
+        include_str!("../sample/app1.dna.json")
     ).unwrap();
 
     let holochains: HcDex = agents.map(|agent| {
@@ -130,10 +127,10 @@ fn main () -> io::Result<()> {
         let agent_hash = agent.to_string();
         let context = get_context(agent).unwrap();
         let hc = create_holochain(&dna, context).unwrap();
-        ((agent_hash, dna_hash), hc)
+        ((agent_hash, dna_hash), RefCell::new(hc))
     }).collect();
 
-    let server = ws_server::start_ws_server("3000", holochains);
+    let server = ws_server::start_ws_server("3000", &holochains);
     Ok(())
 
 }
