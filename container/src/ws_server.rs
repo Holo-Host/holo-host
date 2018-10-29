@@ -2,28 +2,24 @@ use std::collections::HashMap;
 use std::slice::IterMut;
 // use std::sync::mpsc::{channel, Sender, Receiver};
 
-use jsonrpc_ws_server::{
-    Error as WsError,
+use serde_json::{self, Value};
+use ws::{
+    self,
     Result as WsResult,
-    Server,
-    ServerBuilder,
-    jsonrpc_core::{
-        MetaIoHandler,
-        Error,
-        ErrorCode,
-        types::{
-            Params,
-        }
-    }
+    Message,
 };
-use serde_json::Value;
 
 use holochain_core::{
     context::Context,
     logger::SimpleLogger,
     persister::SimplePersister,
 };
-use holochain_core_api::Holochain;
+use holochain_core_api::{
+    Holochain,
+};
+use holochain_core_types::{
+    error::HolochainError,
+};
 use holochain_dna::{
     zome::capabilities::Membrane,
     Dna,
@@ -31,103 +27,58 @@ use holochain_dna::{
 
 type RpcSegments = (String, String, String, String);
 
-pub fn rpc_tuples(dna: Dna) -> Vec<RpcSegments> {
-    let mut tuples = Vec::new();
-    for (zome_name, zome) in dna.zomes {
-        for (cap_name, cap) in zome.capabilities {
-            match cap.cap_type.membrane {
-                Membrane::Public | Membrane::Agent => {
-                    for func in cap.functions {
-                        tuples.push(
-                            (dna.name, zome_name, cap_name, func.name)
-                        );
-                    }
-                },
-                _ => ()
-            }
-        }
-    }
-    tuples
+#[derive(Serialize, Deserialize)]
+struct JsonRpc {
+    version: String,
+    method: String,
+    params: Value,
+    id: String,
 }
 
-pub fn start_ws_server<S: Iterator<Item=Dna>>(
+fn parse_jsonrpc(s: &str) -> Result<JsonRpc, String> {
+    let msg: JsonRpc = serde_json::from_str(s).map_err(|e| e.to_string())?;
+    if msg.version != "2.0" {
+        Err("JSONRPC version must be 2.0".to_string())
+    } else {
+        Ok(msg)
+    }
+}
+
+fn invoke_call(holochains: &mut HcDex, rpc_method: &str, params: Value) -> Result<Value, HolochainError> {
+    let matches: Vec<&str> = rpc_method.split('/').collect();
+    let result = if let [agent, dna, zome, cap, func] = matches.as_slice() {
+        let mut hc = holochains.get_mut(&(agent.to_string(), dna.to_string())).expect("No instance for agent/dna pair");
+        hc.call(zome, cap, func, &params.to_string()).map(Value::from).map_err(|e| e.to_string())
+    } else {
+        Err("bad rpc method".to_string())
+    };
+    result.map_err(HolochainError::ErrorGeneric)
+}
+
+pub type HcDex = HashMap<(String, String), Holochain>;
+
+struct RpcHandler();
+
+pub fn start_ws_server(
     port: &str,
-    holochains: Vec<(Holochain, Dna)>,
-) -> WsResult<Server> {
-    let xyzzy = holochains.iter_mut().map(|(hc, dna)| {
-        let segments = rpc_tuples(dna.clone());
-        (segments, hc)
-    });
-    let middleware = MyMiddleware::new(xyzzy.collect());
-    let mut io = MetaIoHandler::with_middleware(middleware);
-    
-    let socket_addr = format!("0.0.0.0:{}", port);
-    ServerBuilder::new(io).start(&socket_addr.as_str().parse().unwrap())
+    holochains: HcDex,
+) -> WsResult<()> {
+    ws::listen(format!("localhost:{}", port), |out| {
+        move |msg| {
+            match msg {
+                Message::Text(s) => {
+                    let rpc: JsonRpc = parse_jsonrpc(s.as_str()).unwrap();
+                    let response = invoke_call(&mut holochains, rpc.method.as_str(), rpc.params).unwrap();
+                    out.send(Message::Text(response.to_string()))
+                },
+                Message::Binary(b) => Ok(())
+            }
+        }
+    })
 }
 
 fn rpc_method_name(dna_name:&String, zome_name:&String, cap_name:&String, func_name:&String) -> String {
     format!("{}/{}/{}/{}", dna_name, zome_name, cap_name, func_name)
-}
-
-
-
-use std::time::Instant;
-use std::sync::atomic::{self, AtomicUsize};
-
-use jsonrpc_ws_server::{
-    jsonrpc_core::{Metadata, Middleware, FutureResponse, Request, Response},
-    jsonrpc_core::futures::Future,
-    jsonrpc_core::futures::future::Either,
-};
-
-
-type HcArgs = (Dna, Context);
-
-// https://gist.github.com/aisamanra/da7cdde67fc3dfee00d3
-type Callback<'a> = Box<(FnMut(&'a Params) -> WsResult<Value>) + 'static>;
-
-#[derive(Clone)]
-struct Meta(usize);
-impl Metadata for Meta {}
-
-#[derive(Default)]
-struct MyMiddleware<'a> {
-    number: AtomicUsize,
-    holochains: HashMap<String, (RpcSegments, &'a mut Holochain)>
-}
-
-impl<'a> MyMiddleware<'a> {
-    pub fn new<I>(hcs: Vec<(Vec<RpcSegments>, &'a mut Holochain)>) -> Self 
-        
-    {
-        let mut inst = Self::default();
-        inst.holochains = hcs.iter_mut().map(|&mut pair| {
-            let (segments, _) = pair;
-            let (d, z, c, f) = segments;
-            let name = rpc_method_name(&d, &z, &c, &f);
-            (name, pair)
-        }).collect();
-        inst
-    }
-}
-
-// https://github.com/paritytech/jsonrpc/blob/master/core/examples/middlewares.rs
-impl Middleware<Meta> for MyMiddleware<'static> {
-	type Future = FutureResponse;
-
-	fn on_request<F, X>(&self, request: Request, meta: Meta, next: F) -> Either<Self::Future, X> where
-		F: FnOnce(Request, Meta) -> X + Send,
-		X: Future<Item=Option<Response>, Error=()> + Send + 'static,
-	{
-		let start = Instant::now();
-		let request_number = self.number.fetch_add(1, atomic::Ordering::SeqCst);
-		println!("Processing request {}: {:?}", request_number, request);
-
-		Either::A(Box::new(next(request, meta).map(move |res| {
-			println!("Processing took: {:?}", start.elapsed());
-			res
-		})))
-	}
 }
 
 

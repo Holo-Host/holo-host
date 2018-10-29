@@ -7,11 +7,16 @@ extern crate holochain_dna;
 
 extern crate dirs;
 extern crate jsonrpc_ws_server;
+#[macro_use]
+extern crate serde_derive;
+#[macro_use]
 extern crate serde_json;
+extern crate ws;
 
-mod ws;
+mod ws_server;
 
 use std::{
+    collections::HashMap,
     fs,
     io,
     path::PathBuf,
@@ -46,11 +51,19 @@ use holochain_core_api::{
         HolochainInstanceError,
     }
 };
-use holochain_core_types::error::{
-    HolochainError,
-    HcResult,
+use holochain_core_types::{
+    cas::content::AddressableContent,
+    entry::ToEntry,
+    error::{
+        HolochainError,
+        HcResult,
+    }
 };
 use holochain_dna::Dna;
+
+use ws_server::{
+    HcDex
+};
 
 const DATA_DIR: &str = ".holo-host";
 
@@ -77,11 +90,11 @@ fn install_dna(dna_str: &str, context: Context) -> HolochainResult<(Dna, Holocha
     let dna = Dna::from_json_str(include_str!("../sample/app1.dna.json"))
         .map_err(|err| HolochainError::ErrorGeneric(err.to_string()))
         .map_err(HolochainInstanceError::from)?;
-    let hc = create_holochain(dna, context)?.into();
+    let hc = create_holochain(&dna, context)?.into();
     Ok((dna, hc))
 }
 
-fn create_holochain(dna: Dna, context: Context) -> HolochainResult<Holochain> {
+fn create_holochain(dna: &Dna, context: Context) -> HolochainResult<Holochain> {
     Holochain::new(dna.clone(), Arc::new(context))
 }
 
@@ -106,21 +119,21 @@ fn main () -> io::Result<()> {
     let context = get_context(host).unwrap();
 
     let agents = ["agent1", "agent2", "agent3"].iter().map(|a| Agent::from(a.to_string()));
-    
+
     let (dna, hc) = install_dna(
         include_str!("../sample/app1.dna.json"),
         context
     ).unwrap();
 
-    let holochains: Vec<(Holochain, Dna)> = agents.map(|agent| {
+    let holochains: HcDex = agents.map(|agent| {
+        let dna_hash = dna.to_entry().address().to_string();
+        let agent_hash = agent.to_string();
         let context = get_context(agent).unwrap();
-        let hc = create_holochain(dna, context).unwrap();
-        (hc, dna)
+        let hc = create_holochain(&dna, context).unwrap();
+        ((agent_hash, dna_hash), hc)
     }).collect();
 
-    let ws_server = ws::start_ws_server("3000", holochains, vec![dna].into_iter())
-        .expect("WebSocket server could not start");
-    ws_server.wait().unwrap();
+    let server = ws_server::start_ws_server("3000", holochains);
     Ok(())
 
 }
