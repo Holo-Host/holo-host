@@ -63,7 +63,7 @@ use holochain_core_types::{
 use holochain_dna::Dna;
 
 use ws_server::{
-    HcDex
+    HolochainMap
 };
 
 const DATA_DIR: &str = ".holo-host";
@@ -121,7 +121,7 @@ fn main () -> io::Result<()> {
     let dna_hash = dna.to_entry().address().to_string();
 
     let agents = ["agent1"].iter().map(|a| Agent::from(a.to_string()));
-    let mut holochains: HcDex = agents.map(|agent| {
+    let mut holochain_map: HolochainMap = agents.map(|agent| {
         let agent_hash = agent.to_string();
         let context = get_context(agent).unwrap();
         let hc = create_holochain(&dna, context).unwrap();
@@ -130,9 +130,9 @@ fn main () -> io::Result<()> {
 
     let host_context = get_context(host_agent.clone()).unwrap();
     let host_hc = create_holochain(&dna, host_context).unwrap();
-    holochains.insert((host_agent.to_string(), dna_hash), RefCell::new(host_hc));
+    holochain_map.insert((host_agent.to_string(), dna_hash), RefCell::new(host_hc));
 
-    ws_server::start_ws_server("3000", &holochains).unwrap();
+    ws_server::start_ws_server("3000", &holochain_map).unwrap();
     Ok(())
 
 }

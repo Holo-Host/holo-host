@@ -45,10 +45,11 @@ fn parse_jsonrpc(s: &str) -> Result<JsonRpc, String> {
     }
 }
 
-fn invoke_call(holochains: &HcDex, rpc_method: &str, params: Value) -> Result<Value, HolochainError> {
+fn invoke_call(holochain_map: &HolochainMap, rpc_method: &str, params: Value) -> Result<Value, HolochainError> {
     let matches: Vec<&str> = rpc_method.split('/').collect();
     let result = if let [agent, dna, zome, cap, func] = matches.as_slice() {
-        let hc_cell = holochains.get(&(agent.to_string(), dna.to_string())).expect("No instance for agent/dna pair");
+        let key = (agent.to_string(), dna.to_string());
+        let hc_cell = holochain_map.get(&key).expect("No instance for agent/dna pair");
         hc_cell.borrow_mut().call(zome, cap, func, &params.to_string()).map(Value::from).map_err(|e| e.to_string())
     } else {
         Err("bad rpc method".to_string())
@@ -56,11 +57,12 @@ fn invoke_call(holochains: &HcDex, rpc_method: &str, params: Value) -> Result<Va
     result.map_err(HolochainError::ErrorGeneric)
 }
 
-pub type HcDex = HashMap<(String, String), RefCell<Holochain>>;
+type HcLookupKey = (String, String);
+pub type HolochainMap = HashMap<HcLookupKey, RefCell<Holochain>>;
 
 pub fn start_ws_server(
     port: &str,
-    holochains: &HcDex,
+    holochain_map: &HolochainMap,
 ) -> WsResult<()> {
     ws::listen(format!("localhost:{}", port), |out| {
         move |msg| {
@@ -68,7 +70,7 @@ pub fn start_ws_server(
                 Message::Text(s) => {
                     match parse_jsonrpc(s.as_str()) {
                         Ok(rpc) => {
-                            let response = match invoke_call(&holochains, rpc.method.as_str(), rpc.params) {
+                            let response = match invoke_call(&holochain_map, rpc.method.as_str(), rpc.params) {
                                 Ok(payload) => payload,
                                 Err(err) => mk_err(&err.to_string())
                             };
