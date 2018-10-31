@@ -6,14 +6,13 @@ extern crate holochain_core_types;
 extern crate holochain_dna;
 
 extern crate dirs;
-extern crate jsonrpc_ws_server;
 #[macro_use]
 extern crate serde_derive;
 #[macro_use]
 extern crate serde_json;
 extern crate ws;
 
-mod ws_server;
+mod ws_rpc;
 
 use std::{
     cell::RefCell,
@@ -25,14 +24,6 @@ use std::{
     sync::{
         Arc,
         Mutex,
-    }
-};
-
-use jsonrpc_ws_server::{
-    ServerBuilder,
-    jsonrpc_core::{
-        IoHandler,
-        Value,
     }
 };
 
@@ -62,14 +53,17 @@ use holochain_core_types::{
 };
 use holochain_dna::Dna;
 
-use ws_server::{
-    HolochainMap
+use ws_rpc::{
+    HolochainMap,
+    HcWebsocketRpcServer,
 };
 
-const DATA_DIR: &str = ".holo-host";
+const CONTEXT_DIR: &str = ".holo-host/context";
+const DNA_DIR: &str = ".holo-host/dnas";
+const HOST_IDENTITY: &str = "hoster";
 
 fn get_context(agent: Agent) -> HcResult<Context> {
-    let path = data_dir()?.join(agent.to_string());
+    let path = get_agent_path(&agent)?;
     create_dir_ignore_existing(&path)?;
 
     let stringify = |path: PathBuf| path.to_str().unwrap().to_owned();
@@ -87,6 +81,10 @@ fn get_context(agent: Agent) -> HcResult<Context> {
     )
 }
 
+fn get_agent_path(agent: &Agent) -> io::Result<PathBuf> {
+    get_context_dir().map(|dir| dir.join(agent.to_string()))
+}
+
 /// TODO: add entry to hosting app
 fn install_dna(dna_str: &str) -> Result<Dna, serde_json::Error> {
     let dna = Dna::from_json_str(dna_str)?;
@@ -98,41 +96,46 @@ fn create_holochain(dna: &Dna, context: Context) -> HolochainResult<Holochain> {
 }
 
 fn create_dir_ignore_existing(path: &PathBuf) -> io::Result<()> {
-    fs::create_dir(&path).or_else(|err| match err.kind() {
+    fs::create_dir_all(&path).or_else(|err| match err.kind() {
         io::ErrorKind::AlreadyExists => Ok(()),
         _ => Err(err)
     })
 }
 
-fn data_dir() -> io::Result<PathBuf> {
+fn get_context_dir() -> io::Result<PathBuf> {
     let dir: PathBuf = dirs::home_dir()
         .expect("No home directory!?")
-        .join(DATA_DIR);
+        .join(CONTEXT_DIR);
     create_dir_ignore_existing(&dir)?;
     Ok(dir)
 }
 
 fn main () -> io::Result<()> {
-    let host_agent = Agent::from("hoster".to_string());
+    let host_agent = Agent::from(HOST_IDENTITY.to_string());
 
     let dna = install_dna(
         include_str!("../sample/app1.dna.json")
     ).unwrap();
     let dna_hash = dna.to_entry().address().to_string();
+    println!("Loaded DNA: {}", dna_hash);
 
     let agents = ["agent1"].iter().map(|a| Agent::from(a.to_string()));
     let mut holochain_map: HolochainMap = agents.map(|agent| {
         let agent_hash = agent.to_string();
         let context = get_context(agent).unwrap();
         let hc = create_holochain(&dna, context).unwrap();
+        println!("Made instance for agent: {}", agent_hash);
         ((agent_hash, dna_hash.clone()), RefCell::new(hc))
     }).collect();
 
     let host_context = get_context(host_agent.clone()).unwrap();
     let host_hc = create_holochain(&dna, host_context).unwrap();
     holochain_map.insert((host_agent.to_string(), dna_hash), RefCell::new(host_hc));
+    println!("Made instance for host: {}", host_agent.to_string());
 
-    ws_server::start_ws_server("3000", &holochain_map).unwrap();
+    HcWebsocketRpcServer::with_holochains(holochain_map)
+        .start_holochains().expect("Could not start holochains!")
+        .serve("3000").expect("Could not start websocket server");
     Ok(())
 
 }
