@@ -2,6 +2,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 use std::slice::IterMut;
+use std::thread;
 // use std::sync::mpsc::{channel, Sender, Receiver};
 
 use serde_json::{self, Value};
@@ -125,35 +126,37 @@ mod tests {
         make_holochain_map(pairs)
     }
 
-    fn mock_data() -> (Vec<Agent>, Vec<Dna>, HolochainMap) {
-        let agents: Vec<Agent> = ["a1", "a2"]
-            .iter()
-            .map(|a| Agent::from(a.to_string()))
-            .collect();
-        let dnas = vec![Dna::from_json_str(include_str!("../sample/app1.dna.json")).unwrap()];
+    fn mock_data(names: Vec<&str>) -> (Vec<Agent>, Vec<Dna>, HolochainMap) {
+        let agents: Vec<Agent> = names.iter().map(|a| {
+            Agent::from(a.to_string())
+        }).collect();
+        let dnas = vec![
+            Dna::from_json_str(include_str!("../sample/app1.dna.json")).unwrap()
+        ];
         let holochain_map = holochain_map_from_product(agents.clone(), dnas.clone());
         (agents, dnas, holochain_map)
     }
 
-    // #[test]
-    // fn can_start_server() {
-    //     let (agents, dnas, holochain_map) = mock_data();
-    //     HcWebsocketRpcServer::with_holochains(holochain_map)
-    //         .start_holochains()
-    //         .unwrap()
-    //         .serve("4321")
-    //         .unwrap();
-    // }
+    #[test]
+    fn can_start_server() {
+        let (agents, dnas, holochain_map) = mock_data(vec!["a1", "a2"]);
+        let handle = thread::spawn(move || {
+            HcWebsocketRpcServer::with_holochains(holochain_map)
+                .start_holochains().unwrap()
+                .serve("4321").unwrap();
+        });
+        handle.thread().unpark();
+    }
 
     #[test]
     fn can_call_holochains() {
-        let (agents, dnas, holochain_map) = mock_data();
+        let (agents, dnas, holochain_map) = mock_data(vec!["a3", "a4"]);
         let server = HcWebsocketRpcServer::with_holochains(holochain_map);
         server.start_holochains().unwrap();
 
         let method = format!(
-            "{}/{}/blog/main/create_post",
-            agents[0].to_string(),
+            "{}/{}/blog/main/create_post", 
+            agents[0].to_string(), 
             get_dna_hash(&dnas[0]),
         );
         let params = json!({
