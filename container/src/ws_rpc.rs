@@ -1,8 +1,6 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
-use std::slice::IterMut;
-use std::thread;
 // use std::sync::mpsc::{channel, Sender, Receiver};
 
 use serde_json::{self, Value};
@@ -16,7 +14,7 @@ use holochain_core_api::{
 };
 use holochain_core_types::error::HolochainError;
 use holochain_dna::{zome::capabilities::Membrane, Dna};
-use util::*;
+use util::{self, HolochainMap};
 
 #[derive(Serialize, Deserialize)]
 struct JsonRpc {
@@ -31,6 +29,8 @@ pub struct HcWebsocketRpcServer {
 }
 
 impl HcWebsocketRpcServer {
+    /// Initialize struct with a map from Agent hash / DNA hash pairs
+    /// to their corresponding `Holochain` instances
     pub fn with_holochains(holochain_map: HolochainMap) -> Self {
         println!("Loaded holochains:");
         for (agent, dna) in holochain_map.keys() {
@@ -39,6 +39,48 @@ impl HcWebsocketRpcServer {
         Self { holochain_map }
     }
 
+    /// Start a websocket server which responds to JSONRPC frames, where `method` is:
+    /// `[agent_key]/[dna_hash]/[zome_name]/[trait_name]/[function_name]`
+    /// and `params` is a `serde_json::Value`
+    pub fn serve(&self, port: &str) -> WsResult<()> {
+        ws::listen(format!("localhost:{}", port), |out| {
+            move |msg| match msg {
+                Message::Text(s) => match parse_jsonrpc(s.as_str()) {
+                    Ok(rpc) => {
+                        let response = match self.call_rpc(rpc.method.as_str(), rpc.params) {
+                            Ok(payload) => payload,
+                            Err(err) => mk_err(&err.to_string()),
+                        };
+                        out.send(Message::Text(response.to_string()))
+                    }
+                    Err(err) => out.send(Message::Text(mk_err(&err).to_string())),
+                },
+                Message::Binary(_b) => unimplemented!(),
+            }
+        })
+    }
+
+    /// Start all the Holochains
+    pub fn start_holochains(&self) -> HolochainResult<&Self> {
+        self.holochain_map
+            .values()
+            .map(|cell| cell.borrow_mut().start())
+            .into_iter()
+            .collect::<Result<Vec<()>, HolochainInstanceError>>()
+            .map(|_| self)
+    }
+
+    /// Stop all the Holochains (this might be pretty useless)
+    pub fn stop_holochains(&self) -> HolochainResult<&Self> {
+        self.holochain_map
+            .values()
+            .map(|cell| cell.borrow_mut().stop())
+            .into_iter()
+            .collect::<Result<Vec<()>, HolochainInstanceError>>()
+            .map(|_| self)
+    }
+
+    /// Dispatch to the correct Holochain and `call` it based on the JSONRPC method
     fn call_rpc(&self, rpc_method: &str, params: Value) -> Result<Value, HolochainError> {
         let matches: Vec<&str> = rpc_method.split('/').collect();
         let result = if let [agent, dna, zome, cap, func] = matches.as_slice() {
@@ -58,42 +100,6 @@ impl HcWebsocketRpcServer {
         };
         result.map_err(HolochainError::ErrorGeneric)
     }
-
-    pub fn start_holochains(&self) -> HolochainResult<&Self> {
-        self.holochain_map
-            .values()
-            .map(|cell| cell.borrow_mut().start())
-            .into_iter()
-            .collect::<Result<Vec<()>, HolochainInstanceError>>()
-            .map(|_| self)
-    }
-
-    pub fn stop_holochains(&self) -> HolochainResult<&Self> {
-        self.holochain_map
-            .values()
-            .map(|cell| cell.borrow_mut().stop())
-            .into_iter()
-            .collect::<Result<Vec<()>, HolochainInstanceError>>()
-            .map(|_| self)
-    }
-
-    pub fn serve(&self, port: &str) -> WsResult<()> {
-        ws::listen(format!("localhost:{}", port), |out| {
-            move |msg| match msg {
-                Message::Text(s) => match parse_jsonrpc(s.as_str()) {
-                    Ok(rpc) => {
-                        let response = match self.call_rpc(rpc.method.as_str(), rpc.params) {
-                            Ok(payload) => payload,
-                            Err(err) => mk_err(&err.to_string()),
-                        };
-                        out.send(Message::Text(response.to_string()))
-                    }
-                    Err(err) => out.send(Message::Text(mk_err(&err).to_string())),
-                },
-                Message::Binary(_b) => unimplemented!(),
-            }
-        })
-    }
 }
 
 fn parse_jsonrpc(s: &str) -> Result<JsonRpc, String> {
@@ -112,28 +118,12 @@ fn mk_err(msg: &str) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    /// Build a HolochainMap from the cross product of two vectors
-    fn holochain_map_from_product(agents: Vec<Agent>, dnas: Vec<Dna>) -> HolochainMap {
-        let agents = agents.into_iter().map(Rc::new);
-        let dnas: Vec<Rc<Dna>> = dnas.into_iter().map(Rc::new).collect();
-        let mut pairs = Vec::new();
-        for agent in agents {
-            for dna in dnas.iter() {
-                pairs.push((agent.clone(), dna.clone()));
-            }
-        }
-        make_holochain_map(pairs)
-    }
+    use std::thread;
 
     fn mock_data(names: Vec<&str>) -> (Vec<Agent>, Vec<Dna>, HolochainMap) {
-        let agents: Vec<Agent> = names.iter().map(|a| {
-            Agent::from(a.to_string())
-        }).collect();
-        let dnas = vec![
-            Dna::from_json_str(include_str!("../sample/app1.dna.json")).unwrap()
-        ];
-        let holochain_map = holochain_map_from_product(agents.clone(), dnas.clone());
+        let agents: Vec<Agent> = names.iter().map(|a| Agent::from(a.to_string())).collect();
+        let dnas = vec![Dna::from_json_str(include_str!("../sample/app1.dna.json")).unwrap()];
+        let holochain_map = util::holochain_map_from_product(agents.clone(), dnas.clone());
         (agents, dnas, holochain_map)
     }
 
@@ -142,8 +132,10 @@ mod tests {
         let (agents, dnas, holochain_map) = mock_data(vec!["a1", "a2"]);
         let handle = thread::spawn(move || {
             HcWebsocketRpcServer::with_holochains(holochain_map)
-                .start_holochains().unwrap()
-                .serve("4321").unwrap();
+                .start_holochains()
+                .unwrap()
+                .serve("4321")
+                .unwrap();
         });
         handle.thread().unpark();
     }
@@ -155,9 +147,9 @@ mod tests {
         server.start_holochains().unwrap();
 
         let method = format!(
-            "{}/{}/blog/main/create_post", 
-            agents[0].to_string(), 
-            get_dna_hash(&dnas[0]),
+            "{}/{}/blog/main/create_post",
+            agents[0].to_string(),
+            util::get_dna_hash(&dnas[0]),
         );
         let params = json!({
             "content": "i see you",

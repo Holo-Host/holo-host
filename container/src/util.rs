@@ -1,44 +1,28 @@
-
 use std::{
     cell::RefCell,
     collections::HashMap,
-    fs,
-    io,
-    rc::Rc,
+    fs, io,
     path::PathBuf,
+    rc::Rc,
     result::Result,
-    sync::{
-        Arc,
-        Mutex,
-    }
+    sync::{Arc, Mutex},
 };
 
 use holochain_agent::Agent;
 use holochain_cas_implementations::{
     cas::file::FilesystemStorage, eav::file::EavFileStorage, path::create_path_if_not_exists,
 };
-use holochain_core::{
-    context::Context,
-    logger::SimpleLogger,
-    persister::SimplePersister,
-};
+use holochain_core::{context::Context, logger::SimpleLogger, persister::SimplePersister};
 use holochain_core_api::{
+    error::{HolochainInstanceError, HolochainResult},
     Holochain,
-    error::{
-        HolochainResult,
-        HolochainInstanceError,
-    }
 };
 use holochain_core_types::{
     cas::content::AddressableContent,
     entry::ToEntry,
-    error::{
-        HolochainError,
-        HcResult,
-    }
+    error::{HcResult, HolochainError},
 };
 use holochain_dna::Dna;
-
 
 const CONTEXT_DIR: &str = ".holo-host/context";
 const DNA_DIR: &str = ".holo-host/dnas";
@@ -49,7 +33,6 @@ pub type InstanceKey = (String, String);
 
 /// Map from keys to internally mutable Holochains
 pub type HolochainMap = HashMap<InstanceKey, RefCell<Holochain>>;
-
 
 pub fn get_agent_path(agent: &Agent) -> io::Result<PathBuf> {
     get_context_dir().map(|dir| dir.join(agent.to_string()))
@@ -62,7 +45,7 @@ pub fn create_holochain(dna: &Dna, context: Context) -> HolochainResult<Holochai
 pub fn create_dir_ignore_existing(path: &PathBuf) -> io::Result<()> {
     fs::create_dir_all(&path).or_else(|err| match err.kind() {
         io::ErrorKind::AlreadyExists => Ok(()),
-        _ => Err(err)
+        _ => Err(err),
     })
 }
 
@@ -93,15 +76,33 @@ pub fn get_context(agent: &Agent) -> HcResult<Context> {
     )
 }
 
-pub fn get_dna_hash(dna: &Dna) -> String { dna.to_entry().address().to_string() }
+pub fn get_dna_hash(dna: &Dna) -> String {
+    dna.to_entry().address().to_string()
+}
 
 pub fn make_holochain_map(pairs: Vec<(Rc<Agent>, Rc<Dna>)>) -> HolochainMap {
-    pairs.iter().map(|(agent, dna)| {
-        let agent_hash = agent.to_string();
-        let dna_hash = dna.to_entry().address().to_string();
-        let context = get_context(agent).unwrap();
-        let hc = create_holochain(&dna, context).unwrap();
-        println!("Made instance for agent: {}", agent_hash);
-        ((agent_hash, dna_hash.clone()), RefCell::new(hc))
-    }).collect()
+    pairs
+        .iter()
+        .map(|(agent, dna)| {
+            let agent_hash = agent.to_string();
+            let dna_hash = dna.to_entry().address().to_string();
+            let context = get_context(agent).unwrap();
+            let hc = create_holochain(&dna, context).unwrap();
+            println!("Made instance for agent: {}", agent_hash);
+            ((agent_hash, dna_hash.clone()), RefCell::new(hc))
+        })
+        .collect()
+}
+
+/// Build a HolochainMap from the cross product of two vectors
+pub fn holochain_map_from_product(agents: Vec<Agent>, dnas: Vec<Dna>) -> HolochainMap {
+    let agents = agents.into_iter().map(Rc::new);
+    let dnas: Vec<Rc<Dna>> = dnas.into_iter().map(Rc::new).collect();
+    let mut pairs = Vec::new();
+    for agent in agents {
+        for dna in dnas.iter() {
+            pairs.push((agent.clone(), dna.clone()));
+        }
+    }
+    make_holochain_map(pairs)
 }
