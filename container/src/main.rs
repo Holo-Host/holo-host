@@ -41,12 +41,21 @@ use holochain_core_types::{
 use holochain_dna::Dna;
 use util::{create_holochain, get_context, HolochainMap};
 
-use ws_rpc::HcWebsocketRpcServer;
+use ws_rpc::{
+    CallClosure, CallContext, CallResult, HcWebsocketRpcServer, PostCallHook, PreCallHook,
+};
 
 /// TODO: add entry to hosting app
 fn install_dna(dna_str: &str) -> Result<Dna, serde_json::Error> {
     let dna = Dna::from_json_str(dna_str)?;
     Ok(dna)
+}
+
+fn caller(call: CallClosure) -> CallResult {
+    let mut v = 0;
+    let result = call();
+    v = 2;
+    result
 }
 
 fn main() -> io::Result<()> {
@@ -72,7 +81,9 @@ fn main() -> io::Result<()> {
     holochain_map.insert((host_agent.to_string(), dna_hash), RefCell::new(host_hc));
     println!("Made instance for host: {}", host_agent.to_string());
 
-    HcWebsocketRpcServer::with_holochains(holochain_map)
+    HcWebsocketRpcServer::new()
+        .with_holochains(holochain_map)
+        .with_caller(&(caller as CallContext))
         .start_holochains()
         .expect("Could not start holochains!")
         .serve("3000")
