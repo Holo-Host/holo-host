@@ -72,7 +72,7 @@ fn main() -> io::Result<()> {
     holochain_map.insert((host_agent.to_string(), dna_hash), RefCell::new(host_hc));
     println!("Made instance for host: {}", host_agent.to_string());
 
-    HcWebsocketRpcServer::with_holochains(holochain_map)
+    HcWebsocketRpcServer::new(holochain_map)
         .start_holochains()
         .expect("Could not start holochains!")
         .serve("3000")

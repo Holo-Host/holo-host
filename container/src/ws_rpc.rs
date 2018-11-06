@@ -34,7 +34,7 @@ pub struct HcWebsocketRpcServer {
 impl HcWebsocketRpcServer {
     /// Initialize struct with a map from Agent hash / DNA hash pairs
     /// to their corresponding `Holochain` instances
-    pub fn with_holochains(holochain_map: HolochainMap) -> Self {
+    pub fn new(holochain_map: HolochainMap) -> Self {
         println!("Loaded holochains:");
         for (agent, dna) in holochain_map.keys() {
             println!("+  {} ({})", dna, agent);
@@ -109,34 +109,28 @@ impl HcWebsocketRpcServer {
         args: (&str, &str, &str, Value),
     ) -> Result<Value, String> {
         let (zome, cap, func, params) = args;
-        let result = Self::wrapped_call(move || {
-            hc
-                .call(zome, cap, func, &params.to_string())
-                .map(Value::from)
-                .map_err(|e| e.to_string())
-            // post_call()
-        });
-        result
-    }
-
-    fn wrapped_call<F>(f: F) -> Result<Value, String>
-    where F: FnOnce() -> Result<Value, String> {
         let start_time = Instant::now();
-        let result = f();
-        let duration = start_time.elapsed();
-        let metrics = ServiceMetrics {
-
+        let result = hc
+            .call(zome, cap, func, &params.to_string())
+            .map(Value::from)
+            .map_err(|e| e.to_string());
+        if let Ok(response) = result {
+            let duration = start_time.elapsed();
+            let metrics = ServiceMetrics {
+                cpu_time: duration.as_micros(),
+                bytes_in: params.to_string().length(),
+                bytes_out: response.to_string().length(),
+            };
+            println!("TODO: call actual hosting app instance");
+            host_hc.call("hosts", "main", "log_service", json!({
+                "agent_key": "TODO",
+                "request": params,
+                "response": response,
+                "metrics": metrics
+            }));
         }
         result
     }
-
-    // fn pre_call(params: &Value) {
-
-    // }
-
-    // fn post_call(params: &Value, result: Result<Value, String>) {
-
-    // }
 }
 
 fn parse_jsonrpc(s: &str) -> Result<JsonRpc, String> {
@@ -168,7 +162,7 @@ mod tests {
     fn can_start_server() {
         let (agents, dnas, holochain_map) = mock_data(vec!["a1", "a2"]);
         let handle = thread::spawn(move || {
-            HcWebsocketRpcServer::with_holochains(holochain_map)
+            HcWebsocketRpcServer::new(holochain_map)
                 .start_holochains()
                 .unwrap()
                 .serve("4321")
@@ -180,7 +174,7 @@ mod tests {
     #[test]
     fn can_call_holochains() {
         let (agents, dnas, holochain_map) = mock_data(vec!["a3", "a4"]);
-        let server = HcWebsocketRpcServer::with_holochains(holochain_map);
+        let server = HcWebsocketRpcServer::new(holochain_map);
         server.start_holochains().unwrap();
 
         let method = format!(
