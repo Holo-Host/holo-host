@@ -47,7 +47,7 @@ impl HcWebsocketRpcServer {
             move |msg| match msg {
                 Message::Text(s) => match parse_jsonrpc(s.as_str()) {
                     Ok(rpc) => {
-                        let response = match self.call_rpc(rpc.method.as_str(), rpc.params) {
+                        let response = match self.dispatch_rpc(rpc.method.as_str(), rpc.params) {
                             Ok(payload) => payload,
                             Err(err) => mk_err(&err.to_string()),
                         };
@@ -81,7 +81,7 @@ impl HcWebsocketRpcServer {
     }
 
     /// Dispatch to the correct Holochain and `call` it based on the JSONRPC method
-    fn call_rpc(&self, rpc_method: &str, params: Value) -> Result<Value, HolochainError> {
+    fn dispatch_rpc(&self, rpc_method: &str, params: Value) -> Result<Value, HolochainError> {
         let matches: Vec<&str> = rpc_method.split('/').collect();
         let result = if let [agent, dna, zome, cap, func] = matches.as_slice() {
             let key = (agent.to_string(), dna.to_string());
@@ -89,16 +89,27 @@ impl HcWebsocketRpcServer {
                 .get(&key)
                 .ok_or(format!("No instance for agent/dna pair: {:?}", key))
                 .and_then(|hc_cell| {
-                    hc_cell
-                        .borrow_mut()
-                        .call(zome, cap, func, &params.to_string())
-                        .map(Value::from)
-                        .map_err(|e| e.to_string())
+                    self.call_holochain(
+                        hc_cell,
+                        (zome, cap, func, &params)
+                    )
                 })
         } else {
             Err(format!("bad rpc method: {}", rpc_method))
         };
         result.map_err(HolochainError::ErrorGeneric)
+    }
+
+    fn call_holochain(
+        &self,
+        hc: &RefCell<Holochain>,
+        args: (&str, &str, &str, &Value),
+    ) -> Result<Value, String> {
+        let (zome, cap, func, params) = args;
+        hc.borrow_mut()
+            .call(zome, cap, func, &params.to_string())
+            .map(Value::from)
+            .map_err(|e| e.to_string())
     }
 }
 
@@ -155,7 +166,7 @@ mod tests {
             "content": "i see you",
             "in_reply_to": "the moon",
         });
-        let result = server.call_rpc(&method, params).unwrap();
+        let result = server.dispatch_rpc(&method, params).unwrap();
         println!("TODO - check once this is not an error: {:?}", result);
     }
 }
