@@ -1,6 +1,7 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
+use std::time::{Instant};
 // use std::sync::mpsc::{channel, Sender, Receiver};
 
 use serde_json::{self, Value};
@@ -14,6 +15,8 @@ use holochain_core_api::{
 };
 use holochain_core_types::error::HolochainError;
 use holochain_dna::{zome::capabilities::Membrane, Dna};
+use holo_dapp_hosts::{ServiceCycle, ServiceMetrics};
+
 use util::{self, HolochainMap};
 
 #[derive(Serialize, Deserialize)]
@@ -90,8 +93,8 @@ impl HcWebsocketRpcServer {
                 .ok_or(format!("No instance for agent/dna pair: {:?}", key))
                 .and_then(|hc_cell| {
                     self.call_holochain(
-                        hc_cell,
-                        (zome, cap, func, &params)
+                        &mut *hc_cell.borrow_mut(),
+                        (zome, cap, func, params)
                     )
                 })
         } else {
@@ -102,15 +105,38 @@ impl HcWebsocketRpcServer {
 
     fn call_holochain(
         &self,
-        hc: &RefCell<Holochain>,
-        args: (&str, &str, &str, &Value),
+        hc: &mut Holochain,
+        args: (&str, &str, &str, Value),
     ) -> Result<Value, String> {
         let (zome, cap, func, params) = args;
-        hc.borrow_mut()
-            .call(zome, cap, func, &params.to_string())
-            .map(Value::from)
-            .map_err(|e| e.to_string())
+        let result = Self::wrapped_call(move || {
+            hc
+                .call(zome, cap, func, &params.to_string())
+                .map(Value::from)
+                .map_err(|e| e.to_string())
+            // post_call()
+        });
+        result
     }
+
+    fn wrapped_call<F>(f: F) -> Result<Value, String>
+    where F: FnOnce() -> Result<Value, String> {
+        let start_time = Instant::now();
+        let result = f();
+        let duration = start_time.elapsed();
+        let metrics = ServiceMetrics {
+
+        }
+        result
+    }
+
+    // fn pre_call(params: &Value) {
+
+    // }
+
+    // fn post_call(params: &Value, result: Result<Value, String>) {
+
+    // }
 }
 
 fn parse_jsonrpc(s: &str) -> Result<JsonRpc, String> {
