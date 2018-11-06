@@ -31,18 +31,18 @@ pub type PostCallHook<'a> = &'a BoxedCallback<(Value, Value)>;
 pub type CallResult = Result<Value, HolochainError>;
 
 type Caller = Box<FnOnce(String, Value) -> CallResult>;
-pub type CallClosure = Box<FnOnce() -> CallResult>;
-pub type CallContext = fn(CallClosure) -> CallResult;
+pub type CallClosure<'ws> = &'ws Box<FnOnce() -> CallResult>;
+pub type CallContext<'ws> = fn(CallClosure<'ws>) -> CallResult;
 
-pub struct HcWebsocketRpcServer {
+pub struct HcWebsocketRpcServer<'ws> {
     holochain_map: HolochainMap,
     // pre_call_hook: Option<PreCallHook<'a>>,
     // post_call_hook: Option<PostCallHook<'a>>,
     // caller: Option<Caller>,
-    call_context: Option<CallContext>,
+    call_context: Option<CallContext<'ws>>,
 }
 
-impl HcWebsocketRpcServer {
+impl<'ws> HcWebsocketRpcServer<'ws> {
     pub fn new() -> Rc<Self> {
         Rc::new(Self {
             holochain_map: HashMap::new(),
@@ -74,7 +74,7 @@ impl HcWebsocketRpcServer {
     //     self
     // }
 
-    pub fn with_caller(mut self, func: CallContext) -> Self {
+    pub fn with_caller(mut self, func: CallContext<'ws>) -> Self {
         // fn boxit<'a, F>(f: F) -> Box<F>
         // where
         //     F: FnOnce(String, Value) -> CallResult,
@@ -91,7 +91,7 @@ impl HcWebsocketRpcServer {
         // self.caller = Box::new(|rpc_method, params| f(Box::new(move || self.call_rpc(rpc_method, params))));
     }
 
-    fn do_call(&self, rpc_method: String, params: Value) -> CallResult {
+    fn do_call(&'ws self, rpc_method: String, params: Value) -> CallResult {
         self.call_context.unwrap()(Box::new(move || self.call_rpc(rpc_method.as_str(), params)))
     }
 

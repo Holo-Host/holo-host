@@ -83,7 +83,7 @@ fn main() -> io::Result<()> {
 
     HcWebsocketRpcServer::new()
         .with_holochains(holochain_map)
-        .with_caller(&(caller as CallContext))
+        .with_caller(caller)
         .start_holochains()
         .expect("Could not start holochains!")
         .serve("3000")
