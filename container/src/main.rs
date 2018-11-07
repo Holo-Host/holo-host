@@ -1,4 +1,3 @@
-extern crate holochain_agent;
 extern crate holochain_cas_implementations;
 extern crate holochain_core;
 extern crate holochain_core_api;
@@ -24,7 +23,6 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use holochain_agent::Agent;
 use holochain_cas_implementations::{
     cas::file::FilesystemStorage, eav::file::EavFileStorage, path::create_path_if_not_exists,
 };
@@ -35,7 +33,10 @@ use holochain_core_api::{
 };
 use holochain_core_types::{
     cas::content::AddressableContent,
-    entry::ToEntry,
+    entry::{
+        ToEntry,
+        agent::Agent,
+    },
     error::{HcResult, HolochainError},
 };
 use holochain_dna::Dna;

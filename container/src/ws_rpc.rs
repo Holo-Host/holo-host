@@ -7,13 +7,15 @@ use std::time::{Instant};
 use serde_json::{self, Value};
 use ws::{self, Message, Result as WsResult};
 
-use holochain_agent::Agent;
 use holochain_core::{context::Context, logger::SimpleLogger, persister::SimplePersister};
 use holochain_core_api::{
     error::{HolochainInstanceError, HolochainResult},
     Holochain,
 };
-use holochain_core_types::error::HolochainError;
+use holochain_core_types::{
+    entry::agent::Agent,
+    error::HolochainError,
+};
 use holochain_dna::{zome::capabilities::Membrane, Dna};
 use holo_dapp_hosts::{ServiceCycle, ServiceMetrics};
 
