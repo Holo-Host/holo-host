@@ -20,4 +20,4 @@ holochain_core_api = { git = "https://github.com/holochain/holochain-rust", bran
 holochain_core_types = { git = "https://github.com/holochain/holochain-rust", branch = "develop" }
 holochain_dna = { git = "https://github.com/holochain/holochain-rust", branch = "develop" }
 
-holo_dapp_hosts = { path = "../../hosting-app/zomes/hosts/code" }
+holo_dapp_hosts = { path = "/home/michael/Holo/hosting-app/zomes/hosts/code" }

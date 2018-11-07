@@ -1,23 +1,23 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::convert::TryFrom;
 use std::rc::Rc;
-use std::time::{Instant};
+use std::time::Instant;
 // use std::sync::mpsc::{channel, Sender, Receiver};
 
 use serde_json::{self, Value};
 use ws::{self, Message, Result as WsResult};
 
+use holo_dapp_hosts::{ServiceCycle, ServiceMetrics};
 use holochain_core::{context::Context, logger::SimpleLogger, persister::SimplePersister};
 use holochain_core_api::{
     error::{HolochainInstanceError, HolochainResult},
     Holochain,
 };
 use holochain_core_types::{
-    entry::agent::Agent,
-    error::HolochainError,
+    cas::content::AddressableContent, entry::agent::Agent, error::HolochainError, json::JsonString,
 };
 use holochain_dna::{zome::capabilities::Membrane, Dna};
-use holo_dapp_hosts::{ServiceCycle, ServiceMetrics};
 
 use util::{self, HolochainMap};
 
@@ -52,11 +52,12 @@ impl HcWebsocketRpcServer {
             move |msg| match msg {
                 Message::Text(s) => match parse_jsonrpc(s.as_str()) {
                     Ok(rpc) => {
-                        let response = match self.dispatch_rpc(rpc.method.as_str(), rpc.params) {
-                            Ok(payload) => payload,
-                            Err(err) => mk_err(&err.to_string()),
-                        };
-                        out.send(Message::Text(response.to_string()))
+                        let response: JsonString =
+                            match self.dispatch_rpc(rpc.method.as_str(), rpc.params) {
+                                Ok(payload) => payload,
+                                Err(err) => mk_err(&err.to_string()).into(),
+                            };
+                        out.send(Message::Text(response.into()))
                     }
                     Err(err) => out.send(Message::Text(mk_err(&err).to_string())),
                 },
@@ -86,7 +87,7 @@ impl HcWebsocketRpcServer {
     }
 
     /// Dispatch to the correct Holochain and `call` it based on the JSONRPC method
-    fn dispatch_rpc(&self, rpc_method: &str, params: Value) -> Result<Value, HolochainError> {
+    fn dispatch_rpc(&self, rpc_method: &str, params: Value) -> Result<JsonString, HolochainError> {
         let matches: Vec<&str> = rpc_method.split('/').collect();
         let result = if let [agent, dna, zome, cap, func] = matches.as_slice() {
             let key = (agent.to_string(), dna.to_string());
@@ -94,10 +95,7 @@ impl HcWebsocketRpcServer {
                 .get(&key)
                 .ok_or(format!("No instance for agent/dna pair: {:?}", key))
                 .and_then(|hc_cell| {
-                    self.call_holochain(
-                        &mut *hc_cell.borrow_mut(),
-                        (zome, cap, func, params)
-                    )
+                    self.call_holochain(&mut *hc_cell.borrow_mut(), (zome, cap, func, params))
                 })
         } else {
             Err(format!("bad rpc method: {}", rpc_method))
@@ -109,27 +107,31 @@ impl HcWebsocketRpcServer {
         &self,
         hc: &mut Holochain,
         args: (&str, &str, &str, Value),
-    ) -> Result<Value, String> {
+    ) -> Result<JsonString, String> {
         let (zome, cap, func, params) = args;
         let start_time = Instant::now();
         let result = hc
             .call(zome, cap, func, &params.to_string())
-            .map(Value::from)
             .map_err(|e| e.to_string());
-        if let Ok(response) = result {
+        if let Ok(response) = result.clone() {
             let duration = start_time.elapsed();
             let metrics = ServiceMetrics {
-                cpu_time: duration.as_micros(),
-                bytes_in: params.to_string().length(),
-                bytes_out: response.to_string().length(),
+                cpu_seconds: duration.as_float_secs(),
+                bytes_in: params.to_string().len(),
+                bytes_out: response.to_string().len(),
             };
             println!("TODO: call actual hosting app instance");
-            host_hc.call("hosts", "main", "log_service", json!({
-                "agent_key": "TODO",
-                "request": params,
-                "response": response,
-                "metrics": metrics
-            }));
+            // host_hc.call(
+            //     "hosts",
+            //     "main",
+            //     "log_service",
+            //     json!({
+            //         "agent_key": "TODO",
+            //         "request": params,
+            //         "response": response,
+            //         "metrics": metrics
+            //     }).to_string(),
+            // );
         }
         result
     }
@@ -155,7 +157,8 @@ mod tests {
 
     fn mock_data(names: Vec<&str>) -> (Vec<Agent>, Vec<Dna>, HolochainMap) {
         let agents: Vec<Agent> = names.iter().map(|a| Agent::from(a.to_string())).collect();
-        let dnas = vec![Dna::from_json_str(include_str!("../sample/app1.dna.json")).unwrap()];
+        let dna1_json: JsonString = include_str!("../sample/app1.dna.json").into();
+        let dnas = vec![Dna::try_from(dna1_json).unwrap().into()];
         let holochain_map = util::holochain_map_from_product(agents.clone(), dnas.clone());
         (agents, dnas, holochain_map)
     }
@@ -181,7 +184,7 @@ mod tests {
 
         let method = format!(
             "{}/{}/blog/main/create_post",
-            agents[0].to_string(),
+            agents[0].content(),
             util::get_dna_hash(&dnas[0]),
         );
         let params = json!({

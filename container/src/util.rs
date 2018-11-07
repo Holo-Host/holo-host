@@ -8,7 +8,6 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use holochain_agent::Agent;
 use holochain_cas_implementations::{
     cas::file::FilesystemStorage, eav::file::EavFileStorage, path::create_path_if_not_exists,
 };
@@ -19,8 +18,9 @@ use holochain_core_api::{
 };
 use holochain_core_types::{
     cas::content::AddressableContent,
-    entry::ToEntry,
+    entry::{agent::Agent, ToEntry},
     error::{HcResult, HolochainError},
+    json::{JsonString, RawString},
 };
 use holochain_dna::Dna;
 
@@ -34,8 +34,11 @@ pub type InstanceKey = (String, String);
 /// Map from keys to internally mutable Holochains
 pub type HolochainMap = HashMap<InstanceKey, RefCell<Holochain>>;
 
+pub fn agent_hash(agent: &Agent) -> String {
+    agent.content().into()
+}
 pub fn get_agent_path(agent: &Agent) -> io::Result<PathBuf> {
-    get_context_dir().map(|dir| dir.join(agent.to_string()))
+    get_context_dir().map(|dir| dir.join(agent_hash(agent)))
 }
 
 pub fn create_holochain(dna: &Dna, context: Context) -> HolochainResult<Holochain> {
@@ -84,7 +87,8 @@ pub fn make_holochain_map(pairs: Vec<(Rc<Agent>, Rc<Dna>)>) -> HolochainMap {
     pairs
         .iter()
         .map(|(agent, dna)| {
-            let agent_hash = agent.to_string();
+            // TODO: make sure to get the *actual* agent id string
+            let agent_hash: String = agent_hash(agent);
             let dna_hash = dna.to_entry().address().to_string();
             let context = get_context(agent).unwrap();
             let hc = create_holochain(&dna, context).unwrap();
