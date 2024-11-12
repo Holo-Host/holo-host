@@ -1,0 +1,17 @@
+{
+  "editor.defaultFormatter": "ibecker.treefmt-vscode",
+  "direnv.restart.automatic": true,
+  "[nix]": {
+    "editor.defaultFormatter": "jnoortheen.nix-ide"
+  },
+  "nix.enableLanguageServer": true,
+  "nix.serverPath": "nil",
+  "nix.serverSettings": {
+    // settings for 'nil' LSP
+    "nil": {
+      "formatting": {
+        "command": ["treefmt-nix", "--stdin", "neverexists.nix"]
+      }
+    }
+  }
+}
