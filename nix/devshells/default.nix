@@ -5,7 +5,10 @@
 }:
 pkgs.mkShell {
   # Add build dependencies
-  packages = [ flake.formatter.${system} ];
+  packages = [
+    flake.formatter.${system}
+    pkgs.jq
+  ];
 
   # Add environment variables
   env = { };
