@@ -1,19 +1,17 @@
-# holo-host repository
+# holo-host main repository
 
-This is an experiment is to contain all production components and their tests in a single repository, also known as a monorepository.
+This is an experiment to contain the code for all components in a single repository, also known as a monorepository.
 
-## Layout
+## Repository Layout
 
-```
-/README.md
-```
+The code is grouped by language or framework name.
 
 ### Nix
 
 ```
 /flake.nix
 /flake.lock
-/nix/ # [blueprint set up underneath here](https://github.com/numtide/blueprint)
+/nix/ /* [blueprint](https://github.com/numtide/blueprint)  set up underneath here. */
 ```
 
 ### Rust
@@ -34,4 +32,17 @@ This is an experiment is to contain all production components and their tests in
 
 ### Pulumi for Infrastructure-as-Code
 
-**_?_**
+Reusable Pulumi modules with examples
+
+```
+/pulumi/
+```
+
+## Continous Integration
+
+The CI system is driven by [buildbot-nix](https://github.com/nix-community/buildbot-nix/).
+
+## Licenses
+
+Even when this repository is made publicly available, original code in this repository is explicitly stated to be unlicenced.
+This will change in the future when we have made the decision which open-source license to apply.
