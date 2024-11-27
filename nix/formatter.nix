@@ -6,13 +6,16 @@
 }:
 let
   settingsNix = {
-    package = perSystem.nixpkgs-unstable.treefmt2;
+    package = perSystem.nixpkgs.treefmt2;
 
     projectRootFile = ".git/config";
 
     programs = {
       nixfmt.enable = true;
-      deadnix.enable = true;
+      deadnix = {
+        enable = true;
+        no-underscore = true;
+      };
       statix.enable = true;
 
       rustfmt.enable = true;
@@ -20,7 +23,6 @@ let
       gofmt.enable = true;
 
       shfmt.enable = true;
-      shellcheck.enable = true;
 
       prettier.enable = true;
     } // pkgs.lib.optionalAttrs (pkgs.system != "riscv64-linux") { shellcheck.enable = true; };
@@ -63,5 +65,6 @@ treefmtEval.config.build.wrapper.overrideAttrs (_: {
   passthru = {
     inherit (treefmtEval.config) package settings;
     inherit (treefmtEval) config;
+    inherit settingsNix;
   };
 })
