@@ -1,30 +1,33 @@
 ## Issue Template
 
 
-# Description
+# Note that HOLO-HOST is a public repository. Any sensitive issues should be raised in HOLO-HOST-PRIVATE
+
+
+### Description
 
 Please provide a brief summary of the issue
 
-# User Story
+### User Story
 
 What problem are you trying to solve? If there is an existing user story/epic, please mention it here.
 
-# Acceptance Criteria
+### Acceptance Criteria
 
 What conditions must be met for this issue to be considered resolved?
 
-# Implementation Notes
+### Implementation Notes
 
 Any relevant implementation details or context
 
-# Testing Notes
+### Testing Notes
 
 How will you test this issue?
 
-# Dependencies
+### Dependencies
 
 Are there any dependencies or prerequisites for this issue?
 
-# Resources
+### Resources
 
 Any relevant links, articles, or documentation
