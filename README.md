@@ -45,5 +45,5 @@ The CI system is driven by [buildbot-nix](https://github.com/nix-community/build
 ## Licenses
 
 Even when this repository is made publicly available, original code in this repository is explicitly stated to be unlicenced.
-This means that this code cannot be modified or redistribute without explicit permission from the copyright holder, which are the authors in this repository.
+This means that this code cannot be modified or redistributed without explicit permission from the copyright holder, which are the authors in this repository.
 This will change in the future when we have made the decision which open-source license to apply. 
