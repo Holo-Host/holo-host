@@ -1,8 +1,7 @@
 ## Issue Template
 
 
-# Note that HOLO-HOST is a public repository. Any sensitive issues should be raised in HOLO-HOST-PRIVATE
-
+# Note that HOLO-HOST is a public repository. Your issue will be visible to ALL users.
 
 ### Description
 
