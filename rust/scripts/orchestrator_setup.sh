@@ -5,14 +5,14 @@
 # This script is responsible ser setting up the "Operator Chain of Trust" (eg: O/A/U) authentication pattern on the Orchestrator Hub.
 
 # Operator Creation:
-# The operator is named "HOLO", with a system account (SYS), two signing keys, and the JWT server URL set to nats://0.0.0.0:4222.
+# The operator is generated and named "HOLO" and a system account is generated and named SYS.  Both are assigned two signing keys and are associated with the JWT server.  The JWT server URL set to nats://0.0.0.0:4222.
 
 # Account Creation:
-# Two accounts, "ORCHESTRATOR" and "HPOS", are created with JetStream enabled.
-# Each account has a signing key with a randomly generated role name, scoped to allow only users assigned to the signing key to publish and subscribe to their respective streams.
+# Two accounts, named "ORCHESTRATOR" and "HPOS", are created with JetStream enabled.  Both are associated with the HOLO Operator.
+# Each account has a signing key with a randomly generated role name, which is assigned scoped permissions to allow only users assigned to the signing key to publish and subscribe to their respective streams.
 
 # User Creation:
-# An admin user is created in the "ORCHESTRATOR" account.
+# One user named "admin" is created under the "ORCHESTRATOR" account.
 
 # JWT Generation:
 # JWT files are generated for the operator and both accounts, saved in the jwt_output/ directory.

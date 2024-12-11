@@ -1,7 +1,7 @@
-/*
-  This file contains the configuration required to set up a NATS Leaf Server with the "Operator JWT" auth approach.
-  NB: This setup expects the `nats-server` binary to be locally installed and accessible.
-*/
+/* --------
+    This file contains the configuration required to set up a NATS Leaf Server with the "Operator JWT" auth approach.
+    NB: This setup expects the `nats-server` binary to be locally installed and accessible.
+-------- */
 use std::fs::File;
 use std::io::Write;
 use std::process::Command;

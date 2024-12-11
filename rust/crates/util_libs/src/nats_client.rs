@@ -88,7 +88,7 @@ pub struct DefaultClient {
 
 impl DefaultClient {
     pub async fn new(
-        nats_url: &str, // eg: "nats://user:pw@127.0.0.1:4222"
+        nats_url: &str,
         name: &str,
         inbox_prefix: &str,
         ping_interval: Option<Duration>,
