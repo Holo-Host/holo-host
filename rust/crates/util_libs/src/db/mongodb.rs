@@ -38,23 +38,18 @@ pub trait IntoIndexes {
 #[derive(Debug, Clone)]
 pub struct MongoCollection<T>
 where
-    T: Serialize + for<'de> Deserialize<'de> + Unpin + Send + Sync + IntoIndexes,
+    T: Serialize + for<'de> Deserialize<'de> + Unpin + Send + Sync + Default + IntoIndexes,
 {
     collection: Collection<T>,
     indices: Vec<IndexModel>,
-    schema: T,
 }
 
 impl<T> MongoCollection<T>
 where
-    T: Serialize + for<'de> Deserialize<'de> + Unpin + Send + Sync + IntoIndexes,
+    T: Serialize + for<'de> Deserialize<'de> + Unpin + Send + Sync + Default + IntoIndexes,
 {
     // Initialize database and return in form of an MongoDbPool
-    pub async fn new(
-        db_name: &str,
-        collection_name: &str,
-        schema: T,
-    ) -> Result<Self, ServiceError> {
+    pub async fn new(db_name: &str, collection_name: &str) -> Result<Self, ServiceError> {
         let mongo_uri =
             std::env::var("MONGO_URI").unwrap_or_else(|_| "mongodb://127.0.0.1:27017".to_string());
 
@@ -66,12 +61,11 @@ where
         Ok(MongoCollection {
             collection,
             indices,
-            schema,
         })
     }
 
     pub async fn apply_indexing(&mut self) -> Result<&mut Self> {
-        let schema_indices = self.schema.into_indices()?;
+        let schema_indices = T::default().into_indices()?;
         let mut indices = self.indices.to_owned();
 
         for (indexed_field, opts) in schema_indices.into_iter() {
@@ -95,7 +89,7 @@ where
 #[async_trait]
 impl<T> MongoDbPool<T> for MongoCollection<T>
 where
-    T: Serialize + for<'de> Deserialize<'de> + Unpin + Send + Sync + IntoIndexes,
+    T: Serialize + for<'de> Deserialize<'de> + Unpin + Send + Sync + Default + IntoIndexes,
     bson::Document: Borrow<T>,
 {
     async fn get_one_from(&self, filter: Document) -> Result<Option<T>> {
@@ -138,5 +132,60 @@ where
             .delete_many(doc! {})
             .await
             .map_err(|e| anyhow!(e))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::db::schemas;
+    use bson::{self, doc, oid};
+    use dotenv::dotenv;
+
+    #[tokio::test]
+    async fn test_indexing_and_api() -> Result<()> {
+        dotenv().ok();
+        env_logger::init();
+
+        let database_name = "test_db";
+        let collection_name = "host";
+        let mut host_api =
+            MongoCollection::<schemas::Host>::new(&database_name, collection_name).await?;
+
+        // set index
+        host_api.apply_indexing().await?;
+
+        let mongodb_id = oid::ObjectId::new();
+        let host = schemas::Host {
+            _id: mongodb_id.to_string(),
+            device_id: vec!["mac_test".to_string()],
+            ip_address: "127.0.0.1".to_string(),
+            remaining_capacity: 50,
+            avg_uptime: 95,
+            avg_network_speed: 500,
+            avg_latency: 10,
+            vms: vec![],
+            assigned_workloads: "test_workload".to_string(),
+            assigned_hoster: "test_hoster".to_string(),
+        };
+
+        // insert a document
+        host_api.insert_many_into(vec![host.clone()]).await?;
+
+        // get the one (same) document
+        let filter = doc! { "_id": mongodb_id };
+        let fetched_host = host_api.get_one_from(filter.clone()).await?;
+
+        let mongo_db_host = fetched_host.unwrap();
+        assert_eq!(mongo_db_host._id, host._id);
+
+        // delete all documents
+        let DeleteResult { deleted_count, .. } = host_api.delete_all_from().await?;
+        let fetched_host = host_api.get_one_from(filter).await?;
+
+        assert_eq!(deleted_count, 1);
+        assert!(fetched_host.is_none());
+
+        Ok(())
     }
 }

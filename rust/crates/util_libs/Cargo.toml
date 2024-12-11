@@ -12,6 +12,7 @@ futures = { workspace = true }
 tokio = { workspace = true }
 log = { workspace = true }
 env_logger = { workspace = true }
+dotenv = { workspace = true }
 tokio-retry = "0.3.0"
 async-trait = "0.1.83"
 url = { version = "2", features = ["serde"] }

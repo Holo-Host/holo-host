@@ -1,23 +1,24 @@
 use super::mongodb::IntoIndexes;
 use anyhow::Result;
-use bson::{self, doc, Document};
+use bson::{self, doc, from_document, Document};
 use mongodb::options::IndexOptions;
 use serde::{Deserialize, Serialize};
+use std::borrow::Borrow;
 
 // ==================== User Schema ====================
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum Role {
     Developer(String), // jwt string
     Host(String),      // host pubkey
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct RoleInfo {
     pub id: String, // Hoster/Developer Mongodb ID
     pub role: Role, // *INDEXED*
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct User {
     pub _id: String, // *INDEXED*, Mongodb ID
     pub email: String,
@@ -53,8 +54,17 @@ impl IntoIndexes for User {
     }
 }
 
+impl Borrow<User> for Document {
+    fn borrow(&self) -> &User {
+        match from_document::<User>(self.clone()) {
+            Ok(u) => Box::leak(Box::new(u)), // Leak the box to return a reference
+            Err(e) => panic!("Failed to convert Document to User: {}", e), // Handle deserialization error
+        }
+    }
+}
+
 // ==================== Developer Schema ====================
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct Developer {
     pub _id: String,
     pub user_id: String, // MongoDB ID ref to `user.id` (which stores the hoster's pubkey, jurisdiction and email)
@@ -68,8 +78,17 @@ impl IntoIndexes for Developer {
     }
 }
 
+impl Borrow<Developer> for Document {
+    fn borrow(&self) -> &Developer {
+        match from_document::<Developer>(self.clone()) {
+            Ok(d) => Box::leak(Box::new(d)), // Leak the box to return a reference
+            Err(e) => panic!("Failed to convert Document to Developer: {}", e), // Handle deserialization error
+        }
+    }
+}
+
 // ==================== Hoster Schema ====================
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct Hoster {
     pub _id: String,
     pub user_id: String, // MongoDB ID ref to `user.id` (which stores the hoster's pubkey, jurisdiction and email)
@@ -83,9 +102,18 @@ impl IntoIndexes for Hoster {
     }
 }
 
+impl Borrow<Hoster> for Document {
+    fn borrow(&self) -> &Hoster {
+        match from_document::<Hoster>(self.clone()) {
+            Ok(h) => Box::leak(Box::new(h)), // Leak the box to return a reference
+            Err(e) => panic!("Failed to convert Document to Hoster: {}", e), // Handle deserialization error
+        }
+    }
+}
+
 // ==================== Host Schema ====================
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct VM {
     pub port: u16,
     pub size: u64,
@@ -95,7 +123,7 @@ pub struct VM {
 // Provide type Alias for Host, as sometimes the use of "Node" is clearer
 pub use Host as Node;
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct Host {
     pub _id: String,            // Mongodb ID
     pub device_id: Vec<String>, // (eg: mac_address)
@@ -127,8 +155,17 @@ impl IntoIndexes for Host {
     }
 }
 
+impl Borrow<Host> for Document {
+    fn borrow(&self) -> &Host {
+        match from_document::<Host>(self.clone()) {
+            Ok(h) => Box::leak(Box::new(h)), // Leak the box to return a reference
+            Err(e) => panic!("Failed to convert Document to Host: {}", e), // Handle deserialization error
+        }
+    }
+}
+
 // ==================== Workload Schema ====================
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct HolochainEnv {
     pub overlay_network: String,
     pub keystore_service_address: String,
@@ -137,20 +174,26 @@ pub struct HolochainEnv {
     pub ui_url: Option<String>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct BaseEnv {
     pub overlay_network: Option<String>,
     pub keystore_service_address: Option<String>,
     pub size: Option<String>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum Environment {
     Holochain(HolochainEnv),
     Baseline(BaseEnv),
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+impl Default for Environment {
+    fn default() -> Self {
+        Environment::Baseline(BaseEnv::default())
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Workload {
     pub _id: String,    // Mongodb ID
     pub file: url::Url, // (eg: DNA URL, wasm bin url)
@@ -160,7 +203,6 @@ pub struct Workload {
     pub assigned_hosts: Vec<String>, // Host Device IDs (eg: mac_id)
 }
 
-// No Additional Indexing for Hoster
 impl IntoIndexes for Workload {
     fn into_indices(&self) -> Result<Vec<(Document, Option<IndexOptions>)>> {
         let mut indices = vec![];
@@ -176,5 +218,27 @@ impl IntoIndexes for Workload {
         indices.push((developer_index_doc, developer_index_opts));
 
         Ok(indices)
+    }
+}
+
+impl Default for Workload {
+    fn default() -> Self {
+        Self {
+            _id: String::new(),
+            file: url::Url::parse("http://localhost").expect("Default URL should always be valid"),
+            env: Environment::default(),
+            assigned_developer: String::new(),
+            min_hosts: 0,
+            assigned_hosts: Vec::new(),
+        }
+    }
+}
+
+impl Borrow<Workload> for Document {
+    fn borrow(&self) -> &Workload {
+        match from_document::<Workload>(self.clone()) {
+            Ok(w) => Box::leak(Box::new(w)), // Leak the box to return a reference
+            Err(e) => panic!("Failed to convert Document to Workload: {}", e), // Handle deserialization error
+        }
     }
 }

@@ -57,7 +57,7 @@ pub struct JsStreamService {
 
 impl JsStreamService {
     // Spin up a jetstream associated with the provided Nats Client
-    // NB: The context creation is separated out to allow already established js contexts to be passed in instead of recreated.
+    // NB: The context creation is separated out to allow already established js contexts to be passed into `new` instead of being re/created there.
     pub fn get_context(client: Client) -> Context {
         jetstream::new(client)
     }
