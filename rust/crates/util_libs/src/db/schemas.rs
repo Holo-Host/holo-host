@@ -33,8 +33,8 @@ impl IntoIndexes for User {
         let email_index_doc = doc! { "email": 1 };
         let email_index_opts = Some(
             IndexOptions::builder()
-                .unique(true) // Enforce uniqueness
-                .name(Some("email_index".to_string())) // Name of the index
+                .unique(true)
+                .name(Some("email_index".to_string()))
                 .build(),
         );
         indices.push((email_index_doc, email_index_opts));
@@ -43,8 +43,8 @@ impl IntoIndexes for User {
         let role_index_doc = doc! { "roles.role": 1 };
         let role_index_opts = Some(
             IndexOptions::builder()
-                .unique(true) // Enforce uniqueness
-                .name(Some("role_index".to_string())) // Name of the index
+                .unique(true)
+                .name(Some("role_index".to_string()))
                 .build(),
         );
         indices.push((role_index_doc, role_index_opts));
@@ -117,8 +117,8 @@ impl IntoIndexes for Host {
         let capacity_index_doc = doc! { "remaining_capacity": 1 };
         let capacity_index_opts = Some(
             IndexOptions::builder()
-                .unique(true) // Enforce uniqueness
-                .name(Some("remaining_capacity_index".to_string())) // Name of the index
+                .unique(true)
+                .name(Some("remaining_capacity_index".to_string()))
                 .build(),
         );
         indices.push((capacity_index_doc, capacity_index_opts));
@@ -169,8 +169,8 @@ impl IntoIndexes for Workload {
         let developer_index_doc = doc! { "assigned_developer": 1 };
         let developer_index_opts = Some(
             IndexOptions::builder()
-                .unique(true) // Enforce uniqueness
-                .name(Some("assigned_developer_index".to_string())) // Name of the index
+                .unique(true)
+                .name(Some("assigned_developer_index".to_string()))
                 .build(),
         );
         indices.push((developer_index_doc, developer_index_opts));

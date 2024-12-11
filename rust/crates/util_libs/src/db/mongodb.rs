@@ -98,8 +98,6 @@ where
     T: Serialize + for<'de> Deserialize<'de> + Unpin + Send + Sync + IntoIndexes,
     bson::Document: Borrow<T>,
 {
-    // let bson_id = bson::oid::ObjectId::from_str(id)?;
-    // let filter = doc! {"_id": bson_id};
     async fn get_one_from(&self, filter: Document) -> Result<Option<T>> {
         let item = self
             .collection

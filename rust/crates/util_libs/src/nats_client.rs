@@ -62,7 +62,6 @@ pub struct PublishOptions {
     pub data: Vec<u8>,
 }
 
-// Impl the `Debug` trait for the `ConsumerExt.config` field *only*
 impl std::fmt::Debug for DefaultClient {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("DefaultClient")

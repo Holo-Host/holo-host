@@ -51,8 +51,8 @@ pub struct JsStreamService {
     service_subject: String,
     service_log_prefix: String,
     js_context: Arc<RwLock<Context>>,
-    stream: Arc<RwLock<Stream<Info>>>, // NB: you can access the config used to make the stream by calling `stream.info().config` --updates cache or `stream.get_info().config` --calls from cache
-    local_consumers: Arc<RwLock<HashMap<String, ConsumerExt>>>, // the string is the provided name of for the
+    stream: Arc<RwLock<Stream<Info>>>,
+    local_consumers: Arc<RwLock<HashMap<String, ConsumerExt>>>,
 }
 
 impl JsStreamService {
