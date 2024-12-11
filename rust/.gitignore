@@ -1,0 +1,10 @@
+/target
+.env
+
+store_leaf/
+/jwt
+/servers
+*-resolver.conf
+
+logs/
+docs/
