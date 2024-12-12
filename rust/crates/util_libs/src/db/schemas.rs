@@ -5,6 +5,13 @@ use mongodb::options::IndexOptions;
 use serde::{Deserialize, Serialize};
 use std::borrow::Borrow;
 
+pub const DATABASE_NAME: &str = "holo-hosting";
+pub const USER_COLLECTION_NAME: &str = "user";
+pub const DEVELOPER_COLLECTION_NAME: &str = "developer";
+pub const HOSTER_COLLECTION_NAME: &str = "hoster";
+pub const HOST_COLLECTION_NAME: &str = "host";
+pub const WORKLOAD_COLLECTION_NAME: &str = "workload";
+
 // ==================== User Schema ====================
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum Role {

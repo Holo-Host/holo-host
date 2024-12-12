@@ -3,10 +3,7 @@ use async_trait::async_trait;
 use bson::{self, doc, Document};
 use futures::stream::TryStreamExt;
 use mongodb::results::DeleteResult;
-use mongodb::{
-    options::{ClientOptions, IndexOptions},
-    Client, Collection, IndexModel,
-};
+use mongodb::{options::IndexOptions, Client, Collection, IndexModel};
 use serde::{Deserialize, Serialize};
 use std::borrow::Borrow;
 use std::fmt::Debug;
@@ -19,7 +16,6 @@ pub enum ServiceError {
     Database(#[from] mongodb::error::Error),
 }
 
-// Note: Each mongodb::Client clone is an alias of an Arc type and allows for multiple references of the same connection pool.
 #[async_trait]
 pub trait MongoDbPool<T>
 where
@@ -27,6 +23,7 @@ where
 {
     async fn get_one_from(&self, filter: Document) -> Result<Option<T>>;
     async fn get_many_from(&self, filter: Document) -> Result<Vec<T>>;
+    async fn insert_one_into(&self, item: T) -> Result<bson::oid::ObjectId>;
     async fn insert_many_into(&self, items: Vec<T>) -> Result<Vec<bson::oid::ObjectId>>;
     async fn delete_all_from(&self) -> Result<DeleteResult>;
 }
@@ -49,12 +46,12 @@ where
     T: Serialize + for<'de> Deserialize<'de> + Unpin + Send + Sync + Default + IntoIndexes,
 {
     // Initialize database and return in form of an MongoDbPool
-    pub async fn new(db_name: &str, collection_name: &str) -> Result<Self, ServiceError> {
-        let mongo_uri =
-            std::env::var("MONGO_URI").unwrap_or_else(|_| "mongodb://127.0.0.1:27017".to_string());
-
-        let client_options = ClientOptions::parse(mongo_uri).await?;
-        let client = Client::with_options(client_options)?;
+    // NB: Each `mongodb::Client` clone is an alias of an Arc type and allows for multiple references of the same connection pool.
+    pub async fn new(
+        client: &Client,
+        db_name: &str,
+        collection_name: &str,
+    ) -> Result<Self, ServiceError> {
         let collection = client.database(db_name).collection::<T>(collection_name);
         let indices = vec![];
 
@@ -107,6 +104,19 @@ where
         Ok(results)
     }
 
+    async fn insert_one_into(&self, item: T) -> Result<mongodb::bson::oid::ObjectId> {
+        let doc: Document = bson::to_document(&item).unwrap();
+        let result = self
+            .collection
+            .insert_one(doc)
+            .await
+            .map_err(ServiceError::Database)?;
+
+        result.inserted_id.as_object_id().ok_or(anyhow!(
+            "MongoDB Error: Failed to get the ObjectId for inserted document."
+        ))
+    }
+
     async fn insert_many_into(&self, items: Vec<T>) -> Result<Vec<mongodb::bson::oid::ObjectId>> {
         let docs: Vec<Document> = items
             .into_iter()
@@ -141,16 +151,22 @@ mod tests {
     use crate::db::schemas;
     use bson::{self, doc, oid};
     use dotenv::dotenv;
+    use mongodb::{options::ClientOptions, Client as MongoDBClient};
 
     #[tokio::test]
     async fn test_indexing_and_api() -> Result<()> {
         dotenv().ok();
         env_logger::init();
 
+        let mongo_uri =
+            std::env::var("MONGO_URI").unwrap_or_else(|_| "mongodb://127.0.0.1:27017".to_string());
+        let client_options = ClientOptions::parse(mongo_uri).await?;
+        let client = MongoDBClient::with_options(client_options)?;
+
         let database_name = "test_db";
         let collection_name = "host";
         let mut host_api =
-            MongoCollection::<schemas::Host>::new(&database_name, collection_name).await?;
+            MongoCollection::<schemas::Host>::new(&client, &database_name, collection_name).await?;
 
         // set index
         host_api.apply_indexing().await?;

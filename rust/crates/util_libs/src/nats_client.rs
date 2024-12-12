@@ -1,10 +1,10 @@
-use super::microservices::jetstream::JsStreamService;
 use anyhow::{anyhow, Result};
 use async_nats::jetstream::context::PublishAckFuture;
 use async_nats::jetstream::{self, stream::Config};
 use async_nats::Message;
 use async_trait::async_trait;
 use futures::StreamExt;
+use serde::Deserialize;
 use std::error::Error;
 use std::fmt;
 use std::fmt::Debug;
@@ -44,10 +44,10 @@ impl Error for ErrClientDisconnected {}
 #[async_trait]
 pub trait Client: Send + Sync {
     fn name(&self) -> &str;
-    async fn monitor(&self) -> Result<(), Box<dyn Error>>;
-    async fn close(&self) -> Result<(), Box<dyn Error>>;
-    async fn add_stream(&self, opts: &AddStreamOptions) -> Result<(), Box<dyn Error>>;
-    async fn publish(&self, opts: &PublishOptions) -> Result<(), Box<dyn Error>>;
+    async fn monitor(&self) -> Result<(), async_nats::Error>;
+    async fn close(&self) -> Result<(), async_nats::Error>;
+    async fn add_stream(&self, opts: &AddStreamOptions) -> Result<(), async_nats::Error>;
+    async fn publish(&self, opts: &PublishOptions) -> Result<(), async_nats::Error>;
 }
 
 #[derive(Clone, Debug)]
@@ -69,7 +69,6 @@ impl std::fmt::Debug for DefaultClient {
             .field("name", &self.name)
             .field("client", &self.client)
             .field("js", &self.js)
-            .field("js_services", &self.js_services)
             .field("service_log_prefix", &self.service_log_prefix)
             .finish()
     }
@@ -80,64 +79,74 @@ pub struct DefaultClient {
     name: String,
     on_msg_published_event: Option<EventHandler>,
     on_msg_failed_event: Option<EventHandler>,
-    client: async_nats::Client,
+    pub client: async_nats::Client,
     js: jetstream::Context,
-    js_services: Option<Vec<JsStreamService>>,
     service_log_prefix: String,
 }
 
+#[derive(Deserialize, Default)]
+pub struct NewDefaultClientParams {
+    pub nats_url: String,
+    pub name: String,
+    pub inbox_prefix: String,
+    #[serde(skip_deserializing)]
+    pub opts: Vec<ClientOption>, // NB: These opts should not be required for client instantiation
+    #[serde(default)]
+    pub credentials_path: Option<String>,
+    #[serde(default)]
+    pub ping_interval: Option<Duration>,
+    #[serde(default)]
+    pub request_timeout: Option<Duration>, // Defaults to 5s
+}
+
 impl DefaultClient {
-    pub async fn new(
-        nats_url: &str,
-        name: &str,
-        inbox_prefix: &str,
-        ping_interval: Option<Duration>,
-        request_timeout: Option<Duration>, // Defaults to 5s
-        credentials_path: Option<String>,
-        opts: Vec<ClientOption>, // NB: These opts should not be required for client instantiation
-    ) -> Result<Self, async_nats::Error> {
-        let client = match credentials_path {
-            Some(p) => {
-                let path = std::path::Path::new(&p);
+    pub async fn new(p: NewDefaultClientParams) -> Result<Self, async_nats::Error> {
+        let client = match p.credentials_path {
+            Some(cp) => {
+                let path = std::path::Path::new(&cp);
                 async_nats::ConnectOptions::new()
                     .credentials_file(path)
                     .await?
                     // .require_tls(true)
-                    .name(name)
-                    .ping_interval(ping_interval.unwrap_or(Duration::from_secs(120)))
-                    .request_timeout(Some(request_timeout.unwrap_or(Duration::from_secs(10))))
-                    .custom_inbox_prefix(inbox_prefix)
-                    .connect(nats_url)
+                    .name(&p.name)
+                    .ping_interval(p.ping_interval.unwrap_or(Duration::from_secs(120)))
+                    .request_timeout(Some(p.request_timeout.unwrap_or(Duration::from_secs(10))))
+                    .custom_inbox_prefix(&p.inbox_prefix)
+                    .connect(&p.nats_url)
                     .await?
             }
             None => {
                 async_nats::ConnectOptions::new()
                     // .require_tls(true)
-                    .name(name)
-                    .ping_interval(ping_interval.unwrap_or(std::time::Duration::from_secs(120)))
+                    .name(&p.name)
+                    .ping_interval(
+                        p.ping_interval
+                            .unwrap_or(std::time::Duration::from_secs(120)),
+                    )
                     .request_timeout(Some(
-                        request_timeout.unwrap_or(std::time::Duration::from_secs(10)),
+                        p.request_timeout
+                            .unwrap_or(std::time::Duration::from_secs(10)),
                     ))
-                    .custom_inbox_prefix(inbox_prefix)
-                    .connect(nats_url)
+                    .custom_inbox_prefix(&p.inbox_prefix)
+                    .connect(&p.nats_url)
                     .await?
             }
         };
 
-        let service_log_prefix = format!("NATS-CLIENT-LOG::{}::", name);
+        let service_log_prefix = format!("NATS-CLIENT-LOG::{}::", p.name);
 
         let mut default_client = DefaultClient {
-            url: String::new(),
-            name: name.to_string(),
+            url: p.nats_url,
+            name: p.name,
             on_msg_published_event: None,
             on_msg_failed_event: None,
             client: client.clone(),
             js: jetstream::new(client),
-            js_services: None,
+            // js_services: None,
             service_log_prefix: service_log_prefix.clone(),
         };
 
-        for opt in opts {
+        for opt in p.opts {
             opt(&mut default_client);
         }
 
@@ -147,13 +156,6 @@ impl DefaultClient {
             default_client.url
         );
         Ok(default_client)
-    }
-
-    pub async fn add_js_services(mut self, js_services: Vec<JsStreamService>) -> Self {
-        let mut current_services = self.js_services.unwrap_or_default();
-        current_services.extend(js_services);
-        self.js_services = Some(current_services);
-        self
     }
 
     pub async fn health_check_stream(&self, stream_name: &str) -> Result<(), async_nats::Error> {
@@ -251,7 +253,7 @@ impl Client for DefaultClient {
         &self.name
     }
 
-    async fn monitor(&self) -> Result<(), Box<dyn Error>> {
+    async fn monitor(&self) -> Result<(), async_nats::Error> {
         if let async_nats::connection::State::Disconnected = self.client.connection_state() {
             Err(Box::new(ErrClientDisconnected))
         } else {
@@ -259,12 +261,12 @@ impl Client for DefaultClient {
         }
     }
 
-    async fn close(&self) -> Result<(), Box<dyn Error>> {
+    async fn close(&self) -> Result<(), async_nats::Error> {
         self.client.drain().await?;
         Ok(())
     }
 
-    async fn add_stream(&self, opts: &AddStreamOptions) -> Result<(), Box<dyn Error>> {
+    async fn add_stream(&self, opts: &AddStreamOptions) -> Result<(), async_nats::Error> {
         let config = Config {
             name: opts.stream_name.clone(),
             subjects: vec![format!("{}.*", opts.stream_name)],
@@ -281,7 +283,7 @@ impl Client for DefaultClient {
         Ok(())
     }
 
-    async fn publish(&self, opts: &PublishOptions) -> Result<(), Box<dyn Error>> {
+    async fn publish(&self, opts: &PublishOptions) -> Result<(), async_nats::Error> {
         let result = self
             .js
             .publish(opts.subject.clone(), opts.data.clone().into())
@@ -328,13 +330,6 @@ where
         }
     }
     Err(anyhow!("Exceeded max retries"))
-}
-
-// Client Options:
-pub fn with_js_services(js_services: Vec<JsStreamService>) -> ClientOption {
-    Box::new(move |c: &mut DefaultClient| {
-        c.js_services = Some(js_services.to_owned());
-    })
 }
 
 pub fn with_event_listeners(listeners: Vec<EventListener>) -> ClientOption {
