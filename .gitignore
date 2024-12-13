@@ -1,5 +1,6 @@
 # direnv
 .direnv/
+.env
 
 # nix
 result
@@ -10,3 +11,12 @@ target/
 
 # nixago: ignore-linked-files
 /treefmt.toml
+
+# nats
+tmp/*
+store_leaf/
+/jwt
+/servers
+*-resolver.conf
+rust/*/leaf_server.conf
+
