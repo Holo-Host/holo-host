@@ -10,7 +10,6 @@ use std::fmt::Debug;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
-// use std::sync::Mutex;
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 use tokio::sync::Mutex;
@@ -52,6 +51,7 @@ type AsyncEndpointHandler = Arc<
         + Sync,
 >;
 
+#[derive(Clone)]
 pub enum EndpointType {
     Sync(EndpointHandler),
     Async(AsyncEndpointHandler),
@@ -121,7 +121,7 @@ impl MicroService {
     }
 
     /// Adds a new version grouping for endpoints
-    pub async fn add_new_service_versions(self, versions: Vec<Version>) -> Self {
+    pub async fn add_new_service_versions(&self, versions: Vec<Version>) {
         let current_version_map = self.clone().endpoints_by_version;
         let new_version_map = MicroService::add_endpoint_versions(
             current_version_map,
@@ -131,7 +131,6 @@ impl MicroService {
         .await;
 
         self.clone().endpoints_by_version = new_version_map;
-        self
     }
 
     /// Performs a health check for the provided version group
@@ -346,5 +345,142 @@ impl MicroService {
         };
 
         Ok(endpoint)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use async_nats::ConnectOptions;
+    use std::process::{Child, Command};
+    use std::sync::Arc;
+    use std::time::Duration;
+    use tokio::time;
+
+    const TEST_NATS_SERVER_URL: &str = "nats://127.0.0.1:5222";
+    const SERVICE_SEMVER: &str = "0.0.1";
+    const SERVICE_NAME: &str = "test_service";
+    const SUBJECT: &str = "test.subject";
+    const DESCRIPTION: &str = "Test MicroService";
+
+    /// Starts a test NATS server in a separate process
+    fn start_test_nats_server() -> Child {
+        Command::new("nats-server")
+            .args(["-p", "5222", "-js"])
+            .spawn()
+            .expect("Failed to start NATS server")
+    }
+
+    /// Stop the test NATS server
+    async fn stop_test_nats_server(mutex_child: Arc<Mutex<Option<Child>>>) {
+        let mut maybe_child = mutex_child.lock().await;
+        if let Some(child) = maybe_child.as_mut() {
+            // Wait for the server process to finish
+            let status = child.kill().expect("Failed to kill server");
+            println!("NATS server exited with status: {:?}", status);
+        } else {
+            println!("No running server to shut down.");
+        }
+    }
+
+    #[tokio::test]
+    #[ignore = "todo: resolve server spawn issue"]
+    async fn test_microservice_init() {
+        // Setup test server in a separate thread
+        let test_server: Arc<Mutex<Option<Child>>> = Arc::new(Mutex::new(None));
+        let test_server_clone = test_server.clone();
+        let _ = tokio::spawn(async move {
+            let mut test_server = test_server_clone.lock().await;
+            *test_server = Some(start_test_nats_server());
+
+            // Wait for the server to start
+            time::sleep(Duration::from_secs(2)).await;
+        });
+
+        log::info!("Running client test suite");
+
+        //  Test init client
+        let client = ConnectOptions::new()
+            .name("test_client")
+            .connect(TEST_NATS_SERVER_URL)
+            .await
+            .expect("Failed to connect to NATS");
+
+        let microservice = MicroService::new(
+            client.clone(),
+            SERVICE_NAME,
+            SUBJECT,
+            DESCRIPTION,
+            SERVICE_SEMVER,
+        )
+        .await
+        .expect("Failed to initialize MicroService");
+
+        assert_eq!(microservice.name, SERVICE_NAME);
+        assert_eq!(microservice.version, SERVICE_SEMVER);
+
+        // test_adding new service versions
+        microservice
+            .add_new_service_versions(vec![Version::V2, Version::V3])
+            .await;
+
+        let endpoints_by_version = microservice.endpoints_by_version.lock().await;
+        assert!(endpoints_by_version.contains_key(&Version::V2));
+        assert!(endpoints_by_version.contains_key(&Version::V3));
+
+        // Test adding an endpoint
+        let endpoint_subject = "test_endpoint";
+        let endpoint_handler: EndpointHandler = Arc::new(|_msg| Ok(vec![1, 2, 3]));
+        let endpoint_type = EndpointType::Sync(endpoint_handler);
+
+        let result = microservice
+            .add_endpoint(
+                endpoint_subject,
+                &Version::V1.to_string(),
+                endpoint_type.clone(),
+            )
+            .await;
+        assert!(result.is_ok(), "Failed to add endpoint");
+
+        // Test spawning the endpoint
+        microservice
+            .add_endpoint(endpoint_subject, &Version::V1.to_string(), endpoint_type)
+            .await
+            .expect("Failed to add endpoint");
+
+        let endpoint = microservice
+            .endpoints_by_version
+            .lock()
+            .await
+            .get(&Version::V1)
+            .unwrap()
+            .group
+            .read()
+            .await
+            .endpoint(endpoint_subject.to_string())
+            .await
+            .expect("Failed to get micorservice endpoint");
+
+        microservice
+            .spawn_endpoint(endpoint, Version::V1, endpoint_subject.to_string())
+            .await;
+
+        // Test adding the version health endpoint (for the requested version)
+        let version_groups = microservice.endpoints_by_version.lock().await;
+        let version_group = version_groups
+            .get(&Version::V1)
+            .expect("Version group does not exist");
+
+        let endpoints = version_group.endpoints.read().await;
+        assert!(endpoints.contains_key("health"));
+
+        // Close client
+        client
+            .drain()
+            .await
+            .expect("Failed to drain, flush and close client");
+
+        // close server
+        stop_test_nats_server(test_server).await;
     }
 }

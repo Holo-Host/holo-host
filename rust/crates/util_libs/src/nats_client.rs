@@ -358,3 +358,130 @@ where
         c.on_msg_failed_event = Some(Box::pin(f.clone()));
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::Arc;
+    use tokio::sync::Mutex;
+
+    pub fn get_default_params() -> NewDefaultClientParams {
+        NewDefaultClientParams {
+            nats_url: "localhost:4222".to_string(),
+            name: "test_client".to_string(),
+            inbox_prefix: "_UNIQUE_INBOX".to_string(),
+            credentials_path: None,
+            ping_interval: Some(Duration::from_secs(10)),
+            request_timeout: Some(Duration::from_secs(5)),
+            opts: vec![],
+        }
+    }
+
+    #[tokio::test]
+    async fn test_nats_client_init() {
+        let params = get_default_params();
+        let client = DefaultClient::new(params).await;
+        assert!(client.is_ok(), "Client initialization failed: {:?}", client);
+
+        let client = client.unwrap();
+        assert_eq!(client.name(), "test_client");
+    }
+
+    #[tokio::test]
+    async fn test_nats_client_add_stream() {
+        let params = get_default_params();
+        let client = DefaultClient::new(params).await.unwrap();
+        let add_stream_options = AddStreamOptions {
+            stream_name: "test_stream".to_string(),
+        };
+
+        let result = client.add_stream(&add_stream_options).await;
+        assert!(result.is_ok(), "Adding new stream failed: {:?}", result);
+    }
+
+    #[tokio::test]
+    async fn test_nats_client_publish() {
+        let params = get_default_params();
+        let client = DefaultClient::new(params).await.unwrap();
+        let publish_options = PublishOptions {
+            subject: "test_subject".to_string(),
+            msg_id: "test_msg".to_string(),
+            data: b"Hello, NATS!".to_vec(),
+        };
+
+        let result = client.publish(&publish_options).await;
+        assert!(result.is_ok(), "Publishing message failed: {:?}", result);
+    }
+
+    #[tokio::test]
+    async fn test_nats_client_subscribe_and_receive_message() {
+        let params = get_default_params();
+        let client = DefaultClient::new(params).await.unwrap();
+
+        async fn create_closure_async_block(
+            default_message: Arc<Mutex<bool>>,
+        ) -> AsyncEndpointHandler {
+            Arc::new(move |_msg: &Message| {
+                let message = default_message.clone();
+                Box::pin(async move {
+                    tokio::time::sleep(Duration::from_millis(1)).await;
+                    let mut flag = message.lock().await;
+                    *flag = true;
+                    Ok(vec![])
+                })
+            })
+        }
+
+        // Set default message to false
+        let message_received = Arc::new(Mutex::new(false));
+
+        // Update message from false to true via handler to test the handler
+        let handler =
+            EndpointType::Async(create_closure_async_block(message_received.clone()).await);
+
+        let subject = "test_subject";
+        let subscription_result = client.subscribe(subject, handler).await;
+        assert!(
+            subscription_result.is_ok(),
+            "Error: Subscription failed: {:?}",
+            subscription_result
+        );
+
+        // Publish a message to the subject
+        let publish_options = PublishOptions {
+            subject: subject.to_string(),
+            msg_id: "test_msg".to_string(),
+            data: b"Test Message".to_vec(),
+        };
+        let publication_result = client.publish(&publish_options).await;
+        assert!(
+            publication_result.is_ok(),
+            "Error: Publishing message failed: {:?}",
+            publication_result
+        );
+
+        tokio::time::sleep(Duration::from_secs(1)).await;
+
+        // Assert the message was received by the handler (ie: msg_flag should return true)
+        let msg_flag = message_received.lock().await;
+        assert!(*msg_flag);
+    }
+
+    #[tokio::test]
+    async fn test_nats_client_publish_with_retry() {
+        let params = get_default_params();
+        let client = DefaultClient::new(params).await.unwrap();
+
+        let publish_options = PublishOptions {
+            subject: "test_subject".to_string(),
+            msg_id: "retry_msg".to_string(),
+            data: b"Retry Test".to_vec(),
+        };
+        let publication_result = client.publish_with_retry(&publish_options, 3).await;
+        assert!(
+            publication_result.is_ok(),
+            "Publish with retry failed: {:?}",
+            publication_result
+        );
+    }
+}

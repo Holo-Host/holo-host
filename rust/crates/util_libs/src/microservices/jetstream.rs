@@ -316,3 +316,126 @@ impl JsStreamService {
             .to_owned())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use async_nats::ConnectOptions;
+    use std::sync::Arc;
+
+    const NATS_SERVER_URL: &str = "nats://localhost:4222";
+    const SERVICE_SEMVER: &str = "0.0.1";
+
+    pub async fn setup_jetstream() -> Context {
+        let client = ConnectOptions::new()
+            .name("test_client")
+            .connect(NATS_SERVER_URL)
+            .await
+            .expect("Failed to connect to NATS");
+
+        JsStreamService::get_context(client)
+    }
+
+    pub async fn get_default_js_service(context: Context) -> JsStreamService {
+        JsStreamService::new(
+            context,
+            "test_service",
+            "Test Service",
+            SERVICE_SEMVER,
+            "test.subject",
+        )
+        .await
+        .expect("Failed to create JsStreamService")
+    }
+
+    #[tokio::test]
+    async fn test_js_service_init() {
+        let context = setup_jetstream().await;
+        let service_name = "test_service";
+        let description = "Test Service Description";
+        let version = SERVICE_SEMVER;
+        let subject = "test.subject";
+
+        let service = JsStreamService::new(context, service_name, description, version, subject)
+            .await
+            .expect("Failed to create JsStreamService");
+
+        assert_eq!(service.name, service_name);
+        assert_eq!(service.version, version);
+        assert_eq!(service.service_subject, subject);
+    }
+
+    #[tokio::test]
+    async fn test_js_service_with_existing_stream() {
+        let context = setup_jetstream().await;
+        let stream_name = "existing_stream";
+        let version = SERVICE_SEMVER;
+
+        // Create a stream beforehand
+        context
+            .get_or_create_stream(&stream::Config {
+                name: stream_name.to_string(),
+                description: Some("Existing stream description".to_string()),
+                subjects: vec![format!("{}.>", stream_name)],
+                ..Default::default()
+            })
+            .await
+            .expect("Failed to create stream");
+
+        let service = JsStreamService::with_existing_stream(context, version, stream_name)
+            .await
+            .expect("Failed to create JsStreamService with existing stream");
+
+        assert_eq!(service.name, stream_name);
+        assert_eq!(service.version, version);
+    }
+
+    #[tokio::test]
+    async fn test_js_service_add_local_consumer() {
+        let context = setup_jetstream().await;
+        let service = get_default_js_service(context).await;
+
+        let consumer_name = "test_consumer";
+        let endpoint_subject = "endpoint";
+        let endpoint_type = EndpointType::Sync(Arc::new(|_msg| Ok(vec![1, 2, 3])));
+        let response_subject = Some("response.subject".to_string());
+
+        let consumer = service
+            .add_local_consumer(
+                consumer_name,
+                endpoint_subject,
+                endpoint_type,
+                response_subject,
+            )
+            .await
+            .expect("Failed to add local consumer");
+
+        assert_eq!(consumer.name, consumer_name);
+        assert!(consumer.response_subject.is_some());
+        assert_eq!(consumer.response_subject.unwrap(), "response.subject");
+    }
+
+    #[tokio::test]
+    async fn test_js_service_spawn_consumer_handler() {
+        let context = setup_jetstream().await;
+        let service = get_default_js_service(context).await;
+
+        let consumer_name = "test_consumer";
+        let endpoint_subject = "endpoint";
+        let endpoint_type = EndpointType::Sync(Arc::new(|_msg| Ok(vec![1, 2, 3])));
+        let response_subject = None;
+
+        service
+            .add_local_consumer(
+                consumer_name,
+                endpoint_subject,
+                endpoint_type,
+                response_subject,
+            )
+            .await
+            .expect("Failed to add local consumer");
+
+        let result = service.spawn_consumer_handler(consumer_name).await;
+        assert!(result.is_ok(), "Failed to spawn consumer handler");
+    }
+}
