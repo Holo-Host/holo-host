@@ -2,7 +2,7 @@ use super::mongodb::IntoIndexes;
 use anyhow::Result;
 use bson::{self, doc, Document};
 use mongodb::options::IndexOptions;
-use semver::{BuildMetadata, Prerelease, VersionReq};
+use semver::{BuildMetadata, Prerelease};
 use serde::{Deserialize, Serialize};
 
 pub const DATABASE_NAME: &str = "holo-hosting";
@@ -67,10 +67,12 @@ impl Default for Environment {
     }
 }
 
+pub use String as SemVer;
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Workload {
     pub _id: String, // Mongodb ID
-    pub version: semver::Version,
+    pub version: SemVer,
     pub file: url::Url,              // (eg: DNA URL, wasm bin url)
     pub assigned_hosts: Vec<String>, // Host Device IDs (eg: mac_id)
 }
@@ -85,9 +87,11 @@ impl Default for Workload {
             build: BuildMetadata::EMPTY,
         };
 
+        let semver = version.to_string();
+
         Self {
             _id: String::new(),
-            version,
+            version: semver,
             file: url::Url::parse("http://localhost").expect("Default URL should always be valid"),
             assigned_hosts: Vec::new(),
         }

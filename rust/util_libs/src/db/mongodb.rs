@@ -168,14 +168,6 @@ mod tests {
         fn get_mock_host() -> schemas::Host {
             schemas::Host {
                 _id: oid::ObjectId::new().to_string(),
-                device_id: vec!["mac_id".to_string()],
-                ip_address: "127.0.0.1".to_string(),
-                remaining_capacity: 50,
-                avg_uptime: 95,
-                avg_network_speed: 500,
-                avg_latency: 10,
-                vms: vec![],
-                assigned_workloads: "workload_id".to_string(),
                 assigned_hoster: "hoster".to_string(),
             }
         }
