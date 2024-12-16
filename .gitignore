@@ -13,10 +13,10 @@ target/
 /treefmt.toml
 
 # nats
-tmp/*
-store_leaf/
-/jwt
-/servers
-*-resolver.conf
+rust/*/test-auth
+rust/*/tmp
+rust/*/jwt
+rust/*/*/resolver.conf
 rust/*/leaf_server.conf
+rust/*/hub-js-storage
 

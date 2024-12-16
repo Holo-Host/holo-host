@@ -1212,6 +1212,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "nats-jwt"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e51104ed9bd9e7d1f9117603e1186a56a3a437ceaf0761383910180f5879b801"
+dependencies = [
+ "data-encoding",
+ "nkeys",
+ "serde",
+ "serde_json",
+ "sha2",
+]
+
+[[package]]
 name = "nkeys"
 version = "0.4.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2323,6 +2336,7 @@ dependencies = [
  "futures",
  "log",
  "mongodb",
+ "nats-jwt",
  "sea-strum_macros",
  "serde",
  "serde_json",
