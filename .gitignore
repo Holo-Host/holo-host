@@ -10,3 +10,7 @@ target/
 
 # nixago: ignore-linked-files
 /treefmt.toml
+
+# Added by cargo
+
+/target
