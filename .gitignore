@@ -1,5 +1,6 @@
 # direnv
 .direnv/
+.env
 
 # nix
 result
@@ -11,6 +12,11 @@ target/
 # nixago: ignore-linked-files
 /treefmt.toml
 
-# Added by cargo
+# nats
+rust/*/test-auth
+rust/*/tmp
+rust/*/jwt
+rust/*/*/resolver.conf
+rust/*/leaf_server.conf
+rust/*/hub-js-storage
 
-/target
