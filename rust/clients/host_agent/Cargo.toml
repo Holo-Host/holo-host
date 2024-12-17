@@ -1,0 +1,26 @@
+[package]
+name = "host_agent"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+async-nats = { workspace = true }
+anyhow = { workspace = true }
+tokio = { workspace = true }
+futures = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+log = { workspace = true }
+dotenv = { workspace = true }
+thiserror = "2.0"
+url = { version = "2", features = ["serde"] }
+bson = { version = "2.6.1", features = ["chrono-0_4"] }
+env_logger = { workspace = true }
+mongodb = "3.1"
+chrono = "0.4.0"
+bytes = "1.8.0"
+nkeys = "=0.4.4"
+rand = "0.8.5"
+util_libs = { path = "../../util_libs" }
+auth = { path = "../../services/auth" }
+workload = { path = "../../services/workload" }
