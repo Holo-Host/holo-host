@@ -459,7 +459,6 @@ impl HoloPartitionInventory {
                     // bigger problems than a failed inventory.
                     let block_dev = part.file_name().unwrap_or_default().to_string_lossy();
 
-                    // TODO: this should return data to be added to the inventory
                     let fs = parse_fs(&block_dev);
 
                     ret.push(HoloPartitionInventory {
@@ -495,10 +494,11 @@ pub struct HoloNicInventory {
 }
 
 impl HoloNicInventory {
+    const NET_DEV_GLOB: &str = "/sys/class/net/*/device";
     pub fn from_host() -> Vec<HoloNicInventory> {
         let mut ret: Vec<HoloNicInventory> = vec![];
 
-        for phys_dev in glob("/sys/class/net/*/device").unwrap() {
+        for phys_dev in glob(Self::NET_DEV_GLOB).unwrap() {
             let mut net_dev = phys_dev.unwrap().clone();
             net_dev.pop();
             let dev_base = net_dev.to_string_lossy();

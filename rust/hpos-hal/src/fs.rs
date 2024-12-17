@@ -94,7 +94,6 @@ impl Ext4SuperBlock {
     }
 
     pub fn fsuuid(&self) -> Result<String, InventoryError> {
-        // TODO: This is wrong. It's encoded some other way.
         let fsuuid = Uuid::from_bytes(self.s_uuid);
         Ok(fsuuid.to_string())
     }
