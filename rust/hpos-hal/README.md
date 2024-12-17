@@ -9,3 +9,4 @@ The following binaries should be present to facilitate testing:
 * `mkfs.vfat` -- used to create a VFAT filesystem to test against.
 * `mkfs.ext4` -- used to create an EXT4 filesystem to test against.
 * `sh` and `dd` -- used along with mkfs.* to create small test filesystems.
+* `systemd-machine-id-setup` -- used to verify the implementation against systemd's.
