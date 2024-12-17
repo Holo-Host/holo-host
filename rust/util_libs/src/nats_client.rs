@@ -17,9 +17,9 @@ pub type ClientOption = Box<dyn Fn(&mut DefaultClient)>;
 pub type EventListener = Box<dyn Fn(&mut DefaultClient)>;
 pub type EventHandler = Pin<Box<dyn Fn(&str, Duration) + Send + Sync>>;
 
-type EndpointHandler = Arc<dyn Fn(&Message) -> Result<Vec<u8>, anyhow::Error> + Send + Sync>;
-type AsyncEndpointHandler = Arc<
-    dyn Fn(&Message) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, anyhow::Error>> + Send>>
+pub type EndpointHandler = Arc<dyn Fn(&Message) -> Result<Vec<u8>, anyhow::Error> + Send + Sync>;
+pub type AsyncEndpointHandler = Arc<
+    dyn Fn(Arc<Message>) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, anyhow::Error>> + Send>>
         + Send
         + Sync,
 >;
@@ -46,6 +46,10 @@ pub trait Client: Send + Sync {
     fn name(&self) -> &str;
     async fn monitor(&self) -> Result<(), async_nats::Error>;
     async fn close(&self) -> Result<(), async_nats::Error>;
+    async fn get_stream(
+        &self,
+        get_stream: &str,
+    ) -> Result<jetstream::stream::Stream, async_nats::Error>;
     async fn add_stream(&self, opts: &AddStreamOptions) -> Result<(), async_nats::Error>;
     async fn publish(&self, opts: &PublishOptions) -> Result<(), async_nats::Error>;
 }
@@ -79,7 +83,7 @@ pub struct DefaultClient {
     name: String,
     on_msg_published_event: Option<EventHandler>,
     on_msg_failed_event: Option<EventHandler>,
-    pub client: async_nats::Client,
+    pub client: async_nats::Client, // inner_client
     js: jetstream::Context,
     service_log_prefix: String,
 }
@@ -142,7 +146,6 @@ impl DefaultClient {
             on_msg_failed_event: None,
             client: client.clone(),
             js: jetstream::new(client),
-            // js_services: None,
             service_log_prefix: service_log_prefix.clone(),
         };
 
@@ -199,7 +202,7 @@ impl DefaultClient {
 
                 let result = match handler.to_owned() {
                     EndpointType::Sync(handler) => handler(&msg),
-                    EndpointType::Async(handler) => handler(&msg).await,
+                    EndpointType::Async(handler) => handler(Arc::new(msg.clone())).await,
                 };
 
                 let response_bytes: bytes::Bytes = match result {
@@ -283,6 +286,13 @@ impl Client for DefaultClient {
         Ok(())
     }
 
+    async fn get_stream(
+        &self,
+        stream_name: &str,
+    ) -> Result<jetstream::stream::Stream, async_nats::Error> {
+        Ok(self.js.get_stream(stream_name).await?)
+    }
+
     async fn publish(&self, opts: &PublishOptions) -> Result<(), async_nats::Error> {
         let result = self
             .js
@@ -293,7 +303,7 @@ impl Client for DefaultClient {
         let duration = now.elapsed();
         if let Err(err) = result {
             if let Some(ref on_failed) = self.on_msg_failed_event {
-                on_failed(&opts.subject, duration);
+                on_failed(&opts.subject, duration); // add msg_id
             }
             return Err(Box::new(err));
         }
@@ -312,7 +322,6 @@ impl Client for DefaultClient {
     }
 }
 
-// Helper:
 async fn retry<F, Fut, T>(mut operation: F, retries: usize) -> Result<T, anyhow::Error>
 where
     F: FnMut() -> Fut,
@@ -359,11 +368,24 @@ where
     })
 }
 
+// Helpers:
+pub fn get_nats_url() -> String {
+    std::env::var("NATS_URL").unwrap_or_else(|_| "127.0.0.1:4111".to_string())
+}
+
+pub fn get_nats_client_creds(operator: &str, account: &str, user: &str) -> String {
+    std::env::var("HOST_CREDS_FILE_PATH").unwrap_or_else(|_| {
+        format!(
+            "/.local/share/nats/nsc/keys/creds/{}/{}/{}.creds",
+            operator, account, user
+        )
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::sync::Arc;
-    use tokio::sync::Mutex;
 
     pub fn get_default_params() -> NewDefaultClientParams {
         NewDefaultClientParams {
@@ -418,22 +440,24 @@ mod tests {
         let params = get_default_params();
         let client = DefaultClient::new(params).await.unwrap();
 
+        // Set default message to false
+        let message_received = Arc::new(tokio::sync::Mutex::new(false));
+
         async fn create_closure_async_block(
-            default_message: Arc<Mutex<bool>>,
+            message: Arc<tokio::sync::Mutex<bool>>,
         ) -> AsyncEndpointHandler {
-            Arc::new(move |_msg: &Message| {
-                let message = default_message.clone();
+            Arc::new(move |_msg: Arc<Message>| {
+                let message = message.clone();
+                let msg = _msg.clone();
                 Box::pin(async move {
                     tokio::time::sleep(Duration::from_millis(1)).await;
                     let mut flag = message.lock().await;
                     *flag = true;
+                    let x = msg;
                     Ok(vec![])
                 })
             })
         }
-
-        // Set default message to false
-        let message_received = Arc::new(Mutex::new(false));
 
         // Update message from false to true via handler to test the handler
         let handler =

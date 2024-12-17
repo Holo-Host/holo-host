@@ -139,6 +139,11 @@ where
     }
 }
 
+// Helpers:
+pub fn get_mongodb_url() -> String {
+    std::env::var("MONGO_URI").unwrap_or_else(|_| "mongodb://127.0.0.1:27017".to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

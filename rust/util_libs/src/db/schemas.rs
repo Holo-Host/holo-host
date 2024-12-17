@@ -97,3 +97,21 @@ impl Default for Workload {
         }
     }
 }
+
+impl IntoIndexes for Workload {
+    fn into_indices(&self) -> Result<Vec<(Document, Option<IndexOptions>)>> {
+        let mut indices = vec![];
+
+        //  Add Email Index
+        let developer_index_doc = doc! { "assigned_developer": 1 };
+        let developer_index_opts = Some(
+            IndexOptions::builder()
+                .unique(true)
+                .name(Some("assigned_developer_index".to_string()))
+                .build(),
+        );
+        indices.push((developer_index_doc, developer_index_opts));
+
+        Ok(indices)
+    }
+}

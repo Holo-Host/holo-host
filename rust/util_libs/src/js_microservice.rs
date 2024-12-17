@@ -1,4 +1,4 @@
-use crate::nats_client::EndpointType;
+use super::nats_client::EndpointType;
 use anyhow::{anyhow, Result};
 use async_nats::jetstream::consumer::{self, AckPolicy, PullConsumer};
 use async_nats::jetstream::stream::{self, Info, Stream};
@@ -71,6 +71,7 @@ impl JsStreamService {
     }
 
     /// Create a new MicroService instance
+    // For when the consumer service also creates the stream
     pub async fn new(
         context: Context,
         name: &str,
@@ -101,6 +102,7 @@ impl JsStreamService {
         })
     }
 
+    // For then the consumer service doesn't also create the stream
     pub async fn with_existing_stream(
         context: Context,
         version: &str,
@@ -217,7 +219,9 @@ impl JsStreamService {
 
                     let result = match consumer_details.handler.to_owned() {
                         EndpointType::Sync(handler) => handler(&js_msg.message),
-                        EndpointType::Async(handler) => handler(&js_msg.message).await,
+                        EndpointType::Async(handler) => {
+                            handler(Arc::new(js_msg.clone().message)).await
+                        }
                     };
 
                     let response_bytes: bytes::Bytes = match result {

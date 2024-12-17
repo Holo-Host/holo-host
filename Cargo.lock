@@ -157,6 +157,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "auth"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-nats",
+ "bson",
+ "bytes",
+ "chrono",
+ "dotenv",
+ "env_logger",
+ "futures",
+ "log",
+ "mongodb",
+ "nkeys",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.7",
+ "tokio",
+ "url",
+ "util_libs",
+]
+
+[[package]]
 name = "autocfg"
 version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -801,6 +824,32 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6c49c37c09c17a53d937dfbb742eb3a961d65a994e6bcdcf37e7399d0cc8ab5e"
 dependencies = [
  "digest",
+]
+
+[[package]]
+name = "host_agent"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-nats",
+ "auth",
+ "bson",
+ "bytes",
+ "chrono",
+ "dotenv",
+ "env_logger",
+ "futures",
+ "log",
+ "mongodb",
+ "nkeys",
+ "rand",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.7",
+ "tokio",
+ "url",
+ "util_libs",
+ "workload",
 ]
 
 [[package]]
@@ -2623,6 +2672,29 @@ checksum = "524e57b2c537c0f9b1e69f1965311ec12182b4122e45035b1508cd24d2adadb1"
 dependencies = [
  "cfg-if",
  "windows-sys 0.48.0",
+]
+
+[[package]]
+name = "workload"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-nats",
+ "bson",
+ "bytes",
+ "chrono",
+ "dotenv",
+ "env_logger",
+ "futures",
+ "log",
+ "mongodb",
+ "nkeys",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.7",
+ "tokio",
+ "url",
+ "util_libs",
 ]
 
 [[package]]
