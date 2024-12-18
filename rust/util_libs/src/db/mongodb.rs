@@ -180,7 +180,7 @@ mod tests {
                 avg_network_speed: 500,
                 avg_latency: 10,
                 vms: vec![],
-                assigned_workloads: "workload_id".to_string(),
+                assigned_workloads: vec!["workload_id".to_string()],
                 assigned_hoster: "hoster".to_string(),
             }
         }

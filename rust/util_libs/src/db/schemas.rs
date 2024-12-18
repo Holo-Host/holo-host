@@ -103,7 +103,6 @@ pub use String as HosterPubKey;
 
 // Provide type Alias for Host
 pub use Host as Node;
-pub use String as HosterPubKey;
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct Host {
@@ -116,7 +115,7 @@ pub struct Host {
     pub avg_latency: u64,
     pub vms: Vec<VM>,
     pub assigned_workloads: Vec<String>, // MongoDB ID refs to `workload._id`
-    pub assigned_hoster: String,         // *INDEXED*, Hoster pubkey
+    pub assigned_hoster: HosterPubKey,   // *INDEXED*, Hoster pubkey
 }
 
 impl IntoIndexes for Host {
