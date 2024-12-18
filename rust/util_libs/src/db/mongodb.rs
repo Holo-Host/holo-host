@@ -173,6 +173,7 @@ mod tests {
         fn get_mock_host() -> schemas::Host {
             schemas::Host {
                 _id: oid::ObjectId::new().to_string(),
+                device_id: "Vf3IceiD".to_string(),
                 assigned_hoster: "hoster".to_string(),
             }
         }

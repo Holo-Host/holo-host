@@ -10,70 +10,41 @@ pub const HOST_COLLECTION_NAME: &str = "host";
 pub const WORKLOAD_COLLECTION_NAME: &str = "workload";
 
 // ==================== Host Schema ====================
-pub use String as HosterPubKey;
-
-// Provide type Alias for Host, as sometimes the use of "Node" is clearer
 pub use Host as Node;
+pub use String as HosterPubKey;
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct Host {
     pub _id: String,                   // Mongodb ID
-    pub assigned_hoster: HosterPubKey, // *INDEXED*, Hoster pubkey
+    pub device_id: String,             // *INDEXED*, Auto-generated Nats server ID
+    pub assigned_hoster: HosterPubKey, // Hoster pubkey
 }
 
 impl IntoIndexes for Host {
     fn into_indices(&self) -> Result<Vec<(Document, Option<IndexOptions>)>> {
         let mut indices = vec![];
 
-        //  Add Hoster Index
-        let hoster_index_doc = doc! { "assigned_hoster": 1 };
-        let hoster_index_opts = Some(
+        //  Add Device ID Index
+        let device_id_index_doc = doc! { "device_id": 1 };
+        let device_id_index_opts = Some(
             IndexOptions::builder()
-                .name(Some("assigned_hoster_index".to_string()))
+                .name(Some("device_id_index".to_string()))
                 .build(),
         );
-        indices.push((hoster_index_doc, hoster_index_opts));
+        indices.push((device_id_index_doc, device_id_index_opts));
 
         Ok(indices)
     }
 }
 
 // ==================== Workload Schema ====================
-#[derive(Serialize, Deserialize, Clone, Debug, Default)]
-pub struct HolochainEnv {
-    pub overlay_network: String,
-    pub keystore_service_address: String,
-    pub membrane_proof: Option<String>,
-    pub network_seed: Option<String>,
-    pub ui_url: Option<String>,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, Default)]
-pub struct BaseEnv {
-    pub overlay_network: Option<String>,
-    pub keystore_service_address: Option<String>,
-    pub size: Option<u64>,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub enum Environment {
-    Holochain(HolochainEnv),
-    Baseline(BaseEnv),
-}
-
-impl Default for Environment {
-    fn default() -> Self {
-        Environment::Baseline(BaseEnv::default())
-    }
-}
-
 pub use String as SemVer;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Workload {
     pub _id: String, // Mongodb ID
     pub version: SemVer,
-    pub file: url::Url,              // (eg: DNA URL, wasm bin url)
+    pub nats_pkg: String, // (Includes everthing needed to deploy workload - ie: binary & env pkg & deps, etc)
     pub assigned_hosts: Vec<String>, // Host Device IDs (eg: mac_id)
 }
 
@@ -82,7 +53,7 @@ impl Default for Workload {
         let version = semver::Version {
             major: 0,
             minor: 0,
-            patch: 1,
+            patch: 0,
             pre: Prerelease::EMPTY,
             build: BuildMetadata::EMPTY,
         };
@@ -92,7 +63,7 @@ impl Default for Workload {
         Self {
             _id: String::new(),
             version: semver,
-            file: url::Url::parse("http://localhost").expect("Default URL should always be valid"),
+            nats_pkg: String::new(),
             assigned_hosts: Vec::new(),
         }
     }
@@ -102,7 +73,7 @@ impl IntoIndexes for Workload {
     fn into_indices(&self) -> Result<Vec<(Document, Option<IndexOptions>)>> {
         let mut indices = vec![];
 
-        //  Add Email Index
+        //  Add Developer Index
         let developer_index_doc = doc! { "assigned_developer": 1 };
         let developer_index_opts = Some(
             IndexOptions::builder()
