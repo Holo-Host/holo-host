@@ -22,5 +22,4 @@ bytes = "1.8.0"
 nkeys = "=0.4.4"
 rand = "0.8.5"
 util_libs = { path = "../../util_libs" }
-auth = { path = "../../services/auth" }
 workload = { path = "../../services/workload" }

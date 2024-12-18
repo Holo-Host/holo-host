@@ -366,7 +366,7 @@ mod tests {
 
         log::info!("Client successfully connected to the Leaf Server.");
 
-        // Test js use on Leaf Client:
+        // Test js on Leaf Client:
         let test_stream_name = "test_stream";
         let test_stream_subject = "test.subject";
         let js_context = async_nats::jetstream::new(client.clone());
@@ -386,7 +386,7 @@ mod tests {
             .subjects
             .contains(&test_stream_subject.to_string()));
 
-        // Test client publish to js stream
+        // Test client publishing to js stream
         let test_msg = "Hello, Leaf!";
         js_context
             .publish(test_stream_subject, test_msg.into())
@@ -446,7 +446,7 @@ mod tests {
         }
         log::info!("Leaf Server has shut down successfully");
 
-        // Force shut down the Hub Server (run on port 4111)
+        // Force shut down the Hub Server (note: leaf server run on port 4111)
         Command::new("kill")
             .arg("-9")
             .arg("`lsof -t -i:4111`")

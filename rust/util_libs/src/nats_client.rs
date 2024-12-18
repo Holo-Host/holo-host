@@ -448,12 +448,10 @@ mod tests {
         ) -> AsyncEndpointHandler {
             Arc::new(move |_msg: Arc<Message>| {
                 let message = message.clone();
-                let msg = _msg.clone();
                 Box::pin(async move {
                     tokio::time::sleep(Duration::from_millis(1)).await;
                     let mut flag = message.lock().await;
                     *flag = true;
-                    let x = msg;
                     Ok(vec![])
                 })
             })
