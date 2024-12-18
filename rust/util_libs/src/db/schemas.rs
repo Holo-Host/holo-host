@@ -44,7 +44,7 @@ pub use String as SemVer;
 pub struct Workload {
     pub _id: String, // Mongodb ID
     pub version: SemVer,
-    pub nats_pkg: String, // (Includes everthing needed to deploy workload - ie: binary & env pkg & deps, etc)
+    pub nix_pkg: String, // (Includes everthing needed to deploy workload - ie: binary & env pkg & deps, etc)
     pub assigned_hosts: Vec<String>, // Host Device IDs (eg: mac_id)
 }
 
@@ -63,7 +63,7 @@ impl Default for Workload {
         Self {
             _id: String::new(),
             version: semver,
-            nats_pkg: String::new(),
+            nix_pkg: String::new(),
             assigned_hosts: Vec::new(),
         }
     }
