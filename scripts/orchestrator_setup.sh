@@ -12,7 +12,8 @@
 # Each account has a signing key with a randomly generated role name, which is assigned scoped permissions to allow only users assigned to the signing key to publish and subscribe to their respective streams.
 
 # User Creation:
-# One user named "admin" is created under the "ORCHESTRATOR" account.
+# One user named "admin" is created under the "ADMIN" account.
+# One user named "orchestrator" is created under the "WORKLOAD" account.
 
 # JWT Generation:
 # JWT files are generated for the operator and both accounts, saved in the jwt_output/ directory.
@@ -87,16 +88,16 @@ nsc add user --name admin --account $ADMIN_ACCOUNT
 # Step 5: Create User "orchestrator" in WORKLOAD Account
 nsc add user --name orchestrator --account $WORKLOAD_ACCOUNT
 
-# Step 5: Generate JWT files
+# Step 6: Generate JWT files
 nsc describe operator --raw --output-file $JWT_OUTPUT_DIR/holo_operator.jwt
 nsc describe account --name SYS --raw --output-file $JWT_OUTPUT_DIR/sys_account.jwt
 nsc describe account --name $WORKLOAD_ACCOUNT --raw --output-file $JWT_OUTPUT_DIR/workload_account.jwt
 nsc describe account --name $ADMIN_ACCOUNT --raw --output-file $JWT_OUTPUT_DIR/admin_account.jwt
 
-# Step 6: Generate Resolver Config
+# Step 7: Generate Resolver Config
 nsc generate config --nats-resolver --sys-account $SYS_ACCOUNT --force --config-file $RESOLVER_FILE
 
-# Step 7: Push credentials to NATS server
+# Step 8: Push credentials to NATS server
 nsc push -A
 
 echo "Setup complete. JWTs and resolver file are in the $JWT_OUTPUT_DIR/ directory."

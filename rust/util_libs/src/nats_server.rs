@@ -366,7 +366,7 @@ mod tests {
 
         log::info!("Client successfully connected to the Leaf Server.");
 
-        // Test js use on Leaf Client:
+        // Test js on Leaf Client:
         let test_stream_name = "test_stream";
         let test_stream_subject = "test.subject";
         let js_context = async_nats::jetstream::new(client.clone());
@@ -386,14 +386,14 @@ mod tests {
             .subjects
             .contains(&test_stream_subject.to_string()));
 
-        // Test client publish to js stream
+        // Test client publishing to js stream
         let test_msg = "Hello, Leaf!";
         js_context
             .publish(test_stream_subject, test_msg.into())
             .await
             .expect("Failed to publish jetstream message.");
 
-        // Test client subscribing to js stream
+        // Force shut down the Hub Server (note: leaf server run on port 4111)
         let test_stream_consumer_name = "test_stream_consumer".to_string();
         let consumer = stream
             .get_or_create_consumer(
