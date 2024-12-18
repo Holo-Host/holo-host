@@ -11,6 +11,8 @@ mod tests {
 
     #[test]
     fn parse_fat32() {
+        std::fs::create_dir_all("target").unwrap();
+
         let path = "target/vfat.img";
         let _out = Command::new("dd")
             .arg("if=/dev/zero")
@@ -37,6 +39,8 @@ mod tests {
 
     #[test]
     fn parse_ext4() {
+        std::fs::create_dir_all("target").unwrap();
+
         let path = "target/ext4.img";
         // Create a sparse file so that we don't end up using many actual blocks, even for a
         // larger-sized filesystem. The `truncate` utility makes this easier, but we pull in `dd`
@@ -80,6 +84,7 @@ mod tests {
         assert.stdout(format!("{}\n", inv.system.machine_id));
     }
 
+    #[cfg(feature = "tests_sudo")]
     #[test]
     fn smbios_bios() {
         let inv = HoloInventory::from_host();
@@ -133,6 +138,7 @@ mod tests {
         assert.stdout(format!("{}\n", bios_vendor));
     }
 
+    #[cfg(feature = "tests_sudo")]
     #[test]
     fn smbios_board() {
         let inv = HoloInventory::from_host();
