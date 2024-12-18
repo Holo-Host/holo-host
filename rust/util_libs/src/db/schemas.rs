@@ -10,7 +10,6 @@ pub const HOST_COLLECTION_NAME: &str = "host";
 pub const WORKLOAD_COLLECTION_NAME: &str = "workload";
 
 // ==================== Host Schema ====================
-pub use Host as Node;
 pub use String as HosterPubKey;
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
