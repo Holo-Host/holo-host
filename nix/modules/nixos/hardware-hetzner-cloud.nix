@@ -1,6 +1,4 @@
-/*
-  This is an opinionated module to configure Hetzner Cloud instances.
-*/
+# This is an opinionated module to configure Hetzner Cloud instances.
 
 { inputs, lib, ... }:
 {
