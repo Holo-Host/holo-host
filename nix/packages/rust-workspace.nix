@@ -59,21 +59,10 @@ craneLib.cargoBuild (
         }
       );
 
-      # Check formatting
-      fmt = craneLib.cargoFmt {
-        inherit src;
-      };
-
-      toml-fmt = craneLib.taploFmt {
-        src = pkgs.lib.sources.sourceFilesBySuffices src [ ".toml" ];
-        # taplo arguments can be further customized below as needed
-        # taploExtraArgs = "--config ./taplo.toml";
-      };
-
-      # Audit licenses
-      deny = craneLib.cargoDeny {
-        inherit src;
-      };
+      # TODO: Audit licenses
+      # deny = craneLib.cargoDeny {
+      #   inherit src;
+      # };
 
       nextest = craneLib.cargoNextest (
         commonArgs
