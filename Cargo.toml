@@ -7,7 +7,6 @@ members = [
     "rust/util_libs",
     "rust/clients/host_agent",
     "rust/services/workload",
-    "rust/services/auth"
 ]
 
 [workspace.dependencies]
