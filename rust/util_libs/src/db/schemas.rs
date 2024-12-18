@@ -101,9 +101,6 @@ pub struct VM {
 // Provide type Alias for HosterPubKey
 pub use String as HosterPubKey;
 
-// Provide type Alias for Host
-pub use Host as Node;
-
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct Host {
     pub _id: String,       // Mongodb ID (automated default)
