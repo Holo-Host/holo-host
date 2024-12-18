@@ -167,8 +167,8 @@ impl HoloPlatform {
         // model or whether it's a VM or not), and make it consistent across the code running on
         // hosts (agent, Nix*), as well as the centralised services managing the whole armada of
         // machines.
-        let platform_type = Self::guess_platform(&inventory);
-        let hypervisor_guest = Self::guess_hypervisor(&inventory);
+        let platform_type = Self::guess_platform(inventory);
+        let hypervisor_guest = Self::guess_hypervisor(inventory);
         Self {
             platform_type,
             hypervisor_guest,
@@ -180,7 +180,7 @@ impl HoloPlatform {
     /// custom fields and OEM strings from the DMI pool data to give us better identifying
     /// information that will be useful to our management services.
     fn guess_hypervisor(inventory: &HoloInventory) -> bool {
-        if inventory.cpus.len() > 0 {
+        if !inventory.cpus.is_empty() {
             // Check to see whether the hypervisor flag is set for the first CPU
             if inventory.cpus[0].flags.contains(&"hypervisor".to_string()) {
                 return true;
@@ -195,34 +195,33 @@ impl HoloPlatform {
         // holoports have a single NIC of a specific model at a specific part of the PCI tree. We
         // should add more criteria for determining whether it's a holoport or not, but this is a
         // start.
-        if inventory.nics.len() == 1 {
-            if inventory.nics[0].location == "pci0000:00/0000:00:1c.0/0000:01:00.0"
-                && inventory.nics[0].model == Some("0x8168".to_string())
-                && inventory.nics[0].vendor == Some("0x10ec".to_string())
-            {
-                // The main difference between a Holoport and Holoport Plus is that a
-                // Holoport has a single 1G SATA rotational drive model ST1000LM035-1RK1. A holoport
-                // plus has a 2G SATA rotational drive model ST2000LM015-2E81 and a SATA SSD model
-                // KINGSTON RBUSMS1.
-                //
-                // We may need to relax some of the criteria here, around the path. We're making an
-                // assumption that the drives have been cabled consistently for each holoport, but
-                // we've yet to see whether that's the case in the field.
-                for drive in inventory.drives.iter() {
-                    if drive.location == "pci0000:00/0000:00:17.0/ata3/host2/target2:0:0/2:0:0:0"
-                        && drive.model == Some("ST1000LM035-1RK1".to_string())
-                    {
-                        return HoloPlatformType::Holoport;
-                    }
+        if inventory.nics.len() == 1
+            && inventory.nics[0].location == "pci0000:00/0000:00:1c.0/0000:01:00.0"
+            && inventory.nics[0].model == Some("0x8168".to_string())
+            && inventory.nics[0].vendor == Some("0x10ec".to_string())
+        {
+            // The main difference between a Holoport and Holoport Plus is that a
+            // Holoport has a single 1G SATA rotational drive model ST1000LM035-1RK1. A holoport
+            // plus has a 2G SATA rotational drive model ST2000LM015-2E81 and a SATA SSD model
+            // KINGSTON RBUSMS1.
+            //
+            // We may need to relax some of the criteria here, around the path. We're making an
+            // assumption that the drives have been cabled consistently for each holoport, but
+            // we've yet to see whether that's the case in the field.
+            for drive in inventory.drives.iter() {
+                if drive.location == "pci0000:00/0000:00:17.0/ata3/host2/target2:0:0/2:0:0:0"
+                    && drive.model == Some("ST1000LM035-1RK1".to_string())
+                {
+                    return HoloPlatformType::Holoport;
                 }
-                for drive in inventory.drives.iter() {
-                    if drive.location == "pci0000:00/0000:00:17.0/ata2/host1/target1:0:0/1:0:0:0"
-                        && drive.model == Some("ST2000LM015-2E81".to_string())
-                    {
-                        // We could/should also check for the SSD here too, but this will work for
-                        // now.
-                        return HoloPlatformType::HoloportPlus;
-                    }
+            }
+            for drive in inventory.drives.iter() {
+                if drive.location == "pci0000:00/0000:00:17.0/ata2/host1/target1:0:0/1:0:0:0"
+                    && drive.model == Some("ST2000LM015-2E81".to_string())
+                {
+                    // We could/should also check for the SSD here too, but this will work for
+                    // now.
+                    return HoloPlatformType::HoloportPlus;
                 }
             }
         }
@@ -362,17 +361,15 @@ impl HoloDriveInventory {
             let bus = sysfs::bus_by_device_link(&format!("{}/device", dev_base));
             // TODO: We also need to check for filesystems if there are no partitions
             let partitions = HoloPartitionInventory::from_host(&block_dev);
-            let filesystem: Option<HoloFilesystemInventory>;
-            if partitions.len() == 0 {
+            let filesystem: Option<HoloFilesystemInventory> = if partitions.is_empty() {
                 // No partitions, perhaps this block device contains a filesystem
-                let fs = match parse_fs(&block_dev) {
+                match parse_fs(&block_dev) {
                     Ok(fs) => Some(fs),
                     Err(_) => None,
-                };
-                filesystem = fs;
+                }
             } else {
-                filesystem = None;
-            }
+                None
+            };
 
             ret.push(HoloDriveInventory {
                 block_dev: block_dev.to_string(),
@@ -450,25 +447,23 @@ impl HoloPartitionInventory {
         );
 
         if let Ok(parts) = glob(&glob_pattern) {
-            for part in parts {
-                if let Ok(mut part) = part {
-                    part.pop();
-                    let dev_base = part.to_string_lossy();
-                    // Using unwrap() or similar isn't ideal, but in this case should only fail if
-                    // we fail to decode the filename into a string. If this happens, we have
-                    // bigger problems than a failed inventory.
-                    let block_dev = part.file_name().unwrap_or_default().to_string_lossy();
+            for mut part in parts.flatten() {
+                part.pop();
+                let dev_base = part.to_string_lossy();
+                // Using unwrap() or similar isn't ideal, but in this case should only fail if
+                // we fail to decode the filename into a string. If this happens, we have
+                // bigger problems than a failed inventory.
+                let block_dev = part.file_name().unwrap_or_default().to_string_lossy();
 
-                    let fs = parse_fs(&block_dev);
+                let fs = parse_fs(&block_dev);
 
-                    ret.push(HoloPartitionInventory {
-                        block_dev: block_dev.to_string(),
-                        number: sysfs::integer_attr(format!("{}/partition", dev_base)),
-                        start: sysfs::integer_attr(format!("{}/start", dev_base)),
-                        size: sysfs::integer_attr(format!("{}/size", dev_base)),
-                        filesystem: fs.ok(),
-                    })
-                }
+                ret.push(HoloPartitionInventory {
+                    block_dev: block_dev.to_string(),
+                    number: sysfs::integer_attr(format!("{}/partition", dev_base)),
+                    start: sysfs::integer_attr(format!("{}/start", dev_base)),
+                    size: sysfs::integer_attr(format!("{}/size", dev_base)),
+                    filesystem: fs.ok(),
+                })
             }
         }
 
