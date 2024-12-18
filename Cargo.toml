@@ -1,10 +1,10 @@
 [workspace]
-version = "0.1.0"
-edition = "2021"
 resolver = "2"
+package.version = "0.1.0"
+metadata.crane.name = "holo-host-workspace"
 
 members = [
-    "rust/util_libs",
+    "rust/hpos-hal",
     "rust/clients/host_agent",
     "rust/services/workload",
 ]

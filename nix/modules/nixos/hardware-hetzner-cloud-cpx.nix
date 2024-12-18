@@ -1,6 +1,4 @@
-/*
-  This is an opinionated module to configure Hetzner Cloud CPX instances.
-*/
+# This is an opinionated module to configure Hetzner Cloud CPX instances.
 
 { lib, flake, ... }:
 {
