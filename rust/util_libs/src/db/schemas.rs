@@ -2,6 +2,7 @@ use super::mongodb::IntoIndexes;
 use anyhow::Result;
 use bson::{self, doc, Document};
 use mongodb::options::IndexOptions;
+use semver::{BuildMetadata, Prerelease};
 use serde::{Deserialize, Serialize};
 
 pub const DATABASE_NAME: &str = "holo-hosting";
@@ -26,7 +27,7 @@ pub struct RoleInfo {
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct User {
-    pub _id: String, // Mongodb ID
+    pub _id: String, // Mongodb ID (automated default)
     pub email: String,
     pub jurisdiction: String,
     pub roles: Vec<RoleInfo>,
@@ -62,9 +63,9 @@ impl IntoIndexes for User {
 // ==================== Developer Schema ====================
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct Developer {
-    pub _id: String,
-    pub user_id: String, // MongoDB ID ref to `user.id` (which stores the hoster's pubkey, jurisdiction and email)
-    pub requested_workloads: Vec<String>, // MongoDB IDS
+    pub _id: String,                      // Mongodb ID (automated default)
+    pub user_id: String, // MongoDB ID ref to `user._id` (which stores the hoster's pubkey, jurisdiction and email)
+    pub requested_workloads: Vec<String>, // MongoDB ID refs to `workload._id`
 }
 
 // No Additional Indexing for Developer
@@ -77,9 +78,9 @@ impl IntoIndexes for Developer {
 // ==================== Hoster Schema ====================
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct Hoster {
-    pub _id: String,
+    pub _id: String,                 // Mongodb ID (automated default)
     pub user_id: String, // MongoDB ID ref to `user.id` (which stores the hoster's pubkey, jurisdiction and email)
-    pub assigned_hosts: Vec<String>, // device id (g: mac_address)
+    pub assigned_hosts: Vec<String>, // Auto-generated Nats server IDs
 }
 
 // No Additional Indexing for Hoster
@@ -90,7 +91,6 @@ impl IntoIndexes for Hoster {
 }
 
 // ==================== Host Schema ====================
-
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct VM {
     pub port: u16,
@@ -98,21 +98,24 @@ pub struct VM {
     pub agent_pubkey: String,
 }
 
-// Provide type Alias for Host, as sometimes the use of "Node" is clearer
+// Provide type Alias for HosterPubKey
+pub use String as HosterPubKey;
+
+// Provide type Alias for Host
 pub use Host as Node;
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct Host {
-    pub _id: String,            // Mongodb ID
-    pub device_id: Vec<String>, // (eg: mac_address)
+    pub _id: String,            // Mongodb ID (automated default)
+    pub device_id: Vec<String>, // Auto-generated Nats server ID
     pub ip_address: String,
     pub remaining_capacity: u64,
     pub avg_uptime: u64,
     pub avg_network_speed: u64,
     pub avg_latency: u64,
     pub vms: Vec<VM>,
-    pub assigned_workloads: String, // Workload Mongodb ID
-    pub assigned_hoster: String,    // *INDEXED*, Hoster pubkey
+    pub assigned_workloads: Vec<String>, // MongoDB ID refs to `workload._id`
+    pub assigned_hoster: String,         // *INDEXED*, Hoster pubkey
 }
 
 impl IntoIndexes for Host {
@@ -133,42 +136,39 @@ impl IntoIndexes for Host {
 }
 
 // ==================== Workload Schema ====================
-#[derive(Serialize, Deserialize, Clone, Debug, Default)]
-pub struct HolochainEnv {
-    pub overlay_network: String,
-    pub keystore_service_address: String,
-    pub membrane_proof: Option<String>,
-    pub network_seed: Option<String>,
-    pub ui_url: Option<String>,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, Default)]
-pub struct BaseEnv {
-    pub overlay_network: Option<String>,
-    pub keystore_service_address: Option<String>,
-    pub size: Option<u64>,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub enum Environment {
-    Holochain(HolochainEnv),
-    Baseline(BaseEnv),
-}
-
-impl Default for Environment {
-    fn default() -> Self {
-        Environment::Baseline(BaseEnv::default())
-    }
-}
+pub use String as SemVer;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Workload {
-    pub _id: String,    // Mongodb ID
-    pub file: url::Url, // (eg: DNA URL, wasm bin url)
-    pub env: Environment,
+    pub _id: String, // Mongodb ID (automated default)
+    pub version: SemVer,
+    pub nix_pkg: String, // (Includes everthing needed to deploy workload - ie: binary & env pkg & deps, etc)
     pub assigned_developer: String, // *INDEXED*, Developer Mongodb ID
     pub min_hosts: u16,
-    pub assigned_hosts: Vec<String>, // Host Device IDs (eg: mac_id)
+    pub assigned_hosts: Vec<String>, // Host Device IDs (eg: assigned nats server id)
+}
+
+impl Default for Workload {
+    fn default() -> Self {
+        let version = semver::Version {
+            major: 0,
+            minor: 0,
+            patch: 1,
+            pre: Prerelease::EMPTY,
+            build: BuildMetadata::EMPTY,
+        };
+
+        let semver = version.to_string();
+
+        Self {
+            _id: String::new(),
+            version: semver,
+            nix_pkg: String::new(),
+            assigned_developer: String::new(),
+            min_hosts: 1,
+            assigned_hosts: Vec::new(),
+        }
+    }
 }
 
 impl IntoIndexes for Workload {
@@ -185,18 +185,5 @@ impl IntoIndexes for Workload {
         indices.push((developer_index_doc, developer_index_opts));
 
         Ok(indices)
-    }
-}
-
-impl Default for Workload {
-    fn default() -> Self {
-        Self {
-            _id: String::new(),
-            file: url::Url::parse("http://localhost").expect("Default URL should always be valid"),
-            env: Environment::default(),
-            assigned_developer: String::new(),
-            min_hosts: 0,
-            assigned_hosts: Vec::new(),
-        }
     }
 }

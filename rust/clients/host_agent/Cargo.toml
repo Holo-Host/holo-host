@@ -1,27 +1,25 @@
 [package]
-name = "util_libs"
+name = "host_agent"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
 async-nats = { workspace = true }
 anyhow = { workspace = true }
-nats-jwt = "0.3.0"
+tokio = { workspace = true }
+futures = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-semver = "1.0.24"
-futures = { workspace = true }
-tokio = { workspace = true }
 log = { workspace = true }
-env_logger = { workspace = true }
 dotenv = { workspace = true }
-tokio-retry = "0.3.0"
-async-trait = "0.1.83"
+thiserror = "2.0"
 url = { version = "2", features = ["serde"] }
-mongodb = "3.1.0"
 bson = { version = "2.6.1", features = ["chrono-0_4"] }
-thiserror = "2.0.0"
+env_logger = { workspace = true }
+mongodb = "3.1"
 chrono = "0.4.0"
-sea-strum_macros = "0.23.0"
-strum = "0.24"
 bytes = "1.8.0"
+nkeys = "=0.4.4"
+rand = "0.8.5"
+util_libs = { path = "../../util_libs" }
+workload = { path = "../../services/workload" }

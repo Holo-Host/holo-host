@@ -5,6 +5,8 @@ resolver = "2"
 
 members = [
     "rust/util_libs",
+    "rust/clients/host_agent",
+    "rust/services/workload",
 ]
 
 [workspace.dependencies]

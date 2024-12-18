@@ -11,32 +11,32 @@ use tokio::sync::Mutex;
 
 #[derive(Debug, Clone)]
 pub struct JetStreamConfig {
-    store_dir: String,
-    max_memory_store: u64,
-    max_file_store: u64,
+    pub store_dir: String,
+    pub max_memory_store: u64,
+    pub max_file_store: u64,
 }
 
 #[derive(Debug, Clone)]
 pub struct LoggingOptions {
-    debug: bool,
-    trace: bool,
-    longtime: bool,
+    pub debug: bool,
+    pub trace: bool,
+    pub longtime: bool,
 }
 
 #[derive(Debug, Clone)]
 pub struct LeafNodeRemote {
-    url: String,
-    credentials_path: String,
-    account_key: String,
+    pub url: String,
+    pub credentials_path: String,
 }
 
 #[derive(Debug, Clone)]
 pub struct LeafServer {
-    name: String,
+    pub name: String,
+    pub config_path: String,
     host: String,
-    port: u16,
+    pub port: u16,
     jetstream_config: JetStreamConfig,
-    logging: LoggingOptions,
+    pub logging: LoggingOptions,
     leaf_node_remotes: Vec<LeafNodeRemote>,
     server_handle: Arc<Mutex<Option<Child>>>,
 }
@@ -45,6 +45,7 @@ impl LeafServer {
     // Instantiate a new leaf server
     pub fn new(
         server_name: &str,
+        new_config_path: &str,
         host: &str,
         port: u16,
         jetstream_config: JetStreamConfig,
@@ -53,6 +54,7 @@ impl LeafServer {
     ) -> Self {
         Self {
             name: server_name.to_string(),
+            config_path: new_config_path.to_string(),
             host: host.to_string(),
             port,
             jetstream_config,
@@ -64,8 +66,7 @@ impl LeafServer {
 
     /// Generate the config file and run the server
     pub async fn run(&self) -> Result<(), Box<dyn std::error::Error>> {
-        let config_path = "./leaf_server.conf";
-        let mut config_file = File::create(config_path)?;
+        let mut config_file = File::create(&self.config_path)?;
 
         // Generate logging options
         let logging_config = format!(
@@ -83,10 +84,9 @@ impl LeafServer {
     {{
         url: "{}",
         credentials: "{}",
-        account: "{}"
     }}
                 "#,
-                    remote.url, remote.credentials_path, remote.account_key
+                    remote.url, remote.credentials_path
                 )
             })
             .collect::<Vec<String>>()
@@ -127,7 +127,7 @@ leafnodes {{
         // Run the server with the generated config
         let child = Command::new("nats-server")
             .arg("-c")
-            .arg(config_path)
+            .arg(&self.config_path)
             .spawn()
             .expect("Failed to start NATS server");
 
@@ -171,21 +171,17 @@ mod tests {
     use std::process::Command;
     use tokio::time::{sleep, Duration};
 
-    const TEST_AUTH_DIR: &str = "./test-auth";
     const TMP_JS_DIR: &str = "./tmp";
+    const TEST_AUTH_DIR: &str = "./tmp/test-auth";
     const OPERATOR_NAME: &str = "test-operator";
     const USER_ACCOUNT_NAME: &str = "hpos-account";
     const USER_NAME: &str = "hpos-user";
-
-    // NB: if changed, the resolver file path musz also be changed in the `hub-server.conf` iteself as well.
+    const NEW_LEAF_CONFIG_PATH: &str = "./test_configs/leaf_server.conf";
+    // NB: if changed, the resolver file path must also be changed in the `hub-server.conf` iteself as well.
     const RESOLVER_FILE_PATH: &str = "./test_configs/resolver.conf";
     const HUB_SERVER_CONFIG_PATH: &str = "./test_configs/hub_server.conf";
 
-    struct AccountAuthInfo {
-        sys_account_pubkey: String,
-    }
-
-    fn gen_test_agents(jwt_server_url: &str) -> AccountAuthInfo {
+    fn gen_test_agents(jwt_server_url: &str) {
         if Path::new(TEST_AUTH_DIR).exists() {
             fs::remove_dir_all(TEST_AUTH_DIR)
                 .expect("Failed to delete already existing test auth dir");
@@ -257,7 +253,8 @@ mod tests {
             .arg("config")
             .arg("--nats-resolver")
             .arg("sys-account SYS")
-            .arg(format!("> {}", RESOLVER_FILE_PATH))
+            .arg("--force")
+            .arg(format!("--config-file {}", RESOLVER_FILE_PATH))
             .output()
             .expect("Failed to create resolver config file")
             .stdout;
@@ -268,8 +265,6 @@ mod tests {
             .output()
             .expect("Failed to create resolver config file")
             .stdout;
-
-        AccountAuthInfo { sys_account_pubkey }
     }
 
     #[tokio::test]
@@ -291,7 +286,7 @@ mod tests {
         }
 
         let jetstream_config = JetStreamConfig {
-            store_dir: "./tmp/leaf_store".to_string(),
+            store_dir: format!("{}/leaf_store", TMP_JS_DIR),
             max_memory_store: 1024 * 1024 * 1024, // 1 GB
             max_file_store: 1024 * 1024 * 1024,   // 1 GB
         };
@@ -302,18 +297,18 @@ mod tests {
             longtime: false,
         };
 
-        let auth_info = gen_test_agents(&leaf_client_conn_url);
+        gen_test_agents(&leaf_client_conn_url);
 
         let leaf_node_remotes = vec![LeafNodeRemote {
             // sys account user (automated)
             url: leaf_server_remote_conn_url.to_string(),
             credentials_path: format!("{}/keys/creds/{}/SYS/sys.creds", nsc_path, OPERATOR_NAME),
-            account_key: auth_info.sys_account_pubkey,
         }];
 
         // Create a new Leaf Server instance
         let leaf_server = LeafServer::new(
             "test_leaf_server",
+            NEW_LEAF_CONFIG_PATH,
             leaf_client_conn_domain,
             leaf_client_conn_port,
             jetstream_config,
@@ -333,11 +328,11 @@ mod tests {
         // Wait for Leaf Server to be ready
         sleep(Duration::from_secs(1)).await;
 
-        log::info!("Spawning hub server");
+        log::info!("Spawning Hub server");
         let hub_server_handle: Arc<Mutex<Option<Child>>> = Arc::new(Mutex::new(None));
         // Start the Hub Server in a separate thread
         tokio::spawn(async move {
-            // Run the server with the generated config
+            // Run the Hub Server with the (prexisting) config
             let child = Command::new("nats-server")
                 .arg("-c")
                 .arg(HUB_SERVER_CONFIG_PATH)
@@ -371,7 +366,7 @@ mod tests {
 
         log::info!("Client successfully connected to the Leaf Server.");
 
-        // Test JetStream capabilities
+        // Test js on Leaf Client:
         let test_stream_name = "test_stream";
         let test_stream_subject = "test.subject";
         let js_context = async_nats::jetstream::new(client.clone());
@@ -391,13 +386,14 @@ mod tests {
             .subjects
             .contains(&test_stream_subject.to_string()));
 
+        // Test client publishing to js stream
         let test_msg = "Hello, Leaf!";
         js_context
             .publish(test_stream_subject, test_msg.into())
             .await
             .expect("Failed to publish jetstream message.");
 
-        // Subscribe to the stream
+        // Test client subscribing to js stream
         let test_stream_consumer_name = "test_stream_consumer".to_string();
         let consumer = stream
             .get_or_create_consumer(
@@ -450,7 +446,7 @@ mod tests {
         }
         log::info!("Leaf Server has shut down successfully");
 
-        // Force shut down the Hub Server
+        // Force shut down the Hub Server (note: leaf server run on port 4111)
         Command::new("kill")
             .arg("-9")
             .arg("`lsof -t -i:4111`")
@@ -464,6 +460,7 @@ mod tests {
         // Clean up temporary dir & files
         std::fs::remove_dir_all(TEST_AUTH_DIR).expect("Failed to delete config file");
         std::fs::remove_dir_all(TMP_JS_DIR).expect("Failed to delete config file");
-        std::fs::remove_file("./leaf_server.conf").expect("Failed to delete config file");
+        std::fs::remove_file(NEW_LEAF_CONFIG_PATH).expect("Failed to delete config file");
+        std::fs::remove_file(RESOLVER_FILE_PATH).expect("Failed to delete config file");
     }
 }
