@@ -393,7 +393,7 @@ mod tests {
             .await
             .expect("Failed to publish jetstream message.");
 
-        // Test client subscribing to js stream
+        // Force shut down the Hub Server (note: leaf server run on port 4111)
         let test_stream_consumer_name = "test_stream_consumer".to_string();
         let consumer = stream
             .get_or_create_consumer(
