@@ -12,17 +12,26 @@ pub const HOSTER_COLLECTION_NAME: &str = "hoster";
 pub const HOST_COLLECTION_NAME: &str = "host";
 pub const WORKLOAD_COLLECTION_NAME: &str = "workload";
 
+// Provide type Alias for HosterPubKey
+pub use String as HosterPubKey;
+
+// Provide type Alias for DeveloperPubkey
+pub use String as DeveloperPubkey;
+
+// Provide type Alias for DeveloperJWT
+pub use String as DeveloperJWT;
+
 // ==================== User Schema ====================
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum Role {
-    Developer(String), // jwt string
-    Host(String),      // host pubkey
+    Developer(DeveloperJWT), // jwt string
+    Host(HosterPubKey),      // host pubkey
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct RoleInfo {
-    pub id: String, // Hoster/Developer Mongodb ID
-    pub role: Role, // *INDEXED*
+    pub ref_id: String, // Hoster/Developer Mongodb ID ref
+    pub role: Role,     // *INDEXED*
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
@@ -95,14 +104,8 @@ impl IntoIndexes for Hoster {
 pub struct VM {
     pub port: u16,
     pub size: u64,
-    pub agent_pubkey: String,
+    pub agent_pubkey: DeveloperPubkey,
 }
-
-// Provide type Alias for HosterPubKey
-pub use String as HosterPubKey;
-
-// Provide type Alias for Host
-pub use Host as Node;
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct Host {
