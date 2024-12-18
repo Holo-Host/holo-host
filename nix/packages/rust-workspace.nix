@@ -79,6 +79,21 @@ craneLib.cargoBuild (
         commonArgs
         // {
           inherit cargoArtifacts;
+
+          # this will allow some read-only (by ways of little permissions) machine introspection.
+          __noChroot = true;
+
+          nativeBuildInputs = [
+            pkgs.dosfstools
+            pkgs.e2fsprogs
+            pkgs.coreutils
+            pkgs.systemd
+
+            # pkgs.dmidecode
+            # (pkgs.writeShellScriptBin "sudo" ''
+            #   exec "$@"
+            # '')
+          ];
           partitions = 1;
           partitionType = "count";
         }
