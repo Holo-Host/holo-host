@@ -77,7 +77,6 @@ impl IntoIndexes for Workload {
         let developer_index_doc = doc! { "assigned_developer": 1 };
         let developer_index_opts = Some(
             IndexOptions::builder()
-                .unique(true)
                 .name(Some("assigned_developer_index".to_string()))
                 .build(),
         );
