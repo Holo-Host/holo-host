@@ -11,7 +11,7 @@
   - sending active periodic workload reports
 */
 
-mod auth;
+// mod auth;
 mod workloads;
 use anyhow::Result;
 use dotenv::dotenv;
@@ -22,9 +22,8 @@ async fn main() -> Result<(), async_nats::Error> {
     dotenv().ok();
     env_logger::init();
 
-    let user_creds_path = auth::initializer::run().await?;
-
-    gen_leaf_server::run(&user_creds_path).await;
+    // let user_creds_path = auth::initializer::run().await?;
+    // gen_leaf_server::run(&user_creds_path).await;
 
     let user_creds_path = "placeholder_while_we_use_pw_auth";
     workloads::manager::run(user_creds_path).await?;
