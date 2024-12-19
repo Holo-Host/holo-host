@@ -83,7 +83,7 @@ impl WorkloadApi {
 
         // 2. Call mongodb to get host collection to get host info and filter by capacity availability
 
-        // 3. Randomly choose host/node
+        // 3. Randomly choose host/node *and* send the workload request there
 
         // 4. Respond to endpoint request
         let response = b"Successfully handled updated workload!".to_vec();
