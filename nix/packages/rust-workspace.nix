@@ -73,6 +73,7 @@ craneLib.cargoBuild (
           __noChroot = true;
 
           nativeBuildInputs = [
+            ## hpos-hal
             pkgs.dosfstools
             pkgs.e2fsprogs
             pkgs.coreutils
@@ -82,6 +83,10 @@ craneLib.cargoBuild (
             # (pkgs.writeShellScriptBin "sudo" ''
             #   exec "$@"
             # '')
+
+            ## NATS/mongodb integration tests
+            pkgs.mongodb
+            pkgs.nats-server
           ];
           partitions = 1;
           partitionType = "count";
