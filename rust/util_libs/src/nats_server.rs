@@ -446,7 +446,7 @@ mod tests {
         }
         log::info!("Leaf Server has shut down successfully");
 
-        // Force shut down the Hub Server (run on port 4111)
+        // Force shut down the Hub Server (note: leaf server run on port 4111)
         Command::new("kill")
             .arg("-9")
             .arg("`lsof -t -i:4111`")

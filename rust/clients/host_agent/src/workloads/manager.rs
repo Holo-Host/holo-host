@@ -12,10 +12,14 @@
 */
 
 use super::endpoints;
-use anyhow::Result;
+use anyhow::{anyhow, Result};
+use mongodb::{options::ClientOptions, Client as MongoDBClient};
 use std::time::Duration;
-use util_libs::js_microservice::JsStreamService;
-use util_libs::nats_client::{self, Client as NatClient, EndpointType, EventListener};
+use util_libs::{
+    db::mongodb::get_mongodb_url,
+    js_stream_service::{JsServiceParamsPartial},
+    nats_js_client::{self, EndpointType, JsClient},
+};
 use workload::{
     WorkloadApi, WORKLOAD_SRV_DESC, WORKLOAD_SRV_NAME, WORKLOAD_SRV_SUBJ, WORKLOAD_SRV_VERSION,
 };
@@ -24,43 +28,60 @@ const HOST_AGENT_CLIENT_NAME: &str = "Host Agent";
 const HOST_AGENT_CLIENT_INBOX_PREFIX: &str = "_host_inbox";
 
 // TODO: Use _user_creds_path for auth once we add in the more resilient auth pattern.
-pub async fn run(_user_creds_path: &str) -> Result<(), async_nats::Error> {
+pub async fn run(user_creds_path: &str) -> Result<(), async_nats::Error> {
     log::info!("HPOS Agent Client: Connecting to server...");
-    // Connect to Nats server
-    let nats_url = nats_client::get_nats_url();
-    let event_listeners = get_host_workload_event_listeners();
 
+    // ==================== NATS Setup ====================
+    // Connect to Nats server
+    let nats_url = nats_js_client::get_nats_url();
+    let event_listeners = nats_js_client::get_event_listeners();
+
+    // Setup JS Stream Service
+    let workload_stream_service_params = JsServiceParamsPartial {
+        name: WORKLOAD_SRV_NAME.to_string(),
+        description: WORKLOAD_SRV_DESC.to_string(),
+        version: WORKLOAD_SRV_VERSION.to_string(),
+        service_subject: WORKLOAD_SRV_SUBJ.to_string(),
+    };
+
+    // Spin up Nats Client and loaded in the Js Stream Service
     let host_workload_client =
-        nats_client::DefaultClient::new(nats_client::NewDefaultClientParams {
+        nats_js_client::DefaultJsClient::new(nats_js_client::NewDefaultJsClientParams {
             nats_url,
             name: HOST_AGENT_CLIENT_NAME.to_string(),
             inbox_prefix: format!(
                 "{}_{}",
                 HOST_AGENT_CLIENT_INBOX_PREFIX, "host_id_placeholder"
             ),
-            credentials_path: None, // TEMP: Some(user_creds_path),
-            opts: vec![nats_client::with_event_listeners(event_listeners)],
+            service_params: vec![workload_stream_service_params],
+            credentials_path: Some(user_creds_path.to_string()),
+            opts: vec![nats_js_client::with_event_listeners(event_listeners)],
             ping_interval: Some(Duration::from_secs(10)),
             request_timeout: Some(Duration::from_secs(5)),
         })
         .await?;
 
-    // Call workload service and call relevant endpoints
-    let js_context = JsStreamService::get_context(host_workload_client.client.clone());
-    let workload_stream = JsStreamService::new(
-        js_context,
-        WORKLOAD_SRV_NAME,
-        WORKLOAD_SRV_DESC,
-        WORKLOAD_SRV_VERSION,
-        WORKLOAD_SRV_SUBJ,
-    )
-    .await?;
+    // ==================== DB Setup ====================
 
-    let workload_api = WorkloadApi::new().await?;
+    // Create a new MongoDB Client and connect it to the cluster
+    let mongo_uri = get_mongodb_url();
+    let client_options = ClientOptions::parse(mongo_uri).await?;
+    let client = MongoDBClient::with_options(client_options)?;
 
+    // Generate the Workload API with access to db
+    let workload_api = WorkloadApi::new(&client).await?;
+
+    // ==================== API ENDPOINTS ====================
     // Register Workload Streams for Host Agent to consume
     // (subjects should be published by orchestrator or nats-db-connector)
-    workload_stream
+    let workload_service = host_workload_client
+        .get_js_service(WORKLOAD_SRV_NAME.to_string())
+        .await
+        .ok_or(anyhow!(
+            "Failed to locate workload service. Unable to spin up Host Agent."
+        ))?;
+
+    workload_service
         .add_local_consumer(
             "start_workload",
             "start",
@@ -69,7 +90,7 @@ pub async fn run(_user_creds_path: &str) -> Result<(), async_nats::Error> {
         )
         .await?;
 
-    workload_stream
+    workload_service
         .add_local_consumer(
             "signal_status_update",
             "signal_status_update",
@@ -78,7 +99,7 @@ pub async fn run(_user_creds_path: &str) -> Result<(), async_nats::Error> {
         )
         .await?;
 
-    workload_stream
+    workload_service
         .add_local_consumer(
             "remove_workload",
             "remove",
@@ -99,29 +120,4 @@ pub async fn run(_user_creds_path: &str) -> Result<(), async_nats::Error> {
     host_workload_client.close().await?;
 
     Ok(())
-}
-
-pub fn get_host_workload_event_listeners() -> Vec<EventListener> {
-    // TODO: Use duration in handlers..
-    let published_msg_handler = |msg: &str, _duration: Duration| {
-        log::info!(
-            "Successfully published message for {} client: {:?}",
-            HOST_AGENT_CLIENT_NAME,
-            msg
-        );
-    };
-    let failure_handler = |err: &str, _duration: Duration| {
-        log::error!(
-            "Failed to publish message for {} client: {:?}",
-            HOST_AGENT_CLIENT_NAME,
-            err
-        );
-    };
-
-    let event_listeners = vec![
-        nats_client::on_msg_published_event(published_msg_handler),
-        nats_client::on_msg_failed_event(failure_handler),
-    ];
-
-    event_listeners
 }

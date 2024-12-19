@@ -13,13 +13,10 @@ Endpoints & Managed Subjects:
 
 use anyhow::Result;
 use async_nats::Message;
-// use mongodb::Client as MongoDBClient;
+use mongodb::Client as MongoDBClient;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use util_libs::db::{
-    // mongodb::{MongoCollection, MongoDbPool},
-    schemas,
-};
+use util_libs::db::{mongodb::MongoCollection, schemas};
 
 pub const WORKLOAD_SRV_OWNER_NAME: &str = "WORKLOAD_OWNER";
 pub const WORKLOAD_SRV_NAME: &str = "WORKLOAD";
@@ -39,14 +36,14 @@ pub enum WorkloadState {
 
 #[derive(Debug, Clone)]
 pub struct WorkloadApi {
-    // >> TODO: Fill out with other endpoints when we use the DB
     // pub workload_collection: MongoCollection<schemas::Workload>,
     // pub host_collection: MongoCollection<schemas::Host>,
     // pub user_collection: MongoCollection<schemas::User>,
 }
 
 impl WorkloadApi {
-    pub async fn new(/*client: &MongoDBClientA*/) -> Result<Self> {
+    pub async fn new(/*client: &MongoDBClient*/) -> Result<Self> {
+        // Create a typed collection for Workload
         // let workload_api: MongoCollection<schemas::Workload> =
         //     MongoCollection::<schemas::Workload>::new(
         //         client,
@@ -55,8 +52,26 @@ impl WorkloadApi {
         //     )
         //     .await?;
 
+        // Create a typed collection for User
+        // let user_api = MongoCollection::<schemas::User>::new(
+        //     client,
+        //     schemas::DATABASE_NAME,
+        //     schemas::HOST_COLLECTION_NAME,
+        // )
+        // .await?;
+
+        // // Create a typed collection for Host
+        // let host_api = MongoCollection::<schemas::Host>::new(
+        //     client,
+        //     schemas::DATABASE_NAME,
+        //     schemas::HOST_COLLECTION_NAME,
+        // )
+        // .await?;
+
         Ok(Self {
             // workload_collection: workload_api,
+            // host_collection: host_api,
+            // user_collection: user_api,
         })
     }
 
@@ -94,7 +109,7 @@ impl WorkloadApi {
         log::warn!("INCOMING Message for 'WORKLOAD.start' : {:?}", msg);
 
         let payload_buf = msg.payload.to_vec();
-        let _workload: schemas::Workload = serde_json::from_slice(&payload_buf)?;
+        let _workload = serde_json::from_slice::<schemas::Workload>(&payload_buf)?;
 
         // TODO: Talk through with Stefan
         // 1. Connect to interface for Nix and instruct systemd to install workload...
@@ -109,7 +124,7 @@ impl WorkloadApi {
         log::warn!("INCOMING Message for 'WORKLOAD.remove' : {:?}", msg);
 
         let payload_buf = msg.payload.to_vec();
-        let workload_state: WorkloadState = serde_json::from_slice(&payload_buf)?;
+        let workload_state = serde_json::from_slice::<WorkloadState>(&payload_buf)?;
 
         // Send updated reponse:
         // NB: This will send the update to both the requester (if one exists)
@@ -119,7 +134,7 @@ impl WorkloadApi {
 
     pub async fn remove_workload(&self, msg: Arc<Message>) -> Result<Vec<u8>, anyhow::Error> {
         let payload_buf = msg.payload.to_vec();
-        let _workload_id: String = serde_json::from_slice(&payload_buf)?;
+        let _workload_id = serde_json::from_slice::<String>(&payload_buf)?;
 
         // TODO: Talk through with Stefan
         // 1. Connect to interface for Nix and instruct systemd to UNinstall workload...

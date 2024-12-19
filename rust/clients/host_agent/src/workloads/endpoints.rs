@@ -3,10 +3,10 @@ use async_nats::Message;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
-use util_libs::nats_client;
+use util_libs::nats_js_client;
 use workload::WorkloadApi;
 
-pub async fn start_workload(workload_api: &WorkloadApi) -> nats_client::AsyncEndpointHandler {
+pub async fn start_workload(workload_api: &WorkloadApi) -> nats_js_client::AsyncEndpointHandler {
     let api = workload_api.to_owned();
     Arc::new(
             move |msg: Arc<Message>| -> Pin<Box<dyn Future<Output = Result<Vec<u8>, anyhow::Error>> + Send>> {
@@ -18,7 +18,9 @@ pub async fn start_workload(workload_api: &WorkloadApi) -> nats_client::AsyncEnd
         )
 }
 
-pub async fn signal_status_update(workload_api: &WorkloadApi) -> nats_client::AsyncEndpointHandler {
+pub async fn signal_status_update(
+    workload_api: &WorkloadApi,
+) -> nats_js_client::AsyncEndpointHandler {
     let api = workload_api.to_owned();
     Arc::new(
             move |msg: Arc<Message>| -> Pin<Box<dyn Future<Output = Result<Vec<u8>, anyhow::Error>> + Send>> {
@@ -30,7 +32,7 @@ pub async fn signal_status_update(workload_api: &WorkloadApi) -> nats_client::As
         )
 }
 
-pub async fn remove_workload(workload_api: &WorkloadApi) -> nats_client::AsyncEndpointHandler {
+pub async fn remove_workload(workload_api: &WorkloadApi) -> nats_js_client::AsyncEndpointHandler {
     let api = workload_api.to_owned();
     Arc::new(
             move |msg: Arc<Message>| -> Pin<Box<dyn Future<Output = Result<Vec<u8>, anyhow::Error>> + Send>> {
