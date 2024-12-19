@@ -30,6 +30,12 @@ pub struct LeafNodeRemote {
 }
 
 #[derive(Debug, Clone)]
+pub struct Authorization {
+    pub user: String,
+    pub password: String
+}
+
+#[derive(Debug, Clone)]
 pub struct LeafServer {
     pub name: String,
     pub config_path: String,
@@ -38,6 +44,7 @@ pub struct LeafServer {
     jetstream_config: JetStreamConfig,
     pub logging: LoggingOptions,
     leaf_node_remotes: Vec<LeafNodeRemote>,
+    authorization_block: Option<Authorization>,
     server_handle: Arc<Mutex<Option<Child>>>,
 }
 
@@ -51,6 +58,7 @@ impl LeafServer {
         jetstream_config: JetStreamConfig,
         logging: LoggingOptions,
         leaf_node_remotes: Vec<LeafNodeRemote>,
+        authorization_block: Option<Authorization>,
     ) -> Self {
         Self {
             name: server_name.to_string(),
@@ -60,6 +68,7 @@ impl LeafServer {
             jetstream_config,
             logging,
             leaf_node_remotes,
+            authorization_block,
             server_handle: Arc::new(Mutex::new(None)),
         }
     }
@@ -75,22 +84,50 @@ impl LeafServer {
         );
 
         // Generate the "leafnodes" block
+        // ..and only includes the credentials file whenever the username/password auth is *not* being used
+        // NB: Nats does not allow combining auths for same port.
         let leafnodes_config = self
             .leaf_node_remotes
             .iter()
             .map(|remote| {
-                format!(
-                    r#"
-    {{
-        url: "{}",
-        credentials: "{}",
-    }}
-                "#,
-                    remote.url, remote.credentials_path
-                )
+                if self.authorization_block.is_none() {
+                    format!(
+                        r#"
+        {{
+            url: "{}",
+            credentials: "{}",
+        }}
+                    "#,
+                        remote.url, remote.credentials_path
+                    )
+                } else {
+                    format!(
+                        r#"
+        {{
+            url: "{}",
+        }}
+                    "#,
+                        remote.url
+                    )
+                }
+                
             })
             .collect::<Vec<String>>()
             .join(",\n");
+
+            let auth_block = match &self.authorization_block {
+            Some(a) => format!(
+                r#"
+{{
+    user: "{}",
+    password: "{}",
+}}
+            "#,
+                a.user, a.password
+            ),
+            None => "".to_string()
+
+        };
 
         // Write the full config file
         write!(
@@ -98,6 +135,8 @@ impl LeafServer {
             r#"
 server_name: {}
 listen: "{}:{}"
+
+{}
 
 jetstream: {{
     domain: "leaf",
@@ -117,6 +156,7 @@ leafnodes {{
             self.name,
             self.host,
             self.port,
+            auth_block,
             self.jetstream_config.store_dir,
             self.jetstream_config.max_memory_store,
             self.jetstream_config.max_file_store,
@@ -314,6 +354,7 @@ mod tests {
             jetstream_config,
             logging_options,
             leaf_node_remotes,
+            None
         );
 
         log::info!("Spawning Leaf Server");

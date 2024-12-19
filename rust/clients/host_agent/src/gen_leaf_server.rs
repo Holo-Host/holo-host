@@ -1,4 +1,4 @@
-use util_libs::nats_server::{JetStreamConfig, LeafNodeRemote, LeafServer, LoggingOptions};
+use util_libs::nats_server::{Authorization, JetStreamConfig, LeafNodeRemote, LeafServer, LoggingOptions};
 
 const LEAF_SERVE_NAME: &str = "test_leaf_server";
 const LEAF_SERVER_CONFIG_PATH: &str = "test_leaf_server";
@@ -30,6 +30,11 @@ pub async fn run(user_creds_path: &str) {
         credentials_path: user_creds_path.to_string(),
     }];
 
+    let authorizaton_block = Authorization {
+        user: "cluster_user".to_string(),
+        password: "password_hash".to_string(),
+    };
+
     // Create a new Leaf Server instance
     let leaf_server = LeafServer::new(
         LEAF_SERVE_NAME,
@@ -39,6 +44,7 @@ pub async fn run(user_creds_path: &str) {
         jetstream_config,
         logging_options,
         leaf_node_remotes,
+        Some(authorizaton_block)
     );
 
     log::info!("Spawning Leaf Server");
