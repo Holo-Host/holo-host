@@ -1,12 +1,14 @@
 [workspace]
-version = "0.1.0"
+version = "0.0.1"
 edition = "2021"
 resolver = "2"
 
 members = [
-    "rust/util_libs",
     "rust/clients/host_agent",
+    "rust/clients/orchestrator",
+    "rust/services/authentication",
     "rust/services/workload",
+    "rust/util_libs",
 ]
 
 [workspace.dependencies]

@@ -3,11 +3,11 @@ use async_nats::Message;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
-use util_libs::nats_client;
-use workload::api::WorkloadApi;
+use util_libs::nats_js_client;
+use workload::WorkloadApi;
 
 /// TODO:
-pub async fn add_workload(workload_api: WorkloadApi) -> nats_client::AsyncEndpointHandler {
+pub async fn add_workload(workload_api: WorkloadApi) -> nats_js_client::AsyncEndpointHandler {
     Arc::new(
             move |msg: Arc<Message>| -> Pin<Box<dyn Future<Output = Result<Vec<u8>, anyhow::Error>> + Send>> {
                 log::warn!("INCOMING Message for 'WORKLOAD.add' : {:?}", msg);
@@ -20,7 +20,7 @@ pub async fn add_workload(workload_api: WorkloadApi) -> nats_client::AsyncEndpoi
 }
 
 /// TODO:
-pub async fn handle_db_change() ->  nats_client::AsyncEndpointHandler {
+pub async fn handle_db_change() -> nats_js_client::AsyncEndpointHandler {
     Arc::new(
         move |msg: Arc<Message>| -> Pin<Box<dyn Future<Output = Result<Vec<u8>, anyhow::Error>> + Send>> {
             log::warn!("INCOMING Message for 'WORKLOAD.handle_change' : {:?}", msg);

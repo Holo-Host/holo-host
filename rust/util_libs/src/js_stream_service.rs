@@ -1,10 +1,10 @@
-use super::nats_client::EndpointType;
+use super::nats_js_client::EndpointType;
 use anyhow::{anyhow, Result};
 use async_nats::jetstream::consumer::{self, AckPolicy, PullConsumer};
 use async_nats::jetstream::stream::{self, Info, Stream};
-use async_nats::jetstream::{self, Context};
-use async_nats::Client;
+use async_nats::jetstream::Context;
 use futures::StreamExt;
+use serde::Deserialize;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::sync::Arc;
@@ -38,9 +38,17 @@ pub struct ConsumerExt {
 #[allow(dead_code)]
 #[derive(Clone, Debug)]
 pub struct JsStreamServiceInfo<'a> {
-    name: &'a str,
-    version: &'a str,
-    service_subject: &'a str,
+    pub name: &'a str,
+    pub version: &'a str,
+    pub service_subject: &'a str,
+}
+
+#[derive(Deserialize, Default)]
+pub struct JsServiceParamsPartial {
+    pub name: String,
+    pub description: String,
+    pub version: String,
+    pub service_subject: String,
 }
 
 /// Microservice for Jetstream Streams
@@ -56,20 +64,6 @@ pub struct JsStreamService {
 }
 
 impl JsStreamService {
-    // Spin up a jetstream associated with the provided Nats Client
-    // NB: The context creation is separated out to allow already established js contexts to be passed into `new` instead of being re/created there.
-    pub fn get_context(client: Client) -> Context {
-        jetstream::new(client)
-    }
-
-    pub fn get_info(&self) -> JsStreamServiceInfo {
-        JsStreamServiceInfo {
-            name: self.name.as_ref(),
-            version: self.version.as_ref(),
-            service_subject: self.service_subject.as_ref(),
-        }
-    }
-
     /// Create a new MicroService instance
     // For when the consumer service also creates the stream
     pub async fn new(
@@ -122,6 +116,29 @@ impl JsStreamService {
             stream: Arc::new(RwLock::new(stream)),
             local_consumers: Arc::new(RwLock::new(HashMap::new())),
         })
+    }
+
+    pub async fn get_consumer_info(&self, consumer_name: &str) -> Result<Option<consumer::Info>> {
+        if let Some(consumer_ext) = self
+            .to_owned()
+            .local_consumers
+            .write()
+            .await
+            .get_mut(&consumer_name.to_string())
+        {
+            let info = consumer_ext.consumer.info().await?;
+            Ok(Some(info.to_owned()))
+        } else {
+            Ok(None)
+        }
+    }
+
+    pub fn get_service_info(&self) -> JsStreamServiceInfo {
+        JsStreamServiceInfo {
+            name: self.name.as_ref(),
+            version: self.version.as_ref(),
+            service_subject: self.service_subject.as_ref(),
+        }
     }
 
     pub async fn add_local_consumer(
@@ -324,7 +341,7 @@ impl JsStreamService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use async_nats::ConnectOptions;
+    use async_nats::{jetstream, ConnectOptions};
     use std::sync::Arc;
 
     const NATS_SERVER_URL: &str = "nats://localhost:4222";
@@ -337,7 +354,7 @@ mod tests {
             .await
             .expect("Failed to connect to NATS");
 
-        JsStreamService::get_context(client)
+        jetstream::new(client)
     }
 
     pub async fn get_default_js_service(context: Context) -> JsStreamService {
