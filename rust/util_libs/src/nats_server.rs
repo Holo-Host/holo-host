@@ -32,7 +32,7 @@ pub struct LeafNodeRemote {
 #[derive(Debug, Clone)]
 pub struct Authorization {
     pub user: String,
-    pub password: String
+    pub password: String,
 }
 
 #[derive(Debug, Clone)]
@@ -50,6 +50,7 @@ pub struct LeafServer {
 
 impl LeafServer {
     // Instantiate a new leaf server
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         server_name: &str,
         new_config_path: &str,
@@ -110,12 +111,11 @@ impl LeafServer {
                         remote.url
                     )
                 }
-                
             })
             .collect::<Vec<String>>()
             .join(",\n");
 
-            let auth_block = match &self.authorization_block {
+        let auth_block = match &self.authorization_block {
             Some(a) => format!(
                 r#"
 {{
@@ -125,8 +125,7 @@ impl LeafServer {
             "#,
                 a.user, a.password
             ),
-            None => "".to_string()
-
+            None => "".to_string(),
         };
 
         // Write the full config file
@@ -261,8 +260,8 @@ mod tests {
 
         Command::new("nsc")
             .args(["edit", "account", USER_ACCOUNT_NAME])
-            .arg("--sk generate")
             .args([
+                "--sk generate",
                 "--js-streams -1",
                 "--js-consumer -1",
                 "--js-mem-storage 1G",
@@ -300,15 +299,13 @@ mod tests {
             .arg("--force")
             .arg(format!("--config-file {}", RESOLVER_FILE_PATH))
             .output()
-            .expect("Failed to create resolver config file")
-            .stdout;
+            .expect("Failed to create resolver config file");
 
         // Push auth updates to hub server
         Command::new("nsc")
             .arg("push -A")
             .output()
-            .expect("Failed to create resolver config file")
-            .stdout;
+            .expect("Failed to create resolver config file");
     }
 
     #[tokio::test]
@@ -358,7 +355,7 @@ mod tests {
             jetstream_config,
             logging_options,
             leaf_node_remotes,
-            None
+            None,
         );
 
         log::info!("Spawning Leaf Server");
@@ -487,6 +484,8 @@ mod tests {
                 .arg("-9")
                 .arg(format!("`lsof -t -i:{}`", leaf_client_conn_port))
                 .spawn()
+                .expect("Failed to spawn kill command")
+                .wait()
                 .expect("Failed to kill active Leaf Server port");
         }
         log::info!("Leaf Server has shut down successfully");
@@ -496,6 +495,8 @@ mod tests {
             .arg("-9")
             .arg("`lsof -t -i:4111`")
             .spawn()
+            .expect("Error spawning kill command")
+            .wait()
             .expect("Failed to kill active Leaf Server port");
         log::info!("Hub Server has shut down successfully");
 

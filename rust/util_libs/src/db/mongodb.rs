@@ -28,7 +28,7 @@ where
 }
 
 pub trait IntoIndexes {
-    fn into_indices(&self) -> Result<Vec<(Document, Option<IndexOptions>)>>;
+    fn into_indices(self) -> Result<Vec<(Document, Option<IndexOptions>)>>;
 }
 
 #[derive(Debug, Clone)]
@@ -165,7 +165,7 @@ mod tests {
         let database_name = "holo-hosting-test";
         let collection_name = "host";
         let mut host_api =
-            MongoCollection::<schemas::Host>::new(&client, &database_name, collection_name).await?;
+            MongoCollection::<schemas::Host>::new(&client, database_name, collection_name).await?;
 
         // set index
         host_api.apply_indexing().await?;

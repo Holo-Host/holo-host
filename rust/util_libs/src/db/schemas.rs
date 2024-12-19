@@ -20,7 +20,7 @@ pub struct Host {
 }
 
 impl IntoIndexes for Host {
-    fn into_indices(&self) -> Result<Vec<(Document, Option<IndexOptions>)>> {
+    fn into_indices(self) -> Result<Vec<(Document, Option<IndexOptions>)>> {
         let mut indices = vec![];
 
         //  Add Device ID Index
@@ -69,7 +69,7 @@ impl Default for Workload {
 }
 
 impl IntoIndexes for Workload {
-    fn into_indices(&self) -> Result<Vec<(Document, Option<IndexOptions>)>> {
+    fn into_indices(self) -> Result<Vec<(Document, Option<IndexOptions>)>> {
         let mut indices = vec![];
 
         //  Add Developer Index

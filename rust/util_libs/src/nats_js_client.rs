@@ -292,7 +292,7 @@ impl JsClient for DefaultJsClient {
         Ok(self.js.get_stream(stream_name).await?)
     }
 
-    async fn request(&self, opts: &RequestOptions) -> Result<(), async_nats::Error> {
+    async fn request(&self, _opts: &RequestOptions) -> Result<(), async_nats::Error> {
         Ok(())
     }
 
