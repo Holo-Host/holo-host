@@ -118,7 +118,7 @@ impl WorkloadApi {
 
     // For hpos
     pub async fn start_workload(&self, msg: Arc<Message>) -> Result<Vec<u8>, anyhow::Error> {
-        log::warn!("INCOMING Message for 'WORKLOAD.start' : {:?}", msg);
+        log::debug!("Incoming message for 'WORKLOAD.start' : {:?}", msg);
 
         let payload_buf = msg.payload.to_vec();
         let _workload = serde_json::from_slice::<schemas::Workload>(&payload_buf)?;
@@ -137,7 +137,7 @@ impl WorkloadApi {
 
     // For hpos ?
     pub async fn signal_status_update(&self, msg: Arc<Message>) -> Result<Vec<u8>, anyhow::Error> {
-        log::warn!("INCOMING Message for 'WORKLOAD.signal_status_update' : {:?}", msg);
+        log::debug!("Incoming message for 'WORKLOAD.signal_status_update' : {:?}", msg);
 
         let payload_buf = msg.payload.to_vec();
         let workload_state = serde_json::from_slice::<WorkloadState>(&payload_buf)?;
@@ -150,6 +150,8 @@ impl WorkloadApi {
 
     // For hpos
     pub async fn remove_workload(&self, msg: Arc<Message>) -> Result<Vec<u8>, anyhow::Error> {
+        log::debug!("Incoming message for 'WORKLOAD.remove' : {:?}", msg);
+
         let payload_buf = msg.payload.to_vec();
         let _workload_id = serde_json::from_slice::<String>(&payload_buf)?;
 

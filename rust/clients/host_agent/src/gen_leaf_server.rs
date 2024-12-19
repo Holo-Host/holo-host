@@ -6,7 +6,7 @@ const LEAF_SERVER_CONFIG_PATH: &str = "test_leaf_server";
 pub async fn run(user_creds_path: &str) {
     let leaf_server_remote_conn_url = "nats://127.0.0.1:7422";
     let leaf_client_conn_domain = "127.0.0.1";
-    let leaf_client_conn_port = 4333;
+    let leaf_client_conn_port = 4111;
 
     let nsc_path =
         std::env::var("NSC_PATH").unwrap_or_else(|_| ".local/share/nats/nsc".to_string());
