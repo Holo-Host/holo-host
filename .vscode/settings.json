@@ -2,7 +2,8 @@
   "editor.defaultFormatter": "ibecker.treefmt-vscode",
   "direnv.restart.automatic": true,
   "[nix]": {
-    "editor.defaultFormatter": "jnoortheen.nix-ide"
+    "editor.defaultFormatter": "jnoortheen.nix-ide",
+    "editor.formatOnSave": true
   },
   "nix.enableLanguageServer": true,
   "nix.serverPath": "nil",

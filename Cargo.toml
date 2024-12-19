@@ -1,0 +1,9 @@
+[workspace]
+resolver = "2"
+
+package.version = "0.1.0"
+metadata.crane.name = "holo-host-workspace"
+
+members = [
+    "rust/*"
+]
