@@ -87,6 +87,7 @@ craneLib.cargoBuild (
             ## NATS/mongodb integration tests
             pkgs.mongodb
             pkgs.nats-server
+            pkgs.nsc
           ];
           partitions = 1;
           partitionType = "count";
