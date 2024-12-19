@@ -13,10 +13,10 @@ Endpoints & Managed Subjects:
 
 use anyhow::Result;
 use async_nats::Message;
-use mongodb::Client as MongoDBClient;
+// use mongodb::Client as MongoDBClient;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use util_libs::db::{mongodb::MongoCollection, schemas};
+use util_libs::db::schemas; // mongodb::MongoCollection, 
 
 pub const WORKLOAD_SRV_OWNER_NAME: &str = "WORKLOAD_OWNER";
 pub const WORKLOAD_SRV_NAME: &str = "WORKLOAD";
@@ -27,11 +27,18 @@ pub const WORKLOAD_SRV_DESC: &str = "This service handles the flow of Workload r
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum WorkloadState {
     Reported,
-    Started,
     Pending,
+    Installed,
     Running,
     Failed,
+    Uninstalled,
     Unknown(String),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorkloadStatus {
+    desired: WorkloadState,
+    actual: WorkloadState
 }
 
 #[derive(Debug, Clone)]
@@ -88,7 +95,11 @@ impl WorkloadApi {
         // );
 
         // 2. Respond to endpoint request
-        let result = WorkloadState::Reported;
+        let status = WorkloadStatus {
+            desired:WorkloadState::Running,
+            actual: WorkloadState::Reported
+        };
+        let result = status;
         Ok(serde_json::to_vec(&result)?)
     }
 
@@ -105,6 +116,7 @@ impl WorkloadApi {
         Ok(response)
     }
 
+    // For hpos
     pub async fn start_workload(&self, msg: Arc<Message>) -> Result<Vec<u8>, anyhow::Error> {
         log::warn!("INCOMING Message for 'WORKLOAD.start' : {:?}", msg);
 
@@ -116,12 +128,16 @@ impl WorkloadApi {
         // eg: nix_install_with(workload)
 
         // 2. Respond to endpoint request
-        let result = WorkloadState::Started;
+        let result = WorkloadStatus {
+            desired:WorkloadState::Running,
+            actual: WorkloadState::Unknown("..".to_string())
+        };
         Ok(serde_json::to_vec(&result)?)
     }
 
+    // For hpos ?
     pub async fn signal_status_update(&self, msg: Arc<Message>) -> Result<Vec<u8>, anyhow::Error> {
-        log::warn!("INCOMING Message for 'WORKLOAD.remove' : {:?}", msg);
+        log::warn!("INCOMING Message for 'WORKLOAD.signal_status_update' : {:?}", msg);
 
         let payload_buf = msg.payload.to_vec();
         let workload_state = serde_json::from_slice::<WorkloadState>(&payload_buf)?;
@@ -132,6 +148,7 @@ impl WorkloadApi {
         Ok(serde_json::to_vec(&workload_state)?)
     }
 
+    // For hpos
     pub async fn remove_workload(&self, msg: Arc<Message>) -> Result<Vec<u8>, anyhow::Error> {
         let payload_buf = msg.payload.to_vec();
         let _workload_id = serde_json::from_slice::<String>(&payload_buf)?;
@@ -141,7 +158,10 @@ impl WorkloadApi {
         // nix_uninstall_with(workload_id)
 
         // 2. Respond to endpoint request
-        let result = WorkloadState::Pending;
+        let result = WorkloadStatus {
+            desired:WorkloadState::Uninstalled,
+            actual: WorkloadState::Unknown("..".to_string())
+        };
         Ok(serde_json::to_vec(&result)?)
     }
 }
