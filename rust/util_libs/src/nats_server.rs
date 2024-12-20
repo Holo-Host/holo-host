@@ -147,7 +147,10 @@ leafnodes {{
             .spawn()
             .expect("Failed to start NATS server");
 
-        println!("NATS Leaf Server is running at {}:{}", self.host, self.port);
+        // TODO: wait for a readiness indicator
+        std::thread::sleep(std::time::Duration::from_millis(100));
+
+        log::info!("NATS Leaf Server is running at {}:{}", self.host, self.port);
 
         // Store the process handle in the `server_handle`
         let mut handle = self.server_handle.lock().await;

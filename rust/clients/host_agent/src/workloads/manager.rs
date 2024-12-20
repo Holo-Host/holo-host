@@ -113,11 +113,13 @@ pub async fn run(user_creds_path: &str) -> Result<(), async_nats::Error> {
 
     // Only exit program when explicitly requested
     tokio::signal::ctrl_c().await?;
-    log::warn!("CTRL+C detected. Please press CTRL+C again within 5 seconds to confirm exit...");
-    tokio::select! {
-        _ = tokio::time::sleep(tokio::time::Duration::from_secs(5)) => log::warn!("Resuming service."),
-        _ = tokio::signal::ctrl_c() => log::error!("Shutting down."),
-    }
+
+    // TODO: bring this back with actual implementation
+    // log::warn!("CTRL+C detected. Please press CTRL+C again within 5 seconds to confirm exit...");
+    // tokio::select! {
+    //     _ = tokio::time::sleep(tokio::time::Duration::from_secs(5)) => { log::warn!("Resuming service.") },
+    //     _ = tokio::signal::ctrl_c() => log::error!("Shutting down."),
+    // }
 
     // Close client and drain internal buffer before exiting to make sure all messages are sent
     host_workload_client.close().await?;
