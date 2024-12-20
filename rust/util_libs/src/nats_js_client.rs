@@ -407,6 +407,7 @@ pub fn get_event_listeners() -> Vec<EventListener> {
     event_listeners
 }
 
+#[cfg(feature = "tests_integration_nats")]
 #[cfg(test)]
 mod tests {
     use super::*;

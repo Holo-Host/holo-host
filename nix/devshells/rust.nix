@@ -13,9 +13,13 @@ craneLib.devShell {
       flake.devShells.${system}.default
     ]
     # Inherit inputs from rust-workspace on the platforms it's available.
-    ++ (pkgs.lib.lists.optional (pkgs.lib.meta.availableOn pkgs.stdenv.hostPlatform
-      flake.packages.${system}.rust-workspace
-    ) flake.packages.${system}.rust-workspace);
+    ++ (
+      pkgs.lib.lists.optionals
+        (pkgs.lib.meta.availableOn pkgs.stdenv.hostPlatform flake.packages.${system}.rust-workspace)
+        [
+          flake.packages.${system}.rust-workspace
+        ] ++ (builtins.attrValues flake.packages.${system}.rust-workspace.passthru.tests)
+    );
 
   # Additional dev-shell environment variables can be set directly
   # MY_CUSTOM_DEVELOPMENT_VAR = "something else";
