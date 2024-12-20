@@ -6,7 +6,7 @@ use anyhow::Context;
 use std::fmt::Debug;
 use std::fs::File;
 use std::io::Write;
-use std::process::{Child, Command};
+use std::process::{Child, Command, Stdio};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -144,6 +144,9 @@ leafnodes {{
         let child = Command::new("nats-server")
             .arg("-c")
             .arg(&self.config_path)
+            // TODO: direct these to a file or make it conditional. this is silenced because it was very verbose
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
             .spawn()
             .expect("Failed to start NATS server");
 
@@ -166,9 +169,9 @@ leafnodes {{
         if let Some(child) = handle.as_mut() {
             // Wait for the server process to finish
             let status = child.wait()?;
-            println!("NATS server exited with status: {:?}", status);
+            log::info!("NATS server exited with status: {:?}", status);
         } else {
-            println!("No running server to shut down.");
+            log::info!("No running server to shut down.");
         }
 
         // Clear the server handle
