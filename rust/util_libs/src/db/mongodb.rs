@@ -139,28 +139,99 @@ where
     }
 }
 
-// Helpers:
-pub fn get_mongodb_url() -> String {
-    std::env::var("MONGO_URI").unwrap_or_else(|_| "mongodb://127.0.0.1:27017".to_string())
-}
-
 #[cfg(test)]
 mod tests {
+    struct MongodRunner {
+        _child: std::process::Child,
+
+        // this is stored to prevent premature removing of the tempdir
+        tempdir: TempDir,
+    }
+
+    impl MongodRunner {
+        fn socket_path(tempdir: &TempDir) -> anyhow::Result<String> {
+            Ok(format!(
+                "{}/mongod.sock",
+                tempdir
+                    .path()
+                    .canonicalize()?
+                    .as_mut_os_str()
+                    .to_str()
+                    .ok_or_else(|| anyhow::anyhow!("can't convert path to str"))?
+            ))
+        }
+
+        pub fn run() -> anyhow::Result<Self> {
+            let tempdir = TempDir::new().unwrap();
+
+            let stdout = std::fs::File::create_new(tempdir.path().join("mongod.log"))?;
+            let stderr = std::fs::File::open(tempdir.path().join("mongod.log"))?;
+
+            std::fs::File::create_new(Self::socket_path(&tempdir)?)?;
+
+            let mut cmd = std::process::Command::new("mongod");
+            cmd.args([
+                "--dbpath",
+                &tempdir.path().to_string_lossy(),
+                "--bind_ip",
+                &Self::socket_path(&tempdir)?,
+                "--port",
+                &0.to_string(),
+                "--quiet",
+            ]);
+            cmd.stdout(stdout);
+            cmd.stderr(stderr);
+
+            let child = cmd
+                .spawn()
+                .unwrap_or_else(|e| panic!("Failed to spawn {cmd:?}: {e}"));
+
+            let new_self = Self {
+                _child: child,
+                tempdir,
+            };
+
+            std::fs::exists(Self::socket_path(&new_self.tempdir)?)
+                .context("mongod socket should exist")?;
+            println!(
+                "MongoDB Server is running at {:?}",
+                new_self.socket_pathbuf()
+            );
+
+            Ok(new_self)
+        }
+
+        fn socket_pathbuf(&self) -> anyhow::Result<PathBuf> {
+            Ok(PathBuf::from_str(&Self::socket_path(&self.tempdir)?)?)
+        }
+
+        fn client(&self) -> anyhow::Result<Client> {
+            let server_address = mongodb::options::ServerAddress::Unix {
+                path: self.socket_pathbuf()?,
+            };
+            let client_options = ClientOptions::builder().hosts(vec![server_address]).build();
+            Ok(MongoDBClient::with_options(client_options)?)
+        }
+    }
+
+    use std::{path::PathBuf, str::FromStr};
+
     use super::*;
     use crate::db::schemas;
+    use anyhow::Context;
     use bson::{self, doc, oid};
     use dotenv::dotenv;
     use mongodb::{options::ClientOptions, Client as MongoDBClient};
+    use tempfile::TempDir;
 
+    #[cfg(not(target_arch = "aarch64"))]
     #[tokio::test]
     async fn test_indexing_and_api() -> Result<()> {
         dotenv().ok();
         env_logger::init();
 
-        let mongo_uri =
-            std::env::var("MONGO_URI").unwrap_or_else(|_| "mongodb://127.0.0.1:27017".to_string());
-        let client_options = ClientOptions::parse(mongo_uri).await?;
-        let client = MongoDBClient::with_options(client_options)?;
+        let mongod = MongodRunner::run().unwrap();
+        let client = mongod.client().unwrap();
 
         let database_name = "holo-hosting-test";
         let collection_name = "host";

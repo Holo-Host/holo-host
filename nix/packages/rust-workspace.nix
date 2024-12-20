@@ -72,23 +72,27 @@ craneLib.cargoBuild (
           # this will allow some read-only (by ways of little permissions) machine introspection.
           __noChroot = true;
 
-          nativeBuildInputs = [
-            ## hpos-hal
-            pkgs.dosfstools
-            pkgs.e2fsprogs
-            pkgs.coreutils
-            pkgs.systemd
+          nativeBuildInputs =
+            [
+              ## hpos-hal
+              pkgs.dosfstools
+              pkgs.e2fsprogs
+              pkgs.coreutils
+              pkgs.systemd
 
-            # pkgs.dmidecode
-            # (pkgs.writeShellScriptBin "sudo" ''
-            #   exec "$@"
-            # '')
+              # pkgs.dmidecode
+              # (pkgs.writeShellScriptBin "sudo" ''
+              #   exec "$@"
+              # '')
 
-            ## NATS/mongodb integration tests
-            pkgs.mongodb
-            pkgs.nats-server
-            pkgs.nsc
-          ];
+              ## NATS/mongodb integration tests
+              pkgs.nats-server
+              pkgs.nsc
+            ]
+            ++ (pkgs.lib.lists.optionals (!pkgs.stdenv.isAarch64) [
+              # TODO: get mongodb built for aarch64
+              pkgs.mongodb
+            ]);
           partitions = 1;
           partitionType = "count";
         }

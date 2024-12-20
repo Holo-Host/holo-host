@@ -202,6 +202,7 @@ pub fn get_leaf_server_url() -> String {
     std::env::var("LEAF_SERVER_URL").unwrap_or_else(|_| "nats://127.0.0.1:7422".to_string())
 }
 
+#[cfg(feature = "tests_integration_nats")]
 #[cfg(test)]
 mod tests {
     use super::*;
