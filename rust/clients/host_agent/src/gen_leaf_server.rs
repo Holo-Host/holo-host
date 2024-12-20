@@ -1,4 +1,6 @@
-use util_libs::nats_server::{self, Authorization, JetStreamConfig, LeafNodeRemote, LeafServer, LoggingOptions};
+use util_libs::nats_server::{
+    self, Authorization, JetStreamConfig, LeafNodeRemote, LeafServer, LoggingOptions,
+};
 
 const LEAF_SERVE_NAME: &str = "test_leaf_server";
 const LEAF_SERVER_CONFIG_PATH: &str = "test_leaf_server";
@@ -51,7 +53,7 @@ pub async fn run(user_creds_path: &str) {
         jetstream_config,
         logging_options,
         leaf_node_remotes,
-        Some(authorizaton_block) // TODO:  replace with None whenever we return to the more robust auth plan (operator-jwt-style)
+        Some(authorizaton_block), // TODO:  replace with None whenever we return to the more robust auth plan (operator-jwt-style)
     );
 
     log::info!("Spawning Leaf Server");

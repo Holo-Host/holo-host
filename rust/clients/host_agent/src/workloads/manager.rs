@@ -30,12 +30,11 @@ const HOST_AGENT_CLIENT_INBOX_PREFIX: &str = "_host_inbox";
 // TODO: Use _user_creds_path for auth once we add in the more resilient auth pattern.
 pub async fn run(user_creds_path: &str) -> Result<(), async_nats::Error> {
     log::info!("HPOS Agent Client: Connecting to server...");
-    
+
     // ==================== NATS Setup ====================
 
     log::info!("user_creds_path : {}", user_creds_path);
-    
-    
+
     // Connect to Nats server
     let nats_url = nats_js_client::get_nats_url();
     log::info!("nats_url : {}", nats_url);
