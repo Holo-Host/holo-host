@@ -6,7 +6,7 @@ const LEAF_SERVE_NAME: &str = "test_leaf_server";
 const LEAF_SERVER_CONFIG_PATH: &str = "test_leaf_server.conf";
 
 pub async fn run(_user_creds_path: &str) {
-    let leaf_server_remote_conn_url = nats_server::get_leaf_server_url();
+    let leaf_server_remote_conn_url = nats_server::get_hub_server_url();
     let leaf_client_conn_domain = "127.0.0.1";
     let leaf_client_conn_port = 4111;
 

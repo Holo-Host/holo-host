@@ -2,6 +2,7 @@
     This file contains the configuration required to set up a NATS Leaf Server with the "Operator JWT" auth approach.
     NB: This setup expects the `nats-server` binary to be locally installed and accessible.
 -------- */
+use anyhow::Context;
 use std::fmt::Debug;
 use std::fs::File;
 use std::io::Write;
@@ -173,8 +174,12 @@ leafnodes {{
     }
 }
 
-pub fn get_leaf_server_url() -> String {
-    std::env::var("LEAF_SERVER_URL").unwrap_or_else(|_| "nats://127.0.0.1:7422".to_string())
+pub fn get_hub_server_url() -> String {
+    const VAR: &str = "NATS_HUB_SERVER_URL";
+    std::env::var(VAR)
+        .context(format!("reading env var {VAR}"))
+        .unwrap()
+        .to_string()
 }
 
 #[cfg(feature = "tests_integration_nats")]
