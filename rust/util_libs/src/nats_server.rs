@@ -91,7 +91,8 @@ impl LeafServer {
             credentials: "{}",
         }}
                     "#,
-                        remote.url, remote.credentials_path.as_ref().unwrap() // Unwrap is safe here as the check for `Some()` wraps this condition
+                        remote.url,
+                        remote.credentials_path.as_ref().unwrap() // Unwrap is safe here as the check for `Some()` wraps this condition
                     )
                 } else {
                     format!(
@@ -324,7 +325,10 @@ mod tests {
         let leaf_node_remotes = vec![LeafNodeRemote {
             // sys account user (automated)
             url: leaf_server_remote_conn_url.to_string(),
-            credentials_path: Some(format!("{}/keys/creds/{}/SYS/sys.creds", nsc_path, OPERATOR_NAME)),
+            credentials_path: Some(format!(
+                "{}/keys/creds/{}/SYS/sys.creds",
+                nsc_path, OPERATOR_NAME
+            )),
         }];
 
         // Create a new Leaf Server instance
