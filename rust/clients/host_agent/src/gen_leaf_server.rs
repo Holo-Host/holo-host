@@ -1,9 +1,9 @@
 use util_libs::nats_server::{
-    self, Authorization, JetStreamConfig, LeafNodeRemote, LeafServer, LoggingOptions,
+    self, JetStreamConfig, LeafNodeRemote, LeafServer, LoggingOptions,
 };
 
 const LEAF_SERVE_NAME: &str = "test_leaf_server";
-const LEAF_SERVER_CONFIG_PATH: &str = "test_leaf_server";
+const LEAF_SERVER_CONFIG_PATH: &str = "test_leaf_server.conf";
 
 pub async fn run(user_creds_path: &str) {
     let leaf_server_remote_conn_url = nats_server::get_leaf_server_url();
@@ -29,20 +29,8 @@ pub async fn run(user_creds_path: &str) {
     let leaf_node_remotes = vec![LeafNodeRemote {
         // sys account user (automated)
         url: leaf_server_remote_conn_url.to_string(),
-        credentials_path: user_creds_path.to_string(),
+        credentials_path: None, // Some(user_creds_path.to_string()),
     }];
-
-    pub fn get_leaf_server_name() -> String {
-        std::env::var("LEAF_SERVER_USER").unwrap_or_else(|_| "test-user".to_string())
-    }
-    pub fn get_leaf_server_pw() -> String {
-        std::env::var("LEAF_SERVER_PW").unwrap_or_else(|_| "pw-12345".to_string())
-    }
-
-    let authorizaton_block = Authorization {
-        user: get_leaf_server_name(),
-        password: get_leaf_server_pw(),
-    };
 
     // Create a new Leaf Server instance
     let leaf_server = LeafServer::new(
@@ -53,7 +41,6 @@ pub async fn run(user_creds_path: &str) {
         jetstream_config,
         logging_options,
         leaf_node_remotes,
-        Some(authorizaton_block), // TODO:  replace with None whenever we return to the more robust auth plan (operator-jwt-style)
     );
 
     log::info!("Spawning Leaf Server");

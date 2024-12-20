@@ -26,13 +26,7 @@ pub struct LoggingOptions {
 #[derive(Debug, Clone)]
 pub struct LeafNodeRemote {
     pub url: String,
-    pub credentials_path: String,
-}
-
-#[derive(Debug, Clone)]
-pub struct Authorization {
-    pub user: String,
-    pub password: String,
+    pub credentials_path: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -44,7 +38,6 @@ pub struct LeafServer {
     jetstream_config: JetStreamConfig,
     pub logging: LoggingOptions,
     leaf_node_remotes: Vec<LeafNodeRemote>,
-    authorization_block: Option<Authorization>,
     server_handle: Arc<Mutex<Option<Child>>>,
 }
 
@@ -59,7 +52,6 @@ impl LeafServer {
         jetstream_config: JetStreamConfig,
         logging: LoggingOptions,
         leaf_node_remotes: Vec<LeafNodeRemote>,
-        authorization_block: Option<Authorization>,
     ) -> Self {
         Self {
             name: server_name.to_string(),
@@ -69,7 +61,6 @@ impl LeafServer {
             jetstream_config,
             logging,
             leaf_node_remotes,
-            authorization_block,
             server_handle: Arc::new(Mutex::new(None)),
         }
     }
@@ -91,7 +82,7 @@ impl LeafServer {
             .leaf_node_remotes
             .iter()
             .map(|remote| {
-                if self.authorization_block.is_none() {
+                if remote.credentials_path.is_some() {
                     format!(
                         r#"
         {{
@@ -99,7 +90,7 @@ impl LeafServer {
             credentials: "{}",
         }}
                     "#,
-                        remote.url, remote.credentials_path
+                        remote.url, remote.credentials_path.as_ref().unwrap() // Unwrap is safe here as the check for `Some()` wraps this condition
                     )
                 } else {
                     format!(
@@ -115,19 +106,6 @@ impl LeafServer {
             .collect::<Vec<String>>()
             .join(",\n");
 
-        let auth_block = match &self.authorization_block {
-            Some(a) => format!(
-                r#"
-{{
-    user: "{}",
-    password: "{}",
-}}
-            "#,
-                a.user, a.password
-            ),
-            None => "".to_string(),
-        };
-
         // Write the full config file
         write!(
             config_file,
@@ -135,9 +113,7 @@ impl LeafServer {
 server_name: {}
 listen: "{}:{}"
 
-{}
-
-jetstream: {{
+jetstream {{
     domain: "leaf",
     store_dir: "{}",
     max_mem: {},
@@ -155,7 +131,6 @@ leafnodes {{
             self.name,
             self.host,
             self.port,
-            auth_block,
             self.jetstream_config.store_dir,
             self.jetstream_config.max_memory_store,
             self.jetstream_config.max_file_store,
@@ -202,7 +177,7 @@ pub fn get_leaf_server_url() -> String {
     std::env::var("LEAF_SERVER_URL").unwrap_or_else(|_| "nats://127.0.0.1:7422".to_string())
 }
 
-#[cfg(feature = "tests_integration_nats")]
+// #[cfg(feature = "tests_integration_nats")]
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -344,7 +319,7 @@ mod tests {
         let leaf_node_remotes = vec![LeafNodeRemote {
             // sys account user (automated)
             url: leaf_server_remote_conn_url.to_string(),
-            credentials_path: format!("{}/keys/creds/{}/SYS/sys.creds", nsc_path, OPERATOR_NAME),
+            credentials_path: Some(format!("{}/keys/creds/{}/SYS/sys.creds", nsc_path, OPERATOR_NAME)),
         }];
 
         // Create a new Leaf Server instance
@@ -356,7 +331,6 @@ mod tests {
             jetstream_config,
             logging_options,
             leaf_node_remotes,
-            None,
         );
 
         log::info!("Spawning Leaf Server");

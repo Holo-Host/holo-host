@@ -15,6 +15,7 @@ target/
 # nats
 rust/*/tmp
 rust/*/jwt
+rust/*/*/test_leaf_server.conf
 rust/*/*/leaf_server.conf
 rust/*/*/resolver.conf
 leaf_server.conf
