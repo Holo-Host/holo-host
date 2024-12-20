@@ -1,6 +1,5 @@
 ## Issue Template
 
-
 # Description
 
 Please provide a brief summary of the issue

@@ -1,6 +1,5 @@
 ## Issue Template
 
-
 # Note that HOLO-HOST is a public repository. Your issue will be visible to ALL users.
 
 ### Description
