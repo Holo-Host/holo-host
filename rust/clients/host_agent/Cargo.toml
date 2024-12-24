@@ -12,7 +12,8 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 log = { workspace = true }
 dotenv = { workspace = true }
-thiserror = "2.0"
+clap = { workspace = true }
+thiserror = { workspace = true }
 url = { version = "2", features = ["serde"] }
 bson = { version = "2.6.1", features = ["chrono-0_4"] }
 env_logger = { workspace = true }
