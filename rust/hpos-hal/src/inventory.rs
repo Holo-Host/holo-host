@@ -157,6 +157,15 @@ pub struct HoloPlatform {
     pub hypervisor_guest: bool,
 }
 
+impl Display for HoloPlatform {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "Platform Model: {}\nRunning on Hypervisor: {}",
+            self.platform_type, self.hypervisor_guest
+        )
+    }
+}
 // TODO: This needs more work and testing against real hardware.
 impl HoloPlatform {
     /// Given an inventory structure, use some heuristics to give a best-guess at the type of

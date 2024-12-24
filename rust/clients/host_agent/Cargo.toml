@@ -12,6 +12,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 log = { workspace = true }
 dotenv = { workspace = true }
+clap = { workspace = true }
 thiserror = "2.0"
 url = { version = "2", features = ["serde"] }
 bson = { version = "2.6.1", features = ["chrono-0_4"] }
@@ -23,3 +24,4 @@ nkeys = "=0.4.4"
 rand = "0.8.5"
 util_libs = { path = "../../util_libs" }
 workload = { path = "../../services/workload" }
+hpos-hal = { path = "../../hpos-hal" }

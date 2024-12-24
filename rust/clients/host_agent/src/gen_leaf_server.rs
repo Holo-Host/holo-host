@@ -1,6 +1,4 @@
-use util_libs::nats_server::{
-    self, JetStreamConfig, LeafNodeRemote, LeafServer, LoggingOptions,
-};
+use util_libs::nats_server::{self, JetStreamConfig, LeafNodeRemote, LeafServer, LoggingOptions};
 
 const LEAF_SERVE_NAME: &str = "test_leaf_server";
 const LEAF_SERVER_CONFIG_PATH: &str = "test_leaf_server.conf";
