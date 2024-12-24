@@ -25,12 +25,6 @@ async fn main() -> Result<(), async_nats::Error> {
     env_logger::init();
     log::info!("Spawning host_agent");
 
-    daemonize().await?;
-
-    Ok(())
-}
-
-async fn daemonize() -> Result<(), async_nats::Error> {
     // let user_creds_path = auth::initializer::run().await?;
     let user_creds_path = "placeholder_creds_that_will_not_be_read".to_string();
     gen_leaf_server::run(&user_creds_path).await;
