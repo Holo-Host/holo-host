@@ -6,6 +6,14 @@ pub fn support_command(command: &SupportCommands) -> Result<(), std::io::Error> 
         SupportCommands::NetTest => {
             println!("Network Test not yet supported")
         }
+        SupportCommands::SupportTunnel { enable } => {
+            // This is independent of the implementation, which will be plumbed through once we
+            // have an implementation for https://github.com/Holo-Host/holo-host-private/issues/14.
+            match enable {
+                true => { println!("Support Tunnel not yet implemented") }
+                false => { println!("Support Tunnel already disabled") }
+            }
+        }
     }
     Ok(())
 }

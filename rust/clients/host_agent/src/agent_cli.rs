@@ -47,4 +47,9 @@ pub enum HostCommands {
 pub enum SupportCommands {
     /// Run some basic network connectivity diagnostics.
     NetTest,
+    /// Enable or disable a tunnel for support to control this host remotely.
+    SupportTunnel {
+        #[arg(long)]
+        enable: bool,
+    },
 }
