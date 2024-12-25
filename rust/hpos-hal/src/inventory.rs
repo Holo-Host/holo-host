@@ -69,6 +69,9 @@ pub struct HoloInventory {
     /// Information about CPUs present. All CPUs are generally the same in the x86_64 case, but may
     /// be different on other architectures, such as aarch64.
     pub cpus: Vec<HoloProcessorInventory>,
+    /// An inventory of USB devices specifically. May overlap with other sections (eg, USB storage
+    /// devices).
+    pub usb: Vec<HoloUsbInventory>,
     /// Generally x86-specific SMBIOS/DMI information provided by the hardware vendor.
     pub smbios: HoloSMBIOS,
     /// An overall categorisation of this host as a platform. This might include guesses at the
@@ -150,11 +153,77 @@ pub struct HoloSMBIOS {
     pub sys_vendor: Option<String>,
 }
 
+/// A structure representing USB devices connected to a Holo Host.
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct HoloUsbInventory {
+    /// USB device class
+    class: Option<String>,
+    /// USB device subclass
+    subclass: Option<String>,
+    /// USB Vendor ID
+    vendor_id: Option<String>,
+    /// USB Product ID
+    product_id: Option<String>,
+    /// USB version
+    usb_version: Option<String>,
+    /// Path along USB bus
+    path: String,
+}
+
+impl HoloUsbInventory {
+    const USB_DEV_GLOB: &str = "/sys/bus/usb/devices/*";
+    const UNINTERESTING_CLASSES: [&str; 1] = ["09"];
+    pub fn from_host() -> Vec<HoloUsbInventory> {
+        let mut ret: Vec<HoloUsbInventory> = vec![];
+
+        for usb_dev in glob(Self::USB_DEV_GLOB).unwrap() {
+            // TODO: grab fill in fields if the class isn't a hub
+            let usb_dev = usb_dev.unwrap().clone();
+            let dev_base = format!("{}", usb_dev.to_string_lossy());
+            let usb_path = fs::canonicalize(&dev_base).unwrap_or_default();
+            let usb_path = usb_path.to_string_lossy();
+            debug!("USB link: {}", &usb_path);
+            let usb_class = sysfs::string_attr(format!("{}/bDeviceClass", dev_base));
+            // We aren't interested in things like USB hubs. We should instead ignore those.
+            match usb_class {
+                Some(class) => {
+                    if Self::UNINTERESTING_CLASSES.contains(&class.as_str()) {
+                        continue;
+                    }
+
+                    // This device is something of potential interest
+                    let vendor_id = sysfs::string_attr(format!("{}/idVendor", dev_base));
+                    let product_id = sysfs::string_attr(format!("{}/idProduct", dev_base));
+                    let subclass = sysfs::string_attr(format!("{}/bDeviceSubClass", dev_base));
+                    let usb_version = sysfs::string_attr(format!("{}/version", dev_base));
+
+                    // Add to inventory
+                    debug!("Adding USB device {}", usb_path);
+                    ret.push(HoloUsbInventory {
+                        class: Some(class),
+                        subclass,
+                        vendor_id,
+                        product_id,
+                        usb_version,
+                        path: usb_path.to_string(),
+                    });
+                }
+                None => continue,
+            }
+        }
+
+        ret
+    }
+}
+
 /// A structure representing Holo Platform related meta-inventory
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct HoloPlatform {
     pub platform_type: HoloPlatformType,
     pub hypervisor_guest: bool,
+    pub admin_interface: Option<String>,
+    pub system_drive: Option<String>,
+    pub data_drive: Option<String>,
 }
 
 impl Display for HoloPlatform {
@@ -178,9 +247,46 @@ impl HoloPlatform {
         // machines.
         let platform_type = Self::guess_platform(inventory);
         let hypervisor_guest = Self::guess_hypervisor(inventory);
-        Self {
-            platform_type,
-            hypervisor_guest,
+
+        // This is manageable while we have a very limited number of platform models to support,
+        // but could become unwieldy in future. At very least, it could become a separate module,
+        // or perhaps something more dynamic such as being defined in a JSON file.
+        match platform_type {
+            // TODO: find admin interface and system drive by path.
+            HoloPlatformType::Holoport => Self {
+                platform_type,
+                hypervisor_guest,
+                admin_interface: None,
+                system_drive: None,
+                data_drive: None,
+            },
+            // TODO: find admin interface and system and data drives by path.
+            HoloPlatformType::HoloportPlus => Self {
+                platform_type,
+                hypervisor_guest,
+                admin_interface: None,
+                system_drive: None,
+                data_drive: None,
+            },
+            HoloPlatformType::Yoloport => Self {
+                platform_type,
+                hypervisor_guest,
+                admin_interface: None,
+                system_drive: None,
+                data_drive: None,
+            },
+            HoloPlatformType::Unknown => {
+                // Unknown model type, so we don't have any hints for admin interface, etc. Note:
+                // it may be better to just pick or guess at one, or have it able to be configured or
+                // overridden, so that consumers can rely more heavily on it.
+                Self {
+                    platform_type,
+                    hypervisor_guest,
+                    admin_interface: None,
+                    system_drive: None,
+                    data_drive: None,
+                }
+            }
         }
     }
 
@@ -204,6 +310,9 @@ impl HoloPlatform {
         // holoports have a single NIC of a specific model at a specific part of the PCI tree. We
         // should add more criteria for determining whether it's a holoport or not, but this is a
         // start.
+        //
+        // Holoports should also have a USB device visible that is the LED on the front. Why
+        // doesn't mine? It has the LED and the LED appears lit up.
         if inventory.nics.len() == 1
             && inventory.nics[0].location == "pci0000:00/0000:00:1c.0/0000:01:00.0"
             && inventory.nics[0].model == Some("0x8168".to_string())
@@ -303,6 +412,7 @@ impl HoloInventory {
             drives: HoloDriveInventory::from_host(),
             cpus: HoloProcessorInventory::from_host(),
             nics: HoloNicInventory::from_host(),
+            usb: HoloUsbInventory::from_host(),
             platform: None,
         };
 
