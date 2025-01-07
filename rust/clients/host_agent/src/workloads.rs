@@ -11,10 +11,10 @@
   - sending active periodic workload reports
 */
 
-use super::endpoints;
 use anyhow::{anyhow, Result};
+use bytes::Bytes;
 // use mongodb::{options::ClientOptions, Client as MongoDBClient};
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 use util_libs::{
     // db::mongodb::get_mongodb_url,
     js_stream_service::JsServiceParamsPartial,
@@ -23,6 +23,8 @@ use util_libs::{
 use workload::{
     WorkloadApi, WORKLOAD_SRV_DESC, WORKLOAD_SRV_NAME, WORKLOAD_SRV_SUBJ, WORKLOAD_SRV_VERSION,
 };
+use async_nats::Message;
+
 
 const HOST_AGENT_CLIENT_NAME: &str = "Host Agent";
 const HOST_AGENT_CLIENT_INBOX_PREFIX: &str = "_host_inbox";
@@ -88,16 +90,24 @@ pub async fn run(user_creds_path: &str) -> Result<(), async_nats::Error> {
         .add_local_consumer(
             "start_workload",
             "start",
-            EndpointType::Async(endpoints::start_workload(&workload_api).await),
+            EndpointType::Async(workload_api.call(|api: WorkloadApi, msg: Arc<Message>| {
+                async move {
+                    api.start_workload(msg).await
+                }
+            })),
             None,
         )
         .await?;
 
     workload_service
         .add_local_consumer(
-            "signal_status_update",
-            "signal_status_update",
-            EndpointType::Async(endpoints::signal_status_update(&workload_api).await),
+            "send_workload_status",
+            "send_status",
+            EndpointType::Async(workload_api.call(|api: WorkloadApi, msg: Arc<Message>| {
+                async move {
+                    api.send_workload_status(msg).await
+                }
+            })),
             None,
         )
         .await?;
@@ -106,14 +116,17 @@ pub async fn run(user_creds_path: &str) -> Result<(), async_nats::Error> {
         .add_local_consumer(
             "remove_workload",
             "remove",
-            EndpointType::Async(endpoints::remove_workload(&workload_api).await),
+            EndpointType::Async(workload_api.call(|api: WorkloadApi, msg: Arc<Message>| {
+                async move {
+                    api.remove_workload(msg).await
+                }
+            })),
             None,
         )
         .await?;
 
     // Only exit program when explicitly requested
     tokio::signal::ctrl_c().await?;
-
     // TODO: bring this back with actual implementation
     // log::warn!("CTRL+C detected. Please press CTRL+C again within 5 seconds to confirm exit...");
     // tokio::select! {

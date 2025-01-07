@@ -43,7 +43,7 @@ pub struct User {
 }
 
 impl IntoIndexes for User {
-    fn into_indices(&self) -> Result<Vec<(Document, Option<IndexOptions>)>> {
+    fn into_indices(self) -> Result<Vec<(Document, Option<IndexOptions>)>> {
         let mut indices = vec![];
 
         //  Add Email Index
@@ -79,7 +79,7 @@ pub struct Developer {
 
 // No Additional Indexing for Developer
 impl IntoIndexes for Developer {
-    fn into_indices(&self) -> Result<Vec<(Document, Option<IndexOptions>)>> {
+    fn into_indices(self) -> Result<Vec<(Document, Option<IndexOptions>)>> {
         Ok(vec![])
     }
 }
@@ -94,7 +94,7 @@ pub struct Hoster {
 
 // No Additional Indexing for Hoster
 impl IntoIndexes for Hoster {
-    fn into_indices(&self) -> Result<Vec<(Document, Option<IndexOptions>)>> {
+    fn into_indices(self) -> Result<Vec<(Document, Option<IndexOptions>)>> {
         Ok(vec![])
     }
 }

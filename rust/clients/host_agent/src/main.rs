@@ -30,7 +30,7 @@ async fn main() -> Result<(), async_nats::Error> {
     gen_leaf_server::run(&user_creds_path).await;
 
     let user_creds_path = nats_js_client::get_nats_client_creds("HOLO", "HPOS", "hpos");
-    workloads::manager::run(&user_creds_path).await?;
+    workloads::run(&user_creds_path).await?;
 
     Ok(())
 }

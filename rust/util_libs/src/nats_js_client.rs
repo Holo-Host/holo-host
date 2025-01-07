@@ -16,6 +16,7 @@ use std::time::{Duration, Instant};
 pub type ClientOption = Box<dyn Fn(&mut DefaultJsClient)>;
 pub type EventListener = Box<dyn Fn(&mut DefaultJsClient)>;
 pub type EventHandler = Pin<Box<dyn Fn(&str, &str, Duration) + Send + Sync>>;
+pub type JsServiceResponse = Pin<Box<dyn Future<Output = Result<Vec<u8>, anyhow::Error>> + Send>>;
 
 pub type EndpointHandler = Arc<dyn Fn(&Message) -> Result<Vec<u8>, anyhow::Error> + Send + Sync>;
 pub type AsyncEndpointHandler = Arc<

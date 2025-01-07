@@ -17,12 +17,15 @@ use async_nats::Message;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use util_libs::db::schemas; // mongodb::MongoCollection,
+use std::future::Future;
+use util_libs::nats_js_client;
 
 pub const WORKLOAD_SRV_OWNER_NAME: &str = "WORKLOAD_OWNER";
 pub const WORKLOAD_SRV_NAME: &str = "WORKLOAD";
 pub const WORKLOAD_SRV_SUBJ: &str = "WORKLOAD";
 pub const WORKLOAD_SRV_VERSION: &str = "0.0.1";
 pub const WORKLOAD_SRV_DESC: &str = "This service handles the flow of Workload requests between the Developer and the Orchestrator, and between the Orchestrator and HPOS.";
+
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum WorkloadState {
@@ -82,6 +85,22 @@ impl WorkloadApi {
         })
     }
 
+
+    pub fn call<F, Fut>(
+        &self,
+        handler: F,
+    ) -> nats_js_client::AsyncEndpointHandler
+    where
+        F: Fn(WorkloadApi, Arc<Message>) -> Fut + Send + Sync + 'static,
+        Fut: Future<Output = Result<Vec<u8>, anyhow::Error>> + Send + 'static,
+    {
+        let api = self.to_owned(); 
+        Arc::new(move |msg: Arc<Message>| -> nats_js_client::JsServiceResponse {
+            let api_clone = api.clone();
+            Box::pin(handler(api_clone, msg))
+        })
+    }
+
     pub async fn add_workload(&self, msg: Arc<Message>) -> Result<Vec<u8>, anyhow::Error> {
         let payload_buf = msg.payload.to_vec();
         let workload: schemas::Workload = serde_json::from_slice(&payload_buf)?;
@@ -136,16 +155,16 @@ impl WorkloadApi {
     }
 
     // For hpos ?
-    pub async fn signal_status_update(&self, msg: Arc<Message>) -> Result<Vec<u8>, anyhow::Error> {
+    pub async fn send_workload_status(&self, msg: Arc<Message>) -> Result<Vec<u8>, anyhow::Error> {
         log::debug!(
-            "Incoming message for 'WORKLOAD.signal_status_update' : {:?}",
+            "Incoming message for 'WORKLOAD.send_workload_status' : {:?}",
             msg
         );
 
         let payload_buf = msg.payload.to_vec();
         let workload_state = serde_json::from_slice::<WorkloadState>(&payload_buf)?;
 
-        // Send updated reponse:
+        // Send updated response:
         // NB: This will send the update to both the requester (if one exists)
         // and will broadcast the update to for any `response_subject` address registred for the endpoint
         Ok(serde_json::to_vec(&workload_state)?)
