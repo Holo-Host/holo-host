@@ -1,3 +1,6 @@
+#!/usr/bin/env bash
+# shellcheck disable=SC2005,SC2086
+
 # --------
 # NB: This setup expects the `nats` and the `nsc` binarys to be locally installed and accessible.  This script will verify that they both exist locally before running setup commnds.
 
@@ -34,16 +37,12 @@
 # JWT Files: holo-operator.jwt, sys_account.jwt, admin_account.jwt and workload_account.jwt in the `jwt_output` directory.
 # --------
 
-#!/bin/bash
-
-set -e  # Exit on any error
+set -e # Exit on any error
 
 # Check for required commands
-for cmd in nsc nats
-do
+for cmd in nsc nats; do
   echo "Executing command: $cmd --version"
-  if command -v "$cmd" &> /dev/null
-  then
+  if command -v "$cmd" &>/dev/null; then
     $cmd --version
   else
     echo "Command '$cmd' not found."
@@ -66,7 +65,7 @@ mkdir -p $JWT_OUTPUT_DIR
 # Step 1: Create Operator with SYS account and two signing keys
 nsc add operator --name $OPERATOR_NAME --sys --generate-signing-key
 nsc edit operator --require-signing-keys --account-jwt-server-url $ACCOUNT_JWT_SERVER --service-url $OPERATOR_SERVICE_URL
-nsc edit operator --sk generate 
+nsc edit operator --sk generate
 
 # Step 2: Create ADMIN_Account with JetStream and scoped signing key
 nsc add account --name $ADMIN_ACCOUNT
