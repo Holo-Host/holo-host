@@ -2,10 +2,11 @@
     This file contains the configuration required to set up a NATS Leaf Server with the "Operator JWT" auth approach.
     NB: This setup expects the `nats-server` binary to be locally installed and accessible.
 -------- */
+use anyhow::Context;
 use std::fmt::Debug;
 use std::fs::File;
 use std::io::Write;
-use std::process::{Child, Command};
+use std::process::{Child, Command, Stdio};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -26,13 +27,7 @@ pub struct LoggingOptions {
 #[derive(Debug, Clone)]
 pub struct LeafNodeRemote {
     pub url: String,
-    pub credentials_path: String,
-}
-
-#[derive(Debug, Clone)]
-pub struct Authorization {
-    pub user: String,
-    pub password: String,
+    pub credentials_path: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -44,7 +39,6 @@ pub struct LeafServer {
     jetstream_config: JetStreamConfig,
     pub logging: LoggingOptions,
     leaf_node_remotes: Vec<LeafNodeRemote>,
-    authorization_block: Option<Authorization>,
     server_handle: Arc<Mutex<Option<Child>>>,
 }
 
@@ -59,7 +53,6 @@ impl LeafServer {
         jetstream_config: JetStreamConfig,
         logging: LoggingOptions,
         leaf_node_remotes: Vec<LeafNodeRemote>,
-        authorization_block: Option<Authorization>,
     ) -> Self {
         Self {
             name: server_name.to_string(),
@@ -69,7 +62,6 @@ impl LeafServer {
             jetstream_config,
             logging,
             leaf_node_remotes,
-            authorization_block,
             server_handle: Arc::new(Mutex::new(None)),
         }
     }
@@ -91,7 +83,7 @@ impl LeafServer {
             .leaf_node_remotes
             .iter()
             .map(|remote| {
-                if self.authorization_block.is_none() {
+                if remote.credentials_path.is_some() {
                     format!(
                         r#"
         {{
@@ -99,7 +91,8 @@ impl LeafServer {
             credentials: "{}",
         }}
                     "#,
-                        remote.url, remote.credentials_path
+                        remote.url,
+                        remote.credentials_path.as_ref().unwrap() // Unwrap is safe here as the check for `Some()` wraps this condition
                     )
                 } else {
                     format!(
@@ -115,19 +108,6 @@ impl LeafServer {
             .collect::<Vec<String>>()
             .join(",\n");
 
-        let auth_block = match &self.authorization_block {
-            Some(a) => format!(
-                r#"
-{{
-    user: "{}",
-    password: "{}",
-}}
-            "#,
-                a.user, a.password
-            ),
-            None => "".to_string(),
-        };
-
         // Write the full config file
         write!(
             config_file,
@@ -135,9 +115,7 @@ impl LeafServer {
 server_name: {}
 listen: "{}:{}"
 
-{}
-
-jetstream: {{
+jetstream {{
     domain: "leaf",
     store_dir: "{}",
     max_mem: {},
@@ -155,7 +133,6 @@ leafnodes {{
             self.name,
             self.host,
             self.port,
-            auth_block,
             self.jetstream_config.store_dir,
             self.jetstream_config.max_memory_store,
             self.jetstream_config.max_file_store,
@@ -167,10 +144,16 @@ leafnodes {{
         let child = Command::new("nats-server")
             .arg("-c")
             .arg(&self.config_path)
+            // TODO: direct these to a file or make it conditional. this is silenced because it was very verbose
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
             .spawn()
             .expect("Failed to start NATS server");
 
-        println!("NATS Leaf Server is running at {}:{}", self.host, self.port);
+        // TODO: wait for a readiness indicator
+        std::thread::sleep(std::time::Duration::from_millis(100));
+
+        log::info!("NATS Leaf Server is running at {}:{}", self.host, self.port);
 
         // Store the process handle in the `server_handle`
         let mut handle = self.server_handle.lock().await;
@@ -186,9 +169,9 @@ leafnodes {{
         if let Some(child) = handle.as_mut() {
             // Wait for the server process to finish
             let status = child.wait()?;
-            println!("NATS server exited with status: {:?}", status);
+            log::info!("NATS server exited with status: {:?}", status);
         } else {
-            println!("No running server to shut down.");
+            log::info!("No running server to shut down.");
         }
 
         // Clear the server handle
@@ -198,8 +181,12 @@ leafnodes {{
     }
 }
 
-pub fn get_leaf_server_url() -> String {
-    std::env::var("LEAF_SERVER_URL").unwrap_or_else(|_| "nats://127.0.0.1:7422".to_string())
+pub fn get_hub_server_url() -> String {
+    const VAR: &str = "NATS_HUB_SERVER_URL";
+    std::env::var(VAR)
+        .context(format!("reading env var {VAR}"))
+        .unwrap()
+        .to_string()
 }
 
 #[cfg(feature = "tests_integration_nats")]
@@ -344,7 +331,10 @@ mod tests {
         let leaf_node_remotes = vec![LeafNodeRemote {
             // sys account user (automated)
             url: leaf_server_remote_conn_url.to_string(),
-            credentials_path: format!("{}/keys/creds/{}/SYS/sys.creds", nsc_path, OPERATOR_NAME),
+            credentials_path: Some(format!(
+                "{}/keys/creds/{}/SYS/sys.creds",
+                nsc_path, OPERATOR_NAME
+            )),
         }];
 
         // Create a new Leaf Server instance
@@ -356,7 +346,6 @@ mod tests {
             jetstream_config,
             logging_options,
             leaf_node_remotes,
-            None,
         );
 
         log::info!("Spawning Leaf Server");

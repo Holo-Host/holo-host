@@ -18,6 +18,7 @@ craneLib.devShell {
       (
         [
           flake.packages.${system}.rust-workspace
+
         ]
         ++ (builtins.attrValues flake.packages.${system}.rust-workspace.passthru.tests)
       )
@@ -28,5 +29,6 @@ craneLib.devShell {
 
   # Extra inputs can be added here; cargo and rustc are provided by default.
   packages = [
+    pkgs.natscli
   ];
 }
