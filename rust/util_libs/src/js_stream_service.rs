@@ -338,6 +338,8 @@ impl JsStreamService {
     }
 }
 
+
+#[cfg(feature = "tests_integration_nats")]
 #[cfg(test)]
 mod tests {
     use super::*;

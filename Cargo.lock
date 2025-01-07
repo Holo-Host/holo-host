@@ -2680,6 +2680,7 @@ dependencies = [
  "serde",
  "serde_json",
  "strum",
+ "tempfile",
  "thiserror 2.0.8",
  "tokio",
  "tokio-retry",

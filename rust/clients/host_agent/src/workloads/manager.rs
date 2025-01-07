@@ -30,10 +30,13 @@ const HOST_AGENT_CLIENT_INBOX_PREFIX: &str = "_host_inbox";
 // TODO: Use _user_creds_path for auth once we add in the more resilient auth pattern.
 pub async fn run(user_creds_path: &str) -> Result<(), async_nats::Error> {
     log::info!("HPOS Agent Client: Connecting to server...");
-
     // ==================== NATS Setup ====================
+    log::info!("user_creds_path : {}", user_creds_path);
+
     // Connect to Nats server
     let nats_url = nats_js_client::get_nats_url();
+    log::info!("nats_url : {}", nats_url);
+
     let event_listeners = nats_js_client::get_event_listeners();
 
     // Setup JS Stream Service
@@ -51,7 +54,7 @@ pub async fn run(user_creds_path: &str) -> Result<(), async_nats::Error> {
             name: HOST_AGENT_CLIENT_NAME.to_string(),
             inbox_prefix: format!(
                 "{}_{}",
-                HOST_AGENT_CLIENT_INBOX_PREFIX, "host_id_placeholder"
+                HOST_AGENT_CLIENT_INBOX_PREFIX, "<host_id_placeholder>"
             ),
             service_params: vec![workload_stream_service_params],
             credentials_path: Some(user_creds_path.to_string()),
@@ -110,11 +113,13 @@ pub async fn run(user_creds_path: &str) -> Result<(), async_nats::Error> {
 
     // Only exit program when explicitly requested
     tokio::signal::ctrl_c().await?;
-    log::warn!("CTRL+C detected. Please press CTRL+C again within 5 seconds to confirm exit...");
-    tokio::select! {
-        _ = tokio::time::sleep(tokio::time::Duration::from_secs(5)) => log::warn!("Resuming service."),
-        _ = tokio::signal::ctrl_c() => log::error!("Shutting down."),
-    }
+
+    // TODO: bring this back with actual implementation
+    // log::warn!("CTRL+C detected. Please press CTRL+C again within 5 seconds to confirm exit...");
+    // tokio::select! {
+    //     _ = tokio::time::sleep(tokio::time::Duration::from_secs(5)) => { log::warn!("Resuming service.") },
+    //     _ = tokio::signal::ctrl_c() => log::error!("Shutting down."),
+    // }
 
     // Close client and drain internal buffer before exiting to make sure all messages are sent
     host_workload_client.close().await?;

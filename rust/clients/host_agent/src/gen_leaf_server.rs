@@ -1,12 +1,14 @@
-use util_libs::nats_server::{JetStreamConfig, LeafNodeRemote, LeafServer, LoggingOptions};
+use util_libs::nats_server::{
+    self, JetStreamConfig, LeafNodeRemote, LeafServer, LoggingOptions,
+};
 
 const LEAF_SERVE_NAME: &str = "test_leaf_server";
-const LEAF_SERVER_CONFIG_PATH: &str = "test_leaf_server";
+const LEAF_SERVER_CONFIG_PATH: &str = "test_leaf_server.conf";
 
-pub async fn run(user_creds_path: &str) {
-    let leaf_server_remote_conn_url = "nats://127.0.0.1:7422";
+pub async fn run(_user_creds_path: &str) {
+    let leaf_server_remote_conn_url = nats_server::get_hub_server_url();
     let leaf_client_conn_domain = "127.0.0.1";
-    let leaf_client_conn_port = 4333;
+    let leaf_client_conn_port = 4111;
 
     let nsc_path =
         std::env::var("NSC_PATH").unwrap_or_else(|_| ".local/share/nats/nsc".to_string());
@@ -27,7 +29,7 @@ pub async fn run(user_creds_path: &str) {
     let leaf_node_remotes = vec![LeafNodeRemote {
         // sys account user (automated)
         url: leaf_server_remote_conn_url.to_string(),
-        credentials_path: user_creds_path.to_string(),
+        credentials_path: None, // Some(user_creds_path.to_string()),
     }];
 
     // Create a new Leaf Server instance

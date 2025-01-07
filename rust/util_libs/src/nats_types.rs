@@ -73,8 +73,8 @@ pub enum NatsClaims {
 
         /// Default publish and subscribe permissions users under this account will have if not
         /// specified otherwise
-        // default_permissions: NatsPermissionsMap,
-
+        /// default_permissions: NatsPermissionsMap,
+        ///
         /// Version of the nats claims object, always 2 in this crate
         version: i64,
     },
