@@ -23,6 +23,7 @@ use util_libs::nats_js_client;
 async fn main() -> Result<(), async_nats::Error> {
     dotenv().ok();
     env_logger::init();
+    log::info!("Spawning host_agent");
 
     // let user_creds_path = auth::initializer::run().await?;
     let user_creds_path = "placeholder_creds_that_will_not_be_read".to_string();
