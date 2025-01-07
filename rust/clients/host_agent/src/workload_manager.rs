@@ -7,16 +7,15 @@
   - subscribing to workload streams
     - installing new workloads
     - removing workloads
-    - send workload status upon request
-  - sending active periodic workload reports
+    - sending workload status upon request
+    - sending active periodic workload reports
 */
 
 use anyhow::{anyhow, Result};
-use bytes::Bytes;
-// use mongodb::{options::ClientOptions, Client as MongoDBClient};
+use mongodb::{options::ClientOptions, Client as MongoDBClient};
 use std::{sync::Arc, time::Duration};
 use util_libs::{
-    // db::mongodb::get_mongodb_url,
+    db::mongodb::get_mongodb_url,
     js_stream_service::JsServiceParamsPartial,
     nats_js_client::{self, EndpointType, JsClient},
 };
@@ -69,12 +68,12 @@ pub async fn run(user_creds_path: &str) -> Result<(), async_nats::Error> {
     // ==================== DB Setup ====================
 
     // Create a new MongoDB Client and connect it to the cluster
-    // let mongo_uri = get_mongodb_url();
-    // let client_options = ClientOptions::parse(mongo_uri).await?;
-    // let client = MongoDBClient::with_options(client_options)?;
+    let mongo_uri = get_mongodb_url();
+    let client_options = ClientOptions::parse(mongo_uri).await?;
+    let client = MongoDBClient::with_options(client_options)?;
 
     // Generate the Workload API with access to db
-    let workload_api = WorkloadApi::new().await?;
+    let workload_api = WorkloadApi::new(&client).await?;
 
     // ==================== API ENDPOINTS ====================
     // Register Workload Streams for Host Agent to consume

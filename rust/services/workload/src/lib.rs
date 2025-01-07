@@ -5,20 +5,20 @@ Provisioning Account: ORCHESTRATOR Account
 Importing Account: HPOS Account
 Endpoints & Managed Subjects:
 - `add_workload`: handles the "WORKLOAD.add" subject
-- `handle_changed_workload`: handles the "WORKLOAD.handle_change" subject // the stream changed output by the mongo<>nats connector (stream eg: DB_COLL_CHANGE_WORKLOAD).
+- `handle_db_change`: handles the "WORKLOAD.handle_change" subject // the stream changed output by the mongo<>nats connector (stream eg: DB_COLL_CHANGE_WORKLOAD).
 - TODO: `start_workload`: handles the "WORKLOAD.start.{{hpos_id}}" subject
+- TODO: `send_workload_status`: handles the "WORKLOAD.send_status.{{hpos_id}}" subject
 - TODO: `remove_workload`: handles the "WORKLOAD.remove.{{hpos_id}}" subject
 
 */
 
 use anyhow::Result;
 use async_nats::Message;
-// use mongodb::Client as MongoDBClient;
+use mongodb::Client as MongoDBClient;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use util_libs::db::schemas; // mongodb::MongoCollection,
+use util_libs::{nats_js_client, db::{schemas, mongodb::MongoCollection}};
 use std::future::Future;
-use util_libs::nats_js_client;
 
 pub const WORKLOAD_SRV_OWNER_NAME: &str = "WORKLOAD_OWNER";
 pub const WORKLOAD_SRV_NAME: &str = "WORKLOAD";
@@ -30,6 +30,7 @@ pub const WORKLOAD_SRV_DESC: &str = "This service handles the flow of Workload r
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum WorkloadState {
     Reported,
+    Assigned,
     Pending,
     Installed,
     Running,
@@ -46,42 +47,42 @@ pub struct WorkloadStatus {
 
 #[derive(Debug, Clone)]
 pub struct WorkloadApi {
-    // pub workload_collection: MongoCollection<schemas::Workload>,
-    // pub host_collection: MongoCollection<schemas::Host>,
-    // pub user_collection: MongoCollection<schemas::User>,
+    pub workload_collection: MongoCollection<schemas::Workload>,
+    pub host_collection: MongoCollection<schemas::Host>,
+    pub user_collection: MongoCollection<schemas::User>,
 }
 
 impl WorkloadApi {
-    pub async fn new(/*client: &MongoDBClient*/) -> Result<Self> {
+    pub async fn new(client: &MongoDBClient) -> Result<Self> {
         // Create a typed collection for Workload
-        // let workload_api: MongoCollection<schemas::Workload> =
-        //     MongoCollection::<schemas::Workload>::new(
-        //         client,
-        //         schemas::DATABASE_NAME,
-        //         schemas::HOST_COLLECTION_NAME,
-        //     )
-        //     .await?;
+        let workload_api: MongoCollection<schemas::Workload> =
+            MongoCollection::<schemas::Workload>::new(
+                client,
+                schemas::DATABASE_NAME,
+                schemas::HOST_COLLECTION_NAME,
+            )
+            .await?;
 
         // Create a typed collection for User
-        // let user_api = MongoCollection::<schemas::User>::new(
-        //     client,
-        //     schemas::DATABASE_NAME,
-        //     schemas::HOST_COLLECTION_NAME,
-        // )
-        // .await?;
+        let user_api = MongoCollection::<schemas::User>::new(
+            client,
+            schemas::DATABASE_NAME,
+            schemas::HOST_COLLECTION_NAME,
+        )
+        .await?;
 
-        // // Create a typed collection for Host
-        // let host_api = MongoCollection::<schemas::Host>::new(
-        //     client,
-        //     schemas::DATABASE_NAME,
-        //     schemas::HOST_COLLECTION_NAME,
-        // )
-        // .await?;
+        // Create a typed collection for Host
+        let host_api = MongoCollection::<schemas::Host>::new(
+            client,
+            schemas::DATABASE_NAME,
+            schemas::HOST_COLLECTION_NAME,
+        )
+        .await?;
 
         Ok(Self {
-            // workload_collection: workload_api,
-            // host_collection: host_api,
-            // user_collection: user_api,
+            workload_collection: workload_api,
+            host_collection: host_api,
+            user_collection: user_api,
         })
     }
 
@@ -101,6 +102,30 @@ impl WorkloadApi {
         })
     }
 
+    // NB: This is the stream that is automatically published to by the nats-db-connector
+    pub async fn handle_db_change(&self, msg: Arc<Message>) -> Result<Vec<u8>, anyhow::Error> {
+        log::debug!("Incoming message for 'WORKLOAD.start' : {:?}", msg);
+        // 1a. Map over workload items in message and grab capacity requirements
+        // 1b. Check whether the workload is already assigned to a host, and if so, ensure that the host has enough capacity for updated requirements
+
+        // 2. Call mongodb to get host collection to get host info and filter by capacity availability
+
+        // 3. If no host currently assigned OR current host has insufficient capacity,
+        // randomly choose host/node *and* send the workload request there
+        let _error_status = WorkloadStatus {
+            desired: WorkloadState::Assigned,
+            actual: WorkloadState::Reported,
+        };
+        let success_status = WorkloadStatus {
+            desired: WorkloadState::Assigned,
+            actual: WorkloadState::Assigned,
+        };
+        // todo: assign host...
+
+        // 4. Respond to endpoint request
+        Ok(serde_json::to_vec(&success_status)?)
+    }    
+
     pub async fn add_workload(&self, msg: Arc<Message>) -> Result<Vec<u8>, anyhow::Error> {
         let payload_buf = msg.payload.to_vec();
         let workload: schemas::Workload = serde_json::from_slice(&payload_buf)?;
@@ -114,25 +139,11 @@ impl WorkloadApi {
         // );
 
         // 2. Respond to endpoint request
-        let status = WorkloadStatus {
-            desired: WorkloadState::Running,
+        let success_status = WorkloadStatus {
+            desired: WorkloadState::Reported,
             actual: WorkloadState::Reported,
         };
-        let result = status;
-        Ok(serde_json::to_vec(&result)?)
-    }
-
-    // NB: This is the stream that is automatically published to by the nats-db-connector
-    pub async fn handle_db_change(&self, _msg: Arc<Message>) -> Result<Vec<u8>, anyhow::Error> {
-        // 1. Map over workload items in message and grab capacity requirements
-
-        // 2. Call mongodb to get host collection to get host info and filter by capacity availability
-
-        // 3. Randomly choose host/node *and* send the workload request there
-
-        // 4. Respond to endpoint request
-        let response = b"Successfully handled updated workload!".to_vec();
-        Ok(response)
+        Ok(serde_json::to_vec(&success_status)?)
     }
 
     // For hpos
@@ -147,14 +158,14 @@ impl WorkloadApi {
         // eg: nix_install_with(workload)
 
         // 2. Respond to endpoint request
-        let result = WorkloadStatus {
+        let status = WorkloadStatus {
             desired: WorkloadState::Running,
             actual: WorkloadState::Unknown("..".to_string()),
         };
-        Ok(serde_json::to_vec(&result)?)
+        Ok(serde_json::to_vec(&status)?)
     }
 
-    // For hpos ?
+    // For hpos ? or elsewhere ?
     pub async fn send_workload_status(&self, msg: Arc<Message>) -> Result<Vec<u8>, anyhow::Error> {
         log::debug!(
             "Incoming message for 'WORKLOAD.send_workload_status' : {:?}",
@@ -182,10 +193,10 @@ impl WorkloadApi {
         // nix_uninstall_with(workload_id)
 
         // 2. Respond to endpoint request
-        let result = WorkloadStatus {
+        let status = WorkloadStatus {
             desired: WorkloadState::Uninstalled,
             actual: WorkloadState::Unknown("..".to_string()),
         };
-        Ok(serde_json::to_vec(&result)?)
+        Ok(serde_json::to_vec(&status)?)
     }
 }

@@ -307,7 +307,7 @@ impl JsClient for DefaultJsClient {
         let duration = now.elapsed();
         if let Err(err) = result {
             if let Some(ref on_failed) = self.on_msg_failed_event {
-                on_failed(&opts.subject, &self.name, duration); // add msg_id
+                on_failed(&opts.subject, &self.name, duration); // todo: add msg_id
             }
             return Err(Box::new(err));
         }
