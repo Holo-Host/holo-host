@@ -111,13 +111,13 @@ impl WorkloadApi {
         // 1b. Check whether the workload is already assigned to a host, and if so, ensure that the host has enough capacity for updated requirements
 
         // 2. Call mongodb to get host collection to get host info and filter by capacity availability
-        let host_filter = doc! {
-            "$and": [
-                { "remaining_capacity.cores": { "$gte": workload.system_specs.capacity.cores } },      
-                { "remaining_capacity.memory": { "$gte": workload.system_specs.capacity.memory } },
-                { "remaining_capacity.disk": { "$gte": workload.system_specs.capacity.disk } }
-            ]
-        };
+        let host_filter = doc! {}; // doc! {
+        //     "$and": [
+        //         { "remaining_capacity.cores": { "$gte": workload.system_specs.capacity.cores } },      
+        //         { "remaining_capacity.memory": { "$gte": workload.system_specs.capacity.memory } },
+        //         { "remaining_capacity.disk": { "$gte": workload.system_specs.capacity.disk } }
+        //     ]
+        // };
         let eligible_hosts = self.host_collection.get_many_from(host_filter).await?;
         log::info!(
             "Eligible hosts for new workload. MongodDB Host IDs={:?}",
