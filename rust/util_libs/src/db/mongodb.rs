@@ -2,7 +2,8 @@ use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use bson::{self, doc, Document};
 use futures::stream::TryStreamExt;
-use mongodb::results::DeleteResult;
+use mongodb::options::UpdateModifications;
+use mongodb::results::{DeleteResult, UpdateResult};
 use mongodb::{options::IndexOptions, Client, Collection, IndexModel};
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
@@ -24,6 +25,8 @@ where
     async fn get_many_from(&self, filter: Document) -> Result<Vec<T>>;
     async fn insert_one_into(&self, item: T) -> Result<String>;
     async fn insert_many_into(&self, items: Vec<T>) -> Result<Vec<String>>;
+    async fn update_one_within(&self, query: Document, updated_doc: UpdateModifications) -> Result<UpdateResult>;
+    async fn delete_one_from(&self, query: Document) -> Result<DeleteResult>;
     async fn delete_all_from(&self) -> Result<DeleteResult>;
 }
 
@@ -131,6 +134,20 @@ where
         Ok(ids)
     }
 
+    async fn update_one_within(&self, query: Document, updated_doc: UpdateModifications) -> Result<UpdateResult> {
+        self.collection
+            .update_one(query, updated_doc)
+            .await
+            .map_err(|e| anyhow!(e))
+    }
+
+    async fn delete_one_from(&self, query: Document) -> Result<DeleteResult> {
+        self.collection
+            .delete_one(query)
+            .await
+            .map_err(|e| anyhow!(e))
+    }
+
     async fn delete_all_from(&self) -> Result<DeleteResult> {
         self.collection
             .delete_many(doc! {})
@@ -228,7 +245,7 @@ mod tests {
     }
 
     use super::*;
-    use crate::db::schemas;
+    use crate::db::schemas::{self, Capacity};
     use bson::{self, doc, oid};
     use dotenv::dotenv;
 
@@ -253,11 +270,14 @@ mod tests {
                 _id: oid::ObjectId::new().to_string(),
                 device_id: "Vf3IceiD".to_string(),
                 ip_address: "127.0.0.1".to_string(),
-                remaining_capacity: 50,
+                remaining_capacity: Capacity {
+                    memory: 16,
+                    disk: 200,
+                    cores: 16
+                },
                 avg_uptime: 95,
                 avg_network_speed: 500,
                 avg_latency: 10,
-                vms: vec![],
                 assigned_workloads: vec!["workload_id".to_string()],
                 assigned_hoster: "hoster".to_string(),
             }

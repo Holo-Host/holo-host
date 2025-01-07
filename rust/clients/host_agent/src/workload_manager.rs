@@ -113,11 +113,11 @@ pub async fn run(user_creds_path: &str) -> Result<(), async_nats::Error> {
 
     workload_service
         .add_local_consumer(
-            "remove_workload",
-            "remove",
+            "uninstall_workload",
+            "uninstall",
             EndpointType::Async(workload_api.call(|api: WorkloadApi, msg: Arc<Message>| {
                 async move {
-                    api.remove_workload(msg).await
+                    api.uninstall_workload(msg).await
                 }
             })),
             None,

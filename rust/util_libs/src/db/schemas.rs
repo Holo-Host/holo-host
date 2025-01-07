@@ -101,22 +101,29 @@ impl IntoIndexes for Hoster {
 
 // ==================== Host Schema ====================
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
-pub struct VM {
-    pub port: u16,
-    pub size: u64,
-    pub agent_pubkey: DeveloperPubkey,
+pub struct Capacity {
+    pub memory: u64,  // GiB
+    pub disk: u64,  // ssd; GiB 
+    pub cores: u64,
 }
+
+// #[derive(Serialize, Deserialize, Clone, Debug, Default)]
+// pub struct VM {
+//     pub port: u16,
+//     pub size: u64,
+//     pub agent_pubkey: DeveloperPubkey,
+// }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct Host {
     pub _id: String,       // Mongodb ID (automated default)
     pub device_id: String, // *INDEXED*, Auto-generated Nats server ID
     pub ip_address: String,
-    pub remaining_capacity: u64,
+    // pub vms: Vec<VM>,
+    pub remaining_capacity: Capacity,
     pub avg_uptime: u64,
     pub avg_network_speed: u64,
     pub avg_latency: u64,
-    pub vms: Vec<VM>,
     pub assigned_workloads: Vec<String>, // MongoDB ID refs to `workload._id`
     pub assigned_hoster: HosterPubKey,   // *INDEXED*, Hoster pubkey
 }
@@ -141,13 +148,41 @@ impl IntoIndexes for Host {
 // ==================== Workload Schema ====================
 pub use String as SemVer;
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum WorkloadState {
+    Reported,
+    Assigned,
+    Pending,
+    Installed,
+    Running,
+    Failed,
+    Removed,
+    Uninstalled,
+    Unknown(String),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorkloadStatus {
+    pub desired: WorkloadState,
+    pub actual: WorkloadState,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct SystemSpecs {
+    pub capacity: Capacity
+    // network_speed: u64
+    // uptime: u64
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Workload {
     pub _id: String, // Mongodb ID (automated default)
+    // pub status: WorkloadStatus,
     pub version: SemVer,
     pub nix_pkg: String, // (Includes everthing needed to deploy workload - ie: binary & env pkg & deps, etc)
     pub assigned_developer: String, // *INDEXED*, Developer Mongodb ID
     pub min_hosts: u16,
+    pub system_specs: SystemSpecs,
     pub assigned_hosts: Vec<String>, // Host Device IDs (eg: assigned nats server id)
 }
 
@@ -169,6 +204,13 @@ impl Default for Workload {
             nix_pkg: String::new(),
             assigned_developer: String::new(),
             min_hosts: 1,
+            system_specs: SystemSpecs {
+                capacity: Capacity {
+                    memory: 64,
+                    disk: 400,
+                    cores: 20
+                }
+            },
             assigned_hosts: Vec::new(),
         }
     }

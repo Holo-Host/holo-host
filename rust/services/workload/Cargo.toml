@@ -11,6 +11,7 @@ futures = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 env_logger = { workspace = true }
+rand = "0.8.5"
 log = { workspace = true }
 dotenv = { workspace = true }
 thiserror = "2.0"
