@@ -156,24 +156,24 @@ impl WorkloadApi {
     pub async fn handle_db_insertion(&self, msg: Arc<Message>) -> Result<Vec<u8>, anyhow::Error> {
         log::debug!("Incoming message for 'WORKLOAD.insert'");
 
-        let error_status = WorkloadStatus {
-            desired: WorkloadState::Assigned,
-            actual: WorkloadState::Reported,
-        };
-        let success_status = WorkloadStatus {
-            desired: WorkloadState::Assigned,
-            actual: WorkloadState::Assigned,
-        };
-
         let payload_buf = msg.payload.to_vec();
         let workload: schemas::Workload = serde_json::from_slice(&payload_buf)?;
         log::trace!("New workload to assign. Workload={:#?}", workload);
 
         // 0. Fail Safe: exit early if the workload provided does not include a `_id` feild
         let workload_id = if let Some(id) = workload.clone()._id { id } else {
-            log::error!("No Id found for workload.  Unable to proceed assigning a host. Workload={:?}", workload);
-            return Ok(serde_json::to_vec(&types::ApiResult(workload._id, error_status))?);
+            let err_msg = format!("No `_id` found for workload.  Unable to proceed assigning a host. Workload={:?}", workload);
+            log::error!("{}", err_msg);
+            return Ok(serde_json::to_vec(&types::ApiResult(workload._id, WorkloadStatus {
+                desired: WorkloadState::Assigned,
+                actual: WorkloadState::Error(err_msg),
+            }))?);
         };
+
+        let success_status = WorkloadStatus {
+            desired: WorkloadState::Assigned,
+            actual: WorkloadState::Assigned,
+        };        
 
         // 1. Perform sanity check to ensure workload is not already assigned to a host, and if so exit fn
         if !workload.assigned_hosts.is_empty() {
@@ -182,18 +182,13 @@ impl WorkloadApi {
         }
 
         // 2. Otherwise call mongodb to get host collection to get hosts that meet the capacity requirements
-        let host_filter = doc! {}; // doc! {
-        //     "$and": [
-        //         { "remaining_capacity.cores": { "$gte": workload.system_specs.capacity.cores } },      
-        //         { "remaining_capacity.memory": { "$gte": workload.system_specs.capacity.memory } },
-        //         { "remaining_capacity.disk": { "$gte": workload.system_specs.capacity.disk } }
-        //     ]
-        // };
+        let host_filter = doc! {
+            "remaining_capacity.cores": { "$gte": workload.system_specs.capacity.cores },      
+            "remaining_capacity.memory": { "$gte": workload.system_specs.capacity.memory },
+            "remaining_capacity.disk": { "$gte": workload.system_specs.capacity.disk }
+        };
         let eligible_hosts = self.host_collection.get_many_from(host_filter).await?;
-        log::info!(
-            "Eligible hosts for new workload. MongodDB Host IDs={:?}",
-            eligible_hosts
-        );
+        log::info!("Eligible hosts for new workload. MongodDB Host IDs={:?}", eligible_hosts);
 
         // 3. If no host is currently assigned OR the current host has insufficient capacity,
         // randomly choose host/node
@@ -201,7 +196,12 @@ impl WorkloadApi {
             Some(h) => h,
             None => {
                 // todo: Try to get another host up to 5 times, if fails thereafter, return error
-                return Ok(serde_json::to_vec(&error_status)?);
+                let err_msg = format!("Failed to locate an eligible host to support the required workload capacity. Workload={:?}", workload);
+                log::error!("{}", err_msg);
+                return Ok(serde_json::to_vec(&types::ApiResult(workload._id, WorkloadStatus {
+                    desired: WorkloadState::Assigned,
+                    actual: WorkloadState::Error(err_msg),
+                }))?);
             }
         };
 
@@ -225,7 +225,7 @@ impl WorkloadApi {
         // 5. Update the Host Collection with the assigned Workload ID
         let host_query = doc! { "_id":  host.clone()._id };
         let updated_host =  to_document(&Host {
-            assigned_workloads: vec![workload_id],
+            assigned_workloads: vec![workload_id.clone()],
             ..host.to_owned()
         })?;
         let updated_host_result = self.host_collection.update_one_within(host_query, UpdateModifications::Document(updated_host)).await?;
@@ -233,11 +233,12 @@ impl WorkloadApi {
             "Successfully added new workload into the Workload Collection. MongodDB Host ID={:?}",
             updated_host_result
         );
-        
+
         // 6. Return status and host
-        Ok(serde_json::to_vec(&success_status)?)
+        Ok(serde_json::to_vec(&types::ApiResult(Some(workload_id), success_status))?)
     }    
 
+    // Zeeshan to take a look:
     // For orchestrator
     // NB: This is the stream that is automatically published by the nats-db-connector
     pub async fn handle_db_update(&self, msg: Arc<Message>) -> Result<Vec<u8>, anyhow::Error> {
@@ -257,6 +258,7 @@ impl WorkloadApi {
         Ok(serde_json::to_vec(&success_status)?)
     } 
 
+    // Zeeshan to take a look:
     // For orchestrator
     // NB: This is the stream that is automatically published by the nats-db-connector
     pub async fn handle_db_deletion(&self, msg: Arc<Message>) -> Result<Vec<u8>, anyhow::Error> {
@@ -389,52 +391,3 @@ impl WorkloadApi {
         }
     }
 }
-
-
-    // pub async fn add_workload(&self, msg: Arc<Message>) -> Result<Vec<u8>, anyhow::Error> {
-    //     log::debug!("Incoming message for 'WORKLOAD.add'");
-
-    //     // 1. Deserialize payload into the expected type
-    //     let payload_buf = msg.payload.to_vec();
-    //     let new_workload: schemas::Workload = match serde_json::from_slice(&payload_buf) {
-    //         Ok(r) => r,
-    //         Err(e) => {
-    //             log::error!("Failed to add new workload. Unable to deserialize payload. Error={:?}", e);
-    //             let error_status = WorkloadStatus {
-    //                 desired: WorkloadState::Reported,
-    //                 actual: WorkloadState::Error(format!("Unable to deserialize payload. Expected type='Workload'")),
-    //             };
-    //             let err_result = types::ApiResult(None, error_status);
-    //             return Ok(serde_json::to_vec(&err_result)?);
-    //         }
-    //     };
-        
-    //     log::trace!("Incoming message to add workload. Workload={:#?}", new_workload);
-
-    //     // 2. Add new workload data into mongodb collection
-    //     let workload_id = match self.workload_collection.insert_one_into(new_workload.clone()).await {
-    //         Ok(id) => {
-    //             log::info!(
-    //                 "Added new workload into the Workload Collection. MongodDB Workload ID={}", id
-    //             );
-    //             id
-    //         },
-    //         Err(e) => {
-    //             log::error!("Failed to add new workload. Workload={:?}, Error={:?}", new_workload, e);
-    //             let error_status = WorkloadStatus {
-    //                 desired: WorkloadState::Reported,
-    //                 actual: WorkloadState::Failed(serde_json::to_string(&new_workload)?),
-    //             };
-    //             let err_result = types::ApiResult(None, error_status);
-    //             return Ok(serde_json::to_vec(&err_result)?);
-    //         }
-    //     };
-
-    //     // 3. return response for stream
-    //     let success_status = WorkloadStatus {
-    //         desired: WorkloadState::Reported,
-    //         actual: WorkloadState::Reported,
-    //     };
-    //     let success_result = types::ApiResult(Some(workload_id), success_status);
-    //     Ok(serde_json::to_vec(&success_result)?)
-    // }

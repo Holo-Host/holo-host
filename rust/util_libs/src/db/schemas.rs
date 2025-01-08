@@ -111,9 +111,9 @@ impl IntoIndexes for Hoster {
 // ==================== Host Schema ====================
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct Capacity {
-    pub memory: u64,  // GiB
-    pub disk: u64,  // ssd; GiB 
-    pub cores: u64,
+    pub memory: i64,  // GiB
+    pub disk: i64,  // ssd; GiB 
+    pub cores: i64,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
@@ -123,9 +123,9 @@ pub struct Host {
     pub device_id: String, // *INDEXED*, Auto-generated Nats server ID
     pub ip_address: String,
     pub remaining_capacity: Capacity,
-    pub avg_uptime: u64,
-    pub avg_network_speed: u64,
-    pub avg_latency: u64,
+    pub avg_uptime: i64,
+    pub avg_network_speed: i64,
+    pub avg_latency: i64,
     pub assigned_workloads: Vec<String>, // MongoDB ID refs to `workload._id`
     pub assigned_hoster: HosterPubKey,   // *INDEXED*, Hoster pubkey
 }
@@ -170,8 +170,8 @@ pub struct WorkloadStatus {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct SystemSpecs {
     pub capacity: Capacity
-    // network_speed: u64
-    // uptime: u64
+    // network_speed: i64
+    // uptime: i64
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
