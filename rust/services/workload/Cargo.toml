@@ -11,9 +11,10 @@ futures = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 env_logger = { workspace = true }
-rand = "0.8.5"
 log = { workspace = true }
 dotenv = { workspace = true }
+semver = "1.0.24"
+rand = "0.8.5"
 thiserror = "2.0"
 mongodb = "3.1"
 bson = { version = "2.6.1", features = ["chrono-0_4"] }

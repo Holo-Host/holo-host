@@ -21,6 +21,12 @@ pub use String as DeveloperPubkey;
 // Provide type Alias for DeveloperJWT
 pub use String as DeveloperJWT;
 
+// Provide type Alias for SemVer (semantic versioning)
+pub use String as SemVer;
+
+// Providetype Alias for MongoDB ID (mongo's automated id)
+pub use String as MongoDbId;
+
 // ==================== User Schema ====================
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum Role {
@@ -36,7 +42,8 @@ pub struct RoleInfo {
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct User {
-    pub _id: String, // Mongodb ID (automated default)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub _id: Option<MongoDbId>,
     pub email: String,
     pub jurisdiction: String,
     pub roles: Vec<RoleInfo>,
@@ -72,7 +79,8 @@ impl IntoIndexes for User {
 // ==================== Developer Schema ====================
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct Developer {
-    pub _id: String,                      // Mongodb ID (automated default)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub _id: Option<MongoDbId>,
     pub user_id: String, // MongoDB ID ref to `user._id` (which stores the hoster's pubkey, jurisdiction and email)
     pub requested_workloads: Vec<String>, // MongoDB ID refs to `workload._id`
 }
@@ -87,7 +95,8 @@ impl IntoIndexes for Developer {
 // ==================== Hoster Schema ====================
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct Hoster {
-    pub _id: String,                 // Mongodb ID (automated default)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub _id: Option<MongoDbId>,
     pub user_id: String, // MongoDB ID ref to `user.id` (which stores the hoster's pubkey, jurisdiction and email)
     pub assigned_hosts: Vec<String>, // Auto-generated Nats server IDs
 }
@@ -107,19 +116,12 @@ pub struct Capacity {
     pub cores: u64,
 }
 
-// #[derive(Serialize, Deserialize, Clone, Debug, Default)]
-// pub struct VM {
-//     pub port: u16,
-//     pub size: u64,
-//     pub agent_pubkey: DeveloperPubkey,
-// }
-
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct Host {
-    pub _id: String,       // Mongodb ID (automated default)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub _id: Option<MongoDbId>,
     pub device_id: String, // *INDEXED*, Auto-generated Nats server ID
     pub ip_address: String,
-    // pub vms: Vec<VM>,
     pub remaining_capacity: Capacity,
     pub avg_uptime: u64,
     pub avg_network_speed: u64,
@@ -146,8 +148,6 @@ impl IntoIndexes for Host {
 }
 
 // ==================== Workload Schema ====================
-pub use String as SemVer;
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum WorkloadState {
     Reported,
@@ -155,10 +155,10 @@ pub enum WorkloadState {
     Pending,
     Installed,
     Running,
-    Failed,
     Removed,
     Uninstalled,
-    Unknown(String),
+    Error(String), // String = error message
+    Unknown(String), // String = context message
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -176,14 +176,15 @@ pub struct SystemSpecs {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Workload {
-    pub _id: String, // Mongodb ID (automated default)
-    // pub status: WorkloadStatus,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub _id: Option<MongoDbId>,
     pub version: SemVer,
     pub nix_pkg: String, // (Includes everthing needed to deploy workload - ie: binary & env pkg & deps, etc)
     pub assigned_developer: String, // *INDEXED*, Developer Mongodb ID
     pub min_hosts: u16,
     pub system_specs: SystemSpecs,
     pub assigned_hosts: Vec<String>, // Host Device IDs (eg: assigned nats server id)
+    // pub status: WorkloadStatus,
 }
 
 impl Default for Workload {
@@ -199,7 +200,7 @@ impl Default for Workload {
         let semver = version.to_string();
 
         Self {
-            _id: String::new(),
+            _id: None,
             version: semver,
             nix_pkg: String::new(),
             assigned_developer: String::new(),

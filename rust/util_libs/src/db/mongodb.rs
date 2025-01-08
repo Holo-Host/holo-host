@@ -17,7 +17,7 @@ pub enum ServiceError {
 }
 
 #[async_trait]
-pub trait MongoDbPool<T>
+pub trait MongoDbAPI<T>
 where
     T: Serialize + for<'de> Deserialize<'de> + Unpin + Send + Sync,
 {
@@ -47,7 +47,7 @@ impl<T> MongoCollection<T>
 where
     T: Serialize + for<'de> Deserialize<'de> + Unpin + Send + Sync + Default + IntoIndexes,
 {
-    // Initialize database and return in form of an MongoDbPool
+    // Initialize database and return in form of an MongoDbAPI
     // NB: Each `mongodb::Client` clone is an alias of an Arc type and allows for multiple references of the same connection pool.
     pub async fn new(
         client: &Client,
@@ -86,7 +86,7 @@ where
 }
 
 #[async_trait]
-impl<T> MongoDbPool<T> for MongoCollection<T>
+impl<T> MongoDbAPI<T> for MongoCollection<T>
 where
     T: Serialize + for<'de> Deserialize<'de> + Unpin + Send + Sync + Default + IntoIndexes + Debug,
 {
@@ -267,7 +267,7 @@ mod tests {
 
         fn get_mock_host() -> schemas::Host {
             schemas::Host {
-                _id: oid::ObjectId::new().to_string(),
+                _id: Some(oid::ObjectId::new().to_string()),
                 device_id: "Vf3IceiD".to_string(),
                 ip_address: "127.0.0.1".to_string(),
                 remaining_capacity: Capacity {
@@ -288,7 +288,7 @@ mod tests {
         host_api.insert_one_into(host_0.clone()).await?;
 
         // get one (the same) document
-        let filter_one = doc! { "_id":  host_0._id.to_string() };
+        let filter_one = doc! { "_id":  host_0._id.clone().unwrap().to_string() };
         let fetched_host = host_api.get_one_from(filter_one.clone()).await?;
         let mongo_db_host = fetched_host.unwrap();
         assert_eq!(mongo_db_host._id, host_0._id);
@@ -303,9 +303,9 @@ mod tests {
 
         // get many docs
         let ids = vec![
-            host_1._id.to_string(),
-            host_2._id.to_string(),
-            host_3._id.to_string(),
+            host_1._id.unwrap().to_string(),
+            host_2._id.unwrap().to_string(),
+            host_3._id.unwrap().to_string(),
         ];
         let filter_many = doc! {
             "_id": { "$in": ids }
@@ -313,7 +313,7 @@ mod tests {
         let fetched_hosts = host_api.get_many_from(filter_many.clone()).await?;
 
         assert_eq!(fetched_hosts.len(), 3);
-        let ids: Vec<String> = fetched_hosts.into_iter().map(|h| h._id).collect();
+        let ids: Vec<String> = fetched_hosts.into_iter().map(|h| h._id.unwrap()).collect();
         assert!(ids.contains(&ids[0]));
         assert!(ids.contains(&ids[1]));
         assert!(ids.contains(&ids[2]));

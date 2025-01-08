@@ -2939,6 +2939,7 @@ dependencies = [
  "mongodb",
  "nkeys",
  "rand",
+ "semver",
  "serde",
  "serde_json",
  "thiserror 2.0.8",
