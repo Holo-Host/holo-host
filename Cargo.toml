@@ -13,6 +13,7 @@ members = [
 [workspace.dependencies]
 async-nats = { version = "0.38.0", features = ["service"] }
 tokio = { version = "1", features = ["full"] }
+clap = { version = "4.5.23", features = ["derive"] }
 futures = "0.3.31"
 anyhow = "1.0"
 serde = "1.0.215"
