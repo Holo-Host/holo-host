@@ -35,7 +35,7 @@ let
   # cache misses when building individual top-level-crates
   cargoArtifacts = craneLib.buildDepsOnly commonArgs;
 in
-craneLib.cargoBuild (
+craneLib.buildPackage (
   commonArgs
   // {
     inherit cargoArtifacts;
@@ -97,8 +97,6 @@ craneLib.cargoBuild (
           partitionType = "count";
         }
       );
-
     };
-
   }
 )
