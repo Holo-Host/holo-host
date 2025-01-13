@@ -1,8 +1,11 @@
-/*
-  Module to configure a machine as a holo-agent.
-*/
+# Module to configure a machine as a holo-agent.
 
-{ inputs, lib, config, ... }:
+{
+  inputs,
+  lib,
+  config,
+  ...
+}:
 
 let
   cfg = config.holo.nats-server;
