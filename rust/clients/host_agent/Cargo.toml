@@ -24,3 +24,4 @@ nkeys = "=0.4.4"
 rand = "0.8.5"
 util_libs = { path = "../../util_libs" }
 workload = { path = "../../services/workload" }
+hpos-hal = { path = "../../hpos-hal" }
