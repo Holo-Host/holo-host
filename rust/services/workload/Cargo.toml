@@ -13,9 +13,9 @@ serde_json = { workspace = true }
 env_logger = { workspace = true }
 log = { workspace = true }
 dotenv = { workspace = true }
+thiserror = { workspace = true }
 semver = "1.0.24"
 rand = "0.8.5"
-thiserror = "2.0"
 mongodb = "3.1"
 bson = { version = "2.6.1", features = ["chrono-0_4"] }
 url = { version = "2", features = ["serde"] }
