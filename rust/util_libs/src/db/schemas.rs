@@ -184,6 +184,7 @@ pub struct Workload {
     pub min_hosts: u16,
     pub system_specs: SystemSpecs,
     pub assigned_hosts: Vec<String>, // Host Device IDs (eg: assigned nats server id)
+    pub deleted: bool,
     // pub status: WorkloadStatus,
 }
 
@@ -213,6 +214,7 @@ impl Default for Workload {
                 }
             },
             assigned_hosts: Vec::new(),
+            deleted: false,
         }
     }
 }

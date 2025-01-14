@@ -258,8 +258,6 @@ impl WorkloadApi {
         Ok(serde_json::to_vec(&success_status)?)
     } 
 
-    // Zeeshan to take a look:
-    // For orchestrator
     // NB: This is the stream that is automatically published by the nats-db-connector
     pub async fn handle_db_deletion(&self, msg: Arc<Message>) -> Result<Vec<u8>, anyhow::Error> {
         log::debug!("Incoming message for 'WORKLOAD.delete'");
@@ -273,7 +271,25 @@ impl WorkloadApi {
         let workload: schemas::Workload = serde_json::from_slice(&payload_buf)?;
         log::trace!("New workload to assign. Workload={:#?}", workload);
 
-        // TODO: ...handle the use case for the delete entry change stream
+        // 1. fetch the workload document
+        match self.workload_collection.get_one_from(doc! { "_id":  workload._id.clone() }).await?{
+            Some(workload) => {
+                // 2. update hosts
+                self.host_collection.update_one_within(
+                    doc!{ "_id": { "$in": workload.assigned_hosts } },
+                    UpdateModifications::Document(doc!{ "$pull": { "assigned_workloads": workload._id.clone() } })
+                ).await?;
+
+                // 4. mark workload as deleted
+                self.workload_collection.update_one_within(
+                    doc! { "_id":  workload._id.clone() },
+                    UpdateModifications::Document(doc!{ "$set": { "deleted": true } })
+                ).await?;
+            },
+            None => {
+                log::warn!("Workload not found. Unable to remove workload.");
+            }
+        }
         
         Ok(serde_json::to_vec(&success_status)?)
     }    
