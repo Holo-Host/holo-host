@@ -12,7 +12,8 @@ Endpoints & Managed Subjects:
 - TODO: `uninstall_workload`: handles the "WORKLOAD.uninstall.{{hpos_id}}" subject
 */
 
-mod types;
+pub mod types;
+
 use anyhow::{anyhow, Result};
 use async_nats::Message;
 use mongodb::{options::UpdateModifications, Client as MongoDBClient};
@@ -64,10 +65,9 @@ impl WorkloadApi {
     // For orchestrator
     pub async fn add_workload(&self, msg: Arc<Message>) -> Result<types::ApiResult, anyhow::Error> {
         log::debug!("Incoming message for 'WORKLOAD.add'");
-        let (maybe_payload, status) = self.process_db_request(
+        let (maybe_payload, status, maybe_response_subjects) = self.process_request(
             msg,
             WorkloadState::Reported,
-            "insert_one_into".to_string(),
             |workload: schemas::Workload| async move {
                 let workload_id = self.workload_collection.insert_one_into(workload.clone()).await?;
                 log::info!("Successfully added workload. MongodDB Workload ID={:?}", workload_id);
@@ -81,6 +81,7 @@ impl WorkloadApi {
                         desired: WorkloadState::Reported,
                         actual: WorkloadState::Reported,
                     },
+                    None
                 ))
             },
             WorkloadState::Error,
@@ -88,18 +89,17 @@ impl WorkloadApi {
         .await;
 
         if let Some(workload) = maybe_payload {
-            return Ok(types::ApiResult(workload._id, status))        ;
+            return Ok(types::ApiResult(workload._id, status, maybe_response_subjects))        ;
         }
-        Ok(types::ApiResult(None, status))
+        Ok(types::ApiResult(None, status, maybe_response_subjects))
     }
 
     // For orchestrator
     pub async fn update_workload(&self, msg: Arc<Message>) -> Result<types::ApiResult, anyhow::Error> {
         log::debug!("Incoming message for 'WORKLOAD.update'");
-        let (maybe_payload, status) = self.process_db_request(
+        let (maybe_payload, status, maybe_response_subjects) = self.process_request(
             msg,
             WorkloadState::Running,
-            "update_one_within".to_string(),
             |workload: schemas::Workload| async move {
                 let workload_query = doc! { "_id":  workload._id.clone() };
                 let updated_workload = to_document(&workload)?;
@@ -111,25 +111,25 @@ impl WorkloadApi {
                         desired: WorkloadState::Reported,
                         actual: WorkloadState::Reported,
                     },
+                    None
                 ))
             },
             WorkloadState::Error,
         )
         .await;
         if let Some(workload) = maybe_payload {
-            return Ok(types::ApiResult(workload._id, status));
+            return Ok(types::ApiResult(workload._id, status, maybe_response_subjects));
         }
-        Ok(types::ApiResult(None, status))
+        Ok(types::ApiResult(None, status, maybe_response_subjects))
 
     }
 
     // For orchestrator
     pub async fn remove_workload(&self, msg: Arc<Message>) -> Result<types::ApiResult, anyhow::Error> {
         log::debug!("Incoming message for 'WORKLOAD.remove'");
-        let (maybe_payload, status) = self.process_db_request(
+        let (maybe_payload, status, maybe_response_subjects) = self.process_request(
             msg,
             WorkloadState::Removed,
-            "delete_one_from".to_string(),
             |workload_id: schemas::MongoDbId| async move {
                 let workload_query = doc! { "_id":  workload_id.clone() };
                 self.workload_collection.delete_one_from(workload_query).await?;
@@ -143,15 +143,16 @@ impl WorkloadApi {
                         desired: WorkloadState::Removed,
                         actual: WorkloadState::Removed,
                     },
+                    None
                 ))
             },
             WorkloadState::Error,
         )
         .await;
         if let Some(workload_id) = maybe_payload {
-            return Ok(types::ApiResult(Some(workload_id), status));
+            return Ok(types::ApiResult(Some(workload_id), status, maybe_response_subjects));
         }
-        Ok(types::ApiResult(None, status))
+        Ok(types::ApiResult(None, status, maybe_response_subjects))
     }
 
 
@@ -159,10 +160,10 @@ impl WorkloadApi {
     // NB: This is the stream that is automatically published by the nats-db-connector
     pub async fn handle_db_insertion(&self, msg: Arc<Message>) -> Result<types::ApiResult, anyhow::Error> {
         log::debug!("Incoming message for 'WORKLOAD.insert'");
-        let (maybe_payload, status) = self.process_connector_request(
+        let (maybe_payload, status, maybe_response_subjects) = self.process_request(
             msg,
-            WorkloadState::Assigned(vec![]),
-            |workload: schemas::Workload, desired_state: WorkloadState| async move {
+            WorkloadState::Assigned,
+            |workload: schemas::Workload| async move {
                 log::debug!("New workload to assign. Workload={:#?}", workload);
 
                 // 0. Fail Safe: exit early if the workload provided does not include an `_id` field
@@ -176,10 +177,12 @@ impl WorkloadApi {
                 // todo: check for to ensure assigned host *still* has enough capacity for updated workload
                 if !workload.assigned_hosts.is_empty() {
                     log::warn!("Attempted to assign host for new workload, but host already exists.");
-                    return Ok((Some(workload.clone()), WorkloadStatus {
-                        desired: WorkloadState::Assigned(workload.assigned_hosts.clone()),
-                        actual: WorkloadState::Assigned(workload.assigned_hosts),
-                    }));
+                    return Ok((Some(workload.clone()), 
+                    WorkloadStatus {
+                        desired: WorkloadState::Assigned,
+                        actual: WorkloadState::Assigned,
+                    },
+                    Some(workload.assigned_hosts)));
                 }
 
                 // 2. Otherwise call mongodb to get host collection to get hosts that meet the capacity requirements
@@ -234,9 +237,10 @@ impl WorkloadApi {
                 Ok((
                     Some(updated_workload.clone()),
                     WorkloadStatus {
-                        desired: WorkloadState::Assigned(updated_workload.assigned_hosts.clone()),
-                        actual: WorkloadState::Assigned(updated_workload.assigned_hosts.to_owned()),
+                        desired: WorkloadState::Assigned,
+                        actual: WorkloadState::Assigned,
                     },
+                    Some(updated_workload.assigned_hosts.to_owned())
                 ))
         },
             WorkloadState::Error,
@@ -245,9 +249,9 @@ impl WorkloadApi {
 
         // 6. Return status and host
         if let Some(workload) = maybe_payload {
-            return Ok(types::ApiResult(workload._id, status));
+            return Ok(types::ApiResult(workload._id, status, maybe_response_subjects));
         }
-        Ok(types::ApiResult(None, status))
+        Ok(types::ApiResult(None, status, maybe_response_subjects))
     }    
 
     // Zeeshan to take a look:
@@ -267,7 +271,7 @@ impl WorkloadApi {
 
         // TODO: ...handle the use case for the update entry change stream 
 
-        Ok(types::ApiResult(workload._id, success_status))
+        Ok(types::ApiResult(workload._id, success_status, None))
     } 
 
     // Zeeshan to take a look:
@@ -287,7 +291,7 @@ impl WorkloadApi {
 
         // TODO: ...handle the use case for the delete entry change stream
         
-        Ok(types::ApiResult(workload._id, success_status))
+        Ok(types::ApiResult(workload._id, success_status, None))
     }    
 
      /*******************************   For Hosting Agent   *********************************/
@@ -307,7 +311,7 @@ impl WorkloadApi {
             desired: WorkloadState::Running,
             actual: WorkloadState::Unknown("..".to_string()),
         };
-        Ok(types::ApiResult(None, status))
+        Ok(types::ApiResult(None, status, None))
     }
 
     // For hpos
@@ -326,7 +330,7 @@ impl WorkloadApi {
             desired: WorkloadState::Uninstalled,
             actual: WorkloadState::Unknown("..".to_string()),
         };
-        Ok(types::ApiResult(None, status))
+        Ok(types::ApiResult(None, status, None))
     }
 
     // For hpos ? or elsewhere ?
@@ -346,7 +350,7 @@ impl WorkloadApi {
         Ok(types::ApiResult(None, WorkloadStatus {
             desired: WorkloadState::Unknown("todo: pass-in/access desired state".to_string()),
             actual: workload_state
-        }))
+        }, None))
     }
 
     /*******************************  Helper Fns  *********************************/
@@ -361,38 +365,38 @@ impl WorkloadApi {
         Ok(MongoCollection::<T>::new(client, schemas::DATABASE_NAME, collection_name).await?)
     }
 
-    // Helper function to process incoming messages for MongoDB ops
-    async fn process_db_request<T, Fut>(
+    // Helper function to streamline the processing of incoming workload messages
+    // NB: Currently used to process requests for MongoDB ops and the subsequent db change streams these db edits create (via the mongodb<>nats connector)
+    async fn process_request<T, Fut>(
         &self,
         msg: Arc<Message>,
         desired_state: WorkloadState,
-        op_name: String,
-        db_op: impl Fn(T) -> Fut + Send + Sync,
+        cb_fn: impl Fn(T) -> Fut + Send + Sync,
         error_state: impl Fn(String) -> WorkloadState + Send + Sync,
-    ) -> (Option<T>, WorkloadStatus)
+    ) -> (Option<T>, WorkloadStatus, Option<Vec<String>>)
     where
         T: for<'de> Deserialize<'de> + Clone + Send + Sync + Debug + 'static,
-        Fut: Future<Output = Result<(Option<T>, WorkloadStatus), anyhow::Error>> + Send,
+        Fut: Future<Output = Result<(Option<T>, WorkloadStatus, Option<Vec<String>>), anyhow::Error>> + Send,
     {
         // 1. Deserialize payload into the expected type
         let payload: T = match serde_json::from_slice(&msg.payload) {
             Ok(r) => r,
             Err(e) => {
-                let err_msg = format!("Failed to deserialize payload. Error={:?}", e);
+                let err_msg = format!("Failed to deserialize payload for Workload Service Endpoint. Subject={} Error={:?}", msg.subject, e);
                 log::error!("{}", err_msg);
                 let status = WorkloadStatus {
                     desired: desired_state,
                     actual: error_state(err_msg),
                 };
-                return (None, status);
+                return (None, status, None);
             }
         };
 
-        // 2. Process db operation for collection
-        match db_op(payload.clone()).await {
+        // 2. Call callback handler
+        match cb_fn(payload.clone()).await {
             Ok(r) => r,
             Err(e) => {
-                let err_msg = format!("Failed to process db operation for Workload Collection. Op={}, Payload={:?}, Error={:?}", op_name, payload, e);
+                let err_msg = format!("Failed to process Workload Service Endpoint. Subject={} Payload={:?}, Error={:?}", msg.subject, payload, e);
                 log::error!("{}", err_msg);
                 let status = WorkloadStatus {
                     desired: desired_state,
@@ -400,50 +404,7 @@ impl WorkloadApi {
                 };
 
                 // 3. return response for stream
-                (Some(payload), status)
-            }
-        }
-    }
-
-    // Helper function to process Mongodb<>Nats Connecor messages
-    async fn process_connector_request<T, Fut>(
-        &self,
-        msg: Arc<Message>,
-        desired_state: WorkloadState,
-        cb_fn: impl Fn(T, WorkloadState) -> Fut + Send + Sync,
-        error_state: impl Fn(String) -> WorkloadState + Send + Sync,
-    ) -> (Option<T>, WorkloadStatus)
-    where
-        T: for<'de> Deserialize<'de> + Clone + Send + Sync + Debug + 'static,
-        Fut: Future<Output = Result<(Option<T>, WorkloadStatus), anyhow::Error>> + Send,
-    {
-        // 1. Deserialize payload into the expected type
-        let payload: T = match serde_json::from_slice(&msg.payload) {
-            Ok(r) => r,
-            Err(e) => {
-                let err_msg = format!("Failed to deserialize payload. Error={:?}", e);
-                log::error!("{}", err_msg);
-                let status = WorkloadStatus {
-                    desired: desired_state,
-                    actual: error_state(err_msg),
-                };
-                return (None, status);
-            }
-        };       
-
-        // 2. Process db operation for collection
-        match cb_fn(payload.clone(), desired_state.clone()).await {
-            Ok(r) => r,
-            Err(e) => {
-                let err_msg = format!("Failed to process connector {} subject. Payload={:?}, Error={:?}", msg.subject, payload, e);
-                log::error!("{}", err_msg);
-                let status = WorkloadStatus {
-                    desired: desired_state,
-                    actual: error_state(err_msg),
-                };
-
-                // 3. return response for stream
-                (Some(payload), status)
+                (Some(payload), status, None)
             }
         }
     }
