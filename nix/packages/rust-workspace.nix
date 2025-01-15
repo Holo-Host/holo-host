@@ -97,8 +97,6 @@ craneLib.buildPackage (
           partitionType = "count";
         }
       );
-
     };
-
   }
 )

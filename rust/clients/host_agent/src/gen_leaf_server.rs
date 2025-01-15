@@ -1,12 +1,14 @@
-use util_libs::nats_server::{self, JetStreamConfig, LeafNodeRemote, LeafServer, LoggingOptions};
-
-const LEAF_SERVE_NAME: &str = "test_leaf_server";
-const LEAF_SERVER_CONFIG_PATH: &str = "test_leaf_server.conf";
+use util_libs::nats_server::{
+    self, JetStreamConfig, LeafNodeRemote, LeafServer, LoggingOptions, LEAF_SERVER_CONFIG_PATH,
+    LEAF_SERVER_DEFAULT_LISTEN_PORT, LEAF_SERVE_NAME,
+};
 
 pub async fn run(user_creds_path: &str) {
     let leaf_server_remote_conn_url = nats_server::get_hub_server_url();
     let leaf_client_conn_domain = "127.0.0.1";
-    let leaf_client_conn_port = 4111;
+    let leaf_client_conn_port = std::env::var("NATS_LISTEN_PORT")
+        .map(|var| var.parse().expect("can't parse into number"))
+        .unwrap_or_else(|_| LEAF_SERVER_DEFAULT_LISTEN_PORT);
 
     let nsc_path =
         std::env::var("NSC_PATH").unwrap_or_else(|_| ".local/share/nats/nsc".to_string());

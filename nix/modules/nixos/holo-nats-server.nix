@@ -5,10 +5,22 @@ in
 {
   imports = [ ];
 
-  options.holo.nats-server = with lib; {
-    enable = mkOption {
+  options.holo.nats-server = {
+    enable = lib.mkOption {
       description = "enable holo NATS server";
       default = true;
+    };
+
+    port = lib.mkOption {
+      description = "enable holo NATS server";
+      type = lib.types.int;
+      default = 4222;
+    };
+
+    leafnodePort = lib.mkOption {
+      description = "enable holo NATS server";
+      type = lib.types.int;
+      default = 7422;
     };
   };
 
@@ -24,7 +36,8 @@ in
       jetstream = true;
 
       settings = {
-        leafnodes.port = 7422;
+        inherit (cfg) port;
+        leafnodes.port = cfg.leafnodePort;
       };
     };
   };

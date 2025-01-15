@@ -10,20 +10,29 @@ pkgs.testers.runNixOSTest (
     name = "host-agent-integration-nixos";
     meta.platforms = lib.lists.intersectLists lib.platforms.linux lib.platforms.x86_64;
 
-    # TODO: add a NATS server which is used to test the leaf connection
-    # nodes.hub = { };
+    nodes.hub =
+      {
+        ...
 
-    nodes.agent =
-      { config, ... }:
+      }:
       {
         imports = [
           flake.nixosModules.holo-nats-server
-          flake.nixosModules.holo-agent
+          # flake.nixosModules.holo-orchestrator
         ];
 
+        # holo.orchestrator.enable = true;
         holo.nats-server.enable = true;
+      };
 
-        holo.agent = {
+    nodes.host =
+      { ... }:
+      {
+        imports = [
+          flake.nixosModules.holo-host-agent
+        ];
+
+        holo.host-agent = {
           enable = true;
           autoStart = false;
           rust = {
@@ -32,22 +41,39 @@ pkgs.testers.runNixOSTest (
           };
 
           nats = {
-            url = "127.0.0.1:${builtins.toString config.services.nats.port}";
-            hubServerUrl = "127.0.0.1:${builtins.toString config.services.nats.settings.leafnodes.port}";
+            # url = "agent:${builtins.toString config.services.nats.port}";
+            hubServerUrl = "hub:${builtins.toString nodes.hub.holo.nats-server.leafnodePort}";
           };
         };
       };
 
     # takes args which are currently removed by deadnix:
     # { nodes, ... }
-    testScript = _: ''
-      agent.start()
+    testScript =
+      _:
+      let
+        natsCli = lib.getExe pkgs.natscli;
+        hubTestScript = pkgs.writeShellScript "cmd" ''
+          ${natsCli} pub -s 'nats://127.0.0.1:${builtins.toString nodes.hub.holo.nats-server.port}' --count=10 WORKLOAD.start '{"message":"hello"}'
+        '';
 
-      agent.wait_for_unit("nats.service")
+        hostTestScript = pkgs.writeShellScript "cmd" ''
+          ${natsCli} sub -s 'nats://127.0.0.1:${builtins.toString nodes.host.holo.host-agent.nats.listenPort}' --count=10 'WORKLOAD.>'
+        '';
+      in
+      ''
+        hub.start()
+        hub.wait_for_unit("nats.service")
+        hub.succeed("${hubTestScript}")
 
-      # TODO: fix after/require settings of the holo-agent service to make autoStart work
-      agent.succeed("systemctl start holo-agent")
-      agent.wait_for_unit("holo-agent")
-    '';
+        host.start()
+        # agent.wait_for_unit("nats.service")
+
+        # TODO: fix after/require settings of the host-agent service to make autoStart work
+        host.succeed("systemctl start holo-host-agent")
+        host.wait_for_unit("holo-host-agent")
+
+        host.succeed("${hostTestScript}")
+      '';
   }
 )
