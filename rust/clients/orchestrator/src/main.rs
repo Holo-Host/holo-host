@@ -16,10 +16,7 @@ use dotenv::dotenv;
 async fn main() -> Result<(), async_nats::Error> {
     dotenv().ok();
     env_logger::init();
-
-    let _ = auth::controller::run().await?;
-
-    let _ = workloads::controller::run().await?;
-
+    auth::controller::run().await?;
+    workloads::controller::run().await?;
     Ok(())
 }

@@ -27,8 +27,7 @@ pub fn generate_creds_file() -> String {
     Command::new("nsc")
         .arg(format!("... > {}", user_creds_path))
         .output()
-        .expect("Failed to add user with provided keys")
-        .stdout;
+        .expect("Failed to add user with provided keys");
 
     "placeholder_user.creds".to_string()
 }

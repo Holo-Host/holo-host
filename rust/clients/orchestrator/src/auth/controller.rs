@@ -100,15 +100,13 @@ pub async fn run() -> Result<(), async_nats::Error> {
         .arg("--force")
         .arg(format!("--config-file {}", resolver_path))
         .output()
-        .expect("Failed to create resolver config file")
-        .stdout;
+        .expect("Failed to create resolver config file");
 
     // Push auth updates to hub server
     Command::new("nsc")
         .arg("push -A")
         .output()
-        .expect("Failed to create resolver config file")
-        .stdout;
+        .expect("Failed to create resolver config file");
 
     // publish user jwt file
     let server_node_id = "server_node_id_placeholder";

@@ -19,7 +19,6 @@ pub mod agent_cli;
 pub mod host_cmds;
 pub mod support_cmds;
 use thiserror::Error;
-use util_libs::nats_js_client;
 
 #[derive(Error, Debug)]
 pub enum AgentCliError {
@@ -54,10 +53,10 @@ async fn main() -> Result<(), AgentCliError> {
 }
 
 async fn daemonize() -> Result<(), async_nats::Error> {
-    // let (host_pubkey, host_creds_path) = auth::initializer::run().await?;
-    let host_creds_path = nats_js_client::get_nats_client_creds("HOLO", "HPOS", "hpos");
-    let host_pubkey = "host_id_placeholder>";
+    // let (host_pubkey, host_creds_path) = auth::init_agent::run().await?;
+    let host_creds_path = util_libs::nats_js_client::get_nats_client_creds("HOLO", "HPOS", "hpos");
+    let host_pubkey = "host_pubkey_placeholder>";
     hostd::gen_leaf_server::run(&host_creds_path).await;
-    hostd::workload_manager::run(host_pubkey, &host_creds_path).await?;
+    hostd::workload_manager::run(&host_pubkey, &host_creds_path).await?;
     Ok(())
 }

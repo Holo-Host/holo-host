@@ -33,7 +33,7 @@ pub const HOST_INIT_CLIENT_INBOX_PREFIX: &str = "_host_auth_inbox";
 
 const USER_CREDENTIALS_PATH: &str = "./user_creds";
 
-pub async fn run() -> Result<String, async_nats::Error> {
+pub async fn run() -> Result<(String, String), async_nats::Error> {
     log::info!("Host Auth Client: Connecting to server...");
 
     // ==================== NATS Setup ====================
@@ -165,7 +165,7 @@ pub async fn run() -> Result<String, async_nats::Error> {
         msg_id: format!("hpos_init_mid_{}", rand::random::<u8>()),
         data: b"Host Auth Connected!".to_vec(),
     };
-    let _ = host_auth_client.publish(&req_hub_files_options).await?;
+    host_auth_client.publish(&req_hub_files_options).await?;
 
     // ...upon the reply to the above, do the following: publish user pubkey file
     let _send_user_pubkey_publish_options = nats_js_client::SendRequest {
@@ -174,7 +174,7 @@ pub async fn run() -> Result<String, async_nats::Error> {
         data: b"Host Auth Connected!".to_vec(),
     };
     // host_auth_client.publish(send_user_pubkey_publish_options);
-    let _ = utils::chunk_file_and_publish(&host_auth_client.js, "subject", "file_path").await?;
+    utils::chunk_file_and_publish(&host_auth_client.js, "subject", "file_path").await?;
 
     // 5. Generate user creds file
     let user_creds_path = utils::generate_creds_file();
@@ -182,5 +182,5 @@ pub async fn run() -> Result<String, async_nats::Error> {
     // 6. Close and drain internal buffer before exiting to make sure all messages are sent
     host_auth_client.close().await?;
 
-    Ok(user_creds_path)
+    Ok(("host_pubkey_placeholder".to_string(), user_creds_path))
 }

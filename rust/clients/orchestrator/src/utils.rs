@@ -44,7 +44,7 @@ pub async fn chunk_file_and_publish(
         msg_id: format!("hpos_init_msg_id_{}", rand::random::<u8>()),
         data: "EOF".into(),
     };
-    let _ = auth_client.publish(&send_user_jwt_publish_options);
+    let _ = auth_client.publish(&send_user_jwt_publish_options).await;
 
     Ok(())
 }
