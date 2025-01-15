@@ -11,13 +11,11 @@ This client is responsible for subscribing the host agent to workload stream end
 */
 
 mod auth;
-mod utils;
-mod workload_manager;
+mod hostd;
 use anyhow::Result;
 use clap::Parser;
 use dotenv::dotenv;
 pub mod agent_cli;
-pub mod gen_leaf_server;
 pub mod host_cmds;
 pub mod support_cmds;
 use thiserror::Error;
@@ -59,7 +57,7 @@ async fn daemonize() -> Result<(), async_nats::Error> {
     // let (host_pubkey, host_creds_path) = auth::initializer::run().await?;
     let host_creds_path = nats_js_client::get_nats_client_creds("HOLO", "HPOS", "hpos");
     let host_pubkey = "host_id_placeholder>";
-    gen_leaf_server::run(&host_creds_path).await;
-    workload_manager::run(host_pubkey, &host_creds_path).await?;
+    hostd::gen_leaf_server::run(&host_creds_path).await;
+    hostd::workload_manager::run(host_pubkey, &host_creds_path).await?;
     Ok(())
 }

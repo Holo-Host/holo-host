@@ -12,17 +12,17 @@
 */
 
 use anyhow::{anyhow, Result};
-use mongodb::{options::ClientOptions, Client as MongoDBClient};
 use std::{sync::Arc, time::Duration};
+use mongodb::{options::ClientOptions, Client as MongoDBClient};
+use async_nats::Message;
 use util_libs::{
     db::mongodb::get_mongodb_url,
-    js_stream_service::{JsServiceParamsPartial, JsStreamService},
-    nats_js_client::{self, EndpointType, EventListener, JsClient},
+    js_stream_service::JsServiceParamsPartial,
+    nats_js_client::{self, EndpointType},
 };
 use workload::{
     WorkloadApi, WORKLOAD_SRV_DESC, WORKLOAD_SRV_NAME, WORKLOAD_SRV_SUBJ, WORKLOAD_SRV_VERSION,
 };
-use async_nats::Message;
 
 const HOST_AGENT_CLIENT_NAME: &str = "Host Agent";
 const HOST_AGENT_INBOX_PREFIX: &str = "_host_inbox";
@@ -75,8 +75,8 @@ pub async fn run(host_pubkey: &str, host_creds_path: &str) -> Result<(), async_n
     let workload_api = WorkloadApi::new(&client).await?;
 
     // ==================== API ENDPOINTS ====================
-    // Register Workload Streams for Host Agent to consume
-    // NB: Subjects are published by orchestrator or nats-db-connector
+    // Register Workload Streams for Host Agent to consume and process
+    // NB: Subjects are published by orchestrator
     let workload_service = host_workload_client
         .get_js_service(WORKLOAD_SRV_NAME.to_string())
         .await

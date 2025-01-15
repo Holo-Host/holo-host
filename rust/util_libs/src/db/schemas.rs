@@ -131,7 +131,7 @@ pub struct Host {
 }
 
 impl IntoIndexes for Host {
-    fn into_indices(&self) -> Result<Vec<(Document, Option<IndexOptions>)>> {
+    fn into_indices(self) -> Result<Vec<(Document, Option<IndexOptions>)>> {
         let mut indices = vec![];
 
         //  Add Device ID Index
@@ -163,6 +163,7 @@ pub enum WorkloadState {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorkloadStatus {
+    pub id: Option<String>, 
     pub desired: WorkloadState,
     pub actual: WorkloadState,
 }
@@ -218,7 +219,7 @@ impl Default for Workload {
 }
 
 impl IntoIndexes for Workload {
-    fn into_indices(&self) -> Result<Vec<(Document, Option<IndexOptions>)>> {
+    fn into_indices(self) -> Result<Vec<(Document, Option<IndexOptions>)>> {
         let mut indices = vec![];
 
         //  Add Developer Index

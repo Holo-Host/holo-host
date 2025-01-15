@@ -31,7 +31,7 @@ where
 }
 
 pub trait IntoIndexes {
-    fn into_indices(&self) -> Result<Vec<(Document, Option<IndexOptions>)>>;
+    fn into_indices(self) -> Result<Vec<(Document, Option<IndexOptions>)>>;
 }
 
 #[derive(Debug, Clone)]

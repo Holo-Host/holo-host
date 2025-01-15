@@ -6,14 +6,14 @@
 // This client is responsible for:
 */
 
-use super::endpoints;
-use anyhow::Result;
+use anyhow::{anyhow, Result};
+use std::{sync::Arc, time::Duration};
+use async_nats::Message;
 use mongodb::{options::ClientOptions, Client as MongoDBClient};
-use tokio::time::Duration;
 use util_libs::{
     db::mongodb::get_mongodb_url,
-    js_stream_service::JsStreamService,
-    nats_js_client::{self, EventListener, JsClient, NewJsClientParams},
+    js_stream_service::JsServiceParamsPartial,
+    nats_js_client::{self, EndpointType, JsClient, NewJsClientParams},
 };
 use workload::{
     WorkloadApi, WORKLOAD_SRV_DESC, WORKLOAD_SRV_NAME, WORKLOAD_SRV_SUBJ, WORKLOAD_SRV_VERSION,
@@ -28,26 +28,26 @@ pub async fn run() -> Result<(), async_nats::Error> {
     let creds_path = nats_js_client::get_nats_client_creds("HOLO", "WORKLOAD", "orchestrator");
     let event_listeners = nats_js_client::get_event_listeners();
 
-    let workload_service =
+    // Setup JS Stream Service
+    let workload_stream_service_params = JsServiceParamsPartial {
+        name: WORKLOAD_SRV_NAME.to_string(),
+        description: WORKLOAD_SRV_DESC.to_string(),
+        version: WORKLOAD_SRV_VERSION.to_string(),
+        service_subject: WORKLOAD_SRV_SUBJ.to_string(),
+    };
+
+    let orchestrator_workload_client =
         JsClient::new(NewJsClientParams {
             nats_url,
             name: ORCHESTRATOR_WORKLOAD_CLIENT_NAME.to_string(),
             inbox_prefix: ORCHESTRATOR_WORKLOAD_CLIENT_INBOX_PREFIX.to_string(),
-            opts: vec![nats_js_client::with_event_listeners(event_listeners)],
+            service_params: vec![workload_stream_service_params],
             credentials_path: Some(creds_path),
-            ..Default::default()
+            opts: vec![nats_js_client::with_event_listeners(event_listeners)],
+            ping_interval: Some(Duration::from_secs(10)),
+            request_timeout: Some(Duration::from_secs(5)),
         })
         .await?;
-
-    // Create a new Jetstream Microservice
-    let js_service = JsStreamService::new(
-        workload_service.js.clone(),
-        WORKLOAD_SRV_NAME,
-        WORKLOAD_SRV_DESC,
-        WORKLOAD_SRV_VERSION,
-        WORKLOAD_SRV_SUBJ,
-    )
-    .await?;
 
     // ==================== DB Setup ====================
     // Create a new MongoDB Client and connect it to the cluster
@@ -59,31 +59,62 @@ pub async fn run() -> Result<(), async_nats::Error> {
     let workload_api = WorkloadApi::new(&client).await?;
 
     // ==================== API ENDPOINTS ====================
+    // Register Workload Streams for Orchestrator to consume and proceess
+    // NB: Subjects are published by external Developer, the Nats-DB-Connector, or the Host Agent
+    let workload_service = orchestrator_workload_client
+        .get_js_service(WORKLOAD_SRV_NAME.to_string())
+        .await
+        .ok_or(anyhow!(
+            "Failed to locate workload service. Unable to spin up Host Agent."
+        ))?;
 
-    // For ORCHESTRATOR to consume
-    // (subjects should be published by developer)
-    js_service
-        .add_local_consumer(
+    // Published by Developer
+    workload_service
+        .add_local_consumer::<workload::types::ApiResult>(
             "add_workload",
             "add",
-            nats_js_client::EndpointType::Async(endpoints::add_workload(workload_api).await),
+            EndpointType::Async(workload_api.call(|api: WorkloadApi, msg: Arc<Message>| {
+                async move {
+                    api.add_workload(msg).await
+                }
+            })),
             None,
         )
         .await?;
 
-    js_service
-        .add_local_consumer(
-            "handle_changed_db_workload",
-            "handle_change",
-            nats_js_client::EndpointType::Async(endpoints::handle_db_change().await),
+    // Automatically published by the Nats-DB-Connector
+    workload_service
+        .add_local_consumer::<workload::types::ApiResult>(
+            "handle_db_insertion",
+            "insert",
+            EndpointType::Async(workload_api.call(|api: WorkloadApi, msg: Arc<Message>| {
+                async move {
+                    api.handle_db_insertion(msg).await
+                }
+            })),
             None,
         )
         .await?;
+    
+    // Published by the Host Agent
+    workload_service
+    .add_local_consumer::<workload::types::ApiResult>(
+        "handle_status_update",
+        "read_status_update",
+        EndpointType::Async(workload_api.call(|api: WorkloadApi, msg: Arc<Message>| {
+            async move {
+                api.handle_status_update(msg).await
+            }
+        })),
+        None,
+    )
+    .await?;
 
-    log::trace!(
-        "{} Service is running. Waiting for requests...",
-        WORKLOAD_SRV_NAME
-    );
 
+    // Only exit program when explicitly requested
+    tokio::signal::ctrl_c().await?;
+
+    // Close client and drain internal buffer before exiting to make sure all messages are sent
+    orchestrator_workload_client.close().await?;
     Ok(())
 }

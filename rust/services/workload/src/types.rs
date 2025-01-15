@@ -4,11 +4,11 @@ use serde::{Deserialize, Serialize};
 pub use String as WorkloadId;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ApiResult (pub Option<WorkloadId>, pub WorkloadStatus, pub Option<Vec<String>>);
+pub struct ApiResult (pub WorkloadStatus, pub Option<Vec<String>>);
 
 impl CreateTag for ApiResult {
     fn get_tags(&self) -> Option<Vec<String>> {
-        self.2.clone()
+        self.1.clone()
     }
 }
 
