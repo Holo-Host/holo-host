@@ -14,10 +14,10 @@ use std::fmt::Debug;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-type ResponseSubjectGenerator = Arc<dyn Fn(Option<String>) -> String + Send + Sync>;
+type ResponseSubjectsGenerator = Arc<dyn Fn(Option<Vec<String>>) -> Vec<String> + Send + Sync>;
 
 pub trait CreateTag: Send + Sync {
-    fn get_tag(&self) -> Option<String>;
+    fn get_tags(&self) -> Option<Vec<String>>;
 }
 
 pub trait EndpointTraits:  Serialize + for<'de> Deserialize<'de> + Send + Sync + Clone + Debug + CreateTag + 'static {}
@@ -27,7 +27,7 @@ pub trait ConsumerExtTrait: Send + Sync + Debug + 'static {
     fn get_name(&self) -> &str;
     fn get_consumer(&self) -> PullConsumer;
     fn get_endpoint(&self) -> Box<dyn Any + Send + Sync>;
-    fn get_response(&self) -> Option<ResponseSubjectGenerator>;
+    fn get_response(&self) -> Option<ResponseSubjectsGenerator>;
 }
 
 impl<T> TryFrom<Box<dyn Any + Send + Sync>> for EndpointType<T>
@@ -54,7 +54,7 @@ where
     consumer: PullConsumer,
     handler: EndpointType<T>,
     #[debug(skip)]
-    response_subject_fn: Option<ResponseSubjectGenerator>
+    response_subject_fn: Option<ResponseSubjectsGenerator>
 }
 
 #[async_trait]
@@ -71,7 +71,7 @@ where
     fn get_endpoint(&self) -> Box<dyn Any + Send + Sync> {
         Box::new(self.handler.clone())
     }
-    fn get_response(&self) -> Option<ResponseSubjectGenerator> {
+    fn get_response(&self) -> Option<ResponseSubjectsGenerator> {
         self.response_subject_fn.clone()
     }
 }
@@ -202,7 +202,7 @@ impl JsStreamService {
         consumer_name: &str,
         endpoint_subject: &str,
         endpoint_type: EndpointType<T>,
-        response_subject_fn: Option<ResponseSubjectGenerator>,
+        response_subject_fn: Option<ResponseSubjectsGenerator>,
     ) -> Result<ConsumerExt<T>, async_nats::Error>  
     where
         T: EndpointTraits,
@@ -315,7 +315,7 @@ impl JsStreamService {
         service_context: Arc<RwLock<Context>>,
         mut messages: consumer::pull::Stream,
         endpoint_handler: EndpointType<T>,
-        maybe_response_generator: Option<ResponseSubjectGenerator>,
+        maybe_response_generator: Option<ResponseSubjectsGenerator>,
     ) where
         T: EndpointTraits,
     {
@@ -336,14 +336,14 @@ impl JsStreamService {
                 }
             };
 
-            let (response_bytes, maybe_subject_tag) = match result {
+            let (response_bytes, maybe_subject_tags) = match result {
                 Ok(r) => {
                     let bytes: bytes::Bytes = match serde_json::to_vec(&r) {
                         Ok(r) => r.into(),
                         Err(e) => e.to_string().into()
                     };
-                    let maybe_subject_tag = r.get_tag();
-                    (bytes, maybe_subject_tag)
+                    let maybe_subject_tags = r.get_tags();
+                    (bytes, maybe_subject_tags)
                 },
                 Err(err) => (err.to_string().into(), None),
             };
@@ -375,28 +375,30 @@ impl JsStreamService {
                 };
             }
 
-            // Publish a response message if an endpoint response subject exists for handler
+            // Publish a response message to response subjects when an endpoint response subject generator exists for endpoint
             if let Some(response_subject_fn) = maybe_response_generator.as_ref() {
-                let response_subject = response_subject_fn(maybe_subject_tag);
-                if let Err(err) = service_context
-                    .read()
-                    .await
-                    .publish(
-                        format!("{}.{}", log_info.service_subject, response_subject),
-                        response_bytes.clone(),
-                    )
-                    .await
-                {
-                    log::error!(
-                        "{}Failed to publish new message upon successful message consumption: subj='{}.{}', endpoint={}, service={}, err={:?}",
-                        log_info.prefix,
-                        log_info.service_subject,
-                        log_info.endpoint_subject,
-                        log_info.endpoint_name,
-                        log_info.service_name,
-                        err
-                    );
-                };
+                let response_subjects = response_subject_fn(maybe_subject_tags);
+                for response_subject in response_subjects.iter() {
+                    if let Err(err) = service_context
+                        .read()
+                        .await
+                        .publish(
+                            format!("{}.{}", log_info.service_subject, response_subject),
+                            response_bytes.clone(),
+                        )
+                        .await
+                    {
+                        log::error!(
+                            "{}Failed to publish new message upon successful message consumption: subj='{}.{}', endpoint={}, service={}, err={:?}",
+                            log_info.prefix,
+                            log_info.service_subject,
+                            log_info.endpoint_subject,
+                            log_info.endpoint_name,
+                            log_info.service_name,
+                            err
+                        );
+                    };
+                }
                 // todo: discuss how we want to handle error
             }
 

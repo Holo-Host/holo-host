@@ -151,7 +151,7 @@ impl IntoIndexes for Host {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum WorkloadState {
     Reported,
-    Assigned(Vec<String>), // String = host id
+    Assigned, // String = host id
     Pending,
     Installed,
     Running,

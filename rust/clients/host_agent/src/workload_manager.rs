@@ -17,7 +17,7 @@ use std::{sync::Arc, time::Duration};
 use util_libs::{
     db::mongodb::get_mongodb_url,
     js_stream_service::JsServiceParamsPartial,
-    nats_js_client::{self, EndpointType, DefaultJsClient},
+    nats_js_client::{self, EndpointType,  },
 };
 use workload::{
     WorkloadApi, WORKLOAD_SRV_DESC, WORKLOAD_SRV_NAME, WORKLOAD_SRV_SUBJ, WORKLOAD_SRV_VERSION,
@@ -85,7 +85,7 @@ pub async fn run(host_pubkey: &str, host_creds_path: &str) -> Result<(), async_n
         ))?;
 
     workload_service
-        .add_local_consumer(
+        .add_local_consumer::<workload::types::ApiResult>(
             "start_workload",
             "start",
             EndpointType::Async(workload_api.call(|api: WorkloadApi, msg: Arc<Message>| {
@@ -98,7 +98,7 @@ pub async fn run(host_pubkey: &str, host_creds_path: &str) -> Result<(), async_n
         .await?;
 
     workload_service
-        .add_local_consumer(
+        .add_local_consumer::<workload::types::ApiResult>(
             "send_workload_status",
             "send_status",
             EndpointType::Async(workload_api.call(|api: WorkloadApi, msg: Arc<Message>| {
@@ -111,7 +111,7 @@ pub async fn run(host_pubkey: &str, host_creds_path: &str) -> Result<(), async_n
         .await?;
 
     workload_service
-        .add_local_consumer(
+        .add_local_consumer::<workload::types::ApiResult>(
             "uninstall_workload",
             "uninstall",
             EndpointType::Async(workload_api.call(|api: WorkloadApi, msg: Arc<Message>| {
