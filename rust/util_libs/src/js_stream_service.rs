@@ -2,6 +2,7 @@ use super::nats_js_client::EndpointType;
 
 use anyhow::{anyhow, Result};
 use std::any::Any;
+// use async_nats::jetstream::message::Message;
 use async_trait::async_trait;
 use async_nats::jetstream::consumer::{self, AckPolicy, PullConsumer};
 use async_nats::jetstream::stream::{self, Info, Stream};
@@ -22,7 +23,7 @@ pub trait CreateTag: Send + Sync {
 pub trait EndpointTraits:  Serialize + for<'de> Deserialize<'de> + Send + Sync + Clone + Debug + CreateTag + 'static {}
 
 #[async_trait]
-pub trait ConsumerExtTrait: Debug {
+pub trait ConsumerExtTrait: Send + Sync + Debug + 'static {
     fn get_name(&self) -> &str;
     fn get_consumer(&self) -> PullConsumer;
     fn get_endpoint(&self) -> Box<dyn Any + Send + Sync>;
@@ -81,6 +82,14 @@ pub struct JsStreamServiceInfo<'a> {
     pub name: &'a str,
     pub version: &'a str,
     pub service_subject: &'a str,
+}
+
+struct LogInfo {
+    prefix: String,
+    service_name: String,
+    service_subject: String,
+    endpoint_name: String,
+    endpoint_subject: String,
 }
 
 #[derive(Deserialize, Default)]
@@ -246,145 +255,166 @@ impl JsStreamService {
     where
         T: EndpointTraits,
     {
-        let service_log_prefix = self.service_log_prefix.clone();
-        let service_name = self.name.clone();
-        let service_subject = self.service_subject.clone();
-        let service_context = self.js_context.clone();
-
         if let Some(consumer_ext) = self
-            .to_owned()
-            .local_consumers
-            .write()
-            .await
-            .get_mut(&consumer_name.to_string())
+        .to_owned()
+        .local_consumers
+        .write()
+        .await
+        .get_mut(&consumer_name.to_string())
         {
             let consumer_details = consumer_ext.to_owned();
-            let endpoint_name = consumer_details.get_name().to_owned();
             let endpoint_handler: EndpointType<T> = EndpointType::try_from(consumer_details.get_endpoint())?;
-            let endpoint_response_subject = consumer_details.get_response();
+            let maybe_response_generator = consumer_ext.get_response();
             let mut consumer = consumer_details.get_consumer();
-            let endpoint_subject = consumer
-                .info()
-                .await?
-                .config
-                .filter_subject
-                .clone();
-
-            let mut messages = consumer
+            let messages = consumer
                 .stream()
                 .heartbeat(std::time::Duration::from_secs(10))
                 .messages()
                 .await?;
-
+            
+            let log_info = LogInfo {
+                prefix: self.service_log_prefix.clone(),
+                service_name: self.name.clone(),
+                service_subject: self.service_subject.clone(),
+                endpoint_name: consumer_details.get_name().to_owned(),
+                endpoint_subject: consumer
+                .info()
+                .await?
+                .config
+                .filter_subject
+                .clone()
+            };
+            
+            let service_context = self.js_context.clone();
+            
             tokio::spawn(async move {
-                while let Some(Ok(js_msg)) = messages.next().await {
-                    log::trace!(
-                        "{}Consumer received message: subj='{}.{}', endpoint={}, service={}",
-                        service_log_prefix,
-                        service_subject,
-                        endpoint_subject,
-                        endpoint_name,
-                        service_name
-                    );
-
-                    let result = match endpoint_handler {
-                        EndpointType::Sync(ref handler) => handler(&js_msg.message),
-                        EndpointType::Async(ref handler) => {
-                            handler(Arc::new(js_msg.clone().message)).await
-                        }
-                    };
-
-                    let (response_bytes, maybe_subject_tag) = match result {
-                        Ok(r) => {
-                            let bytes: bytes::Bytes = match serde_json::to_vec(&r) {
-                                Ok(r) => r.into(),
-                                Err(e) => e.to_string().into()
-                            };
-                            let maybe_subject_tag = r.get_tag();
-                            (bytes, maybe_subject_tag)
-                        },
-                        Err(err) => (err.to_string().into(), None),
-                    };
-
-                    // Returns a response if a reply address exists.
-                    // (Note: This means the js subject was called with a `req` instead of a `pub`.)
-                    if let Some(reply) = &js_msg.reply {
-                        if let Err(err) = service_context
-                            .read()
-                            .await
-                            .publish(
-                                format!("{}.{}.{}", reply, service_subject, endpoint_subject),
-                                response_bytes.clone(),
-                            )
-                            .await
-                        {
-                            log::error!(
-                                "{}Failed to send reply upon successful message consumption: subj='{}.{}.{}', endpoint={}, service={}, err={:?}",
-                                service_log_prefix,
-                                reply,
-                                service_subject,
-                                endpoint_subject,
-                                endpoint_name,
-                                service_name,
-                                err
-                            );
-
-                            // todo: discuss how we want to handle error
-                        };
-                    }
-
-                    // Publish a response message if an endpoint response subject exists for handler
-                    if let Some(response_subject_fn) = endpoint_response_subject.as_ref() {
-                        let response_subject = response_subject_fn(maybe_subject_tag);
-                        if let Err(err) = service_context
-                            .read()
-                            .await
-                            .publish(
-                                format!("{}.{}", service_subject, response_subject),
-                                response_bytes.clone(),
-                            )
-                            .await
-                        {
-                            log::error!(
-                                "{}Failed to publish new message upon successful message consumption: subj='{}.{}', endpoint={}, service={}, err={:?}",
-                                service_log_prefix,
-                                service_subject,
-                                endpoint_subject,
-                                endpoint_name,
-                                service_name,
-                                err
-                            );
-                        };
-                        // todo: discuss how we want to handle error
-                    }
-
-                    // Send back message acknowledgment
-                    if let Err(err) = js_msg.ack().await {
-                        log::error!(
-                            "{}Failed to send ACK new message upon successful message consumption: subj='{}.{}', endpoint={}, service={}, err={:?}",
-                            service_log_prefix,
-                            service_subject,
-                            endpoint_subject,
-                            endpoint_name,
-                            service_name,
-                            err
-                        );
-
-                        // todo: discuss how we want to handle error
-                    }
-                }
+                Self::process_messages(
+                    log_info,
+                    service_context,
+                    messages,
+                    endpoint_handler,
+                    maybe_response_generator,
+                )
+                .await;
             });
         } else {
             log::warn!(
                 "{}Unable to spawn the consumer endpoint handler. Consumer does not exist in the stream service: consumer={}, service={}",
-                service_log_prefix,
+                self.service_log_prefix,
                 consumer_name,
-                service_name
+                self.name
 
             );
         };
 
         Ok(())
+    }
+
+    async fn process_messages<T>(
+        log_info: LogInfo,
+        service_context: Arc<RwLock<Context>>,
+        mut messages: consumer::pull::Stream,
+        endpoint_handler: EndpointType<T>,
+        maybe_response_generator: Option<ResponseSubjectGenerator>,
+    ) where
+        T: EndpointTraits,
+    {
+        while let Some(Ok(js_msg)) = messages.next().await {
+            log::trace!(
+                "{}Consumer received message: subj='{}.{}', endpoint={}, service={}",
+                log_info.prefix,
+                log_info.service_subject,
+                log_info.endpoint_subject,
+                log_info.endpoint_name,
+                log_info.service_name
+            );
+
+            let result = match endpoint_handler {
+                EndpointType::Sync(ref handler) => handler(&js_msg.message),
+                EndpointType::Async(ref handler) => {
+                    handler(Arc::new(js_msg.clone().message)).await
+                }
+            };
+
+            let (response_bytes, maybe_subject_tag) = match result {
+                Ok(r) => {
+                    let bytes: bytes::Bytes = match serde_json::to_vec(&r) {
+                        Ok(r) => r.into(),
+                        Err(e) => e.to_string().into()
+                    };
+                    let maybe_subject_tag = r.get_tag();
+                    (bytes, maybe_subject_tag)
+                },
+                Err(err) => (err.to_string().into(), None),
+            };
+
+            // Returns a response if a reply address exists.
+            // (Note: This means the js subject was called with a `req` instead of a `pub`.)
+            if let Some(reply) = &js_msg.reply {
+                if let Err(err) = service_context
+                    .read()
+                    .await
+                    .publish(
+                        format!("{}.{}.{}", reply, log_info.service_subject, log_info.endpoint_subject),
+                        response_bytes.clone(),
+                    )
+                    .await
+                {
+                    log::error!(
+                        "{}Failed to send reply upon successful message consumption: subj='{}.{}.{}', endpoint={}, service={}, err={:?}",
+                        log_info.prefix,
+                        reply,
+                        log_info.service_subject,
+                        log_info.endpoint_subject,
+                        log_info.endpoint_name,
+                        log_info.service_name,
+                        err
+                    );
+
+                    // todo: discuss how we want to handle error
+                };
+            }
+
+            // Publish a response message if an endpoint response subject exists for handler
+            if let Some(response_subject_fn) = maybe_response_generator.as_ref() {
+                let response_subject = response_subject_fn(maybe_subject_tag);
+                if let Err(err) = service_context
+                    .read()
+                    .await
+                    .publish(
+                        format!("{}.{}", log_info.service_subject, response_subject),
+                        response_bytes.clone(),
+                    )
+                    .await
+                {
+                    log::error!(
+                        "{}Failed to publish new message upon successful message consumption: subj='{}.{}', endpoint={}, service={}, err={:?}",
+                        log_info.prefix,
+                        log_info.service_subject,
+                        log_info.endpoint_subject,
+                        log_info.endpoint_name,
+                        log_info.service_name,
+                        err
+                    );
+                };
+                // todo: discuss how we want to handle error
+            }
+
+            // Send back message acknowledgment
+            if let Err(err) = js_msg.ack().await {
+                log::error!(
+                    "{}Failed to send ACK new message upon successful message consumption: subj='{}.{}', endpoint={}, service={}, err={:?}",
+                    log_info.prefix,
+                    log_info.service_subject,
+                    log_info.endpoint_subject,
+                    log_info.endpoint_name,
+                    log_info.service_name,
+                    err
+                );
+
+                // todo: discuss how we want to handle error
+            }
+        }
     }
 
 }

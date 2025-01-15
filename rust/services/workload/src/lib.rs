@@ -48,13 +48,13 @@ impl WorkloadApi {
     pub fn call<F, Fut>(
         &self,
         handler: F,
-    ) -> nats_js_client::AsyncEndpointHandler
+    ) -> nats_js_client::AsyncEndpointHandler<types::ApiResult>
     where
         F: Fn(WorkloadApi, Arc<Message>) -> Fut + Send + Sync + 'static,
-        Fut: Future<Output = Result<Vec<u8>, anyhow::Error>> + Send + 'static,
+        Fut: Future<Output = Result<types::ApiResult, anyhow::Error>> + Send + 'static,
     {
         let api = self.to_owned(); 
-        Arc::new(move |msg: Arc<Message>| -> nats_js_client::JsServiceResponse {
+        Arc::new(move |msg: Arc<Message>| -> nats_js_client::JsServiceResponse<types::ApiResult> {
             let api_clone = api.clone();
             Box::pin(handler(api_clone, msg))
         })
@@ -62,7 +62,7 @@ impl WorkloadApi {
     
     /*******************************  For Orchestrator   *********************************/
     // For orchestrator
-    pub async fn add_workload(&self, msg: Arc<Message>) -> Result<Vec<u8>, anyhow::Error> {
+    pub async fn add_workload(&self, msg: Arc<Message>) -> Result<types::ApiResult, anyhow::Error> {
         log::debug!("Incoming message for 'WORKLOAD.add'");
         let (maybe_payload, status) = self.process_db_request(
             msg,
@@ -88,13 +88,13 @@ impl WorkloadApi {
         .await;
 
         if let Some(workload) = maybe_payload {
-            return Ok(serde_json::to_vec(&types::ApiResult(workload._id, status))?)        ;
+            return Ok(types::ApiResult(workload._id, status))        ;
         }
-        Ok(serde_json::to_vec(&types::ApiResult(None, status))?)
+        Ok(types::ApiResult(None, status))
     }
 
     // For orchestrator
-    pub async fn update_workload(&self, msg: Arc<Message>) -> Result<Vec<u8>, anyhow::Error> {
+    pub async fn update_workload(&self, msg: Arc<Message>) -> Result<types::ApiResult, anyhow::Error> {
         log::debug!("Incoming message for 'WORKLOAD.update'");
         let (maybe_payload, status) = self.process_db_request(
             msg,
@@ -117,14 +117,14 @@ impl WorkloadApi {
         )
         .await;
         if let Some(workload) = maybe_payload {
-            return Ok(serde_json::to_vec(&types::ApiResult(workload._id, status))?);
+            return Ok(types::ApiResult(workload._id, status));
         }
-        Ok(serde_json::to_vec(&types::ApiResult(None, status))?)
+        Ok(types::ApiResult(None, status))
 
     }
 
     // For orchestrator
-    pub async fn remove_workload(&self, msg: Arc<Message>) -> Result<Vec<u8>, anyhow::Error> {
+    pub async fn remove_workload(&self, msg: Arc<Message>) -> Result<types::ApiResult, anyhow::Error> {
         log::debug!("Incoming message for 'WORKLOAD.remove'");
         let (maybe_payload, status) = self.process_db_request(
             msg,
@@ -149,15 +149,15 @@ impl WorkloadApi {
         )
         .await;
         if let Some(workload_id) = maybe_payload {
-            return Ok(serde_json::to_vec(&types::ApiResult(Some(workload_id), status))?);
+            return Ok(types::ApiResult(Some(workload_id), status));
         }
-        Ok(serde_json::to_vec(&types::ApiResult(None, status))?)
+        Ok(types::ApiResult(None, status))
     }
 
 
     // For orchestrator
     // NB: This is the stream that is automatically published by the nats-db-connector
-    pub async fn handle_db_insertion(&self, msg: Arc<Message>) -> Result<Vec<u8>, anyhow::Error> {
+    pub async fn handle_db_insertion(&self, msg: Arc<Message>) -> Result<types::ApiResult, anyhow::Error> {
         log::debug!("Incoming message for 'WORKLOAD.insert'");
         let (maybe_payload, status) = self.process_connector_request(
             msg,
@@ -245,15 +245,15 @@ impl WorkloadApi {
 
         // 6. Return status and host
         if let Some(workload) = maybe_payload {
-            return Ok(serde_json::to_vec(&types::ApiResult(workload._id, status))?);
+            return Ok(types::ApiResult(workload._id, status));
         }
-        Ok(serde_json::to_vec(&types::ApiResult(None, status))?)
+        Ok(types::ApiResult(None, status))
     }    
 
     // Zeeshan to take a look:
     // For orchestrator
     // NB: This is the stream that is automatically published by the nats-db-connector
-    pub async fn handle_db_update(&self, msg: Arc<Message>) -> Result<Vec<u8>, anyhow::Error> {
+    pub async fn handle_db_update(&self, msg: Arc<Message>) -> Result<types::ApiResult, anyhow::Error> {
         log::debug!("Incoming message for 'WORKLOAD.update'");
 
         let success_status = WorkloadStatus {
@@ -267,13 +267,13 @@ impl WorkloadApi {
 
         // TODO: ...handle the use case for the update entry change stream 
 
-        Ok(serde_json::to_vec(&types::ApiResult(workload._id, success_status))?)
+        Ok(types::ApiResult(workload._id, success_status))
     } 
 
     // Zeeshan to take a look:
     // For orchestrator
     // NB: This is the stream that is automatically published by the nats-db-connector
-    pub async fn handle_db_deletion(&self, msg: Arc<Message>) -> Result<Vec<u8>, anyhow::Error> {
+    pub async fn handle_db_deletion(&self, msg: Arc<Message>) -> Result<types::ApiResult, anyhow::Error> {
         log::debug!("Incoming message for 'WORKLOAD.delete'");
 
         let success_status = WorkloadStatus {
@@ -287,12 +287,12 @@ impl WorkloadApi {
 
         // TODO: ...handle the use case for the delete entry change stream
         
-        Ok(serde_json::to_vec(&types::ApiResult(workload._id, success_status))?)
+        Ok(types::ApiResult(workload._id, success_status))
     }    
 
      /*******************************   For Hosting Agent   *********************************/
     // For hpos
-    pub async fn start_workload(&self, msg: Arc<Message>) -> Result<Vec<u8>, anyhow::Error> {
+    pub async fn start_workload(&self, msg: Arc<Message>) -> Result<types::ApiResult, anyhow::Error> {
         log::debug!("Incoming message for 'WORKLOAD.start' : {:?}", msg);
 
         let payload_buf = msg.payload.to_vec();
@@ -307,11 +307,11 @@ impl WorkloadApi {
             desired: WorkloadState::Running,
             actual: WorkloadState::Unknown("..".to_string()),
         };
-        Ok(serde_json::to_vec(&status)?)
+        Ok(types::ApiResult(None, status))
     }
 
     // For hpos
-    pub async fn uninstall_workload(&self, msg: Arc<Message>) -> Result<Vec<u8>, anyhow::Error> {
+    pub async fn uninstall_workload(&self, msg: Arc<Message>) -> Result<types::ApiResult, anyhow::Error> {
         log::debug!("Incoming message for 'WORKLOAD.uninstall' : {:?}", msg);
 
         let payload_buf = msg.payload.to_vec();
@@ -326,12 +326,12 @@ impl WorkloadApi {
             desired: WorkloadState::Uninstalled,
             actual: WorkloadState::Unknown("..".to_string()),
         };
-        Ok(serde_json::to_vec(&status)?)
+        Ok(types::ApiResult(None, status))
     }
 
     // For hpos ? or elsewhere ?
     // TODO: Talk through with Stefan
-    pub async fn send_workload_status(&self, msg: Arc<Message>) -> Result<Vec<u8>, anyhow::Error> {
+    pub async fn send_workload_status(&self, msg: Arc<Message>) -> Result<types::ApiResult, anyhow::Error> {
         log::debug!(
             "Incoming message for 'WORKLOAD.send_workload_status' : {:?}",
             msg
@@ -343,7 +343,10 @@ impl WorkloadApi {
         // Send updated status:
         // NB: This will send the update to both the requester (if one exists)
         // and will broadcast the update to for any `response_subject` address registred for the endpoint
-        Ok(serde_json::to_vec(&workload_state)?)
+        Ok(types::ApiResult(None, WorkloadStatus {
+            desired: WorkloadState::Unknown("todo: pass-in/access desired state".to_string()),
+            actual: workload_state
+        }))
     }
 
     /*******************************  Helper Fns  *********************************/
