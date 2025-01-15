@@ -163,6 +163,7 @@ pub enum WorkloadState {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorkloadStatus {
+    pub id: Option<String>, 
     pub desired: WorkloadState,
     pub actual: WorkloadState,
 }
