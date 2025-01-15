@@ -18,14 +18,14 @@ Endpoints & Managed Subjects:
 */
 
 pub mod types;
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use async_nats::Message;
-use mongodb::{options::UpdateModifications, Client as MongoDBClient};
+use mongodb::Client as MongoDBClient; // options::UpdateModifications, 
 use std::process::Command;
 use std::sync::Arc;
 use std::future::Future;
 use serde::{Deserialize, Serialize};
-use util_libs::{db::{mongodb::{IntoIndexes, MongoCollection, MongoDbAPI}, schemas::{self, Host, Workload, WorkloadState, WorkloadStatus}}, nats_js_client};
+use util_libs::{db::{mongodb::{IntoIndexes, MongoCollection}, schemas}, nats_js_client};
 
 pub const AUTH_SRV_NAME: &str = "AUTH";
 pub const AUTH_SRV_SUBJ: &str = "AUTH";
@@ -113,7 +113,7 @@ impl AuthApi {
     }
 
     /*******************************   For Host Agent   *********************************/
-     pub async fn save_hub_jwts(&self, msg: Arc<Message>) -> Result<types::ApiResult, anyhow::Error> {
+     pub async fn save_hub_jwts(&self, _msg: Arc<Message>) -> Result<types::ApiResult, anyhow::Error> {
         // receive_and_write_file();
 
         // Respond to endpoint request
@@ -131,11 +131,10 @@ impl AuthApi {
         Command::new("nsc")
             .arg("...")
             .output()
-            .expect("Failed to add user with provided keys")
-            .stdout;
+            .expect("Failed to add user with provided keys");
 
         // Output jwt
-        let user_jwt_path = Command::new("nsc")
+        let _user_jwt_path = Command::new("nsc")
             .arg("...")
             // .arg(format!("> {}", output_dir))
             .output()
@@ -158,7 +157,7 @@ impl AuthApi {
      pub async fn save_user_jwt(
         &self,
         msg: Arc<Message>,
-        output_dir: &str,
+        _output_dir: &str,
     ) -> Result<types::ApiResult, anyhow::Error> {
         log::warn!("INCOMING Message for 'AUTH.add' : {:?}", msg);
 

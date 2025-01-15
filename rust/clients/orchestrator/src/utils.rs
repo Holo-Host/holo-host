@@ -1,8 +1,7 @@
-use super::auth::controller::ORCHESTRATOR_AUTH_CLIENT_NAME;
+// use super::auth::controller::ORCHESTRATOR_AUTH_CLIENT_NAME;
 use anyhow::Result;
 use std::io::Read;
-use tokio::time::Duration;
-use util_libs::nats_js_client::{self, EventListener, JsClient, SendRequest};
+use util_libs::nats_js_client::{JsClient, SendRequest};
 
 const CHUNK_SIZE: usize = 1024; // 1 KB chunk size
 
@@ -35,7 +34,7 @@ pub async fn chunk_file_and_publish(
             msg_id: format!("hpos_init_msg_id_{}", rand::random::<u8>()),
             data: chunk_data.into(),
         };
-        auth_client.publish(&send_user_jwt_publish_options).await;
+        let _ = auth_client.publish(&send_user_jwt_publish_options).await;
         chunk_id += 1;
     }
 
@@ -45,7 +44,7 @@ pub async fn chunk_file_and_publish(
         msg_id: format!("hpos_init_msg_id_{}", rand::random::<u8>()),
         data: "EOF".into(),
     };
-    auth_client.publish(&send_user_jwt_publish_options);
+    let _ = auth_client.publish(&send_user_jwt_publish_options);
 
     Ok(())
 }

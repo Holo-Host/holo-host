@@ -89,7 +89,7 @@ pub async fn run() -> Result<(), async_nats::Error> {
 
     let resolver_path = utils::get_resolver_path();
 
-    let auth_endpoint_subject = format!("AUTH.{}.file.transfer.JWT-User", "host_id_placeholder"); // endpoint_subject
+    let _auth_endpoint_subject = format!("AUTH.{}.file.transfer.JWT-User", "host_id_placeholder"); // endpoint_subject
  
     // Generate resolver file and create resolver file
     Command::new("nsc")

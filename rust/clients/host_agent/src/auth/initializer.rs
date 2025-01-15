@@ -24,8 +24,8 @@ use mongodb::{options::ClientOptions, Client as MongoDBClient};
 use std::{sync::Arc, time::Duration};
 use util_libs::{
     db::mongodb::get_mongodb_url,
-    js_stream_service::{JsServiceParamsPartial, JsStreamService},
-    nats_js_client::{self, EndpointType, EventListener, JsClient},
+    js_stream_service::JsServiceParamsPartial,
+    nats_js_client::{self, EndpointType},
 };
 
 pub const HOST_INIT_CLIENT_NAME: &str = "Host Auth";
@@ -165,16 +165,16 @@ pub async fn run() -> Result<String, async_nats::Error> {
         msg_id: format!("hpos_init_mid_{}", rand::random::<u8>()),
         data: b"Host Auth Connected!".to_vec(),
     };
-    host_auth_client.publish(&req_hub_files_options);
+    let _ = host_auth_client.publish(&req_hub_files_options).await?;
 
     // ...upon the reply to the above, do the following: publish user pubkey file
-    let send_user_pubkey_publish_options = nats_js_client::SendRequest {
+    let _send_user_pubkey_publish_options = nats_js_client::SendRequest {
         subject: format!("HPOS.init.{}", server_node_id),
         msg_id: format!("hpos_init_mid_{}", rand::random::<u8>()),
         data: b"Host Auth Connected!".to_vec(),
     };
     // host_auth_client.publish(send_user_pubkey_publish_options);
-    utils::chunk_file_and_publish(&host_auth_client.js, "subject", "file_path");
+    let _ = utils::chunk_file_and_publish(&host_auth_client.js, "subject", "file_path").await?;
 
     // 5. Generate user creds file
     let user_creds_path = utils::generate_creds_file();
