@@ -48,7 +48,7 @@ pub async fn run() -> Result<String, async_nats::Error> {
     };
 
     let initializer_client =
-        nats_js_client::DefaultJsClient::new(nats_js_client::NewDefaultJsClientParams {
+        nats_js_client::JsClient::new(nats_js_client::NewJsClientParams {
             nats_url,
             name: HOST_INIT_CLIENT_NAME.to_string(),
             inbox_prefix: HOST_INIT_CLIENT_INBOX_PREFIX.to_string(),

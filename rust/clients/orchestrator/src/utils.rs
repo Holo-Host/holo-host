@@ -2,7 +2,7 @@ use super::auth::controller::ORCHESTRATOR_AUTH_CLIENT_NAME;
 use anyhow::Result;
 use std::io::Read;
 use tokio::time::Duration;
-use util_libs::nats_js_client::{self, DefaultJsClient, EventListener, JsClient, PublishOptions};
+use util_libs::nats_js_client::{self, EventListener, JsClient, SendRequest};
 
 const CHUNK_SIZE: usize = 1024; // 1 KB chunk size
 
@@ -15,7 +15,7 @@ pub fn get_resolver_path() -> String {
 }
 
 pub async fn chunk_file_and_publish(
-    auth_client: &DefaultJsClient,
+    auth_client: &JsClient,
     subject: &str,
     host_id: &str,
 ) -> Result<()> {
@@ -30,7 +30,7 @@ pub async fn chunk_file_and_publish(
         }
         let chunk_data = &buffer[..bytes_read];
 
-        let send_user_jwt_publish_options = PublishOptions {
+        let send_user_jwt_publish_options = SendRequest {
             subject: subject.to_string(),
             msg_id: format!("hpos_init_msg_id_{}", rand::random::<u8>()),
             data: chunk_data.into(),
@@ -40,7 +40,7 @@ pub async fn chunk_file_and_publish(
     }
 
     // Send an EOF marker
-    let send_user_jwt_publish_options = PublishOptions {
+    let send_user_jwt_publish_options = SendRequest {
         subject: subject.to_string(),
         msg_id: format!("hpos_init_msg_id_{}", rand::random::<u8>()),
         data: "EOF".into(),

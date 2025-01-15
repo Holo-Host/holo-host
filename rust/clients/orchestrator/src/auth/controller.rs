@@ -7,7 +7,7 @@ use std::process::Command;
 use util_libs::{
     db::mongodb::get_mongodb_url,
     js_stream_service::JsStreamService,
-    nats_js_client::{self, EndpointType, JsClient},
+    nats_js_client::{self, EndpointType, JsClient, NewJsClientParams},
 };
 
 pub const ORCHESTRATOR_AUTH_CLIENT_NAME: &str = "Orchestrator Auth Agent";
@@ -20,7 +20,7 @@ pub async fn run() -> Result<(), async_nats::Error> {
     let event_listeners = nats_js_client::get_event_listeners();
 
     let orchestrator_auth_client =
-        nats_js_client::DefaultJsClient::new(nats_js_client::NewDefaultJsClientParams {
+        JsClient::new(NewJsClientParams {
             nats_url,
             name: ORCHESTRATOR_AUTH_CLIENT_NAME.to_string(),
             inbox_prefix: ORCHESTRATOR_AUTH_CLIENT_INBOX_PREFIX.to_string(),
