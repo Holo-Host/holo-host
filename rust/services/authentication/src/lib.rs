@@ -17,14 +17,16 @@ Endpoints & Managed Subjects:
 
 */
 
-use anyhow::Result;
+pub mod types;
+use anyhow::{anyhow, Result};
 use async_nats::Message;
-use mongodb::Client as MongoDBClient;
+use mongodb::{options::UpdateModifications, Client as MongoDBClient};
 use std::process::Command;
 use std::sync::Arc;
-use util_libs::db::{mongodb::MongoCollection, schemas};
+use std::future::Future;
+use serde::{Deserialize, Serialize};
+use util_libs::{db::{mongodb::{IntoIndexes, MongoCollection, MongoDbAPI}, schemas::{self, Host, Workload, WorkloadState, WorkloadStatus}}, nats_js_client};
 
-pub const AUTH_SRV_OWNER_NAME: &str = "AUTH_OWNER";
 pub const AUTH_SRV_NAME: &str = "AUTH";
 pub const AUTH_SRV_SUBJ: &str = "AUTH";
 pub const AUTH_SRV_VERSION: &str = "0.0.1";
@@ -40,42 +42,34 @@ pub struct AuthApi {
 
 impl AuthApi {
     pub async fn new(client: &MongoDBClient) -> Result<Self> {
-        // Create a typed collection for User
-        let user_api: MongoCollection<schemas::User> = MongoCollection::<schemas::User>::new(
-            client,
-            schemas::DATABASE_NAME,
-            schemas::HOST_COLLECTION_NAME,
-        )
-        .await?;
-
-        // Create a typed collection for Hoster
-        let hoster_api = MongoCollection::<schemas::Hoster>::new(
-            &client,
-            schemas::DATABASE_NAME,
-            schemas::HOST_COLLECTION_NAME,
-        )
-        .await?;
-
-        // Create a typed collection for Host
-        let host_api = MongoCollection::<schemas::Host>::new(
-            &client,
-            schemas::DATABASE_NAME,
-            schemas::HOST_COLLECTION_NAME,
-        )
-        .await?;
-
         Ok(Self {
-            user_collection: user_api,
-            hoster_collection: hoster_api,
-            host_collection: host_api,
+            user_collection: Self::init_collection(client, schemas::USER_COLLECTION_NAME).await?,
+            hoster_collection: Self::init_collection(client, schemas::HOSTER_COLLECTION_NAME).await?,
+            host_collection: Self::init_collection(client, schemas::HOST_COLLECTION_NAME).await?,
         })
     }
 
-    // For orchestrator
+
+    pub fn call<F, Fut>(
+        &self,
+        handler: F,
+    ) -> nats_js_client::AsyncEndpointHandler<types::ApiResult>
+    where
+        F: Fn(AuthApi, Arc<Message>) -> Fut + Send + Sync + 'static,
+        Fut: Future<Output = Result<types::ApiResult, anyhow::Error>> + Send + 'static,
+    {
+        let api = self.to_owned(); 
+        Arc::new(move |msg: Arc<Message>| -> nats_js_client::JsServiceResponse<types::ApiResult> {
+            let api_clone = api.clone();
+            Box::pin(handler(api_clone, msg))
+        })
+    }
+    
+    /*******************************  For Orchestrator   *********************************/
     pub async fn receive_handshake_request(
         &self,
         msg: Arc<Message>,
-    ) -> Result<Vec<u8>, anyhow::Error> {
+    ) -> Result<types::ApiResult, anyhow::Error> {
         // 1. Verify expected data was received
         if msg.headers.is_none() {
             log::error!(
@@ -108,12 +102,18 @@ impl AuthApi {
         // let hub_operator_account = chunk_and_publish().await; // returns to the `save_hub_files` subject
         // let hub_sys_account = chunk_and_publish().await; // returns to the `save_hub_files` subject
 
-        let response = serde_json::to_vec(&"OK")?;
-        Ok(response)
+        Ok(types::ApiResult {
+            status: types::AuthStatus { 
+                host_id: "host_id_placeholder".to_string(),
+                status: types::AuthState::Requested
+            },
+            result: serde_json::to_vec(&"OK")?,
+            maybe_response_tags: None
+        })
     }
 
-    // For hpos
-    pub async fn save_hub_jwts(&self, msg: Arc<Message>) -> Result<Vec<u8>, anyhow::Error> {
+    /*******************************   For Host Agent   *********************************/
+     pub async fn save_hub_jwts(&self, msg: Arc<Message>) -> Result<types::ApiResult, anyhow::Error> {
         // receive_and_write_file();
 
         // Respond to endpoint request
@@ -123,8 +123,8 @@ impl AuthApi {
         todo!();
     }
 
-    // For orchestrator
-    pub async fn add_user_pubkey(&self, msg: Arc<Message>) -> Result<Vec<u8>, anyhow::Error> {
+    /*******************************  For Orchestrator   *********************************/
+    pub async fn add_user_pubkey(&self, msg: Arc<Message>) -> Result<types::ApiResult, anyhow::Error> {
         log::warn!("INCOMING Message for 'AUTH.add' : {:?}", msg);
 
         // Add user with Keys and create jwt
@@ -144,24 +144,49 @@ impl AuthApi {
 
         // 2. Respond to endpoint request
         // let resposne = user_jwt_path;
-        let response = b"Hello, NATS!".to_vec();
-        Ok(response)
+        Ok(types::ApiResult {
+            status: types::AuthStatus { 
+                host_id: "host_id_placeholder".to_string(),
+                status: types::AuthState::ValidatedAgent
+            },
+            result: b"user_jwt_path_placeholder".to_vec(),
+            maybe_response_tags: None
+        })
     }
 
-    // For hpos
-    pub async fn save_user_jwt(
+    /*******************************   For Host Agent   *********************************/
+     pub async fn save_user_jwt(
         &self,
         msg: Arc<Message>,
         output_dir: &str,
-    ) -> Result<Vec<u8>, anyhow::Error> {
+    ) -> Result<types::ApiResult, anyhow::Error> {
         log::warn!("INCOMING Message for 'AUTH.add' : {:?}", msg);
 
         // utils::receive_and_write_file(msg, output_dir, file_name).await?;
 
         // 2. Respond to endpoint request
-        let response = b"Hello, NATS!".to_vec();
-        Ok(response)
+        Ok(types::ApiResult {
+            status: types::AuthStatus { 
+                host_id: "host_id_placeholder".to_string(),
+                status: types::AuthState::Authenticated
+            },
+            result: b"Hello, NATS!".to_vec(),
+            maybe_response_tags: None
+        })
     }
+
+    /*******************************  Helper Fns  *********************************/
+    // Helper function to initialize mongodb collections
+    async fn init_collection<T>(
+        client: &MongoDBClient,
+        collection_name: &str,
+    ) -> Result<MongoCollection<T>>
+    where
+        T: Serialize + for<'de> Deserialize<'de> + Unpin + Send + Sync + Default + IntoIndexes,
+    {
+        Ok(MongoCollection::<T>::new(client, schemas::DATABASE_NAME, collection_name).await?)
+    }
+
 }
 
 // In orchestrator

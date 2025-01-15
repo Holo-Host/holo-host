@@ -13,7 +13,6 @@ Endpoints & Managed Subjects:
 */
 
 pub mod types;
-
 use anyhow::{anyhow, Result};
 use async_nats::Message;
 use mongodb::{options::UpdateModifications, Client as MongoDBClient};

@@ -10,13 +10,13 @@ use anyhow::{anyhow, Result};
 use std::{sync::Arc, time::Duration};
 use async_nats::Message;
 use mongodb::{options::ClientOptions, Client as MongoDBClient};
+use workload::{
+    WorkloadApi, WORKLOAD_SRV_DESC, WORKLOAD_SRV_NAME, WORKLOAD_SRV_SUBJ, WORKLOAD_SRV_VERSION,
+};
 use util_libs::{
     db::mongodb::get_mongodb_url,
     js_stream_service::JsServiceParamsPartial,
     nats_js_client::{self, EndpointType, JsClient, NewJsClientParams},
-};
-use workload::{
-    WorkloadApi, WORKLOAD_SRV_DESC, WORKLOAD_SRV_NAME, WORKLOAD_SRV_SUBJ, WORKLOAD_SRV_VERSION,
 };
 
 const ORCHESTRATOR_WORKLOAD_CLIENT_NAME: &str = "Orchestrator Workload Agent";
@@ -60,12 +60,12 @@ pub async fn run() -> Result<(), async_nats::Error> {
 
     // ==================== API ENDPOINTS ====================
     // Register Workload Streams for Orchestrator to consume and proceess
-    // NB: Subjects are published by external Developer, the Nats-DB-Connector, or the Host Agent
+    // NB: These subjects below are published by external Developer, the Nats-DB-Connector, or the Host Agent
     let workload_service = orchestrator_workload_client
         .get_js_service(WORKLOAD_SRV_NAME.to_string())
         .await
         .ok_or(anyhow!(
-            "Failed to locate workload service. Unable to spin up Host Agent."
+            "Failed to locate Workload Service. Unable to spin up Orchestrator Workload Client."
         ))?;
 
     // Published by Developer

@@ -16,23 +16,25 @@
 4. instantiate the leaf server via the leaf-server struct/service
 */
 
-use super::endpoints;
-use crate::utils;
+use super::utils;
 use anyhow::{anyhow, Result};
+use async_nats::Message;
 use authentication::{AuthApi, AUTH_SRV_DESC, AUTH_SRV_NAME, AUTH_SRV_SUBJ, AUTH_SRV_VERSION};
 use mongodb::{options::ClientOptions, Client as MongoDBClient};
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 use util_libs::{
     db::mongodb::get_mongodb_url,
     js_stream_service::{JsServiceParamsPartial, JsStreamService},
     nats_js_client::{self, EndpointType, EventListener, JsClient},
 };
 
-pub const HOST_INIT_CLIENT_NAME: &str = "Host Initializer";
-pub const HOST_INIT_CLIENT_INBOX_PREFIX: &str = "_host_init_inbox";
+pub const HOST_INIT_CLIENT_NAME: &str = "Host Auth";
+pub const HOST_INIT_CLIENT_INBOX_PREFIX: &str = "_host_auth_inbox";
+
+const USER_CREDENTIALS_PATH: &str = "./user_creds";
 
 pub async fn run() -> Result<String, async_nats::Error> {
-    log::info!("Host Initializer Client: Connecting to server...");
+    log::info!("Host Auth Client: Connecting to server...");
 
     // ==================== NATS Setup ====================
     // Connect to Nats server
@@ -47,13 +49,13 @@ pub async fn run() -> Result<String, async_nats::Error> {
         service_subject: AUTH_SRV_SUBJ.to_string(),
     };
 
-    let initializer_client =
+    let host_auth_client =
         nats_js_client::JsClient::new(nats_js_client::NewJsClientParams {
             nats_url,
             name: HOST_INIT_CLIENT_NAME.to_string(),
             inbox_prefix: HOST_INIT_CLIENT_INBOX_PREFIX.to_string(),
-            credentials_path: None,
             service_params: vec![auth_stream_service_params],
+            credentials_path: None,
             opts: vec![nats_js_client::with_event_listeners(event_listeners)],
             ping_interval: Some(Duration::from_secs(10)),
             request_timeout: Some(Duration::from_secs(5)),
@@ -61,7 +63,6 @@ pub async fn run() -> Result<String, async_nats::Error> {
         .await?;
 
     // ==================== DB Setup ====================
-
     // Create a new MongoDB Client and connect it to the cluster
     let mongo_uri = get_mongodb_url();
     let client_options = ClientOptions::parse(mongo_uri).await?;
@@ -73,39 +74,39 @@ pub async fn run() -> Result<String, async_nats::Error> {
     // ==================== Report Host to Orchestator ====================
 
     // Discover the server Node ID via INFO response
-    let server_node_id = initializer_client.get_server_info().server_id;
+    let server_node_id = host_auth_client.get_server_info().server_id;
     log::trace!(
-        "Host Initializer Client: Retrieved Node ID: {}",
+        "Host Auth Client: Retrieved Node ID: {}",
         server_node_id
     );
 
     // Publish a message with the Node ID as part of the subject
-    let publish_options = nats_js_client::PublishOptions {
+    let publish_options = nats_js_client::SendRequest {
         subject: format!("HPOS.init.{}", server_node_id),
         msg_id: format!("hpos_init_mid_{}", rand::random::<u8>()),
-        data: b"Host Initializer Connected!".to_vec(),
+        data: b"Host Auth Connected!".to_vec(),
     };
 
-    match initializer_client
-        .publish_with_retry(&publish_options, 3)
+    match host_auth_client
+        .publish(&publish_options)
         .await
     {
         Ok(_r) => {
-            log::trace!("Host Initializer Client: Node ID published.");
+            log::trace!("Host Auth Client: Node ID published.");
         }
         Err(_e) => {}
     };
 
     // ==================== API ENDPOINTS ====================
-    // Register Workload Streams for Host Agent to consume
-    // (subjects should be published by orchestrator or nats-db-connector)
+    // Register Auth Streams for Orchestrator to consume and proceess
+    // NB: The subjects below are published by the Orchestrator
 
     // Call auth service and perform auth handshake
-    let auth_service = initializer_client
+    let auth_service = host_auth_client
         .get_js_service(AUTH_SRV_NAME.to_string())
         .await
         .ok_or(anyhow!(
-            "Failed to locate workload service. Unable to spin up Host Agent."
+            "Failed to locate Auth Service. Unable to spin up Orchestrator Auth Client."
         ))?;
 
     // i. register `save_hub_auth` consumer
@@ -121,22 +122,30 @@ pub async fn run() -> Result<String, async_nats::Error> {
     // to add_user_pubkey
     // then await the reply (which should include the user jwt)
 
-    // register save service for hub auth files (operator and sys)
+    // Register save service for hub auth files (operator and sys)
     auth_service
-        .add_local_consumer(
+        .add_local_consumer::<authentication::types::ApiResult>(
             "save_hub_auth",
             "save_hub_auth",
-            nats_js_client::EndpointType::Async(endpoints::save_hub_jwts(&auth_api).await),
+            EndpointType::Async(auth_api.call(|api: AuthApi, msg: Arc<Message>| {
+                async move {
+                    api.save_hub_jwts(msg).await
+                }
+            })),
             None,
         )
         .await?;
-
-    // register save service for signed user jwt file
+        
+    // Register save service for signed user jwt file
     auth_service
-        .add_local_consumer(
-            "save_user_file",
+       .add_local_consumer::<authentication::types::ApiResult>(
+            "save_user_jwt",
             "end_hub_handshake",
-            EndpointType::Async(endpoints::save_user_jwt(&auth_api).await),
+            EndpointType::Async(auth_api.call(|api: AuthApi, msg: Arc<Message>| {
+                async move {
+                    api.save_user_jwt(msg, USER_CREDENTIALS_PATH).await
+                }
+            })),
             None,
         )
         .await?;
@@ -151,27 +160,27 @@ pub async fn run() -> Result<String, async_nats::Error> {
     //         println!("Failed to get a response: {}", e);
     //     }
     // }
-    let req_hub_files_options = nats_js_client::PublishOptions {
+    let req_hub_files_options = nats_js_client::SendRequest {
         subject: format!("HPOS.init.{}", server_node_id),
         msg_id: format!("hpos_init_mid_{}", rand::random::<u8>()),
-        data: b"Host Initializer Connected!".to_vec(),
+        data: b"Host Auth Connected!".to_vec(),
     };
-    initializer_client.publish(&req_hub_files_options);
+    host_auth_client.publish(&req_hub_files_options);
 
     // ...upon the reply to the above, do the following: publish user pubkey file
-    let send_user_pubkey_publish_options = nats_js_client::PublishOptions {
+    let send_user_pubkey_publish_options = nats_js_client::SendRequest {
         subject: format!("HPOS.init.{}", server_node_id),
         msg_id: format!("hpos_init_mid_{}", rand::random::<u8>()),
-        data: b"Host Initializer Connected!".to_vec(),
+        data: b"Host Auth Connected!".to_vec(),
     };
-    // initializer_client.publish(send_user_pubkey_publish_options);
-    utils::chunk_file_and_publish(&initializer_client.js, "subject", "file_path");
+    // host_auth_client.publish(send_user_pubkey_publish_options);
+    utils::chunk_file_and_publish(&host_auth_client.js, "subject", "file_path");
 
     // 5. Generate user creds file
     let user_creds_path = utils::generate_creds_file();
 
     // 6. Close and drain internal buffer before exiting to make sure all messages are sent
-    initializer_client.close().await?;
+    host_auth_client.close().await?;
 
     Ok(user_creds_path)
 }

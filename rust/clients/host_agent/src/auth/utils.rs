@@ -1,4 +1,4 @@
-use super::auth::initializer::HOST_INIT_CLIENT_NAME;
+use super::initializer::HOST_INIT_CLIENT_NAME;
 use anyhow::Result;
 use async_nats::jetstream::Context;
 use std::process::Command;
