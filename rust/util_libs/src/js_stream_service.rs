@@ -1,38 +1,78 @@
 use super::nats_js_client::EndpointType;
+
 use anyhow::{anyhow, Result};
+use std::any::Any;
+use async_trait::async_trait;
 use async_nats::jetstream::consumer::{self, AckPolicy, PullConsumer};
 use async_nats::jetstream::stream::{self, Info, Stream};
 use async_nats::jetstream::Context;
 use futures::StreamExt;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-impl std::fmt::Debug for ConsumerExt {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let handler_placeholder = match &self.handler {
-            EndpointType::Async(_) => "EndpointType::Async(<function>)",
-            EndpointType::Sync(_) => "EndpointType::Sync(<function>)",
-        };
+type ResponseSubjectGenerator = Arc<dyn Fn(Option<String>) -> String + Send + Sync>;
 
-        f.debug_struct("ConsumerExt")
-            .field("name", &self.name)
-            .field("consumer", &self.consumer)
-            .field("handler", &format_args!("{}", handler_placeholder))
-            .field("response_subject", &self.response_subject)
-            .finish()
+pub trait CreateTag: Send + Sync {
+    fn get_tag(&self) -> Option<String>;
+}
+
+pub trait EndpointTraits:  Serialize + for<'de> Deserialize<'de> + Send + Sync + Clone + Debug + CreateTag + 'static {}
+
+#[async_trait]
+pub trait ConsumerExtTrait: Debug {
+    fn get_name(&self) -> &str;
+    fn get_consumer(&self) -> PullConsumer;
+    fn get_endpoint(&self) -> Box<dyn Any + Send + Sync>;
+    fn get_response(&self) -> Option<ResponseSubjectGenerator>;
+}
+
+impl<T> TryFrom<Box<dyn Any + Send + Sync>> for EndpointType<T>
+where
+    T: EndpointTraits,
+{
+    type Error = anyhow::Error;
+
+    fn try_from(value: Box<dyn Any + Send + Sync>) -> Result<Self, Self::Error> {
+        if let Ok(endpoint) = value.downcast::<EndpointType<T>>() {
+            Ok(*endpoint)
+        } else {
+            Err(anyhow::anyhow!("Failed to downcast to EndpointType"))
+        }
     }
 }
 
-// This setup expects that each consumer only listens to *one* subject on the stream
-#[derive(Clone)]
-pub struct ConsumerExt {
+#[derive(Clone, derive_more::Debug)]
+pub struct ConsumerExt<T> 
+where
+    T: EndpointTraits,
+{
     name: String,
     consumer: PullConsumer,
-    handler: EndpointType,
-    response_subject: Option<String>,
+    handler: EndpointType<T>,
+    #[debug(skip)]
+    response_subject_fn: Option<ResponseSubjectGenerator>
+}
+
+#[async_trait]
+impl<T> ConsumerExtTrait for ConsumerExt<T> 
+where
+    T: EndpointTraits,
+{
+    fn get_name(&self) -> &str {
+        &self.name
+    }
+    fn get_consumer(&self) -> PullConsumer {
+        self.consumer.clone()
+    }
+    fn get_endpoint(&self) -> Box<dyn Any + Send + Sync> {
+        Box::new(self.handler.clone())
+    }
+    fn get_response(&self) -> Option<ResponseSubjectGenerator> {
+        self.response_subject_fn.clone()
+    }
 }
 
 #[allow(dead_code)]
@@ -52,6 +92,8 @@ pub struct JsServiceParamsPartial {
 }
 
 /// Microservice for Jetstream Streams
+// This setup creates only one subject for the stream (eg: "WORKLOAD.>") and sets up
+// all consumers of the stream to listen to stream subjects beginning with that subject (eg: "WORKLOAD.start")
 #[derive(Clone, Debug)]
 pub struct JsStreamService {
     name: String,
@@ -60,19 +102,22 @@ pub struct JsStreamService {
     service_log_prefix: String,
     js_context: Arc<RwLock<Context>>,
     stream: Arc<RwLock<Stream<Info>>>,
-    local_consumers: Arc<RwLock<HashMap<String, ConsumerExt>>>,
+    local_consumers: Arc<RwLock<HashMap<String, Arc<dyn ConsumerExtTrait>>>>,
 }
 
 impl JsStreamService {
     /// Create a new MicroService instance
-    // For when the consumer service also creates the stream
+    // NB: The service consumer creates the stream
     pub async fn new(
         context: Context,
         name: &str,
         description: &str,
         version: &str,
         service_subject: &str,
-    ) -> Result<Self, async_nats::Error> {
+    ) -> Result<Self, async_nats::Error> 
+    where
+        Self: 'static
+    {
         let stream = context
             .get_or_create_stream(&stream::Config {
                 name: name.to_string(),
@@ -96,43 +141,6 @@ impl JsStreamService {
         })
     }
 
-    // For then the consumer service doesn't also create the stream
-    pub async fn with_existing_stream(
-        context: Context,
-        version: &str,
-        stream_name: &str,
-    ) -> Result<Self, async_nats::Error> {
-        let stream = context.get_stream(stream_name).await?;
-        let stream_config = stream.get_info().await?.config;
-        let service_log_prefix = format!("LOG::{}:: : ", stream_config.name);
-        let service_subject = stream_config.subjects[0].split(">").collect::<Vec<&str>>()[0];
-
-        Ok(JsStreamService {
-            name: stream_config.name.to_string(),
-            version: version.to_string(),
-            service_subject: service_subject.to_string(),
-            service_log_prefix,
-            js_context: Arc::new(RwLock::new(context)),
-            stream: Arc::new(RwLock::new(stream)),
-            local_consumers: Arc::new(RwLock::new(HashMap::new())),
-        })
-    }
-
-    pub async fn get_consumer_info(&self, consumer_name: &str) -> Result<Option<consumer::Info>> {
-        if let Some(consumer_ext) = self
-            .to_owned()
-            .local_consumers
-            .write()
-            .await
-            .get_mut(&consumer_name.to_string())
-        {
-            let info = consumer_ext.consumer.info().await?;
-            Ok(Some(info.to_owned()))
-        } else {
-            Ok(None)
-        }
-    }
-
     pub fn get_service_info(&self) -> JsStreamServiceInfo {
         JsStreamServiceInfo {
             name: self.name.as_ref(),
@@ -141,13 +149,55 @@ impl JsStreamService {
         }
     }
 
-    pub async fn add_local_consumer(
+    pub async fn get_consumer_stream_info(&self, consumer_name: &str) -> Result<Option<consumer::Info>> {
+        if let Some(consumer_ext) = self
+            .to_owned()
+            .local_consumers
+            .write()
+            .await
+            .get_mut(&consumer_name.to_string())
+        {
+            let mut consumer = consumer_ext.get_consumer();
+            let info = consumer.info().await?;
+            Ok(Some(info.to_owned()))
+        } else {
+            Ok(None)
+        }
+    }
+
+    pub async fn get_consumer<T>(&self, consumer_name: &str) -> Result<ConsumerExt<T>>
+    where
+        T: EndpointTraits,
+    {
+        let consumer_ext = self
+            .local_consumers
+            .read()
+            .await
+            .get(&consumer_name.to_string())
+            .ok_or(anyhow!("Error"))?
+            .to_owned();
+
+        let endpoint_trait_obj = consumer_ext.get_endpoint();
+        let handler: EndpointType<T> = EndpointType::try_from(endpoint_trait_obj)?;
+
+        Ok(ConsumerExt {
+            name: consumer_ext.get_name().to_string(),
+            consumer:consumer_ext.get_consumer(),
+            handler,
+            response_subject_fn: consumer_ext.get_response()
+        })
+    }
+
+    pub async fn add_local_consumer<T>(
         &self,
         consumer_name: &str,
         endpoint_subject: &str,
-        endpoint_type: EndpointType,
-        response_subject: Option<String>,
-    ) -> Result<ConsumerExt, async_nats::Error> {
+        endpoint_type: EndpointType<T>,
+        response_subject_fn: Option<ResponseSubjectGenerator>,
+    ) -> Result<ConsumerExt<T>, async_nats::Error>  
+    where
+        T: EndpointTraits,
+    {
         let full_subject = format!("{}.{}", self.service_subject, endpoint_subject);
 
         // Register JS Subject Consumer
@@ -169,16 +219,16 @@ impl JsStreamService {
             name: consumer_name.to_string(),
             consumer,
             handler: endpoint_type,
-            response_subject,
+            response_subject_fn,
         };
 
         self.local_consumers
             .write()
             .await
-            .insert(consumer_name.to_string(), consumer_with_handler);
+            .insert(consumer_name.to_string(), Arc::new(consumer_with_handler));
 
-        let endpoint_consumer: ConsumerExt = self.get_consumer(consumer_name).await?;
-        self.spawn_consumer_handler(consumer_name).await?;
+        let endpoint_consumer: ConsumerExt<T> = self.get_consumer(consumer_name).await?;
+        self.spawn_consumer_handler::<T>(consumer_name).await?;
 
         log::debug!(
             "{}Added the {} local consumer",
@@ -189,10 +239,13 @@ impl JsStreamService {
         Ok(endpoint_consumer)
     }
 
-    pub async fn spawn_consumer_handler(
+    pub async fn spawn_consumer_handler<T>(
         &self,
         consumer_name: &str,
-    ) -> Result<(), async_nats::Error> {
+    ) -> Result<(), async_nats::Error> 
+    where
+        T: EndpointTraits,
+    {
         let service_log_prefix = self.service_log_prefix.clone();
         let service_name = self.name.clone();
         let service_subject = self.service_subject.clone();
@@ -205,19 +258,19 @@ impl JsStreamService {
             .await
             .get_mut(&consumer_name.to_string())
         {
-            let mut consumer_details = consumer_ext.to_owned();
-            let endpoint_response_subject = consumer_details.response_subject.clone();
-            let endpoint_name = consumer_details.name.clone();
-            let endpoint_subject = consumer_details
-                .consumer
+            let consumer_details = consumer_ext.to_owned();
+            let endpoint_name = consumer_details.get_name().to_owned();
+            let endpoint_handler: EndpointType<T> = EndpointType::try_from(consumer_details.get_endpoint())?;
+            let endpoint_response_subject = consumer_details.get_response();
+            let mut consumer = consumer_details.get_consumer();
+            let endpoint_subject = consumer
                 .info()
                 .await?
                 .config
                 .filter_subject
                 .clone();
 
-            let mut messages = consumer_details
-                .consumer
+            let mut messages = consumer
                 .stream()
                 .heartbeat(std::time::Duration::from_secs(10))
                 .messages()
@@ -234,16 +287,23 @@ impl JsStreamService {
                         service_name
                     );
 
-                    let result = match consumer_details.handler.to_owned() {
-                        EndpointType::Sync(handler) => handler(&js_msg.message),
-                        EndpointType::Async(handler) => {
+                    let result = match endpoint_handler {
+                        EndpointType::Sync(ref handler) => handler(&js_msg.message),
+                        EndpointType::Async(ref handler) => {
                             handler(Arc::new(js_msg.clone().message)).await
                         }
                     };
 
-                    let response_bytes: bytes::Bytes = match result {
-                        Ok(response) => response.into(),
-                        Err(err) => err.to_string().into(),
+                    let (response_bytes, maybe_subject_tag) = match result {
+                        Ok(r) => {
+                            let bytes: bytes::Bytes = match serde_json::to_vec(&r) {
+                                Ok(r) => r.into(),
+                                Err(e) => e.to_string().into()
+                            };
+                            let maybe_subject_tag = r.get_tag();
+                            (bytes, maybe_subject_tag)
+                        },
+                        Err(err) => (err.to_string().into(), None),
                     };
 
                     // Returns a response if a reply address exists.
@@ -274,13 +334,14 @@ impl JsStreamService {
                     }
 
                     // Publish a response message if an endpoint response subject exists for handler
-                    if let Some(response_subject) = endpoint_response_subject.as_ref() {
+                    if let Some(response_subject_fn) = endpoint_response_subject.as_ref() {
+                        let response_subject = response_subject_fn(maybe_subject_tag);
                         if let Err(err) = service_context
                             .read()
                             .await
                             .publish(
                                 format!("{}.{}", service_subject, response_subject),
-                                response_bytes,
+                                response_bytes.clone(),
                             )
                             .await
                         {
@@ -294,7 +355,6 @@ impl JsStreamService {
                                 err
                             );
                         };
-
                         // todo: discuss how we want to handle error
                     }
 
@@ -327,15 +387,6 @@ impl JsStreamService {
         Ok(())
     }
 
-    async fn get_consumer(&self, consumer_name: &str) -> Result<ConsumerExt> {
-        Ok(self
-            .local_consumers
-            .read()
-            .await
-            .get(&consumer_name.to_string())
-            .ok_or(anyhow!("Error"))?
-            .to_owned())
-    }
 }
 
 #[cfg(feature = "tests_integration_nats")]
