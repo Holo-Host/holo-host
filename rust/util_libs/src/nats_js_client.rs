@@ -11,8 +11,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-pub type ClientOption = Box<dyn Fn(&mut JsClient)>;
-pub type EventListener = Box<dyn Fn(&mut JsClient)>;
+pub type EventListener = Box<dyn Fn(&mut JsClient) + Send + Sync>;
 pub type EventHandler = Pin<Box<dyn Fn(&str, &str, Duration) + Send + Sync>>;
 pub type JsServiceResponse<T> = Pin<Box<dyn Future<Output = Result<T, anyhow::Error>> + Send>>;
 pub type EndpointHandler<T> = Arc<dyn Fn(&Message) -> Result<T, anyhow::Error> + Send + Sync>;
@@ -93,7 +92,7 @@ pub struct NewJsClientParams {
     #[serde(default)]
     pub service_params: Vec<JsServiceParamsPartial>,
     #[serde(skip_deserializing)]
-    pub opts: Vec<ClientOption>, // NB: These opts should not be required for client instantiation
+    pub opts: Vec<EventListener>, // NB: These opts should not be required for client instantiation
     #[serde(default)]
     pub credentials_path: Option<String>,
     #[serde(default)]
@@ -250,7 +249,7 @@ impl JsClient {
 }
 
 // Client Options:
-pub fn with_event_listeners(listeners: Vec<EventListener>) -> ClientOption {
+pub fn with_event_listeners(listeners: Vec<EventListener>) -> EventListener {
     Box::new(move |c: &mut JsClient | {
         for listener in &listeners {
             listener(c);
