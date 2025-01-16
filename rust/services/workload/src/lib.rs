@@ -22,7 +22,7 @@ use util_libs::{db::{mongodb::{IntoIndexes, MongoCollection, MongoDbAPI}, schema
 use rand::seq::SliceRandom;
 use std::future::Future;
 use serde::{Deserialize, Serialize};
-use bson::{self, doc, to_document};
+use bson::{self, doc, to_document, DateTime};
 
 pub const WORKLOAD_SRV_NAME: &str = "WORKLOAD";
 pub const WORKLOAD_SRV_SUBJ: &str = "WORKLOAD";
@@ -35,6 +35,7 @@ pub struct WorkloadApi {
     pub workload_collection: MongoCollection<schemas::Workload>,
     pub host_collection: MongoCollection<schemas::Host>,
     pub user_collection: MongoCollection<schemas::User>,
+    pub developer_collection: MongoCollection<schemas::Developer>,
 }
 
 impl WorkloadApi {
@@ -43,6 +44,7 @@ impl WorkloadApi {
             workload_collection: Self::init_collection(client, schemas::WORKLOAD_COLLECTION_NAME).await?,
             host_collection: Self::init_collection(client, schemas::HOST_COLLECTION_NAME).await?,
             user_collection: Self::init_collection(client, schemas::USER_COLLECTION_NAME).await?,
+            developer_collection: Self::init_collection(client, schemas::DEVELOPER_COLLECTION_NAME).await?,
         })
     }
 
@@ -98,7 +100,7 @@ impl WorkloadApi {
             |workload: schemas::Workload| async move {
                 let workload_query = doc! { "_id":  workload._id.clone() };
                 let updated_workload = to_document(&workload)?;
-                self.workload_collection.update_one_within(workload_query, UpdateModifications::Document(updated_workload)).await?;
+                self.workload_collection.update_one_within(workload_query, UpdateModifications::Document(doc!{ "$set": updated_workload })).await?;
                 log::info!("Successfully updated workload. MongodDB Workload ID={:?}", workload._id);
                 Ok((
                     workload._id,
@@ -216,7 +218,10 @@ impl WorkloadApi {
             assigned_hosts: vec![host_id],
             ..workload.clone()
         })?;
-        let updated_workload_result = self.workload_collection.update_one_within(workload_query, UpdateModifications::Document(updated_workload)).await?;
+        let updated_workload_result = self.workload_collection.update_one_within(
+            workload_query,
+            UpdateModifications::Document(doc!{ "$set": updated_workload })
+        ).await?;
         log::info!(
             "Successfully added new workload into the Workload Collection. MongodDB Workload ID={:?}",
             updated_workload_result
@@ -228,7 +233,10 @@ impl WorkloadApi {
             assigned_workloads: vec![workload_id.clone()],
             ..host.to_owned()
         })?;
-        let updated_host_result = self.host_collection.update_one_within(host_query, UpdateModifications::Document(updated_host)).await?;
+        let updated_host_result = self.host_collection.update_one_within(
+            host_query,
+            UpdateModifications::Document(doc!{ "$set": updated_host })
+        ).await?;
         log::info!(
             "Successfully added new workload into the Workload Collection. MongodDB Host ID={:?}",
             updated_host_result
@@ -250,10 +258,47 @@ impl WorkloadApi {
         };
 
         let payload_buf = msg.payload.to_vec();
-        let workload: schemas::Workload = serde_json::from_slice(&payload_buf)?;
-        log::trace!("New workload to assign. Workload={:#?}", workload);
+        let mut workload: schemas::Workload = serde_json::from_slice(&payload_buf)?;
+        log::trace!("New workload to assign. Workload={:#?}", workload.clone());
 
-        // TODO: ...handle the use case for the update entry change stream 
+        // 1. fetch existing workload document
+        match self.workload_collection.get_one_from(doc! { "_id":  workload._id.clone() }).await?{
+            Some(workload_doc) => {
+                // 2. remove workload from hosts
+                self.host_collection.update_one_within(
+                    doc!{ "_id": { "$in": workload_doc.assigned_hosts } },
+                    UpdateModifications::Document(doc!{ "$pull": { "assigned_workloads": workload_doc._id.clone() } })
+                ).await?;
+                
+                // 3. remove workload from developers
+                self.developer_collection.update_one_within(
+                    doc!{ "_id": { "$in": workload_doc.assigned_developer } },
+                    UpdateModifications::Document(doc!{ "$pull": { "assigned_workloads": workload_doc._id.clone() } })
+                ).await?;
+            },
+            None => {
+                log::warn!("Workload not found. Unable to remove workload.");
+            }
+        }
+
+        // 4. add workload to hosts
+        self.host_collection.update_one_within(
+            doc!{ "_id": { "$in": workload.clone().assigned_hosts } },
+            UpdateModifications::Document(doc!{ "$push": { "assigned_workloads": workload._id.clone() } })
+        ).await?;
+        
+        // 5. add workload to developers
+        self.developer_collection.update_one_within(
+            doc!{ "_id": { "$in": workload.clone().assigned_developer } },
+            UpdateModifications::Document(doc!{ "$push": { "assigned_workloads": workload._id.clone() } })
+        ).await?;
+
+        workload.updated_at = Some(DateTime::from_chrono(chrono::Utc::now()));
+        let updated_workload_doc = to_document(&workload)?;
+        self.workload_collection.update_one_within(
+            doc! { "_id": workload._id },
+            UpdateModifications::Document(doc!{ "$set": updated_workload_doc }),
+        ).await?;
 
         Ok(serde_json::to_vec(&success_status)?)
     } 
@@ -273,23 +318,32 @@ impl WorkloadApi {
 
         // 1. fetch the workload document
         match self.workload_collection.get_one_from(doc! { "_id":  workload._id.clone() }).await?{
-            Some(workload) => {
-                // 2. update hosts
+            Some(workload_doc) => {
+                // 2. remove workload from hosts
                 self.host_collection.update_one_within(
-                    doc!{ "_id": { "$in": workload.assigned_hosts } },
-                    UpdateModifications::Document(doc!{ "$pull": { "assigned_workloads": workload._id.clone() } })
+                    doc!{ "_id": { "$in": workload_doc.assigned_hosts } },
+                    UpdateModifications::Document(doc!{ "$pull": { "assigned_workloads": workload_doc._id.clone() } })
                 ).await?;
-
-                // 4. mark workload as deleted
-                self.workload_collection.update_one_within(
-                    doc! { "_id":  workload._id.clone() },
-                    UpdateModifications::Document(doc!{ "$set": { "deleted": true } })
+                
+                // 3. remove workload from developers
+                self.developer_collection.update_one_within(
+                    doc!{ "_id": { "$in": workload_doc.assigned_developer } },
+                    UpdateModifications::Document(doc!{ "$pull": { "assigned_workloads": workload_doc._id.clone() } })
                 ).await?;
             },
             None => {
                 log::warn!("Workload not found. Unable to remove workload.");
             }
         }
+
+        // 4. mark workload as deleted
+        self.workload_collection.update_one_within(
+            doc! { "_id":  workload._id.clone() },
+            UpdateModifications::Document(doc!{ "$set": {
+                "deleted": true,
+                "deletedAt": DateTime::from_chrono(chrono::Utc::now())
+            }
+        })).await?;
         
         Ok(serde_json::to_vec(&success_status)?)
     }    
