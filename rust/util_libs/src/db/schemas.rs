@@ -1,7 +1,6 @@
 use super::mongodb::IntoIndexes;
 use anyhow::Result;
 use bson::{self, doc, DateTime, Document};
-use chrono::Duration;
 use mongodb::options::IndexOptions;
 use semver::{BuildMetadata, Prerelease};
 use serde::{Deserialize, Serialize};
