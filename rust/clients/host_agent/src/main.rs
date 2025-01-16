@@ -54,9 +54,10 @@ async fn main() -> Result<(), AgentCliError> {
 }
 
 async fn daemonize() -> Result<(), async_nats::Error> {
-    // let user_creds_path = auth::initializer::run().await?;
-    let user_creds_path = nats_js_client::get_nats_client_creds("HOLO", "HPOS", "hpos");
-    gen_leaf_server::run(&user_creds_path).await;
-    workload_manager::run(&user_creds_path).await?;
+    // let (host_pubkey, host_creds_path) = auth::initializer::run().await?;
+    let host_creds_path = nats_js_client::get_nats_client_creds("HOLO", "HPOS", "hpos");
+    let host_pubkey = "host_id_placeholder>";
+    gen_leaf_server::run(&host_creds_path).await;
+    workload_manager::run(host_pubkey, &host_creds_path).await?;
     Ok(())
 }

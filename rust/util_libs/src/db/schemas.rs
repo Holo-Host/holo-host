@@ -163,7 +163,7 @@ impl IntoIndexes for Host {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum WorkloadState {
     Reported,
-    Assigned,
+    Assigned, // String = host id
     Pending,
     Installed,
     Running,
@@ -175,6 +175,7 @@ pub enum WorkloadState {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorkloadStatus {
+    pub id: Option<String>, 
     pub desired: WorkloadState,
     pub actual: WorkloadState,
 }
