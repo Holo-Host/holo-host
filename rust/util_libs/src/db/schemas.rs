@@ -29,6 +29,12 @@ pub use String as MongoDbId;
 
 // ==================== User Schema ====================
 #[derive(Serialize, Deserialize, Clone, Debug)]
+pub enum UserPermission {
+    Admin
+}
+
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum Role {
     Developer(DeveloperJWT), // jwt string
     Host(HosterPubKey),      // host pubkey
@@ -44,9 +50,15 @@ pub struct RoleInfo {
 pub struct User {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub _id: Option<MongoDbId>,
-    pub email: String,
     pub jurisdiction: String,
-    pub roles: Vec<RoleInfo>,
+    pub permisions: Vec<UserPermission>,
+    pub deleted: bool,
+    pub deleted_at: Option<DateTime>,
+    pub updated_at: Option<DateTime>,
+    pub created_at: Option<DateTime>,
+
+    pub email: String, // we need to remove this from the collection (personal info)
+    pub roles: Vec<RoleInfo>, // I suggest we remove this. Use the mongodb query to map the role when we fetch the user data
 }
 
 impl IntoIndexes for User {
@@ -82,7 +94,7 @@ pub struct Developer {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub _id: Option<MongoDbId>,
     pub user_id: String, // MongoDB ID ref to `user._id` (which stores the hoster's pubkey, jurisdiction and email)
-    pub active_workloads: Vec<String>, // MongoDB ID refs to `workload._id`
+    pub active_workloads: Vec<MongoDbId>, // MongoDB ID refs to `workload._id`
 }
 
 // No Additional Indexing for Developer
@@ -98,7 +110,7 @@ pub struct Hoster {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub _id: Option<MongoDbId>,
     pub user_id: String, // MongoDB ID ref to `user.id` (which stores the hoster's pubkey, jurisdiction and email)
-    pub assigned_hosts: Vec<String>, // MongoDB ID refs to `host._id`
+    pub assigned_hosts: Vec<MongoDbId>, // MongoDB ID refs to `host._id`
 }
 
 // No Additional Indexing for Hoster
@@ -120,6 +132,7 @@ pub struct Capacity {
 pub struct Host {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub _id: Option<MongoDbId>,
+    pub assigned_hoster: MongoDbId,
     pub device_id: String, // *INDEXED*, Auto-generated Nats server ID
     pub ip_address: String,
     pub remaining_capacity: Capacity,
@@ -127,7 +140,6 @@ pub struct Host {
     pub avg_network_speed: i64,
     pub avg_latency: i64,
     pub assigned_workloads: Vec<String>, // MongoDB ID refs to `workload._id`
-    pub assigned_hoster: HosterPubKey,   // *INDEXED*, Hoster pubkey
 }
 
 impl IntoIndexes for Host {
@@ -178,12 +190,12 @@ pub struct SystemSpecs {
 pub struct Workload {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub _id: Option<MongoDbId>,
+    pub assigned_developer: MongoDbId, // *INDEXED*, Developer Mongodb ID
     pub version: SemVer,
     pub nix_pkg: String, // (Includes everthing needed to deploy workload - ie: binary & env pkg & deps, etc)
-    pub assigned_developer: String, // *INDEXED*, Developer Mongodb ID
     pub min_hosts: u16,
     pub system_specs: SystemSpecs,
-    pub assigned_hosts: Vec<String>, // Host Device IDs (eg: assigned nats server id)
+    pub assigned_hosts: Vec<MongoDbId>, // Host Device IDs (eg: assigned nats server id)
     pub deleted: bool,
     pub deleted_at: Option<DateTime>,
     pub updated_at: Option<DateTime>,
