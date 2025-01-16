@@ -1,6 +1,7 @@
 use super::mongodb::IntoIndexes;
 use anyhow::Result;
-use bson::{self, doc, Document};
+use bson::{self, doc, DateTime, Document};
+use chrono::Duration;
 use mongodb::options::IndexOptions;
 use semver::{BuildMetadata, Prerelease};
 use serde::{Deserialize, Serialize};
@@ -82,7 +83,7 @@ pub struct Developer {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub _id: Option<MongoDbId>,
     pub user_id: String, // MongoDB ID ref to `user._id` (which stores the hoster's pubkey, jurisdiction and email)
-    pub requested_workloads: Vec<String>, // MongoDB ID refs to `workload._id`
+    pub active_workloads: Vec<String>, // MongoDB ID refs to `workload._id`
 }
 
 // No Additional Indexing for Developer
@@ -98,7 +99,7 @@ pub struct Hoster {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub _id: Option<MongoDbId>,
     pub user_id: String, // MongoDB ID ref to `user.id` (which stores the hoster's pubkey, jurisdiction and email)
-    pub assigned_hosts: Vec<String>, // Auto-generated Nats server IDs
+    pub assigned_hosts: Vec<String>, // MongoDB ID refs to `host._id`
 }
 
 // No Additional Indexing for Hoster
@@ -185,6 +186,8 @@ pub struct Workload {
     pub system_specs: SystemSpecs,
     pub assigned_hosts: Vec<String>, // Host Device IDs (eg: assigned nats server id)
     pub deleted: bool,
+    pub deleted_at: Option<DateTime>,
+    pub updated_at: Option<DateTime>,
     // pub status: WorkloadStatus,
 }
 
@@ -215,6 +218,8 @@ impl Default for Workload {
             },
             assigned_hosts: Vec::new(),
             deleted: false,
+            deleted_at: None,
+            updated_at: None,
         }
     }
 }
