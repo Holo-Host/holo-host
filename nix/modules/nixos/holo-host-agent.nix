@@ -75,8 +75,7 @@ in
       enable = true;
 
       wants = [ "network-online.target" ];
-
-      requiredBy = lib.optional cfg.autoStart "multi-user.target";
+      wantedBy = lib.lists.optional cfg.autoStart "multi-user.target";
 
       environment =
         {
