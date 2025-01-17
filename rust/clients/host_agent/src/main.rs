@@ -1,19 +1,16 @@
 /*
- This client is associated with the:
-- WORKLOAD account
-- hpos user
+This client is associated with the:
+  - WORKLOAD account
+  - hpos user
 
-// This client is responsible for:
-  - subscribing to workload streams
-    - installing new workloads
-    - removing workloads
-    - send workload status upon request
+This client is responsible for subscribing the host agent to workload stream endpoints:
+  - installing new workloads
+  - removing workloads
   - sending active periodic workload reports
+  - sending workload status upon request
 */
 
-// mod auth;
-// mod utils;
-mod workloads;
+mod workload_manager;
 use anyhow::Result;
 use clap::Parser;
 use dotenv::dotenv;
@@ -57,12 +54,10 @@ async fn main() -> Result<(), AgentCliError> {
 }
 
 async fn daemonize() -> Result<(), async_nats::Error> {
-    // let user_creds_path = auth::initializer::run().await?;
-    let user_creds_path = "placeholder_creds_that_will_not_be_read".to_string();
-    gen_leaf_server::run(&user_creds_path).await;
-
-    let user_creds_path = nats_js_client::get_nats_client_creds("HOLO", "HPOS", "hpos");
-    workloads::manager::run(&user_creds_path).await?;
-
+    // let (host_pubkey, host_creds_path) = auth::initializer::run().await?;
+    let host_creds_path = nats_js_client::get_nats_client_creds("HOLO", "HPOS", "hpos");
+    let host_pubkey = "host_id_placeholder>";
+    gen_leaf_server::run(&host_creds_path).await;
+    workload_manager::run(host_pubkey, &host_creds_path).await?;
     Ok(())
 }
