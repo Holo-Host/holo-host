@@ -267,7 +267,7 @@ mod tests {
 
         fn get_mock_host() -> schemas::Host {
             schemas::Host {
-                _id: Some(oid::ObjectId::new().to_string()),
+                _id: Some(oid::ObjectId::new()),
                 device_id: "Vf3IceiD".to_string(),
                 ip_address: "127.0.0.1".to_string(),
                 remaining_capacity: Capacity {
@@ -279,7 +279,7 @@ mod tests {
                 avg_network_speed: 500,
                 avg_latency: 10,
                 assigned_workloads: vec!["workload_id".to_string()],
-                assigned_hoster: "hoster".to_string(),
+                assigned_hoster: oid::ObjectId::new(),
             }
         }
 
@@ -313,7 +313,7 @@ mod tests {
         let fetched_hosts = host_api.get_many_from(filter_many.clone()).await?;
 
         assert_eq!(fetched_hosts.len(), 3);
-        let ids: Vec<String> = fetched_hosts.into_iter().map(|h| h._id.unwrap()).collect();
+        let ids: Vec<String> = fetched_hosts.into_iter().map(|h| h._id?.to_hex().unwrap()).collect();
         assert!(ids.contains(&ids[0]));
         assert!(ids.contains(&ids[1]));
         assert!(ids.contains(&ids[2]));

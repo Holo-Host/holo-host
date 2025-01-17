@@ -25,7 +25,7 @@ pub use String as DeveloperJWT;
 pub use String as SemVer;
 
 // Providetype Alias for MongoDB ID (mongo's automated id)
-pub use String as MongoDbId;
+pub use bson::oid::ObjectId as MongoDbId;
 
 // ==================== User Schema ====================
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -219,7 +219,7 @@ impl Default for Workload {
             _id: None,
             version: semver,
             nix_pkg: String::new(),
-            assigned_developer: String::new(),
+            assigned_developer: MongoDbId::new(),
             min_hosts: 1,
             system_specs: SystemSpecs {
                 capacity: Capacity {
