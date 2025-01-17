@@ -42,7 +42,7 @@ pub enum Role {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct RoleInfo {
-    pub ref_id: String, // Hoster/Developer Mongodb ID ref
+    pub ref_id: MongoDbId, // Hoster/Developer Mongodb ID ref
     pub role: Role,     // *INDEXED*
 }
 
