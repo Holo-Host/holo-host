@@ -49,11 +49,6 @@ in
     };
 
     nats = {
-      useOsNats = lib.mkOption {
-        type = lib.types.bool;
-        default = false;
-      };
-
       listenHost = lib.mkOption {
         type = lib.types.str;
         default = "127.0.0.1";
@@ -65,7 +60,7 @@ in
       };
 
       url = lib.mkOption {
-        type = lib.types.nullOr lib.types.str;
+        type = lib.types.str;
         default = "${cfg.nats.listenHost}:${builtins.toString cfg.nats.listenPort}";
       };
 
@@ -79,8 +74,7 @@ in
     systemd.services.holo-host-agent = {
       enable = true;
 
-      requires = lib.lists.optional cfg.nats.useOsNats "nats.service";
-      after = lib.lists.optional cfg.nats.useOsNats "nats.service";
+      wants = [ "network-online.target" ];
 
       requiredBy = lib.optional cfg.autoStart "multi-user.target";
 

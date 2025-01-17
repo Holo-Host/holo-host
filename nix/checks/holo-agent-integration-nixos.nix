@@ -34,7 +34,6 @@ pkgs.testers.runNixOSTest (
 
         holo.host-agent = {
           enable = true;
-          autoStart = false;
           rust = {
             log = "trace";
             backtrace = "trace";
@@ -67,10 +66,6 @@ pkgs.testers.runNixOSTest (
         hub.succeed("${hubTestScript}")
 
         host.start()
-        # agent.wait_for_unit("nats.service")
-
-        # TODO: fix after/require settings of the host-agent service to make autoStart work
-        host.succeed("systemctl start holo-host-agent")
         host.wait_for_unit("holo-host-agent")
 
         host.succeed("${hostTestScript}")
