@@ -1,6 +1,7 @@
 /// MOdule containing all of the Clap Derive structs/definitions that make up the agent's
 /// command line. To start the agent daemon (usually from systemd), use `host_agent daemonize`.
 use clap::{Parser, Subcommand};
+use netdiag::IPVersion;
 
 #[derive(Parser)]
 #[command(
@@ -46,7 +47,22 @@ pub enum HostCommands {
 #[derive(Subcommand, Clone)]
 pub enum SupportCommands {
     /// Run some basic network connectivity diagnostics.
-    NetTest,
+    NetTest {
+        #[arg(long, default_value("1.1.1.1:53"))]
+        nameserver: String,
+        // Once we have a URL we can use, make it the default.
+        #[arg(long, default_value("holo.host"))]
+        hostname: String,
+        #[arg(long, default_value("true"))]
+        use_tls: bool,
+        #[arg(long, default_value("443"))]
+        port: u16,
+        // As with the hostname, we should change this default once we have something public.
+        #[arg(long, default_value("/status"))]
+        http_path: String,
+        #[arg(long, default_value("ipv4"))]
+        ip_version: IPVersion,
+    },
     /// Enable or disable a tunnel for support to control this host remotely.
     SupportTunnel {
         #[arg(long)]
