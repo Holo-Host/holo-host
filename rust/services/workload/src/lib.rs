@@ -69,13 +69,13 @@ impl WorkloadApi {
             |workload: schemas::Workload| async move {
                 let workload_id = self.workload_collection.insert_one_into(workload.clone()).await?;
                 log::info!("Successfully added workload. MongodDB Workload ID={:?}", workload_id);
-                let updated_workload = schemas::Workload {
+                let new_workload = schemas::Workload {
                     _id: Some(workload_id),
                     ..workload
                 };
                 Ok(types::ApiResult(
                     WorkloadStatus {
-                        id: updated_workload._id,
+                        id: new_workload._id,
                         desired: WorkloadState::Reported,
                         actual: WorkloadState::Reported,
                     },
@@ -94,8 +94,8 @@ impl WorkloadApi {
             WorkloadState::Running,
             |workload: schemas::Workload| async move {
                 let workload_query = doc! { "_id":  workload._id.clone() };
-                let updated_workload = to_document(&workload)?;
-                self.workload_collection.update_one_within(workload_query, UpdateModifications::Document(updated_workload)).await?;
+                let updated_workload_doc = to_document(&workload)?;
+                self.workload_collection.update_one_within(workload_query, UpdateModifications::Document(updated_workload_doc)).await?;
                 log::info!("Successfully updated workload. MongodDB Workload ID={:?}", workload._id);
                 Ok(types::ApiResult(
                     WorkloadStatus {
