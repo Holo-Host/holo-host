@@ -57,6 +57,11 @@ async fn daemonize(args: &DaemonzeArgs) -> Result<(), async_nats::Error> {
     // let (host_pubkey, host_creds_path) = auth::initializer::run().await?;
     let host_pubkey = "host_id_placeholder>";
     gen_leaf_server::run(&args.nats_leafnode_client_creds_path).await;
-    workload_manager::run(host_pubkey, &args.nats_leafnode_client_creds_path).await?;
+    workload_manager::run(
+        host_pubkey,
+        &args.nats_leafnode_client_creds_path,
+        args.nats_connect_timeout_secs,
+    )
+    .await?;
     Ok(())
 }

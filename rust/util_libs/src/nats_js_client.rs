@@ -12,7 +12,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-pub type EventListener = Box<dyn Fn(&mut JsClient) + Send + Sync>;
+pub type EventListener = Arc<Box<dyn Fn(&mut JsClient) + Send + Sync>>;
 pub type EventHandler = Pin<Box<dyn Fn(&str, &str, Duration) + Send + Sync>>;
 pub type JsServiceResponse<T> = Pin<Box<dyn Future<Output = Result<T, anyhow::Error>> + Send>>;
 pub type EndpointHandler<T> = Arc<dyn Fn(&Message) -> Result<T, anyhow::Error> + Send + Sync>;
@@ -255,11 +255,11 @@ impl JsClient {
 
 // Client Options:
 pub fn with_event_listeners(listeners: Vec<EventListener>) -> EventListener {
-    Box::new(move |c: &mut JsClient| {
+    Arc::new(Box::new(move |c: &mut JsClient| {
         for listener in &listeners {
             listener(c);
         }
-    })
+    }))
 }
 
 // Event Listener Options:
@@ -267,18 +267,18 @@ pub fn on_msg_published_event<F>(f: F) -> EventListener
 where
     F: Fn(&str, &str, Duration) + Send + Sync + Clone + 'static,
 {
-    Box::new(move |c: &mut JsClient| {
+    Arc::new(Box::new(move |c: &mut JsClient| {
         c.on_msg_published_event = Some(Box::pin(f.clone()));
-    })
+    }))
 }
 
 pub fn on_msg_failed_event<F>(f: F) -> EventListener
 where
     F: Fn(&str, &str, Duration) + Send + Sync + Clone + 'static,
 {
-    Box::new(move |c: &mut JsClient| {
+    Arc::new(Box::new(move |c: &mut JsClient| {
         c.on_msg_failed_event = Some(Box::pin(f.clone()));
-    })
+    }))
 }
 
 // Helpers:

@@ -92,7 +92,7 @@ struct LogInfo {
     endpoint_subject: String,
 }
 
-#[derive(Deserialize, Default)]
+#[derive(Clone, Deserialize, Default)]
 pub struct JsServiceParamsPartial {
     pub name: String,
     pub description: String,

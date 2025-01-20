@@ -36,6 +36,12 @@ pub enum CommandScopes {
 pub struct DaemonzeArgs {
     #[arg(help = "path to NATS credentials used for the LeafNode client connection")]
     pub(crate) nats_leafnode_client_creds_path: Option<PathBuf>,
+
+    #[arg(
+        help = "try to connect to the (internally spawned) Nats instance for the given duration in seconds before giving up",
+        default_value = "10"
+    )]
+    pub(crate) nats_connect_timeout_secs: u64,
 }
 
 /// A set of commands for being able to manage the local host. We may (later) want to gate some
