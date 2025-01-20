@@ -298,8 +298,8 @@ impl WorkloadApi {
                 Some(oid) => Some(oid.to_hex()),
                 None => None
             },
-            desired: WorkloadState::Running,
-            actual: WorkloadState::Running,
+            desired: WorkloadState::Updating,
+            actual: WorkloadState::Updating,
         };
         
         Ok(types::ApiResult(success_status, None))
