@@ -51,7 +51,7 @@ pub struct User {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub _id: Option<MongoDbId>,
     pub jurisdiction: String,
-    pub permisions: Vec<UserPermission>,
+    pub permissions: Vec<UserPermission>,
     pub deleted: bool,
     pub deleted_at: Option<DateTime>,
     pub updated_at: Option<DateTime>,

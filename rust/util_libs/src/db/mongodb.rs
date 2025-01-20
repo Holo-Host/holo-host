@@ -313,12 +313,7 @@ mod tests {
         let fetched_hosts = host_api.get_many_from(filter_many.clone()).await?;
 
         assert_eq!(fetched_hosts.len(), 3);
-        let ids: Vec<String> = fetched_hosts.into_iter().map(
-            |h| match h._id {
-                Some(oid) => oid.to_hex(),
-                None => String::new(),
-            }
-        ).collect();
+        let ids: Vec<String> = fetched_hosts.into_iter().map(|h| h._id.unwrap.or(oid::ObjectId::new()).to_hex()).collect();
         assert!(ids.contains(&ids[0]));
         assert!(ids.contains(&ids[1]));
         assert!(ids.contains(&ids[2]));
