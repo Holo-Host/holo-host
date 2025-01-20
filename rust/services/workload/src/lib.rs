@@ -247,7 +247,7 @@ impl WorkloadApi {
         let payload_buf = msg.payload.to_vec();
 
         let mut workload: schemas::Workload = serde_json::from_slice(&payload_buf)?;
-        log::trace!("New workload to assign. Workload={:#?}", workload.clone());
+        log::trace!("Workload to update. Workload={:#?}", workload.clone());
 
         // 1. fetch existing workload document
         match self.workload_collection.get_one_from(doc! { "_id":  workload._id.clone() }).await?{
