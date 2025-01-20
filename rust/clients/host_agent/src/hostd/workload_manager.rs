@@ -13,15 +13,13 @@
 
 use anyhow::{anyhow, Result};
 use std::{sync::Arc, time::Duration};
-use mongodb::{options::ClientOptions, Client as MongoDBClient};
 use async_nats::Message;
 use util_libs::{
-    db::mongodb::get_mongodb_url,
     js_stream_service::JsServiceParamsPartial,
     nats_js_client::{self, EndpointType},
 };
 use workload::{
-    WorkloadApi, WORKLOAD_SRV_DESC, WORKLOAD_SRV_NAME, WORKLOAD_SRV_SUBJ, WORKLOAD_SRV_VERSION,
+    WorkloadServiceApi, host_api::HostWorkloadApi, WORKLOAD_SRV_DESC, WORKLOAD_SRV_NAME, WORKLOAD_SRV_SUBJ, WORKLOAD_SRV_VERSION,
     types::{WorkloadServiceSubjects, ApiResult}
 };
 
@@ -64,18 +62,12 @@ pub async fn run(host_pubkey: &str, host_creds_path: &str) -> Result<(), async_n
             ping_interval: Some(Duration::from_secs(10)),
             request_timeout: Some(Duration::from_secs(5)),
         })
-        .await?;
+        .await?;    
 
-    // ==================== Setup DB ====================
-    // Create a new MongoDB Client and connect it to the cluster
-    let mongo_uri = get_mongodb_url();
-    let client_options = ClientOptions::parse(mongo_uri).await?;
-    let client = MongoDBClient::with_options(client_options)?;
-
-    // Generate the Workload API with access to db
-    let workload_api = WorkloadApi::new(&client).await?;
-
-    // ==================== Register API Endpoints ====================
+    // ==================== Setup API & Register Endpoints ====================
+    // Instantiate the Workload API
+    let workload_api = HostWorkloadApi::default();
+    
     // Register Workload Streams for Host Agent to consume and process
     // NB: Subjects are published by orchestrator
     let workload_start_subject = serde_json::to_string(&WorkloadServiceSubjects::Start)?;
@@ -94,7 +86,7 @@ pub async fn run(host_pubkey: &str, host_creds_path: &str) -> Result<(), async_n
         .add_consumer::<ApiResult>(
             "start_workload", // consumer name
             &format!("{}.{}", host_pubkey, workload_start_subject), // consumer stream subj
-            EndpointType::Async(workload_api.call(|api: WorkloadApi, msg: Arc<Message>| {
+            EndpointType::Async(workload_api.call(|api: HostWorkloadApi, msg: Arc<Message>| {
                 async move {
                     api.start_workload_on_host(msg).await
                 }
@@ -107,7 +99,7 @@ pub async fn run(host_pubkey: &str, host_creds_path: &str) -> Result<(), async_n
         .add_consumer::<ApiResult>(
             "send_workload_status", // consumer name
             &format!("{}.{}", host_pubkey, workload_handle_update_subject), // consumer stream subj
-            EndpointType::Async(workload_api.call(|api: WorkloadApi, msg: Arc<Message>| {
+            EndpointType::Async(workload_api.call(|api: HostWorkloadApi, msg: Arc<Message>| {
                 async move {
                     api.update_workload_on_host(msg).await
                 }
@@ -120,7 +112,7 @@ pub async fn run(host_pubkey: &str, host_creds_path: &str) -> Result<(), async_n
         .add_consumer::<ApiResult>(
             "uninstall_workload", // consumer name
             &format!("{}.{}", host_pubkey, workload_uninstall_subject), // consumer stream subj
-            EndpointType::Async(workload_api.call(|api: WorkloadApi, msg: Arc<Message>| {
+            EndpointType::Async(workload_api.call(|api: HostWorkloadApi, msg: Arc<Message>| {
                 async move {
                     api.uninstall_workload_from_host(msg).await
                 }
@@ -133,7 +125,7 @@ pub async fn run(host_pubkey: &str, host_creds_path: &str) -> Result<(), async_n
         .add_consumer::<ApiResult>(
             "send_workload_status", // consumer name
             &format!("{}.{}", host_pubkey, workload_send_status_subject), // consumer stream subj
-            EndpointType::Async(workload_api.call(|api: WorkloadApi, msg: Arc<Message>| {
+            EndpointType::Async(workload_api.call(|api: HostWorkloadApi, msg: Arc<Message>| {
                 async move {
                     api.send_workload_status_from_host(msg).await
                 }
