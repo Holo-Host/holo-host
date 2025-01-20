@@ -18,14 +18,36 @@ Endpoints & Managed Subjects:
 */
 
 pub mod types;
+pub mod utils;
+
 use anyhow::Result;
-use async_nats::Message;
-use mongodb::Client as MongoDBClient; // options::UpdateModifications, 
+use async_nats::{Message, HeaderValue};
+use async_nats::jetstream::ErrorCode;
+use nkeys::KeyPair;
+use types::AuthResult;
+use utils::handle_internal_err;
+use core::option::Option::None;
+use std::collections::HashMap;
 use std::process::Command;
 use std::sync::Arc;
 use std::future::Future;
 use serde::{Deserialize, Serialize};
-use util_libs::{db::{mongodb::{IntoIndexes, MongoCollection}, schemas}, nats_js_client};
+use bson::{self, doc, to_document};
+use mongodb::{options::UpdateModifications, Client as MongoDBClient};
+use util_libs::{
+    nats_js_client::{ServiceError, AsyncEndpointHandler, JsServiceResponse},
+    db::{
+        mongodb::{IntoIndexes, MongoCollection, MongoDbAPI},
+        schemas::{
+            self,
+            User,
+            Hoster,
+            Host,
+            Role,
+            RoleInfo,
+        }
+    },
+};
 
 pub const AUTH_SRV_NAME: &str = "AUTH";
 pub const AUTH_SRV_SUBJ: &str = "AUTH";
@@ -33,11 +55,12 @@ pub const AUTH_SRV_VERSION: &str = "0.0.1";
 pub const AUTH_SRV_DESC: &str =
     "This service handles the Authentication flow the HPOS and the Orchestrator.";
 
-#[derive(Debug, Clone)]
+#[derive(Debug,
+    Clone)]
 pub struct AuthApi {
-    pub user_collection: MongoCollection<schemas::User>,
-    pub hoster_collection: MongoCollection<schemas::Hoster>,
-    pub host_collection: MongoCollection<schemas::Host>,
+    pub user_collection: MongoCollection<User>,
+    pub hoster_collection: MongoCollection<Hoster>,
+    pub host_collection: MongoCollection<Host>,
 }
 
 impl AuthApi {
@@ -49,106 +72,203 @@ impl AuthApi {
         })
     }
 
-
     pub fn call<F, Fut>(
         &self,
         handler: F,
-    ) -> nats_js_client::AsyncEndpointHandler<types::ApiResult>
+    ) -> AsyncEndpointHandler<types::ApiResult>
     where
         F: Fn(AuthApi, Arc<Message>) -> Fut + Send + Sync + 'static,
-        Fut: Future<Output = Result<types::ApiResult, anyhow::Error>> + Send + 'static,
+        Fut: Future<Output = Result<types::ApiResult, ServiceError>> + Send + 'static,
     {
         let api = self.to_owned(); 
-        Arc::new(move |msg: Arc<Message>| -> nats_js_client::JsServiceResponse<types::ApiResult> {
+        Arc::new(move |msg: Arc<Message>| -> JsServiceResponse<types::ApiResult> {
             let api_clone = api.clone();
             Box::pin(handler(api_clone, msg))
         })
     }
     
     /*******************************  For Orchestrator   *********************************/
-    pub async fn receive_handshake_request(
+    // nb: returns to the `save_hub_files` subject
+    pub async fn handle_handshake_request(
         &self,
         msg: Arc<Message>,
-    ) -> Result<types::ApiResult, anyhow::Error> {
+        creds_dir_path: &str,
+    ) -> Result<types::ApiResult, ServiceError> {
+        log::warn!("INCOMING Message for 'AUTH.start_handshake' : {:?}", msg);
+
         // 1. Verify expected data was received
-        if msg.headers.is_none() {
-            log::error!(
-                "Error: Missing headers. Consumer=authorize_ext_client, Subject='/AUTH/authorize'"
-            );
-            // anyhow!(ErrorCode::BAD_REQUEST)
-        }
+        let signature: &[u8] = match &msg.headers {
+            Some(h) => {
+                HeaderValue::as_ref(h.get("X-Signature").ok_or_else(|| {
+                    log::error!(
+                        "Error: Missing x-signature header. Subject='AUTH.authorize'"
+                    );
+                    ServiceError::Request(format!("{:?}", ErrorCode::BAD_REQUEST))
+                })?)
+            },
+            None => {
+                log::error!(
+                    "Error: Missing message headers. Subject='AUTH.authorize'"
+                );
+                return Err(ServiceError::Request(format!("{:?}", ErrorCode::BAD_REQUEST)));
+            }
+        };
 
-        // let signature = msg_clone.headers.unwrap().get("Signature").unwrap_or(&HeaderValue::new());
+        let types::AuthRequestPayload { host_pubkey, email, hoster_pubkey, nonce: _ } = Self::convert_to_type::<types::AuthRequestPayload>(msg.clone())?;
 
-        // match  serde_json::from_str::<types::AuthHeaders>(signature.as_str()) {
-        //     Ok(r) => {}
-        //     Err(e) => {
-        //         log::error!("Error: Failed to deserialize headers. Consumer=authorize_ext_client, Subject='/AUTH/authorize'")
-        //         // anyhow!(ErrorCode::BAD_REQUEST)
-        //     }
-        // }
+        // 2. Validate signature
+        let user_verifying_keypair = KeyPair::from_public_key(&host_pubkey).map_err(|e| ServiceError::Internal(e.to_string()))?;
+        if let Err(e) = user_verifying_keypair.verify(msg.payload.as_ref(), signature) {
+            log::error!("Error: Failed to validate Signature. Subject='{}'. Err={}", msg.subject, e);
+            return Err(ServiceError::Request(format!("{:?}", ErrorCode::BAD_REQUEST)));
+        };
 
-        // match serde_json::from_slice::<types::AuthPayload>(msg.payload.as_ref()) {
-        //     Ok(r) => {}
-        //     Err(e) => {
-        //         log::error!("Error: Failed to deserialize payload. Consumer=authorize_ext_client, Subject='/AUTH/authorize'")
-        //         // anyhow!(ErrorCode::BAD_REQUEST)
-        //     }
-        // }
+        // 3. Authenticate the Hosting Agent (via email and host id info?)
+        match self.user_collection.get_one_from(doc! { "roles.role.Hoster": hoster_pubkey.clone() }).await? {
+            Some(u) => {
+                // If hoster exists with pubkey, verify email
+                if u.email != email {
+                    log::error!("Error: Failed to validate user email. Subject='{}'.", msg.subject);
+                    return Err(ServiceError::Request(format!("{:?}", ErrorCode::BAD_REQUEST)));
+                }
 
-        // 2. Authenticate the HPOS client(?via email and host id info?)
+                // ...then find the host collection that contains the provided host pubkey
+                match self.host_collection.get_one_from(doc! { "pubkey": host_pubkey.clone() }).await? {
+                    Some(host_collection) => {
+                        // ...and pair the host with hoster pubkey (if the hoster is not already assiged to host)
+                        if host_collection.assigned_hoster != hoster_pubkey {
+                            let host_query: bson::Document = doc! { "_id":  host_collection._id.clone() };
+                            let updated_host_doc = to_document(& Host{
+                                assigned_hoster: hoster_pubkey,
+                                ..host_collection
+                            }).map_err(|e| ServiceError::Internal(e.to_string()))?;
+                            self.host_collection.update_one_within(host_query, UpdateModifications::Document(updated_host_doc)).await?;                
+                        }
+                    },
+                    None => {
+                        let err_msg = format!("Error: Failed to locate Host record. Subject='{}'.", msg.subject);
+                        return Err(handle_internal_err(&err_msg));
+                    }
+                }
 
-        // 3. Publish operator and sys account jwts for orchestrator
-        // let hub_operator_account = chunk_and_publish().await; // returns to the `save_hub_files` subject
-        // let hub_sys_account = chunk_and_publish().await; // returns to the `save_hub_files` subject
+                // Find the mongo_id ref for the hoster associated with this user
+                let RoleInfo { ref_id, role: _ } = u.roles.into_iter().find(|r| matches!(r.role, Role::Hoster(_))).ok_or_else(|| {
+                    let err_msg = format!("Error: Failed to locate Hoster record id in User collection. Subject='{}'.", msg.subject);
+                    handle_internal_err(&err_msg)
+                })?;
+                
+                // Finally, find the hoster collection
+                match self.hoster_collection.get_one_from(doc! { "_id":  ref_id.clone() }).await? {
+                    Some(hoster_collection) => {
+                        // ...and pair the hoster with host (if the host is not already assiged to the hoster)
+                        let mut updated_assigned_hosts = hoster_collection.assigned_hosts;
+                        if !updated_assigned_hosts.contains(&host_pubkey) {
+                        let hoster_query: bson::Document = doc! { "_id":  hoster_collection._id.clone() };
+                        updated_assigned_hosts.push(host_pubkey.clone());
+                        let updated_hoster_doc = to_document(& Hoster {
+                            assigned_hosts: updated_assigned_hosts,
+                            ..hoster_collection
+                        }).map_err(|e| ServiceError::Internal(e.to_string()))?;
+                        self.host_collection.update_one_within(hoster_query, UpdateModifications::Document(updated_hoster_doc)).await?;                
+                        }
+                    },
+                    None => {
+                        let err_msg = format!("Error: Failed to locate Hoster record. Subject='{}'.", msg.subject);
+                        return Err(handle_internal_err(&err_msg));
+                    }
+                }
+            },
+            None => {
+                let err_msg = format!("Error: Failed to find User Collection with Hoster pubkey. Subject='{}'.", msg.subject);
+                return Err(handle_internal_err(&err_msg));
+            }
+        };
+
+        // 4. Read operator and sys account jwts and prepare them to be sent as a payload in the publication callback
+        let operator_path = utils::get_file_path_buf(&format!("{}/operator.creds", creds_dir_path));
+        let hub_operator_creds: Vec<u8> = std::fs::read(operator_path).map_err(|e| ServiceError::Internal(e.to_string()))?;
+
+        let sys_path = utils::get_file_path_buf(&format!("{}/sys.creds", creds_dir_path));
+        let hub_sys_creds: Vec<u8> = std::fs::read(sys_path).map_err(|e| ServiceError::Internal(e.to_string()))?;
+
+        let mut tag_map: HashMap<String, String> = HashMap::new();
+        tag_map.insert("host_pubkey".to_string(), host_pubkey.clone());
 
         Ok(types::ApiResult {
             status: types::AuthStatus { 
-                host_id: "host_id_placeholder".to_string(),
+                host_pubkey: host_pubkey.clone(),
                 status: types::AuthState::Requested
             },
-            result: serde_json::to_vec(&"OK")?,
-            maybe_response_tags: None
+            result: AuthResult {
+                data: types::AuthResultType::Multiple(vec![hub_operator_creds, hub_sys_creds])
+            },
+            maybe_response_tags: Some(tag_map) // used to inject as tag in response subject
         })
     }
 
     /*******************************   For Host Agent   *********************************/
-     pub async fn save_hub_jwts(&self, _msg: Arc<Message>) -> Result<types::ApiResult, anyhow::Error> {
+     pub async fn save_hub_jwts(&self, msg: Arc<Message>) -> Result<types::ApiResult, ServiceError> {
+        log::warn!("INCOMING Message for 'AUTH.<host_pubkey>.handle_handshake_p1' : {:?}", msg);
+
         // receive_and_write_file();
 
         // Respond to endpoint request
         // let response = b"Hello, NATS!".to_vec();
+
+        // let resolver_path = utils::get_resolver_path();
+
+        // // Generate resolver file and create resolver file
+        // Command::new("nsc")
+        //     .arg("generate")
+        //     .arg("config")
+        //     .arg("--nats-resolver")
+        //     .arg("sys-account SYS")
+        //     .arg("--force")
+        //     .arg(format!("--config-file {}", resolver_path))
+        //     .output()
+        //     .expect("Failed to create resolver config file");
+
+        // // Push auth updates to hub server
+        // Command::new("nsc")
+        //     .arg("push -A")
+        //     .output()
+        //     .expect("Failed to create resolver config file");
+
         // Ok(response)
 
         todo!();
     }
 
     /*******************************  For Orchestrator   *********************************/
-    pub async fn add_user_pubkey(&self, msg: Arc<Message>) -> Result<types::ApiResult, anyhow::Error> {
-        log::warn!("INCOMING Message for 'AUTH.add' : {:?}", msg);
+    pub async fn add_user_pubkey(&self, msg: Arc<Message>) -> Result<types::ApiResult, ServiceError> {
+        log::warn!("INCOMING Message for 'AUTH.handle_handshake_p2' : {:?}", msg);
 
-        // Add user with Keys and create jwt
+        // 1. Verify expected payload was received
+        let host_pubkey = Self::convert_to_type::<String>(msg.clone())?;
+
+        // 2. Add User keys to Orchestrator nsc resolver
         Command::new("nsc")
             .arg("...")
             .output()
             .expect("Failed to add user with provided keys");
+        
+        // 3. Create and sign User JWT
+        let account_signing_key = utils::get_account_signing_key();
+        utils::generate_user_jwt(&host_pubkey, &account_signing_key);
 
-        // Output jwt
-        let _user_jwt_path = Command::new("nsc")
-            .arg("...")
-            // .arg(format!("> {}", output_dir))
-            .output()
-            .expect("Failed to output user jwt to file")
-            .stdout;
+        // 4. Prepare User JWT to be sent as a payload in the publication callback
+        let sys_path = utils::get_file_path_buf("user_jwt_path");
+        let user_jwt: Vec<u8> = std::fs::read(sys_path).map_err(|e| ServiceError::Internal(e.to_string()))?;
 
-        // 2. Respond to endpoint request
-        // let resposne = user_jwt_path;
+        // 5. Respond to endpoint request
         Ok(types::ApiResult {
             status: types::AuthStatus { 
-                host_id: "host_id_placeholder".to_string(),
+                host_pubkey,
                 status: types::AuthState::ValidatedAgent
             },
-            result: b"user_jwt_path_placeholder".to_vec(),
+            result: AuthResult {
+                data: types::AuthResultType::Single(user_jwt)
+            },
             maybe_response_tags: None
         })
     }
@@ -158,18 +278,24 @@ impl AuthApi {
         &self,
         msg: Arc<Message>,
         _output_dir: &str,
-    ) -> Result<types::ApiResult, anyhow::Error> {
-        log::warn!("INCOMING Message for 'AUTH.add' : {:?}", msg);
+    ) -> Result<types::ApiResult, ServiceError> {
+        log::warn!("INCOMING Message for 'AUTH.<host_pubkey>.end_handshake' : {:?}", msg);
 
+        // Generate user jwt file
         // utils::receive_and_write_file(msg, output_dir, file_name).await?;
+        
+        // Generate user creds file
+        // let _user_creds_path = utils::generate_creds_file();
 
         // 2. Respond to endpoint request
         Ok(types::ApiResult {
             status: types::AuthStatus { 
-                host_id: "host_id_placeholder".to_string(),
+                host_pubkey: "host_id_placeholder".to_string(),
                 status: types::AuthState::Authenticated
             },
-            result: b"Hello, NATS!".to_vec(),
+            result: AuthResult {
+                data: types::AuthResultType::Single(b"Hello, NATS!".to_vec())
+            },
             maybe_response_tags: None
         })
     }
@@ -186,24 +312,22 @@ impl AuthApi {
         Ok(MongoCollection::<T>::new(client, schemas::DATABASE_NAME, collection_name).await?)
     }
 
+    fn convert_to_type<T>(msg: Arc<Message>) -> Result<T, ServiceError>
+    where
+        T: for<'de> Deserialize<'de> + Send + Sync,
+    {
+        let payload_buf = msg.payload.to_vec();
+        serde_json::from_slice::<T>(&payload_buf).map_err(|e| {
+            let err_msg = format!("Error: Failed to deserialize payload. Subject='{}' Err={}", msg.subject, e);
+            log::error!("{}", err_msg);
+            ServiceError::Request(format!("{} Code={:?}", err_msg, ErrorCode::BAD_REQUEST))
+        })
+    }
+
 }
 
-// In orchestrator
-// pub async fn send_hub_jwts(
-//     &self,
-//     msg: Arc<Message>,
-// ) -> Result<Vec<u8>, anyhow::Error> {
-//     log::warn!("INCOMING Message for 'AUTH.add' : {:?}", msg);
-
-//     utils::chunk_file_and_publish(msg, output_dir, file_name).await?;
-
-//     // 2. Respond to endpoint request
-//     let response = b"Hello, NATS!".to_vec();
-//     Ok(response)
-// }
-
 // In hpos
-// pub async fn send_user_pubkey(&self, msg: Arc<Message>) -> Result<Vec<u8>, anyhow::Error> {
+// pub async fn send_user_pubkey(&self, msg: Arc<Message>) -> Result<Vec<u8>, ServiceError> {
 //     // 1. validate nk key...
 //     // let auth_endpoint_subject =
 //     // format!("AUTH.{}.file.transfer.JWT-operator", "host_id_placeholder"); // endpoint_subject
@@ -212,25 +336,11 @@ impl AuthApi {
 
 //     // 3. create signed jwt
 
-//     // 4. `Ack last request and publish the new jwt to for hpos
+//     // 4. `Ack last msg and publish the new jwt to for hpos
 
 //     // 5. Respond to endpoint request
 //     // let response = b"Hello, NATS!".to_vec();
 //     // Ok(response)
 
 //     todo!()
-// }
-
-// In orchestrator
-// pub async fn send_user_file(
-//     &self,
-//     msg: Arc<Message>,
-// ) -> Result<Vec<u8>, anyhow::Error> {
-//     log::warn!("INCOMING Message for 'AUTH.add' : {:?}", msg);
-
-//     utils::chunk_file_and_publish(msg, output_dir, file_name).await?;
-
-//     // 2. Respond to endpoint request
-//     let response = b"Hello, NATS!".to_vec();
-//     Ok(response)
 // }

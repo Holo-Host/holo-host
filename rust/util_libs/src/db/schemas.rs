@@ -28,10 +28,10 @@ pub use String as SemVer;
 pub use String as MongoDbId;
 
 // ==================== User Schema ====================
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, PartialEq, Clone, Debug)]
 pub enum Role {
     Developer(DeveloperJWT), // jwt string
-    Host(HosterPubKey),      // host pubkey
+    Hoster(HosterPubKey),      // host pubkey
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -120,14 +120,14 @@ pub struct Capacity {
 pub struct Host {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub _id: Option<MongoDbId>,
-    pub device_id: String, // *INDEXED*, Auto-generated Nats server ID
+    pub pubkey: String, // *INDEXED* // the HPOS/Device pubkey // nb: Unlike the hoster and developer pubkeys, this pubkey is not considered peronal info as it is not directly connected to a "natural person".
     pub ip_address: String,
     pub remaining_capacity: Capacity,
     pub avg_uptime: i64,
     pub avg_network_speed: i64,
     pub avg_latency: i64,
     pub assigned_workloads: Vec<String>, // MongoDB ID refs to `workload._id`
-    pub assigned_hoster: HosterPubKey,   // *INDEXED*, Hoster pubkey
+    pub assigned_hoster: HosterPubKey,   // *INDEXED*
 }
 
 impl IntoIndexes for Host {
@@ -135,13 +135,13 @@ impl IntoIndexes for Host {
         let mut indices = vec![];
 
         //  Add Device ID Index
-        let device_id_index_doc = doc! { "device_id": 1 };
-        let device_id_index_opts = Some(
+        let pubkey_index_doc = doc! { "pubkey": 1 };
+        let pubkey_index_opts = Some(
             IndexOptions::builder()
-                .name(Some("device_id_index".to_string()))
+                .name(Some("pubkey_index".to_string()))
                 .build(),
         );
-        indices.push((device_id_index_doc, device_id_index_opts));
+        indices.push((pubkey_index_doc, pubkey_index_opts));
 
         Ok(indices)
     }

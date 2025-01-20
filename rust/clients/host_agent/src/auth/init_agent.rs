@@ -16,27 +16,34 @@
 4. instantiate the leaf server via the leaf-server struct/service
 */
 
-use super::utils;
+use super::utils as local_utils;
 use anyhow::{anyhow, Result};
-use async_nats::Message;
-use authentication::{AuthApi, AUTH_SRV_DESC, AUTH_SRV_NAME, AUTH_SRV_SUBJ, AUTH_SRV_VERSION};
+use nkeys::KeyPair;
+use std::str::FromStr;
+use async_nats::{HeaderMap, HeaderName, HeaderValue, Message};
+use authentication::{types, AuthApi, AUTH_SRV_DESC, AUTH_SRV_NAME, AUTH_SRV_SUBJ, AUTH_SRV_VERSION};
 use mongodb::{options::ClientOptions, Client as MongoDBClient};
-use std::{sync::Arc, time::Duration};
+use core::option::Option::{None, Some};
+use std::{collections::HashMap, sync::Arc, time::Duration};
+use textnonce::TextNonce;
 use util_libs::{
     db::mongodb::get_mongodb_url,
-    js_stream_service::JsServiceParamsPartial,
+    js_stream_service::{JsServiceParamsPartial, ResponseSubjectsGenerator},
     nats_js_client::{self, EndpointType},
 };
 
 pub const HOST_INIT_CLIENT_NAME: &str = "Host Auth";
 pub const HOST_INIT_CLIENT_INBOX_PREFIX: &str = "_host_auth_inbox";
 
-const USER_CREDENTIALS_PATH: &str = "./user_creds";
+pub fn create_callback_subject_to_orchestrator(sub_subject_name: String) -> ResponseSubjectsGenerator {
+    Arc::new(move |_: HashMap<String, String>| -> Vec<String> {
+        vec![format!("{}", sub_subject_name)]
+    })
+}
 
-pub async fn run() -> Result<(String, String), async_nats::Error> {
+pub async fn run() -> Result<String, async_nats::Error> {
     log::info!("Host Auth Client: Connecting to server...");
-
-    // ==================== NATS Setup ====================
+    // ==================== Setup NATS ============================================================
     // Connect to Nats server
     let nats_url = nats_js_client::get_nats_url();
     let event_listeners = nats_js_client::get_event_listeners();
@@ -62,7 +69,7 @@ pub async fn run() -> Result<(String, String), async_nats::Error> {
         })
         .await?;
 
-    // ==================== DB Setup ====================
+    // ==================== Setup DB ==============================================================
     // Create a new MongoDB Client and connect it to the cluster
     let mongo_uri = get_mongodb_url();
     let client_options = ClientOptions::parse(mongo_uri).await?;
@@ -71,8 +78,12 @@ pub async fn run() -> Result<(String, String), async_nats::Error> {
     // Generate the Auth API with access to db
     let auth_api = AuthApi::new(&client).await?;
 
-    // ==================== Report Host to Orchestator ====================
-
+    // ==================== Report Host to Orchestator ============================================
+    // Generate Host Pubkey && Fetch Hoster Pubkey (from config)..
+    // NB: This nkey keypair is a `ed25519_dalek::VerifyingKey` that is `BASE_32` encoded and returned as a String.
+    let host_user_keys = KeyPair::new_user();
+    let host_pubkey = host_user_keys.public_key();
+    
     // Discover the server Node ID via INFO response
     let server_node_id = host_auth_client.get_server_info().server_id;
     log::trace!(
@@ -81,14 +92,15 @@ pub async fn run() -> Result<(String, String), async_nats::Error> {
     );
 
     // Publish a message with the Node ID as part of the subject
-    let publish_options = nats_js_client::SendRequest {
+    let publish_options = nats_js_client::PublishInfo {
         subject: format!("HPOS.init.{}", server_node_id),
         msg_id: format!("hpos_init_mid_{}", rand::random::<u8>()),
         data: b"Host Auth Connected!".to_vec(),
+        headers: None
     };
 
     match host_auth_client
-        .publish(&publish_options)
+        .publish(publish_options)
         .await
     {
         Ok(_r) => {
@@ -97,9 +109,13 @@ pub async fn run() -> Result<(String, String), async_nats::Error> {
         Err(_e) => {}
     };
 
-    // ==================== API ENDPOINTS ====================
+    // ==================== Register API ENDPOINTS ===============================================
     // Register Auth Streams for Orchestrator to consume and proceess
     // NB: The subjects below are published by the Orchestrator
+    
+    let auth_p1_subject = serde_json::to_string(&types::AuthServiceSubjects::HandleHandshakeP1)?;
+    let auth_p2_subject = serde_json::to_string(&types::AuthServiceSubjects::HandleHandshakeP2)?;
+    let auth_end_subject = serde_json::to_string(&types::AuthServiceSubjects::EndHandshake)?;
 
     // Call auth service and perform auth handshake
     let auth_service = host_auth_client
@@ -109,78 +125,70 @@ pub async fn run() -> Result<(String, String), async_nats::Error> {
             "Failed to locate Auth Service. Unable to spin up Orchestrator Auth Client."
         ))?;
 
-    // i. register `save_hub_auth` consumer
-    // ii. register `save_user_file` consumer
-    // iii. send req for `` /eg:`start_hub_handshake`
-    // iv. THEN (on get resp from start_handshake) `send_user_pubkey`
-
-    // 1. make req (with agent key & email & nonce in payload, & sig in headers)
-    // to receive_handhake_request
-    // then await the reply (which should include the hub jwts)
-
-    // 2. make req (with agent key as payload)
-    // to add_user_pubkey
-    // then await the reply (which should include the user jwt)
-
     // Register save service for hub auth files (operator and sys)
     auth_service
-        .add_local_consumer::<authentication::types::ApiResult>(
-            "save_hub_auth",
-            "save_hub_auth",
+        .add_consumer::<authentication::types::ApiResult>(
+            "save_hub_jwts", // consumer name
+            &format!("{}.{}", host_pubkey, auth_p1_subject), // consumer stream subj
             EndpointType::Async(auth_api.call(|api: AuthApi, msg: Arc<Message>| {
                 async move {
                     api.save_hub_jwts(msg).await
                 }
             })),
-            None,
+            Some(create_callback_subject_to_orchestrator(auth_p2_subject)),
         )
         .await?;
         
     // Register save service for signed user jwt file
     auth_service
-       .add_local_consumer::<authentication::types::ApiResult>(
-            "save_user_jwt",
-            "end_hub_handshake",
+       .add_consumer::<authentication::types::ApiResult>(
+            "save_user_jwt", // consumer name
+            &format!("{}.{}", host_pubkey, auth_end_subject), // consumer stream subj
             EndpointType::Async(auth_api.call(|api: AuthApi, msg: Arc<Message>| {
                 async move {
-                    api.save_user_jwt(msg, USER_CREDENTIALS_PATH).await
+                    api.save_user_jwt(msg, &local_utils::get_host_credentials_path()).await
                 }
             })),
             None,
         )
         .await?;
 
-    // Send the request (with payload) for the hub auth files and await a response
-    // match client.request(subject, payload.into()).await {
-    //     Ok(response) => {
-    //         let response_str = String::from_utf8_lossy(&response.payload);
-    //         println!("Received response: {}", response_str);
-    //     }
-    //     Err(e) => {
-    //         println!("Failed to get a response: {}", e);
-    //     }
-    // }
-    let req_hub_files_options = nats_js_client::SendRequest {
-        subject: format!("HPOS.init.{}", server_node_id),
-        msg_id: format!("hpos_init_mid_{}", rand::random::<u8>()),
-        data: b"Host Auth Connected!".to_vec(),
+    // ==================== Publish Initial Auth Req =============================================
+    // Initialize auth handshake with Orchestrator
+    // by calling `AUTH.start_handshake` on the Auth Service
+    let payload = types::AuthRequestPayload {
+        host_pubkey: host_pubkey.clone(),
+        email: "config.test.email@holo.host".to_string(),
+        hoster_pubkey: "test_pubkey_from_config".to_string(),
+        nonce: TextNonce::new().to_string()
     };
-    host_auth_client.publish(&req_hub_files_options).await?;
 
-    // ...upon the reply to the above, do the following: publish user pubkey file
-    let _send_user_pubkey_publish_options = nats_js_client::SendRequest {
-        subject: format!("HPOS.init.{}", server_node_id),
-        msg_id: format!("hpos_init_mid_{}", rand::random::<u8>()),
-        data: b"Host Auth Connected!".to_vec(),
+    let payload_bytes = serde_json::to_vec(&payload)?;
+    let signature: Vec<u8> = host_user_keys.sign(&payload_bytes)?;
+
+    let mut headers = HeaderMap::new();
+    headers.insert(HeaderName::from_static("X-Signature"), HeaderValue::from_str(&format!("{:?}",signature))?);
+
+    let publish_info = nats_js_client::PublishInfo {
+        subject: "AUTH.start_handshake".to_string(),
+        msg_id: format!("id={}", rand::random::<u8>()),
+        data: payload_bytes,
+        headers: Some(headers)
     };
-    // host_auth_client.publish(send_user_pubkey_publish_options);
-    utils::chunk_file_and_publish(&host_auth_client.js, "subject", "file_path").await?;
+    host_auth_client
+        .publish(publish_info)
+        .await?;
 
-    // 5. Generate user creds file
-    let user_creds_path = utils::generate_creds_file();
+    log::trace!(
+        "Init Host Agent Service is running. Waiting for requests..."
+    );
 
-    // 6. Close and drain internal buffer before exiting to make sure all messages are sent
+    // ==================== Wait for Host Creds File & Safely Exit Auth Client ==================
+    // Register FILE WATCHER and WAIT FOR the Host Creds File to exist
+    // authentication::utils::get_file_path_buf(&host_creds_path).try_exists()?;
+
+    // Close and drain internal buffer before exiting to make sure all messages are sent
     host_auth_client.close().await?;
 
-    Ok(("host_pubkey_placeholder".to_string(), user_creds_path))
+    Ok(host_pubkey)
 }

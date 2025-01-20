@@ -7,7 +7,7 @@
 */
 
 use anyhow::{anyhow, Result};
-use std::{sync::Arc, time::Duration};
+use std::{collections::HashMap, sync::Arc, time::Duration};
 use async_nats::Message;
 use mongodb::{options::ClientOptions, Client as MongoDBClient};
 use workload::{
@@ -15,12 +15,30 @@ use workload::{
 };
 use util_libs::{
     db::mongodb::get_mongodb_url,
-    js_stream_service::JsServiceParamsPartial,
+    js_stream_service::{JsServiceParamsPartial, ResponseSubjectsGenerator},
     nats_js_client::{self, EndpointType, JsClient, NewJsClientParams},
 };
 
 const ORCHESTRATOR_WORKLOAD_CLIENT_NAME: &str = "Orchestrator Workload Agent";
 const ORCHESTRATOR_WORKLOAD_CLIENT_INBOX_PREFIX: &str = "_orchestrator_workload_inbox";
+
+pub fn create_callback_subject_to_host(is_prefix: bool, tag_name: String, sub_subject_name: String) -> ResponseSubjectsGenerator {
+    Arc::new(move |tag_map: HashMap<String, String>| -> Vec<String> {
+        if is_prefix {
+            let matching_tags = tag_map.into_iter().fold(vec![], |mut acc, (k, v)| {
+                if k.starts_with(&tag_name) {
+                    acc.push(v)
+                }
+                acc
+            });
+            return matching_tags;
+        } else if let Some(tag) = tag_map.get(&tag_name) {
+            return vec![format!("{}.{}", tag, sub_subject_name)];
+        }
+        log::error!("WORKLOAD Error: Failed to find {}. Unable to send orchestrator response to hosting agent for subject {}. Fwding response to `WORKLOAD.ERROR.INBOX`.", tag_name, sub_subject_name);
+        vec!["WORKLOAD.ERROR.INBOX".to_string()]
+    })
+}
 
 pub async fn run() -> Result<(), async_nats::Error> {
     // ==================== NATS Setup ====================
@@ -70,7 +88,7 @@ pub async fn run() -> Result<(), async_nats::Error> {
 
     // Published by Developer
     workload_service
-        .add_local_consumer::<workload::types::ApiResult>(
+        .add_consumer::<workload::types::ApiResult>(
             "add_workload",
             "add",
             EndpointType::Async(workload_api.call(|api: WorkloadApi, msg: Arc<Message>| {
@@ -84,7 +102,7 @@ pub async fn run() -> Result<(), async_nats::Error> {
 
     // Automatically published by the Nats-DB-Connector
     workload_service
-        .add_local_consumer::<workload::types::ApiResult>(
+        .add_consumer::<workload::types::ApiResult>(
             "handle_db_insertion",
             "insert",
             EndpointType::Async(workload_api.call(|api: WorkloadApi, msg: Arc<Message>| {
@@ -92,13 +110,13 @@ pub async fn run() -> Result<(), async_nats::Error> {
                     api.handle_db_insertion(msg).await
                 }
             })),
-            None,
+            Some(create_callback_subject_to_host(true, "assigned_hosts".to_string(), "start".to_string())),
         )
         .await?;
     
     // Published by the Host Agent
     workload_service
-    .add_local_consumer::<workload::types::ApiResult>(
+    .add_consumer::<workload::types::ApiResult>(
         "handle_status_update",
         "read_status_update",
         EndpointType::Async(workload_api.call(|api: WorkloadApi, msg: Arc<Message>| {

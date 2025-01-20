@@ -4,24 +4,35 @@
 - orchestrator user
 
 // This client is responsible for:
+//// auth_endpoint_subject = "AUTH.{host_id}.file.transfer.JWT-User"
 */
 
-use crate::utils;
+use crate::utils as local_utils;
 
 use anyhow::{anyhow, Result};
-use std::{sync::Arc, time::Duration};
+use std::{collections::HashMap, sync::Arc, time::Duration};
+// use std::process::Command;
 use async_nats::Message;
 use mongodb::{options::ClientOptions, Client as MongoDBClient};
-use authentication::{self, AuthApi, AUTH_SRV_DESC, AUTH_SRV_NAME, AUTH_SRV_SUBJ, AUTH_SRV_VERSION};
-use std::process::Command;
+use authentication::{self, types::AuthServiceSubjects, AuthApi, AUTH_SRV_DESC, AUTH_SRV_NAME, AUTH_SRV_SUBJ, AUTH_SRV_VERSION};
 use util_libs::{
     db::mongodb::get_mongodb_url,
-    js_stream_service::JsServiceParamsPartial,
+    js_stream_service::{JsServiceParamsPartial, ResponseSubjectsGenerator},
     nats_js_client::{self, EndpointType, JsClient, NewJsClientParams},
 };
 
 pub const ORCHESTRATOR_AUTH_CLIENT_NAME: &str = "Orchestrator Auth Agent";
 pub const ORCHESTRATOR_AUTH_CLIENT_INBOX_PREFIX: &str = "_orchestrator_auth_inbox";
+
+pub fn create_callback_subject_to_host(tag_name: String, sub_subject_name: String) -> ResponseSubjectsGenerator {
+    Arc::new(move |tag_map: HashMap<String, String>| -> Vec<String> {
+        if let Some(tag) = tag_map.get(&tag_name) {
+            return vec![format!("{}.{}", tag, &sub_subject_name)];
+        }
+        log::error!("Auth Error: Failed to find {}. Unable to send orchestrator response to hosting agent for subject {}. Fwding response to `AUTH.ERROR.INBOX`.", tag_name, sub_subject_name);
+        vec!["AUTH.ERROR.INBOX".to_string()]
+    })
+}
 
 pub async fn run() -> Result<(), async_nats::Error> {
     // ==================== NATS Setup ====================
@@ -61,69 +72,50 @@ pub async fn run() -> Result<(), async_nats::Error> {
     // ==================== API ENDPOINTS ====================
     // Register Auth Streams for Orchestrator to consume and proceess
     // NB: The subjects below are published by the Host Agent
+    let auth_start_subject = serde_json::to_string(&AuthServiceSubjects::StartHandshake)?;
+    let auth_p1_subject = serde_json::to_string(&AuthServiceSubjects::HandleHandshakeP1)?;
+    let auth_p2_subject = serde_json::to_string(&AuthServiceSubjects::HandleHandshakeP2)?;
+    let auth_end_subject = serde_json::to_string(&AuthServiceSubjects::EndHandshake)?;
+
     let auth_service = orchestrator_auth_client
         .get_js_service(AUTH_SRV_NAME.to_string())
         .await
         .ok_or(anyhow!(
             "Failed to locate Auth Service. Unable to spin up Orchestrator Auth Client."
-        ))?;
-
+        ))?;    
+    
     auth_service
-        .add_local_consumer::<authentication::types::ApiResult>(
-            "add_user_pubkey",
-            "add_user_pubkey",
+        .add_consumer::<authentication::types::ApiResult>(
+            "start_handshake", // consumer name
+            &auth_start_subject, // consumer stream subj
+            EndpointType::Async(auth_api.call(|api: AuthApi, msg: Arc<Message>| {
+                async move {
+                    api.handle_handshake_request(msg, &local_utils::get_orchestrator_credentials_dir_path()).await
+                }
+            })),
+            Some(create_callback_subject_to_host("host_pubkey".to_string(), auth_p1_subject)),
+        )
+        .await?;
+        
+    auth_service
+        .add_consumer::<authentication::types::ApiResult>(
+            "add_user_pubkey", // consumer name
+            &auth_p2_subject, // consumer stream subj
             EndpointType::Async(auth_api.call(|api: AuthApi, msg: Arc<Message>| {
                 async move {
                     api.add_user_pubkey(msg).await
                 }
             })),
-            None,
+            Some(create_callback_subject_to_host("host_pubkey".to_string(), auth_end_subject)),
         )
         .await?;
 
     log::trace!(
-        "{} Service is running. Waiting for requests...",
-        AUTH_SRV_NAME
+        "Orchestrator Auth Service is running. Waiting for requests..."
     );
-
-
-    let resolver_path = utils::get_resolver_path();
-
-    let _auth_endpoint_subject = format!("AUTH.{}.file.transfer.JWT-User", "host_id_placeholder"); // endpoint_subject
- 
-    // Generate resolver file and create resolver file
-    Command::new("nsc")
-        .arg("generate")
-        .arg("config")
-        .arg("--nats-resolver")
-        .arg("sys-account SYS")
-        .arg("--force")
-        .arg(format!("--config-file {}", resolver_path))
-        .output()
-        .expect("Failed to create resolver config file");
-
-    // Push auth updates to hub server
-    Command::new("nsc")
-        .arg("push -A")
-        .output()
-        .expect("Failed to create resolver config file");
-
-    // publish user jwt file
-    let server_node_id = "server_node_id_placeholder";
-    utils::chunk_file_and_publish(
-        &orchestrator_auth_client,
-        &format!("HPOS.init.{}", server_node_id),
-        "placeholder_user_id / pubkey",
-    )
-    .await?;
 
     // Only exit program when explicitly requested
     tokio::signal::ctrl_c().await?;
-    log::warn!("CTRL+C detected. Please press CTRL+C again within 5 seconds to confirm exit...");
-    tokio::select! {
-        _ = tokio::time::sleep(tokio::time::Duration::from_secs(5)) => log::warn!("Resuming service."),
-        _ = tokio::signal::ctrl_c() => log::error!("Shutting down."),
-    }
 
     // Close client and drain internal buffer before exiting to make sure all messages are sent
     orchestrator_auth_client.close().await?;

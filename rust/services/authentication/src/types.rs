@@ -1,5 +1,16 @@
+use std::collections::HashMap;
+
 use util_libs::js_stream_service::{CreateTag, EndpointTraits};
 use serde::{Deserialize, Serialize};
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "snake_case")]
+pub enum AuthServiceSubjects {
+    StartHandshake,
+    HandleHandshakeP1,
+    HandleHandshakeP2,
+    EndHandshake,
+}
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum AuthState {
@@ -11,7 +22,7 @@ pub enum AuthState {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct AuthStatus {
-    pub host_id: String,
+    pub host_pubkey: String,
     pub status: AuthState
 }
 
@@ -22,20 +33,32 @@ pub struct AuthHeaders {
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct AuthRequestPayload {
+    pub hoster_pubkey: String,
     pub email: String,
-    pub host_id: String,
-    pub pubkey: String,
+    pub host_pubkey: String,
+    pub nonce: String
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub enum AuthResultType {
+    Single(Vec<u8>),
+    Multiple(Vec<Vec<u8>>)
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct AuthResult {
+    pub data: AuthResultType,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ApiResult {
     pub status: AuthStatus,
-    pub result: Vec<u8>,
-    pub maybe_response_tags: Option<Vec<String>>
+    pub result: AuthResult,
+    pub maybe_response_tags: Option<HashMap<String, String>>
 }
 impl EndpointTraits for ApiResult {}
 impl CreateTag for ApiResult {
-    fn get_tags(&self) -> Option<Vec<String>> {
-        self.maybe_response_tags.clone()
+    fn get_tags(&self) -> HashMap<String, String> {
+        self.maybe_response_tags.clone().unwrap_or_default()
     }
 }

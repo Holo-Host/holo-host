@@ -85,9 +85,9 @@ pub async fn run(host_pubkey: &str, host_creds_path: &str) -> Result<(), async_n
         ))?;
 
     workload_service
-        .add_local_consumer::<workload::types::ApiResult>(
-            "start_workload",
-            "start",
+        .add_consumer::<workload::types::ApiResult>(
+            "start_workload", // consumer name
+            &format!("{}.start", host_pubkey), // consumer stream subj
             EndpointType::Async(workload_api.call(|api: WorkloadApi, msg: Arc<Message>| {
                 async move {
                     api.start_workload(msg).await
@@ -98,9 +98,9 @@ pub async fn run(host_pubkey: &str, host_creds_path: &str) -> Result<(), async_n
         .await?;
 
     workload_service
-        .add_local_consumer::<workload::types::ApiResult>(
-            "send_workload_status",
-            "send_status",
+        .add_consumer::<workload::types::ApiResult>(
+            "send_workload_status", // consumer name
+            &format!("{}.send_status", host_pubkey), // consumer stream subj
             EndpointType::Async(workload_api.call(|api: WorkloadApi, msg: Arc<Message>| {
                 async move {
                     api.send_workload_status(msg).await
@@ -111,9 +111,9 @@ pub async fn run(host_pubkey: &str, host_creds_path: &str) -> Result<(), async_n
         .await?;
 
     workload_service
-        .add_local_consumer::<workload::types::ApiResult>(
-            "uninstall_workload",
-            "uninstall",
+        .add_consumer::<workload::types::ApiResult>(
+            "uninstall_workload", // consumer name
+            &format!("{}.uninstall", host_pubkey), // consumer stream subj
             EndpointType::Async(workload_api.call(|api: WorkloadApi, msg: Arc<Message>| {
                 async move {
                     api.uninstall_workload(msg).await
