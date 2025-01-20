@@ -96,7 +96,7 @@ impl WorkloadApi {
             msg,
             WorkloadState::Running,
             |workload: schemas::Workload| async move {
-                let workload_query = doc! { "_id":  workload._id.clone() };
+                let workload_query = doc! { "_id":  workload._id };
                 let updated_workload = to_document(&workload)?;
                 self.workload_collection.update_one_within(workload_query, UpdateModifications::Document(doc!{ "$set": updated_workload })).await?;
                 log::info!("Successfully updated workload. MongodDB Workload ID={:?}", workload._id);
@@ -121,7 +121,7 @@ impl WorkloadApi {
             msg,
             WorkloadState::Removed,
             |workload_id: schemas::MongoDbId| async move {
-                let workload_query = doc! { "_id":  workload_id.clone() };
+                let workload_query = doc! { "_id":  workload_id };
                 self.workload_collection.delete_one_from(workload_query).await?;
                 log::info!(
                     "Successfully removed workload from the Workload Collection. MongodDB Workload ID={:?}",
@@ -199,7 +199,7 @@ impl WorkloadApi {
                 let host_id = host._id.to_owned().unwrap();
                 
                 // 4. Update the Workload Collection with the assigned Host ID
-                let workload_query = doc! { "_id":  workload_id.clone() };
+                let workload_query = doc! { "_id":  workload_id };
                 let updated_workload = &Workload {
                     assigned_hosts: vec![host_id],
                     ..workload.clone()
@@ -214,7 +214,7 @@ impl WorkloadApi {
                 // 5. Update the Host Collection with the assigned Workload ID
                 let host_query = doc! { "_id":  host.clone()._id };
                 let updated_host_doc =  to_document(&Host {
-                    assigned_workloads: vec![workload_id.clone().to_hex()],
+                    assigned_workloads: vec![workload_id.to_hex()],
                     ..host.to_owned()
                 })?;
                 let updated_host_result = self.host_collection.update_one_within(host_query, UpdateModifications::Document(updated_host_doc)).await?;
@@ -250,18 +250,18 @@ impl WorkloadApi {
         log::trace!("Workload to update. Workload={:#?}", workload.clone());
 
         // 1. fetch existing workload document
-        match self.workload_collection.get_one_from(doc! { "_id":  workload._id.clone() }).await?{
+        match self.workload_collection.get_one_from(doc! { "_id":  workload._id }).await?{
             Some(workload_doc) => {
                 // 2. remove workload from hosts
                 self.host_collection.update_one_within(
                     doc!{ "_id": { "$in": workload_doc.assigned_hosts } },
-                    UpdateModifications::Document(doc!{ "$pull": { "assigned_workloads": workload_doc._id.clone() } })
+                    UpdateModifications::Document(doc!{ "$pull": { "assigned_workloads": workload_doc._id } })
                 ).await?;
                 
                 // 3. remove workload from developers
                 self.developer_collection.update_one_within(
                     doc!{ "_id": { "$in": workload_doc.assigned_developer } },
-                    UpdateModifications::Document(doc!{ "$pull": { "assigned_workloads": workload_doc._id.clone() } })
+                    UpdateModifications::Document(doc!{ "$pull": { "assigned_workloads": workload_doc._id } })
                 ).await?;
             },
             None => {
@@ -272,19 +272,19 @@ impl WorkloadApi {
         // 4. add workload to hosts
         self.host_collection.update_one_within(
             doc!{ "_id": { "$in": workload.clone().assigned_hosts } },
-            UpdateModifications::Document(doc!{ "$push": { "assigned_workloads": workload._id.clone() } })
+            UpdateModifications::Document(doc!{ "$push": { "assigned_workloads": workload._id } })
         ).await?;
         
         // 5. add workload to developers
         self.developer_collection.update_one_within(
             doc!{ "_id": { "$in": workload.clone().assigned_developer } },
-            UpdateModifications::Document(doc!{ "$push": { "assigned_workloads": workload._id.clone() } })
+            UpdateModifications::Document(doc!{ "$push": { "assigned_workloads": workload._id } })
         ).await?;
 
         workload.updated_at = Some(DateTime::from_chrono(chrono::Utc::now()));
 
         let success_status = WorkloadStatus {
-            id: workload._id.clone().map(|oid| oid.to_hex()),
+            id: workload._id.map(|oid| oid.to_hex()),
             desired: WorkloadState::Running,
             actual: WorkloadState::Running,
         };
@@ -326,13 +326,13 @@ impl WorkloadApi {
                 // 2. remove workload from hosts
                 self.host_collection.update_one_within(
                     doc!{ "_id": { "$in": workload_doc.assigned_hosts } },
-                    UpdateModifications::Document(doc!{ "$pull": { "assigned_workloads": workload_doc._id.clone() } })
+                    UpdateModifications::Document(doc!{ "$pull": { "assigned_workloads": workload_doc._id } })
                 ).await?;
                 
                 // 3. remove workload from developers
                 self.developer_collection.update_one_within(
                     doc!{ "_id": { "$in": workload_doc.assigned_developer } },
-                    UpdateModifications::Document(doc!{ "$pull": { "assigned_workloads": workload_doc._id.clone() } })
+                    UpdateModifications::Document(doc!{ "$pull": { "assigned_workloads": workload_doc._id } })
                 ).await?;
             },
             None => {
