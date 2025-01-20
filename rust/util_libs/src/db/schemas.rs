@@ -155,6 +155,7 @@ pub enum WorkloadState {
     Pending,
     Installed,
     Running,
+    Updating,
     Removed,
     Uninstalled,
     Error(String), // String = error message

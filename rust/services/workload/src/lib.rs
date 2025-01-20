@@ -248,8 +248,8 @@ impl WorkloadApi {
 
     // Zeeshan to take a look:
     // NB: Automatically published by the nats-db-connector
-    pub async fn handle_db_update(&self, msg: Arc<Message>) -> Result<types::ApiResult, ServiceError> {
-        log::debug!("Incoming message for 'WORKLOAD.update'");
+    pub async fn handle_db_modification(&self, msg: Arc<Message>) -> Result<types::ApiResult, ServiceError> {
+        log::debug!("Incoming message for 'WORKLOAD.modify'");
         
         let workload = Self::convert_to_type::<schemas::Workload>(msg)?;
         log::trace!("New workload to assign. Workload={:#?}", workload);
@@ -265,28 +265,9 @@ impl WorkloadApi {
         Ok(types::ApiResult(success_status, None))
     }
 
-    // Zeeshan to take a look:
-    // NB: Automatically published by the nats-db-connector
-    pub async fn handle_db_deletion(&self, msg: Arc<Message>) -> Result<types::ApiResult, ServiceError> {
-        log::debug!("Incoming message for 'WORKLOAD.delete'");
-        
-        let workload = Self::convert_to_type::<schemas::Workload>(msg)?;
-        log::trace!("New workload to assign. Workload={:#?}", workload);   
-
-        // TODO: ...handle the use case for the delete entry change stream
-
-        let success_status = WorkloadStatus {
-            id: workload._id,
-            desired: WorkloadState::Removed,
-            actual: WorkloadState::Removed,
-        };
-        
-        Ok(types::ApiResult(success_status, None))
-    }
-
     // NB: Published by the Hosting Agent whenever the status of a workload changes
     pub async fn handle_status_update(&self, msg: Arc<Message>) -> Result<types::ApiResult, ServiceError> {
-        log::debug!("Incoming message for 'WORKLOAD.read_status_update'");
+        log::debug!("Incoming message for 'WORKLOAD.handle_status_update'");
 
         let workload_status = Self::convert_to_type::<WorkloadStatus>(msg)?;
         log::trace!("Workload status to update. Status={:?}", workload_status);
@@ -297,7 +278,7 @@ impl WorkloadApi {
     }    
 
      /*******************************   For Host Agent   *********************************/
-    pub async fn start_workload(&self, msg: Arc<Message>) -> Result<types::ApiResult, ServiceError> {
+    pub async fn start_workload_on_host(&self, msg: Arc<Message>) -> Result<types::ApiResult, ServiceError> {
         log::debug!("Incoming message for 'WORKLOAD.start' : {:?}", msg);
         let workload = Self::convert_to_type::<schemas::Workload>(msg)?;
 
@@ -314,7 +295,24 @@ impl WorkloadApi {
         Ok(types::ApiResult(status, None))
     }
 
-    pub async fn uninstall_workload(&self, msg: Arc<Message>) -> Result<types::ApiResult, ServiceError> {
+    pub async fn update_workload_on_host(&self, msg: Arc<Message>) -> Result<types::ApiResult, ServiceError> {
+        log::debug!("Incoming message for 'WORKLOAD.handle_update' : {:?}", msg);
+        let workload = Self::convert_to_type::<schemas::Workload>(msg)?;
+
+        // TODO: Talk through with Stefan
+        // 1. Connect to interface for Nix and instruct systemd to install workload...
+        // eg: nix_install_with(workload)
+
+        // 2. Respond to endpoint request
+        let status = WorkloadStatus {
+            id: workload._id,
+            desired: WorkloadState::Updating,
+            actual: WorkloadState::Unknown("..".to_string()),
+        };
+        Ok(types::ApiResult(status, None))
+    }
+
+    pub async fn uninstall_workload_from_host(&self, msg: Arc<Message>) -> Result<types::ApiResult, ServiceError> {
         log::debug!("Incoming message for 'WORKLOAD.uninstall' : {:?}", msg);
         let workload_id = Self::convert_to_type::<String>(msg)?;
 
@@ -333,7 +331,7 @@ impl WorkloadApi {
 
     // For host agent ? or elsewhere ?
     // TODO: Talk through with Stefan
-    pub async fn send_workload_status(&self, msg: Arc<Message>) -> Result<types::ApiResult, ServiceError> {
+    pub async fn send_workload_status_from_host(&self, msg: Arc<Message>) -> Result<types::ApiResult, ServiceError> {
         log::debug!(
             "Incoming message for 'WORKLOAD.send_workload_status' : {:?}",
             msg
