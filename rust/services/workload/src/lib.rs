@@ -142,6 +142,7 @@ impl WorkloadApi {
     }
 
     // NB: Automatically published by the nats-db-connector
+    // trigger on mongodb [workload] collection (insert)
     pub async fn handle_db_insertion(&self, msg: Arc<Message>) -> Result<types::ApiResult, anyhow::Error> {
         log::debug!("Incoming message for 'WORKLOAD.insert'");
         Ok(self.process_request(
@@ -241,12 +242,13 @@ impl WorkloadApi {
     }
 
     // NB: Automatically published by the nats-db-connector
+    // triggers on mongodb [workload] collection (update)
     pub async fn handle_db_update(&self, msg: Arc<Message>) -> Result<types::ApiResult, anyhow::Error> {
         log::debug!("Incoming message for 'WORKLOAD.update'");
         
         let payload_buf = msg.payload.to_vec();
 
-        let mut workload: schemas::Workload = serde_json::from_slice(&payload_buf)?;
+        let workload: schemas::Workload = serde_json::from_slice(&payload_buf)?;
         log::trace!("Workload to update. Workload={:#?}", workload.clone());
 
         // 1. fetch existing workload document
@@ -257,31 +259,17 @@ impl WorkloadApi {
                     doc!{ "_id": { "$in": workload_doc.assigned_hosts } },
                     UpdateModifications::Document(doc!{ "$pull": { "assigned_workloads": workload_doc._id } })
                 ).await?;
-                
-                // 3. remove workload from developers
-                self.developer_collection.update_one_within(
-                    doc!{ "_id": { "$in": workload_doc.assigned_developer } },
-                    UpdateModifications::Document(doc!{ "$pull": { "assigned_workloads": workload_doc._id } })
-                ).await?;
             },
             None => {
                 log::warn!("Workload not found. Unable to remove workload.");
             }
         }
 
-        // 4. add workload to hosts
+        // 3. add workload to hosts
         self.host_collection.update_one_within(
             doc!{ "_id": { "$in": workload.clone().assigned_hosts } },
             UpdateModifications::Document(doc!{ "$push": { "assigned_workloads": workload._id } })
         ).await?;
-        
-        // 5. add workload to developers
-        self.developer_collection.update_one_within(
-            doc!{ "_id": { "$in": workload.clone().assigned_developer } },
-            UpdateModifications::Document(doc!{ "$push": { "assigned_workloads": workload._id } })
-        ).await?;
-
-        workload.updated_at = Some(DateTime::from_chrono(chrono::Utc::now()));
 
         let success_status = WorkloadStatus {
             id: workload._id.map(|oid| oid.to_hex()),
@@ -292,7 +280,9 @@ impl WorkloadApi {
         Ok(types::ApiResult(success_status, None))
     }
   
+    // deprecated?
     // NB: This is the stream that is automatically published by the nats-db-connector
+    // triggers on mongodb [workload] collection (delete)
     pub async fn handle_db_deletion(&self, msg: Arc<Message>) -> Result<types::ApiResult, anyhow::Error> {
 
         log::debug!("Incoming message for 'WORKLOAD.delete'");

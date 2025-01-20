@@ -33,17 +33,37 @@ pub enum UserPermission {
     Admin
 }
 
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub enum Role {
-    Developer(DeveloperJWT), // jwt string
-    Host(HosterPubKey),      // host pubkey
+pub struct BaseMongoStruct {
+    pub deleted: bool,
+    pub deleted_at: DateTime,
+    pub created_at: DateTime,
+    pub updated_at: DateTime,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct RoleInfo {
-    pub ref_id: MongoDbId, // Hoster/Developer Mongodb ID ref
-    pub role: Role,     // *INDEXED*
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+pub struct UserInfo  {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub _id: Option<MongoDbId>,
+    pub email: String,
+    pub given_names: String,
+    pub family_name: String,
+}
+
+impl IntoIndexes for UserInfo {
+    fn into_indices(self) -> Result<Vec<(Document, Option<IndexOptions>)>> {
+        let mut indices = vec![];
+
+        // add email index
+        let email_index_doc = doc! { "email": 1 };
+        let email_index_opts = Some(
+            IndexOptions::builder()
+                .name(Some("email_index".to_string()))
+                .build(),
+        );
+        indices.push((email_index_doc, email_index_opts));
+
+        Ok(indices)
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
@@ -57,32 +77,42 @@ pub struct User {
     pub updated_at: Option<DateTime>,
     pub created_at: Option<DateTime>,
 
-    pub email: String, // we need to remove this from the collection (personal info)
-    pub roles: Vec<RoleInfo>, // I suggest we remove this. Use the mongodb query to map the role when we fetch the user data
+    pub user_info: Option<MongoDbId>,
+    pub developer: Option<MongoDbId>,
+    pub host: Option<MongoDbId>,
 }
 
+// No Additional Indexing for Developer
 impl IntoIndexes for User {
     fn into_indices(self) -> Result<Vec<(Document, Option<IndexOptions>)>> {
         let mut indices = vec![];
 
-        //  Add Email Index
-        let email_index_doc = doc! { "email": 1 };
-        let email_index_opts = Some(
+        // add user_info index
+        let user_info_index_doc = doc! { "user_info": 1 };
+        let user_info_index_opts = Some(
             IndexOptions::builder()
-                .unique(true)
-                .name(Some("email_index".to_string()))
+                .name(Some("user_info_index".to_string()))
                 .build(),
         );
-        indices.push((email_index_doc, email_index_opts));
+        indices.push((user_info_index_doc, user_info_index_opts));
 
-        // Add Role Index
-        let role_index_doc = doc! { "roles.role": 1 };
-        let role_index_opts = Some(
+        // add developer index
+        let developer_index_doc = doc! { "developer": 1 };
+        let developer_index_opts = Some(
             IndexOptions::builder()
-                .name(Some("role_index".to_string()))
+                .name(Some("developer_index".to_string()))
                 .build(),
         );
-        indices.push((role_index_doc, role_index_opts));
+        indices.push((developer_index_doc, developer_index_opts));
+
+        // add host index
+        let host_index_doc = doc! { "host": 1 };
+        let host_index_opts = Some(
+            IndexOptions::builder()
+                .name(Some("host_index".to_string()))
+                .build(),
+        );
+        indices.push((host_index_doc, host_index_opts));
 
         Ok(indices)
     }
