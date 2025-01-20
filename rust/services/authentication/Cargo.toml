@@ -13,7 +13,8 @@ tokio = { workspace = true }
 env_logger = { workspace = true }
 log = { workspace = true }
 dotenv = { workspace = true }
-thiserror = "2.0"
+thiserror = { workspace = true }
+async-trait = "0.1.83"
 mongodb = "3.1"
 bson = { version = "2.6.1", features = ["chrono-0_4"] }
 url = { version = "2", features = ["serde"] }

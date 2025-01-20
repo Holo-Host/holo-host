@@ -185,6 +185,7 @@ version = "0.0.1"
 dependencies = [
  "anyhow",
  "async-nats",
+ "async-trait",
  "bson",
  "bytes",
  "chrono",

@@ -14,7 +14,7 @@ use std::{collections::HashMap, sync::Arc, time::Duration};
 // use std::process::Command;
 use async_nats::Message;
 use mongodb::{options::ClientOptions, Client as MongoDBClient};
-use authentication::{self, types::AuthServiceSubjects, AuthApi, AUTH_SRV_DESC, AUTH_SRV_NAME, AUTH_SRV_SUBJ, AUTH_SRV_VERSION};
+use authentication::{self, types::AuthServiceSubjects, AuthServiceApi, orchestrator_api::OrchestratorAuthApi, AUTH_SRV_DESC, AUTH_SRV_NAME, AUTH_SRV_SUBJ, AUTH_SRV_VERSION};
 use util_libs::{
     db::mongodb::get_mongodb_url,
     js_stream_service::{JsServiceParamsPartial, ResponseSubjectsGenerator},
@@ -65,11 +65,11 @@ pub async fn run() -> Result<(), async_nats::Error> {
     let mongo_uri = get_mongodb_url();
     let client_options = ClientOptions::parse(mongo_uri).await?;
     let client = MongoDBClient::with_options(client_options)?;
-
+    
+    // ==================== Setup API & Register Endpoints ====================
     // Generate the Auth API with access to db
-    let auth_api = AuthApi::new(&client).await?;
-
-    // ==================== Register API Endpoints ====================
+    let auth_api = OrchestratorAuthApi::new(&client).await?;
+    
     // Register Auth Streams for Orchestrator to consume and proceess
     // NB: The subjects below are published by the Host Agent
     let auth_start_subject = serde_json::to_string(&AuthServiceSubjects::StartHandshake)?;
@@ -88,7 +88,7 @@ pub async fn run() -> Result<(), async_nats::Error> {
         .add_consumer::<authentication::types::ApiResult>(
             "start_handshake", // consumer name
             &auth_start_subject, // consumer stream subj
-            EndpointType::Async(auth_api.call(|api: AuthApi, msg: Arc<Message>| {
+            EndpointType::Async(auth_api.call(|api: OrchestratorAuthApi, msg: Arc<Message>| {
                 async move {
                     api.handle_handshake_request(msg, &local_utils::get_orchestrator_credentials_dir_path()).await
                 }
@@ -101,7 +101,7 @@ pub async fn run() -> Result<(), async_nats::Error> {
         .add_consumer::<authentication::types::ApiResult>(
             "add_user_pubkey", // consumer name
             &auth_p2_subject, // consumer stream subj
-            EndpointType::Async(auth_api.call(|api: AuthApi, msg: Arc<Message>| {
+            EndpointType::Async(auth_api.call(|api: OrchestratorAuthApi, msg: Arc<Message>| {
                 async move {
                     api.add_user_pubkey(msg).await
                 }
