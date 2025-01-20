@@ -78,12 +78,7 @@ impl WorkloadApi {
                 };
                 Ok(types::ApiResult(
                     WorkloadStatus {
-                        id: match updated_workload._id {
-                            Some(oid) => {
-                                Some(oid.to_hex())
-                            },
-                            None => None
-                        },
+                        id: updated_workload._id.map(|oid| oid.to_hex()),
                         desired: WorkloadState::Reported,
                         actual: WorkloadState::Reported,
                     },
@@ -107,12 +102,7 @@ impl WorkloadApi {
                 log::info!("Successfully updated workload. MongodDB Workload ID={:?}", workload._id);
                 Ok(types::ApiResult(
                     WorkloadStatus {
-                        id: match workload._id {
-                            Some(oid) => {
-                                Some(oid.to_hex())
-                            },
-                            None => None
-                        },
+                        id: workload._id.map(|oid| oid.to_hex()),
                         desired: WorkloadState::Reported,
                         actual: WorkloadState::Reported,
                     },
@@ -299,10 +289,7 @@ impl WorkloadApi {
         ).await?;
 
         let success_status = WorkloadStatus {
-            id: match workload._id.clone() {
-                Some(oid) => Some(oid.to_hex()),
-                None => None
-            },
+            id: workload._id.clone().map(|oid| oid.to_hex()),
             desired: WorkloadState::Running,
             actual: WorkloadState::Running,
         };
@@ -322,10 +309,7 @@ impl WorkloadApi {
         // TODO: ...handle the use case for the delete entry change stream
 
         let success_status = WorkloadStatus {
-            id: match workload._id {
-                Some(oid) => Some(oid.to_hex()),
-                None => None
-            },
+            id: workload._id.map(|oid| oid.to_hex()),
             desired: WorkloadState::Removed,
             actual: WorkloadState::Removed,
         };
@@ -386,10 +370,7 @@ impl WorkloadApi {
 
         // 2. Respond to endpoint request
         let status = WorkloadStatus {
-            id: match workload._id {
-                Some(oid) => Some(oid.to_hex()),
-                None => None
-            },
+            id: workload._id.map(|oid| oid.to_hex()),
             desired: WorkloadState::Running,
             actual: WorkloadState::Unknown("..".to_string()),
         };
