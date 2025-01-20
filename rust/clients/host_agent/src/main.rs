@@ -10,16 +10,14 @@ This client is responsible for subscribing the host agent to workload stream end
   - sending workload status upon request
 */
 
-mod workload_manager;
+mod hostd;
 use anyhow::Result;
 use clap::Parser;
 use dotenv::dotenv;
 pub mod agent_cli;
-pub mod gen_leaf_server;
 pub mod host_cmds;
 pub mod support_cmds;
 use thiserror::Error;
-use util_libs::nats_js_client;
 
 #[derive(Error, Debug)]
 pub enum AgentCliError {
@@ -54,10 +52,12 @@ async fn main() -> Result<(), AgentCliError> {
 }
 
 async fn daemonize() -> Result<(), async_nats::Error> {
-    // let (host_pubkey, host_creds_path) = auth::initializer::run().await?;
-    let host_creds_path = nats_js_client::get_nats_client_creds("HOLO", "HPOS", "hpos");
-    let host_pubkey = "host_id_placeholder>";
-    gen_leaf_server::run(&host_creds_path).await;
-    workload_manager::run(host_pubkey, &host_creds_path).await?;
+    let host_creds_path = std::env::var("HOST_CREDENTIALS_PATH").unwrap_or_else(|_| {
+        util_libs::nats_js_client::get_nats_client_creds("HOLO", "HPOS", "hpos")
+    });
+    // let host_pubkey = auth::init_agent::run().await?;
+    let host_pubkey = "host_pubkey_placeholder>".to_string();
+    hostd::gen_leaf_server::run(&host_creds_path).await;
+    hostd::workload_manager::run(&host_pubkey, &host_creds_path).await?;
     Ok(())
 }

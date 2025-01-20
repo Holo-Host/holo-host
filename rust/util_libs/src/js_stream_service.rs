@@ -14,10 +14,10 @@ use std::fmt::Debug;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-type ResponseSubjectsGenerator = Arc<dyn Fn(Option<Vec<String>>) -> Vec<String> + Send + Sync>;
+pub type ResponseSubjectsGenerator = Arc<dyn Fn(HashMap<String, String>) -> Vec<String> + Send + Sync>;
 
 pub trait CreateTag: Send + Sync {
-    fn get_tags(&self) -> Option<Vec<String>>;
+    fn get_tags(&self) -> HashMap<String, String>;
 }
 
 pub trait EndpointTraits:  Serialize + for<'de> Deserialize<'de> + Send + Sync + Clone + Debug + CreateTag + 'static {}
@@ -197,7 +197,7 @@ impl JsStreamService {
         })
     }
 
-    pub async fn add_local_consumer<T>(
+    pub async fn add_consumer<T>(
         &self,
         consumer_name: &str,
         endpoint_subject: &str,
@@ -345,7 +345,7 @@ impl JsStreamService {
                     let maybe_subject_tags = r.get_tags();
                     (bytes, maybe_subject_tags)
                 },
-                Err(err) => (err.to_string().into(), None),
+                Err(err) => (err.to_string().into(), HashMap::new()),
             };
 
             // Returns a response if a reply address exists.
@@ -496,7 +496,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_js_service_add_local_consumer() {
+    async fn test_js_service_add_consumer() {
         let context = setup_jetstream().await;
         let service = get_default_js_service(context).await;
 
@@ -506,7 +506,7 @@ mod tests {
         let response_subject = Some("response.subject".to_string());
 
         let consumer = service
-            .add_local_consumer(
+            .add_consumer(
                 consumer_name,
                 endpoint_subject,
                 endpoint_type,
@@ -531,7 +531,7 @@ mod tests {
         let response_subject = None;
 
         service
-            .add_local_consumer(
+            .add_consumer(
                 consumer_name,
                 endpoint_subject,
                 endpoint_type,

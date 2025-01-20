@@ -12,17 +12,16 @@
 */
 
 use anyhow::{anyhow, Result};
-use mongodb::{options::ClientOptions, Client as MongoDBClient};
 use std::{sync::Arc, time::Duration};
+use async_nats::Message;
 use util_libs::{
-    db::mongodb::get_mongodb_url,
     js_stream_service::JsServiceParamsPartial,
-    nats_js_client::{self, EndpointType,  },
+    nats_js_client::{self, EndpointType},
 };
 use workload::{
-    WorkloadApi, WORKLOAD_SRV_DESC, WORKLOAD_SRV_NAME, WORKLOAD_SRV_SUBJ, WORKLOAD_SRV_VERSION,
+    WorkloadServiceApi, host_api::HostWorkloadApi, WORKLOAD_SRV_DESC, WORKLOAD_SRV_NAME, WORKLOAD_SRV_SUBJ, WORKLOAD_SRV_VERSION,
+    types::{WorkloadServiceSubjects, ApiResult}
 };
-use async_nats::Message;
 
 const HOST_AGENT_CLIENT_NAME: &str = "Host Agent";
 const HOST_AGENT_INBOX_PREFIX: &str = "_host_inbox";
@@ -33,7 +32,7 @@ pub async fn run(host_pubkey: &str, host_creds_path: &str) -> Result<(), async_n
     log::info!("host_creds_path : {}", host_creds_path);
     log::info!("host_pubkey : {}", host_pubkey);
 
-    // ==================== NATS Setup ====================
+    // ==================== Setup NATS ====================
     // Connect to Nats server
     let nats_url = nats_js_client::get_nats_url();
     log::info!("nats_url : {}", nats_url);
@@ -63,20 +62,19 @@ pub async fn run(host_pubkey: &str, host_creds_path: &str) -> Result<(), async_n
             ping_interval: Some(Duration::from_secs(10)),
             request_timeout: Some(Duration::from_secs(5)),
         })
-        .await?;
+        .await?;    
 
-    // ==================== DB Setup ====================
-    // Create a new MongoDB Client and connect it to the cluster
-    let mongo_uri = get_mongodb_url();
-    let client_options = ClientOptions::parse(mongo_uri).await?;
-    let client = MongoDBClient::with_options(client_options)?;
+    // ==================== Setup API & Register Endpoints ====================
+    // Instantiate the Workload API
+    let workload_api = HostWorkloadApi::default();
+    
+    // Register Workload Streams for Host Agent to consume and process
+    // NB: Subjects are published by orchestrator
+    let workload_start_subject = serde_json::to_string(&WorkloadServiceSubjects::Start)?;
+    let workload_send_status_subject = serde_json::to_string(&WorkloadServiceSubjects::SendStatus)?;
+    let workload_uninstall_subject = serde_json::to_string(&WorkloadServiceSubjects::Uninstall)?;
+    let workload_handle_update_subject = serde_json::to_string(&WorkloadServiceSubjects::HandleUpdate)?;
 
-    // Generate the Workload API with access to db
-    let workload_api = WorkloadApi::new(&client).await?;
-
-    // ==================== API ENDPOINTS ====================
-    // Register Workload Streams for Host Agent to consume
-    // NB: Subjects are published by orchestrator or nats-db-connector
     let workload_service = host_workload_client
         .get_js_service(WORKLOAD_SRV_NAME.to_string())
         .await
@@ -85,12 +83,12 @@ pub async fn run(host_pubkey: &str, host_creds_path: &str) -> Result<(), async_n
         ))?;
 
     workload_service
-        .add_local_consumer::<workload::types::ApiResult>(
-            "start_workload",
-            "start",
-            EndpointType::Async(workload_api.call(|api: WorkloadApi, msg: Arc<Message>| {
+        .add_consumer::<ApiResult>(
+            "start_workload", // consumer name
+            &format!("{}.{}", host_pubkey, workload_start_subject), // consumer stream subj
+            EndpointType::Async(workload_api.call(|api: HostWorkloadApi, msg: Arc<Message>| {
                 async move {
-                    api.start_workload(msg).await
+                    api.start_workload_on_host(msg).await
                 }
             })),
             None,
@@ -98,12 +96,12 @@ pub async fn run(host_pubkey: &str, host_creds_path: &str) -> Result<(), async_n
         .await?;
 
     workload_service
-        .add_local_consumer::<workload::types::ApiResult>(
-            "send_workload_status",
-            "send_status",
-            EndpointType::Async(workload_api.call(|api: WorkloadApi, msg: Arc<Message>| {
+        .add_consumer::<ApiResult>(
+            "send_workload_status", // consumer name
+            &format!("{}.{}", host_pubkey, workload_handle_update_subject), // consumer stream subj
+            EndpointType::Async(workload_api.call(|api: HostWorkloadApi, msg: Arc<Message>| {
                 async move {
-                    api.send_workload_status(msg).await
+                    api.update_workload_on_host(msg).await
                 }
             })),
             None,
@@ -111,18 +109,32 @@ pub async fn run(host_pubkey: &str, host_creds_path: &str) -> Result<(), async_n
         .await?;
 
     workload_service
-        .add_local_consumer::<workload::types::ApiResult>(
-            "uninstall_workload",
-            "uninstall",
-            EndpointType::Async(workload_api.call(|api: WorkloadApi, msg: Arc<Message>| {
+        .add_consumer::<ApiResult>(
+            "uninstall_workload", // consumer name
+            &format!("{}.{}", host_pubkey, workload_uninstall_subject), // consumer stream subj
+            EndpointType::Async(workload_api.call(|api: HostWorkloadApi, msg: Arc<Message>| {
                 async move {
-                    api.uninstall_workload(msg).await
+                    api.uninstall_workload_from_host(msg).await
                 }
             })),
             None,
         )
         .await?;
 
+        workload_service
+        .add_consumer::<ApiResult>(
+            "send_workload_status", // consumer name
+            &format!("{}.{}", host_pubkey, workload_send_status_subject), // consumer stream subj
+            EndpointType::Async(workload_api.call(|api: HostWorkloadApi, msg: Arc<Message>| {
+                async move {
+                    api.send_workload_status_from_host(msg).await
+                }
+            })),
+            None,
+        )
+        .await?;
+
+    // ==================== Close and Clean Client ====================
     // Only exit program when explicitly requested
     tokio::signal::ctrl_c().await?;
 
