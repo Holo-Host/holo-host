@@ -134,13 +134,13 @@ impl AuthApi {
 
                 // ...then find the host collection that contains the provided host pubkey
                 match self.host_collection.get_one_from(doc! { "pubkey": host_pubkey.clone() }).await? {
-                    Some(host_collection) => {
+                    Some(h) => {
                         // ...and pair the host with hoster pubkey (if the hoster is not already assiged to host)
-                        if host_collection.assigned_hoster != hoster_pubkey {
-                            let host_query: bson::Document = doc! { "_id":  host_collection._id.clone() };
+                        if h.assigned_hoster != hoster_pubkey {
+                            let host_query: bson::Document = doc! { "_id":  h._id.clone() };
                             let updated_host_doc = to_document(& Host{
                                 assigned_hoster: hoster_pubkey,
-                                ..host_collection
+                                ..h
                             }).map_err(|e| ServiceError::Internal(e.to_string()))?;
                             self.host_collection.update_one_within(host_query, UpdateModifications::Document(updated_host_doc)).await?;                
                         }
@@ -159,15 +159,15 @@ impl AuthApi {
                 
                 // Finally, find the hoster collection
                 match self.hoster_collection.get_one_from(doc! { "_id":  ref_id.clone() }).await? {
-                    Some(hoster_collection) => {
+                    Some(hr) => {
                         // ...and pair the hoster with host (if the host is not already assiged to the hoster)
-                        let mut updated_assigned_hosts = hoster_collection.assigned_hosts;
+                        let mut updated_assigned_hosts = hr.assigned_hosts;
                         if !updated_assigned_hosts.contains(&host_pubkey) {
-                        let hoster_query: bson::Document = doc! { "_id":  hoster_collection._id.clone() };
+                        let hoster_query: bson::Document = doc! { "_id":  hr._id.clone() };
                         updated_assigned_hosts.push(host_pubkey.clone());
                         let updated_hoster_doc = to_document(& Hoster {
                             assigned_hosts: updated_assigned_hosts,
-                            ..hoster_collection
+                            ..hr
                         }).map_err(|e| ServiceError::Internal(e.to_string()))?;
                         self.host_collection.update_one_within(hoster_query, UpdateModifications::Document(updated_hoster_doc)).await?;                
                         }
