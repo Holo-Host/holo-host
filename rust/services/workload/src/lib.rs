@@ -78,12 +78,7 @@ impl WorkloadApi {
                 };
                 Ok(types::ApiResult(
                     WorkloadStatus {
-                        id: match updated_workload._id {
-                            Some(oid) => {
-                                Some(oid.to_hex())
-                            },
-                            None => None
-                        },
+                        id: updated_workload._id.map(|oid| oid.to_hex()),
                         desired: WorkloadState::Reported,
                         actual: WorkloadState::Reported,
                     },
