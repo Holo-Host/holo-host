@@ -1,16 +1,3 @@
-/*
- This client is associated with the:
-- WORKLOAD account
-- orchestrator user
-
-// This client is responsible for:
-    - handling requests to add workloads
-    - handling requests to update workloads
-    - handling requests to remove workloads
-    - handling workload status updates
-    - interfacing with mongodb DB
-*/
-
 mod auth;
 mod utils;
 mod workloads;

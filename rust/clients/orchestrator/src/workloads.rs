@@ -2,8 +2,12 @@
  This client is associated with the:
 - WORKLOAD account
 - orchestrator user
-
 // This client is responsible for:
+    - handling requests to add workloads
+    - handling requests to update workloads
+    - handling requests to remove workloads
+    - handling workload status updates
+    - interfacing with mongodb DB
 */
 
 use anyhow::{anyhow, Result};
@@ -86,7 +90,7 @@ pub async fn run() -> Result<(), async_nats::Error> {
     let workload_db_modification_subject = serde_json::to_string(&WorkloadServiceSubjects::Modify)?;
     let workload_handle_status_subject = serde_json::to_string(&WorkloadServiceSubjects::HandleStatusUpdate)?;
     let workload_start_subject = serde_json::to_string(&WorkloadServiceSubjects::Start)?;
-    let workload_handle_update_subject = serde_json::to_string(&WorkloadServiceSubjects::HandleUpdate)?;
+    let workload_update_installed_subject = serde_json::to_string(&WorkloadServiceSubjects::UpdateInstalled)?;
 
     let workload_service = orchestrator_workload_client
         .get_js_service(WORKLOAD_SRV_NAME.to_string())
@@ -159,7 +163,7 @@ pub async fn run() -> Result<(), async_nats::Error> {
                     api.handle_db_modification(msg).await
                 }
             })),
-            Some(create_callback_subject_to_host(true, "assigned_hosts".to_string(), workload_handle_update_subject)),
+            Some(create_callback_subject_to_host(true, "assigned_hosts".to_string(), workload_update_installed_subject)),
         )
         .await?;
 

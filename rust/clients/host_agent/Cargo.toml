@@ -14,15 +14,15 @@ log = { workspace = true }
 dotenv = { workspace = true }
 clap = { workspace = true }
 thiserror = { workspace = true }
+env_logger = { workspace = true }
 url = { version = "2", features = ["serde"] }
 bson = { version = "2.6.1", features = ["chrono-0_4"] }
-env_logger = { workspace = true }
-mongodb = "3.1"
+textnonce = "1.0.0"
 chrono = "0.4.0"
+mongodb = "3.1"
 bytes = "1.8.0"
 nkeys = "=0.4.4"
 rand = "0.8.5"
-textnonce = "1.0.0"
 util_libs = { path = "../../util_libs" }
 workload = { path = "../../services/workload" }
 authentication = { path = "../../services/authentication" }

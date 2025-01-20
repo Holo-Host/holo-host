@@ -1,11 +1,9 @@
 /*
-Endpoints & Managed Subjects:
-- `add_workload`: handles the "WORKLOAD.add" subject
-- `remove_workload`: handles the "WORKLOAD.remove" subject
-- Partial: `handle_db_change`: handles the "WORKLOAD.handle_change" subject // the stream changed output by the mongo<>nats connector (stream eg: DB_COLL_CHANGE_WORKLOAD).
-- TODO: `start_workload`: handles the "WORKLOAD.start.{{hpos_id}}" subject
-- TODO: `send_workload_status`: handles the "WORKLOAD.send_status.{{hpos_id}}" subject
-- TODO: `uninstall_workload`: handles the "WORKLOAD.uninstall.{{hpos_id}}" subject
+Endpoint Subjects:
+- `start_workload`: handles the "WORKLOAD.<host_pukey>.start." subject
+- `update_workload`: handles the "WORKLOAD.<host_pukey>.update_installed" subject
+- `uninstall_workload`: handles the "WORKLOAD.<host_pukey>.uninstall." subject
+- `send_workload_status`: handles the "WORKLOAD.<host_pukey>.send_status" subject
 */
 
 use super::{types, WorkloadServiceApi};
@@ -24,7 +22,7 @@ pub struct HostWorkloadApi {}
 impl WorkloadServiceApi for HostWorkloadApi {}
 
 impl HostWorkloadApi {
-    pub async fn start_workload_on_host(&self, msg: Arc<Message>) -> Result<types::ApiResult, ServiceError> {
+    pub async fn start_workload(&self, msg: Arc<Message>) -> Result<types::ApiResult, ServiceError> {
         log::debug!("Incoming message for 'WORKLOAD.start' : {:?}", msg);
         let workload = Self::convert_to_type::<schemas::Workload>(msg)?;
 
@@ -41,8 +39,8 @@ impl HostWorkloadApi {
         Ok(types::ApiResult(status, None))
     }
 
-    pub async fn update_workload_on_host(&self, msg: Arc<Message>) -> Result<types::ApiResult, ServiceError> {
-        log::debug!("Incoming message for 'WORKLOAD.handle_update' : {:?}", msg);
+    pub async fn update_workload(&self, msg: Arc<Message>) -> Result<types::ApiResult, ServiceError> {
+        log::debug!("Incoming message for 'WORKLOAD.update_installed' : {:?}", msg);
         let workload = Self::convert_to_type::<schemas::Workload>(msg)?;
 
         // TODO: Talk through with Stefan
@@ -58,7 +56,7 @@ impl HostWorkloadApi {
         Ok(types::ApiResult(status, None))
     }
 
-    pub async fn uninstall_workload_from_host(&self, msg: Arc<Message>) -> Result<types::ApiResult, ServiceError> {
+    pub async fn uninstall_workload(&self, msg: Arc<Message>) -> Result<types::ApiResult, ServiceError> {
         log::debug!("Incoming message for 'WORKLOAD.uninstall' : {:?}", msg);
         let workload_id = Self::convert_to_type::<String>(msg)?;
 
@@ -77,9 +75,9 @@ impl HostWorkloadApi {
 
     // For host agent ? or elsewhere ?
     // TODO: Talk through with Stefan
-    pub async fn send_workload_status_from_host(&self, msg: Arc<Message>) -> Result<types::ApiResult, ServiceError> {
+    pub async fn send_workload_status(&self, msg: Arc<Message>) -> Result<types::ApiResult, ServiceError> {
         log::debug!(
-            "Incoming message for 'WORKLOAD.send_workload_status' : {:?}",
+            "Incoming message for 'WORKLOAD.send_status' : {:?}",
             msg
         );
 

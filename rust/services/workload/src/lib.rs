@@ -3,13 +3,6 @@ Service Name: WORKLOAD
 Subject: "WORKLOAD.>"
 Provisioning Account: WORKLOAD
 Users: orchestrator & hpos
-Endpoints & Managed Subjects:
-- `add_workload`: handles the "WORKLOAD.add" subject
-- `remove_workload`: handles the "WORKLOAD.remove" subject
-- Partial: `handle_db_change`: handles the "WORKLOAD.handle_change" subject // the stream changed output by the mongo<>nats connector (stream eg: DB_COLL_CHANGE_WORKLOAD).
-- TODO: `start_workload`: handles the "WORKLOAD.start.{{hpos_id}}" subject
-- TODO: `send_workload_status`: handles the "WORKLOAD.send_status.{{hpos_id}}" subject
-- TODO: `uninstall_workload`: handles the "WORKLOAD.uninstall.{{hpos_id}}" subject
 */
 
 pub mod orchestrator_api;
