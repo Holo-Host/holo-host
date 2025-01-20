@@ -292,11 +292,6 @@ impl WorkloadApi {
         ).await?;
 
         workload.updated_at = Some(DateTime::from_chrono(chrono::Utc::now()));
-        let updated_workload_doc = to_document(&workload)?;
-        self.workload_collection.update_one_within(
-            doc! { "_id": workload._id.clone() },
-            UpdateModifications::Document(doc!{ "$set": updated_workload_doc }),
-        ).await?;
 
         let success_status = WorkloadStatus {
             id: match workload._id.clone() {
