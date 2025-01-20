@@ -13,5 +13,5 @@ async fn hello() -> impl Responder {
     HttpResponse::Ok()
         .insert_header(("Access-Control-Allow-Origin", "*"))
         .insert_header(("Content-Type", "Application/text"))
-        .body("Hello world Zeeshan")
+        .body("Hello world.")
 }
