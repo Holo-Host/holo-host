@@ -35,7 +35,7 @@ pub fn create_callback_subject_to_host(tag_name: String, sub_subject_name: Strin
 }
 
 pub async fn run() -> Result<(), async_nats::Error> {
-    // ==================== NATS Setup ====================
+    // ==================== Setup NATS ====================
     let nats_url = nats_js_client::get_nats_url();
     let event_listeners = nats_js_client::get_event_listeners();
 
@@ -60,7 +60,7 @@ pub async fn run() -> Result<(), async_nats::Error> {
         })
         .await?;
 
-    // ==================== DB Setup ====================
+    // ==================== Setup DB ====================
     // Create a new MongoDB Client and connect it to the cluster
     let mongo_uri = get_mongodb_url();
     let client_options = ClientOptions::parse(mongo_uri).await?;
@@ -69,7 +69,7 @@ pub async fn run() -> Result<(), async_nats::Error> {
     // Generate the Auth API with access to db
     let auth_api = AuthApi::new(&client).await?;
 
-    // ==================== API ENDPOINTS ====================
+    // ==================== Register API Endpoints ====================
     // Register Auth Streams for Orchestrator to consume and proceess
     // NB: The subjects below are published by the Host Agent
     let auth_start_subject = serde_json::to_string(&AuthServiceSubjects::StartHandshake)?;
@@ -114,6 +114,7 @@ pub async fn run() -> Result<(), async_nats::Error> {
         "Orchestrator Auth Service is running. Waiting for requests..."
     );
 
+    // ==================== Close and Clean Client ====================
     // Only exit program when explicitly requested
     tokio::signal::ctrl_c().await?;
 

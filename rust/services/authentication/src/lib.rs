@@ -206,40 +206,6 @@ impl AuthApi {
         })
     }
 
-    /*******************************   For Host Agent   *********************************/
-     pub async fn save_hub_jwts(&self, msg: Arc<Message>) -> Result<types::ApiResult, ServiceError> {
-        log::warn!("INCOMING Message for 'AUTH.<host_pubkey>.handle_handshake_p1' : {:?}", msg);
-
-        // receive_and_write_file();
-
-        // Respond to endpoint request
-        // let response = b"Hello, NATS!".to_vec();
-
-        // let resolver_path = utils::get_resolver_path();
-
-        // // Generate resolver file and create resolver file
-        // Command::new("nsc")
-        //     .arg("generate")
-        //     .arg("config")
-        //     .arg("--nats-resolver")
-        //     .arg("sys-account SYS")
-        //     .arg("--force")
-        //     .arg(format!("--config-file {}", resolver_path))
-        //     .output()
-        //     .expect("Failed to create resolver config file");
-
-        // // Push auth updates to hub server
-        // Command::new("nsc")
-        //     .arg("push -A")
-        //     .output()
-        //     .expect("Failed to create resolver config file");
-
-        // Ok(response)
-
-        todo!();
-    }
-
-    /*******************************  For Orchestrator   *********************************/
     pub async fn add_user_pubkey(&self, msg: Arc<Message>) -> Result<types::ApiResult, ServiceError> {
         log::warn!("INCOMING Message for 'AUTH.handle_handshake_p2' : {:?}", msg);
 
@@ -257,8 +223,8 @@ impl AuthApi {
         utils::generate_user_jwt(&host_pubkey, &account_signing_key);
 
         // 4. Prepare User JWT to be sent as a payload in the publication callback
-        let sys_path = utils::get_file_path_buf("user_jwt_path");
-        let user_jwt: Vec<u8> = std::fs::read(sys_path).map_err(|e| ServiceError::Internal(e.to_string()))?;
+        let user_jwt_path = utils::get_file_path_buf("user_jwt_path");
+        let user_jwt: Vec<u8> = std::fs::read(user_jwt_path).map_err(|e| ServiceError::Internal(e.to_string()))?;
 
         // 5. Respond to endpoint request
         Ok(types::ApiResult {
@@ -274,7 +240,51 @@ impl AuthApi {
     }
 
     /*******************************   For Host Agent   *********************************/
-     pub async fn save_user_jwt(
+    pub async fn save_hub_jwts(&self, msg: Arc<Message>) -> Result<types::ApiResult, ServiceError> {
+        log::warn!("INCOMING Message for 'AUTH.<host_pubkey>.handle_handshake_p1' : {:?}", msg);
+
+        // utils::receive_and_write_file();
+
+        // // Generate resolver file and create resolver file
+        // let resolver_path = utils::get_resolver_path();
+        // Command::new("nsc")
+        //     .arg("generate")
+        //     .arg("config")
+        //     .arg("--nats-resolver")
+        //     .arg("sys-account SYS")
+        //     .arg("--force")
+        //     .arg(format!("--config-file {}", resolver_path))
+        //     .output()
+        //     .expect("Failed to create resolver config file");
+
+        // // Push auth updates to hub server
+        // Command::new("nsc")
+        //     .arg("push -A")
+        //     .output()
+        //     .expect("Failed to create resolver config file");
+
+        // Prepare to send over user pubkey(to trigger the user jwt gen on hub)
+        let user_nkey_path = utils::get_file_path_buf("user_jwt_path");
+        let user_nkey: Vec<u8> = std::fs::read(user_nkey_path).map_err(|e| ServiceError::Internal(e.to_string()))?;
+        let host_pubkey = serde_json::to_string(&user_nkey).map_err(|e| ServiceError::Internal(e.to_string()))?;
+
+        let mut tag_map: HashMap<String, String> = HashMap::new();
+        tag_map.insert("host_pubkey".to_string(), host_pubkey.clone());
+        
+        // Respond to endpoint request
+        Ok(types::ApiResult {
+            status: types::AuthStatus { 
+                host_pubkey: host_pubkey.clone(),
+                status: types::AuthState::Requested
+            },
+            result: AuthResult {
+                data: types::AuthResultType::Single(user_nkey)
+            },
+            maybe_response_tags: Some(tag_map) // used to inject as tag in response subject
+        })
+    }
+
+    pub async fn save_user_jwt(
         &self,
         msg: Arc<Message>,
         _output_dir: &str,
@@ -325,22 +335,3 @@ impl AuthApi {
     }
 
 }
-
-// In hpos
-// pub async fn send_user_pubkey(&self, msg: Arc<Message>) -> Result<Vec<u8>, ServiceError> {
-//     // 1. validate nk key...
-//     // let auth_endpoint_subject =
-//     // format!("AUTH.{}.file.transfer.JWT-operator", "host_id_placeholder"); // endpoint_subject
-
-//     // 2. Update the hub nsc with user pubkey
-
-//     // 3. create signed jwt
-
-//     // 4. `Ack last msg and publish the new jwt to for hpos
-
-//     // 5. Respond to endpoint request
-//     // let response = b"Hello, NATS!".to_vec();
-//     // Ok(response)
-
-//     todo!()
-// }

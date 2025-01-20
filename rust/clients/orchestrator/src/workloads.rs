@@ -41,7 +41,7 @@ pub fn create_callback_subject_to_host(is_prefix: bool, tag_name: String, sub_su
 }
 
 pub async fn run() -> Result<(), async_nats::Error> {
-    // ==================== NATS Setup ====================
+    // ==================== Setup NATS ====================
     let nats_url = nats_js_client::get_nats_url();
     let creds_path = nats_js_client::get_nats_client_creds("HOLO", "WORKLOAD", "orchestrator");
     let event_listeners = nats_js_client::get_event_listeners();
@@ -67,7 +67,7 @@ pub async fn run() -> Result<(), async_nats::Error> {
         })
         .await?;
 
-    // ==================== DB Setup ====================
+    // ==================== Setup DB ====================
     // Create a new MongoDB Client and connect it to the cluster
     let mongo_uri = get_mongodb_url();
     let client_options = ClientOptions::parse(mongo_uri).await?;
@@ -76,7 +76,7 @@ pub async fn run() -> Result<(), async_nats::Error> {
     // Generate the Workload API with access to db
     let workload_api = WorkloadApi::new(&client).await?;
 
-    // ==================== API ENDPOINTS ====================
+    // ==================== Register API Endpoints ====================
     // Register Workload Streams for Orchestrator to consume and proceess
     // NB: These subjects below are published by external Developer, the Nats-DB-Connector, or the Host Agent
     let workload_service = orchestrator_workload_client
@@ -128,7 +128,7 @@ pub async fn run() -> Result<(), async_nats::Error> {
     )
     .await?;
 
-
+    // ==================== Close and Clean Client ====================
     // Only exit program when explicitly requested
     tokio::signal::ctrl_c().await?;
 

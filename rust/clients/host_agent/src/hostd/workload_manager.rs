@@ -33,7 +33,7 @@ pub async fn run(host_pubkey: &str, host_creds_path: &str) -> Result<(), async_n
     log::info!("host_creds_path : {}", host_creds_path);
     log::info!("host_pubkey : {}", host_pubkey);
 
-    // ==================== NATS Setup ====================
+    // ==================== Setup NATS ====================
     // Connect to Nats server
     let nats_url = nats_js_client::get_nats_url();
     log::info!("nats_url : {}", nats_url);
@@ -65,7 +65,7 @@ pub async fn run(host_pubkey: &str, host_creds_path: &str) -> Result<(), async_n
         })
         .await?;
 
-    // ==================== DB Setup ====================
+    // ==================== Setup DB ====================
     // Create a new MongoDB Client and connect it to the cluster
     let mongo_uri = get_mongodb_url();
     let client_options = ClientOptions::parse(mongo_uri).await?;
@@ -74,7 +74,7 @@ pub async fn run(host_pubkey: &str, host_creds_path: &str) -> Result<(), async_n
     // Generate the Workload API with access to db
     let workload_api = WorkloadApi::new(&client).await?;
 
-    // ==================== API ENDPOINTS ====================
+    // ==================== Register API Endpoints ====================
     // Register Workload Streams for Host Agent to consume and process
     // NB: Subjects are published by orchestrator
     let workload_service = host_workload_client
@@ -123,6 +123,7 @@ pub async fn run(host_pubkey: &str, host_creds_path: &str) -> Result<(), async_n
         )
         .await?;
 
+    // ==================== Close and Clean Client ====================
     // Only exit program when explicitly requested
     tokio::signal::ctrl_c().await?;
 
