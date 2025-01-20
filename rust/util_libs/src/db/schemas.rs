@@ -169,6 +169,7 @@ pub enum WorkloadState {
     Running,
     Removed,
     Uninstalled,
+    Updating,
     Error(String), // String = error message
     Unknown(String), // String = context message
 }

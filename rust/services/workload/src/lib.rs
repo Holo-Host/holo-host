@@ -285,8 +285,8 @@ impl WorkloadApi {
 
         let success_status = WorkloadStatus {
             id: workload._id.map(|oid| oid.to_hex()),
-            desired: WorkloadState::Running,
-            actual: WorkloadState::Running,
+            desired: WorkloadState::Updating,
+            actual: WorkloadState::Updating,
         };
         
         Ok(types::ApiResult(success_status, None))
