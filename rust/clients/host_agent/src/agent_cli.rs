@@ -1,6 +1,8 @@
+use std::path::PathBuf;
+
 /// MOdule containing all of the Clap Derive structs/definitions that make up the agent's
 /// command line. To start the agent daemon (usually from systemd), use `host_agent daemonize`.
-use clap::{Parser, Subcommand};
+use clap::{Args, Parser, Subcommand};
 
 #[derive(Parser)]
 #[command(
@@ -17,7 +19,7 @@ pub struct Root {
 #[derive(Subcommand, Clone)]
 pub enum CommandScopes {
     /// Start the Holo Hosting Agent Daemon.
-    Daemonize,
+    Daemonize(DaemonzeArgs),
     /// Commmands for managing this host.
     Host {
         #[command(subcommand)]
@@ -28,6 +30,12 @@ pub enum CommandScopes {
         #[command(subcommand)]
         command: SupportCommands,
     },
+}
+
+#[derive(Args, Clone, Debug, Default)]
+pub struct DaemonzeArgs {
+    #[arg(help = "path to NATS credentials used for the LeafNode client connection")]
+    pub(crate) nats_leafnode_client_creds_path: Option<PathBuf>,
 }
 
 /// A set of commands for being able to manage the local host. We may (later) want to gate some

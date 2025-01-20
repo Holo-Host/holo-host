@@ -6,6 +6,7 @@ use anyhow::Context;
 use std::fmt::Debug;
 use std::fs::File;
 use std::io::Write;
+use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -31,7 +32,7 @@ pub struct LoggingOptions {
 #[derive(Debug, Clone)]
 pub struct LeafNodeRemote {
     pub url: String,
-    pub credentials_path: Option<String>,
+    pub credentials_path: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone)]
@@ -87,7 +88,7 @@ impl LeafServer {
             .leaf_node_remotes
             .iter()
             .map(|remote| {
-                if remote.credentials_path.is_some() {
+                if let Some(credentials_path) = &remote.credentials_path {
                     format!(
                         r#"
         {{
@@ -96,7 +97,7 @@ impl LeafServer {
         }}
                     "#,
                         remote.url,
-                        remote.credentials_path.as_ref().unwrap() // Unwrap is safe here as the check for `Some()` wraps this condition
+                        credentials_path.as_path().as_os_str().to_string_lossy(), // Unwrap is safe here as the check for `Some()` wraps this condition
                     )
                 } else {
                     format!(

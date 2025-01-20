@@ -1,9 +1,11 @@
+use std::path::PathBuf;
+
 use util_libs::nats_server::{
     self, JetStreamConfig, LeafNodeRemote, LeafServer, LoggingOptions, LEAF_SERVER_CONFIG_PATH,
     LEAF_SERVER_DEFAULT_LISTEN_PORT, LEAF_SERVE_NAME,
 };
 
-pub async fn run(user_creds_path: &str) {
+pub async fn run(user_creds_path: &Option<PathBuf>) {
     let leaf_server_remote_conn_url = nats_server::get_hub_server_url();
     let leaf_client_conn_domain = "127.0.0.1";
     let leaf_client_conn_port = std::env::var("NATS_LISTEN_PORT")
@@ -29,7 +31,7 @@ pub async fn run(user_creds_path: &str) {
     let leaf_node_remotes = vec![LeafNodeRemote {
         // sys account user (automated)
         url: leaf_server_remote_conn_url.to_string(),
-        credentials_path: Some(user_creds_path.to_string()),
+        credentials_path: user_creds_path.clone(),
     }];
 
     // Create a new Leaf Server instance
