@@ -3,12 +3,11 @@
 - WORKLOAD account
 - hpos user
 
-// This client is responsible for:
-  - subscribing to workload streams
-    - installing new workloads
-    - removing workloads
+// This client is responsible for subscribing to workload streams that handle:
+    - installing new workloads onto the hosting device
+    - removing workloads from the hosting device
     - sending workload status upon request
-    - sending active periodic workload reports
+    - sending out active periodic workload reports
 */
 
 use anyhow::{anyhow, Result};
@@ -73,7 +72,7 @@ pub async fn run(host_pubkey: &str, host_creds_path: &str) -> Result<(), async_n
     let workload_start_subject = serde_json::to_string(&WorkloadServiceSubjects::Start)?;
     let workload_send_status_subject = serde_json::to_string(&WorkloadServiceSubjects::SendStatus)?;
     let workload_uninstall_subject = serde_json::to_string(&WorkloadServiceSubjects::Uninstall)?;
-    let workload_handle_update_subject = serde_json::to_string(&WorkloadServiceSubjects::HandleUpdate)?;
+    let workload_update_installed_subject = serde_json::to_string(&WorkloadServiceSubjects::UpdateInstalled)?;
 
     let workload_service = host_workload_client
         .get_js_service(WORKLOAD_SRV_NAME.to_string())
@@ -88,7 +87,7 @@ pub async fn run(host_pubkey: &str, host_creds_path: &str) -> Result<(), async_n
             &format!("{}.{}", host_pubkey, workload_start_subject), // consumer stream subj
             EndpointType::Async(workload_api.call(|api: HostWorkloadApi, msg: Arc<Message>| {
                 async move {
-                    api.start_workload_on_host(msg).await
+                    api.start_workload(msg).await
                 }
             })),
             None,
@@ -97,11 +96,11 @@ pub async fn run(host_pubkey: &str, host_creds_path: &str) -> Result<(), async_n
 
     workload_service
         .add_consumer::<ApiResult>(
-            "send_workload_status", // consumer name
-            &format!("{}.{}", host_pubkey, workload_handle_update_subject), // consumer stream subj
+            "update_installed_workload", // consumer name
+            &format!("{}.{}", host_pubkey, workload_update_installed_subject), // consumer stream subj
             EndpointType::Async(workload_api.call(|api: HostWorkloadApi, msg: Arc<Message>| {
                 async move {
-                    api.update_workload_on_host(msg).await
+                    api.update_workload(msg).await
                 }
             })),
             None,
@@ -114,7 +113,7 @@ pub async fn run(host_pubkey: &str, host_creds_path: &str) -> Result<(), async_n
             &format!("{}.{}", host_pubkey, workload_uninstall_subject), // consumer stream subj
             EndpointType::Async(workload_api.call(|api: HostWorkloadApi, msg: Arc<Message>| {
                 async move {
-                    api.uninstall_workload_from_host(msg).await
+                    api.uninstall_workload(msg).await
                 }
             })),
             None,
@@ -127,7 +126,7 @@ pub async fn run(host_pubkey: &str, host_creds_path: &str) -> Result<(), async_n
             &format!("{}.{}", host_pubkey, workload_send_status_subject), // consumer stream subj
             EndpointType::Async(workload_api.call(|api: HostWorkloadApi, msg: Arc<Message>| {
                 async move {
-                    api.send_workload_status_from_host(msg).await
+                    api.send_workload_status(msg).await
                 }
             })),
             None,
