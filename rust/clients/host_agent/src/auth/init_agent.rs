@@ -16,7 +16,6 @@ This client is responsible for:
     - returning the host pubkey and closing client cleanly
 */
 
-use super::utils as local_utils;
 use anyhow::{anyhow, Result};
 use nkeys::KeyPair;
 use std::str::FromStr;
@@ -27,7 +26,7 @@ use std::{collections::HashMap, sync::Arc, time::Duration};
 use textnonce::TextNonce;
 use util_libs::{
     js_stream_service::{JsServiceParamsPartial, ResponseSubjectsGenerator},
-    nats_js_client::{self, EndpointType},
+    nats_js_client::{self, get_nats_client_creds, EndpointType},
 };
 
 pub const HOST_INIT_CLIENT_NAME: &str = "Host Auth";
@@ -138,7 +137,7 @@ pub async fn run() -> Result<String, async_nats::Error> {
             &format!("{}.{}", host_pubkey, auth_end_subject), // consumer stream subj
             EndpointType::Async(auth_api.call(|api: HostAuthApi, msg: Arc<Message>| {
                 async move {
-                    api.save_user_jwt(msg, &local_utils::get_host_credentials_path()).await
+                    api.save_user_jwt(msg, &get_nats_client_creds("HOLO", "HPOS", "host")).await
                 }
             })),
             None,

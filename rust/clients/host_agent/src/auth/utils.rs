@@ -13,9 +13,3 @@ pub fn _generate_creds_file() -> String {
 
     "placeholder_user.creds".to_string()
 }
-
-pub fn get_host_credentials_path() -> String {
-    std::env::var("HOST_CREDENTIALS_PATH").unwrap_or_else(|_| {
-        util_libs::nats_js_client::get_nats_client_creds("HOLO", "HPOS", "hpos")
-    })
-}

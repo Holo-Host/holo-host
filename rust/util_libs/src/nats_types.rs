@@ -2,7 +2,7 @@
 NOTE: These types are the standaried types from NATS and are already made available as rust structs via the `nats-jwt` crate.
 IMP: Currently there is an issue serizialing claims that were generated without any permissions. This file removes one of the serialization traits that was causing the issue, but consequently required us to copy down all the related nats claim types.
 TODO: Make PR into `nats-jwt` repo to properly fix the serialization issue with the Permissions Map, so we can import these structs from thhe `nats-jwt` crate, rather than re-implmenting them here.
--------- */ 
+-------- */
 
 use serde::{Deserialize, Serialize};
 

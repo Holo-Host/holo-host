@@ -6,9 +6,14 @@ use anyhow::Context;
 use std::fmt::Debug;
 use std::fs::File;
 use std::io::Write;
+use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
 use std::sync::Arc;
 use tokio::sync::Mutex;
+
+pub const LEAF_SERVE_NAME: &str = "test_leaf_server";
+pub const LEAF_SERVER_CONFIG_PATH: &str = "test_leaf_server.conf";
+pub const LEAF_SERVER_DEFAULT_LISTEN_PORT: u16 = 4111;
 
 #[derive(Debug, Clone)]
 pub struct JetStreamConfig {
@@ -27,7 +32,7 @@ pub struct LoggingOptions {
 #[derive(Debug, Clone)]
 pub struct LeafNodeRemote {
     pub url: String,
-    pub credentials_path: Option<String>,
+    pub credentials_path: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone)]
@@ -83,7 +88,7 @@ impl LeafServer {
             .leaf_node_remotes
             .iter()
             .map(|remote| {
-                if remote.credentials_path.is_some() {
+                if let Some(credentials_path) = &remote.credentials_path {
                     format!(
                         r#"
         {{
@@ -92,7 +97,7 @@ impl LeafServer {
         }}
                     "#,
                         remote.url,
-                        remote.credentials_path.as_ref().unwrap() // Unwrap is safe here as the check for `Some()` wraps this condition
+                        credentials_path.as_path().as_os_str().to_string_lossy(), // Unwrap is safe here as the check for `Some()` wraps this condition
                     )
                 } else {
                     format!(
@@ -124,11 +129,11 @@ jetstream {{
 
 leafnodes {{
     remotes = [
-        {}
+        {leafnodes_config}
     ]
 }}
 
-{}
+{logging_config}
 "#,
             self.name,
             self.host,
@@ -136,8 +141,6 @@ leafnodes {{
             self.jetstream_config.store_dir,
             self.jetstream_config.max_memory_store,
             self.jetstream_config.max_file_store,
-            leafnodes_config,
-            logging_config
         )?;
 
         // Run the server with the generated config
@@ -205,8 +208,8 @@ mod tests {
     const TMP_JS_DIR: &str = "./tmp";
     const TEST_AUTH_DIR: &str = "./tmp/test-auth";
     const OPERATOR_NAME: &str = "test-operator";
-    const USER_ACCOUNT_NAME: &str = "hpos-account";
-    const USER_NAME: &str = "hpos-user";
+    const USER_ACCOUNT_NAME: &str = "host-account";
+    const USER_NAME: &str = "host-user";
     const NEW_LEAF_CONFIG_PATH: &str = "./test_configs/leaf_server.conf";
     // NB: if changed, the resolver file path must also be changed in the `hub-server.conf` iteself as well.
     const RESOLVER_FILE_PATH: &str = "./test_configs/resolver.conf";
@@ -240,7 +243,7 @@ mod tests {
             .output()
             .expect("Failed to create edit operator");
 
-        // Create hpos account (with js enabled)
+        // Create host account (with js enabled)
         Command::new("nsc")
             .args(["add", "account", USER_ACCOUNT_NAME])
             .output()
@@ -258,7 +261,7 @@ mod tests {
             .output()
             .expect("Failed to create edit account");
 
-        // Create user for hpos account
+        // Create user for host account
         Command::new("nsc")
             .args(["add", "user", USER_NAME])
             .args(["--account", USER_ACCOUNT_NAME])
@@ -425,7 +428,7 @@ mod tests {
             .await
             .expect("Failed to publish jetstream message.");
 
-        // Force shut down the Hub Server (note: leaf server run on port 4111)
+        // Force shut down the Hub Server (note: leaf server run on port LEAF_SERVER_DEFAULT_LISTEN_PORT)
         let test_stream_consumer_name = "test_stream_consumer".to_string();
         let consumer = stream
             .get_or_create_consumer(
@@ -470,6 +473,7 @@ mod tests {
             log::error!("Failed to shut down Leaf Server.  Err:{:#?}", err);
 
             // Force the port to close
+            // TODO(techdebt): use the command child handle to terminate the process.
             Command::new("kill")
                 .arg("-9")
                 .arg(format!("`lsof -t -i:{}`", leaf_client_conn_port))
@@ -480,10 +484,11 @@ mod tests {
         }
         log::info!("Leaf Server has shut down successfully");
 
-        // Force shut down the Hub Server (note: leaf server run on port 4111)
+        // Force shut down the Hub Server (note: leaf server run on port LEAF_SERVER_DEFAULT_LISTEN_PORT)
+        // TODO(techdebt): use the command child handle to terminate the process.
         Command::new("kill")
             .arg("-9")
-            .arg("`lsof -t -i:4111`")
+            .arg(format!("`lsof -t -i:{LEAF_SERVER_DEFAULT_LISTEN_PORT}`"))
             .spawn()
             .expect("Error spawning kill command")
             .wait()

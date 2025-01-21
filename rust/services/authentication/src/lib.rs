@@ -25,7 +25,7 @@ pub const AUTH_SRV_NAME: &str = "AUTH";
 pub const AUTH_SRV_SUBJ: &str = "AUTH";
 pub const AUTH_SRV_VERSION: &str = "0.0.1";
 pub const AUTH_SRV_DESC: &str =
-    "This service handles the Authentication flow the HPOS and the Orchestrator.";
+    "This service handles the Authentication flow the Host and the Orchestrator.";
 
 #[async_trait]
 pub trait AuthServiceApi

@@ -2,7 +2,7 @@
 Service Name: WORKLOAD
 Subject: "WORKLOAD.>"
 Provisioning Account: WORKLOAD
-Users: orchestrator & hpos
+Users: orchestrator & host
 */
 
 pub mod orchestrator_api;
@@ -26,7 +26,7 @@ use util_libs::{
 pub const WORKLOAD_SRV_NAME: &str = "WORKLOAD";
 pub const WORKLOAD_SRV_SUBJ: &str = "WORKLOAD";
 pub const WORKLOAD_SRV_VERSION: &str = "0.0.1";
-pub const WORKLOAD_SRV_DESC: &str = "This service handles the flow of Workload requests between the Developer and the Orchestrator, and between the Orchestrator and HPOS.";
+pub const WORKLOAD_SRV_DESC: &str = "This service handles the flow of Workload requests between the Developer and the Orchestrator, and between the Orchestrator and Host.";
 
 
 #[async_trait]
