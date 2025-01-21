@@ -122,7 +122,15 @@ impl WorkloadApi {
             WorkloadState::Removed,
             |workload_id: schemas::MongoDbId| async move {
                 let workload_query = doc! { "_id":  workload_id };
-                self.workload_collection.delete_one_from(workload_query).await?;
+                self.workload_collection.update_one_within(
+                    workload_query,
+                    UpdateModifications::Document(doc! {
+                        "$set": {
+                            "deleted": true,
+                            "deleted_at": DateTime::from_chrono(chrono::Utc::now())
+                        }
+                    })
+                );
                 log::info!(
                     "Successfully removed workload from the Workload Collection. MongodDB Workload ID={:?}",
                     workload_id
@@ -251,21 +259,13 @@ impl WorkloadApi {
         let workload: schemas::Workload = serde_json::from_slice(&payload_buf)?;
         log::trace!("Workload to update. Workload={:#?}", workload.clone());
 
-        // 1. fetch existing workload document
-        match self.workload_collection.get_one_from(doc! { "_id":  workload._id }).await?{
-            Some(workload_doc) => {
-                // 2. remove workload from hosts
-                self.host_collection.update_one_within(
-                    doc!{ "_id": { "$in": workload_doc.assigned_hosts } },
-                    UpdateModifications::Document(doc!{ "$pull": { "assigned_workloads": workload_doc._id } })
-                ).await?;
-            },
-            None => {
-                log::warn!("Workload not found. Unable to remove workload.");
-            }
-        }
+        // 1. remove workload from all hosts
+        self.host_collection.update_one_within(
+            doc!{},
+            UpdateModifications::Document(doc!{ "$pull": { "assigned_workloads": workload._id } })
+        ).await?;
 
-        // 3. add workload to hosts
+        // 3. add workload to specific hosts
         self.host_collection.update_one_within(
             doc!{ "_id": { "$in": workload.clone().assigned_hosts } },
             UpdateModifications::Document(doc!{ "$push": { "assigned_workloads": workload._id } })
