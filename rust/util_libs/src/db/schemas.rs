@@ -120,7 +120,7 @@ pub struct Capacity {
 pub struct Host {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub _id: Option<MongoDbId>,
-    pub pubkey: String, // *INDEXED* // the HPOS/Device pubkey // nb: Unlike the hoster and developer pubkeys, this pubkey is not considered peronal info as it is not directly connected to a "natural person".
+    pub pubkey: String, // *INDEXED* // = the host pubkey // nb: Unlike the hoster and developer pubkeys, this pubkey is not considered peronal info as it is not directly connected to a "natural person".
     pub ip_address: String,
     pub remaining_capacity: Capacity,
     pub avg_uptime: i64,

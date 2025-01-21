@@ -1,7 +1,7 @@
 /*
 This client is associated with the:
   - WORKLOAD account
-  - hpos user
+  - host user
 
 This client is responsible for subscribing the host agent to workload stream endpoints:
   - installing new workloads

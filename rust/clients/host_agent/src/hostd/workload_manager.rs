@@ -1,7 +1,7 @@
 /*
  This client is associated with the:
 - WORKLOAD account
-- hpos user
+- host user
 
 // This client is responsible for subscribing to workload streams that handle:
     - installing new workloads onto the hosting device
@@ -31,7 +31,7 @@ pub async fn run(
     host_creds_path: &Option<PathBuf>,
     nats_connect_timeout_secs: u64,
 ) -> Result<(), async_nats::Error> {
-    log::info!("HPOS Agent Client: Connecting to server...");
+    log::info!("Host Agent Client: Connecting to server...");
     log::info!("host_creds_path : {:?}", host_creds_path);
     log::info!("host_pubkey : {}", host_pubkey);
 
