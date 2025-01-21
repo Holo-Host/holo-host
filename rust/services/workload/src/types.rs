@@ -18,9 +18,9 @@ pub enum WorkloadServiceSubjects {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ApiResult (pub WorkloadStatus, pub Option<HashMap<String, String>>);
-impl EndpointTraits for ApiResult {}
-impl CreateTag for ApiResult {
+pub struct WorkloadApiResult (pub WorkloadStatus, pub Option<HashMap<String, String>>);
+impl EndpointTraits for WorkloadApiResult {}
+impl CreateTag for WorkloadApiResult {
     fn get_tags(&self) -> HashMap<String, String> {
         self.1.clone().unwrap_or_default()
     }

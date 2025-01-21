@@ -17,6 +17,7 @@ use std::{fmt::Debug, sync::Arc};
 use async_nats::Message;
 use std::future::Future;
 use serde::Deserialize;
+use types::WorkloadApiResult;
 use util_libs::{
     nats_js_client::{ServiceError, AsyncEndpointHandler, JsServiceResponse},
     db::schemas::{WorkloadState, WorkloadStatus}
@@ -36,14 +37,14 @@ where
     fn call<F, Fut>(
         &self,
         handler: F,
-    ) -> AsyncEndpointHandler<types::ApiResult>
+    ) -> AsyncEndpointHandler<WorkloadApiResult>
     where
         F: Fn(Self, Arc<Message>) -> Fut + Send + Sync + 'static,
-        Fut: Future<Output = Result<types::ApiResult, ServiceError>> + Send + 'static,
+        Fut: Future<Output = Result<WorkloadApiResult, ServiceError>> + Send + 'static,
         Self: Send + Sync
     {
         let api = self.to_owned(); 
-        Arc::new(move |msg: Arc<Message>| -> JsServiceResponse<types::ApiResult> {
+        Arc::new(move |msg: Arc<Message>| -> JsServiceResponse<WorkloadApiResult> {
             let api_clone = api.clone();
             Box::pin(handler(api_clone, msg))
         })
@@ -70,10 +71,10 @@ where
         desired_state: WorkloadState,
         cb_fn: impl Fn(T) -> Fut + Send + Sync,
         error_state: impl Fn(String) -> WorkloadState + Send + Sync,
-    ) -> Result<types::ApiResult, ServiceError>
+    ) -> Result<WorkloadApiResult, ServiceError>
     where
         T: for<'de> Deserialize<'de> + Clone + Send + Sync + Debug + 'static,
-        Fut: Future<Output = Result<types::ApiResult, ServiceError>> + Send,
+        Fut: Future<Output = Result<WorkloadApiResult, ServiceError>> + Send,
     {
         // 1. Deserialize payload into the expected type
         let payload: T = Self::convert_to_type::<T>(msg.clone())?;
@@ -91,7 +92,7 @@ where
                 };
 
                 // 3. return response for stream
-                types::ApiResult(status, None)
+                WorkloadApiResult(status, None)
             }
         })
     }
