@@ -12,7 +12,6 @@
 
 use anyhow::{anyhow, Result};
 use async_nats::Message;
-use mongodb::{options::ClientOptions, Client as MongoDBClient};
 use std::{path::PathBuf, sync::Arc, time::Duration};
 use util_libs::{
     js_stream_service::JsServiceParamsPartial,

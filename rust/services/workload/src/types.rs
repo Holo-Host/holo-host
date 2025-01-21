@@ -1,10 +1,6 @@
 use std::collections::HashMap;
 use util_libs::{db::schemas::WorkloadStatus, js_stream_service::{CreateTag, EndpointTraits}};
 use serde::{Deserialize, Serialize};
-use util_libs::{
-    db::schemas::WorkloadStatus,
-    js_stream_service::{CreateTag, EndpointTraits},
-};
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "snake_case")]
