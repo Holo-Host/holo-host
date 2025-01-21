@@ -1,14 +1,17 @@
 /*
- This client is associated with the:
-- WORKLOAD account
-- orchestrator user
+This client is associated with the:
+    - WORKLOAD account
+    - orchestrator user
 
 This client is responsible for:
-    - handling requests to add workloads
-    - handling requests to update workloads
-    - handling requests to remove workloads
-    - handling workload status updates
-    - interfacing with mongodb DB
+    - initalizing connection and handling interface with db
+    - registering with the host worklload service to:
+        - handling requests to add workloads
+        - handling requests to update workloads
+        - handling requests to remove workloads
+        - handling workload status updates
+        - interfacing with mongodb DB
+    - keeping service running until explicitly cancelled out
 */
 
 use anyhow::{anyhow, Result};
