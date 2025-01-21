@@ -1,5 +1,5 @@
 /*
-This client is associated with the:
+ This client is associated with the:
     - WORKLOAD account
     - host user
 
