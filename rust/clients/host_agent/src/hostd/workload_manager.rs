@@ -1,9 +1,9 @@
 /*
  This client is associated with the:
-- WORKLOAD account
-- host user
+    - WORKLOAD account
+    - host user
 
-// This client is responsible for subscribing to workload streams that handle:
+This client is responsible for subscribing to workload streams that handle:
     - installing new workloads onto the hosting device
     - removing workloads from the hosting device
     - sending workload status upon request
@@ -19,7 +19,7 @@ use util_libs::{
 };
 use workload::{
     WorkloadServiceApi, host_api::HostWorkloadApi, WORKLOAD_SRV_DESC, WORKLOAD_SRV_NAME, WORKLOAD_SRV_SUBJ, WORKLOAD_SRV_VERSION,
-    types::{WorkloadServiceSubjects, ApiResult}
+    types::{WorkloadServiceSubjects, WorkloadApiResult}
 };
 
 const HOST_AGENT_CLIENT_NAME: &str = "Host Agent";
@@ -103,7 +103,7 @@ pub async fn run(
         ))?;
 
     workload_service
-        .add_consumer::<ApiResult>(
+        .add_consumer::<WorkloadApiResult>(
             "start_workload", // consumer name
             &format!("{}.{}", host_pubkey, workload_start_subject), // consumer stream subj
             EndpointType::Async(
@@ -116,7 +116,7 @@ pub async fn run(
         .await?;
 
     workload_service
-        .add_consumer::<ApiResult>(
+        .add_consumer::<WorkloadApiResult>(
             "update_installed_workload", // consumer name
             &format!("{}.{}", host_pubkey, workload_update_installed_subject), // consumer stream subj
             EndpointType::Async(
@@ -129,7 +129,7 @@ pub async fn run(
         .await?;
 
     workload_service
-        .add_consumer::<ApiResult>(
+        .add_consumer::<WorkloadApiResult>(
             "uninstall_workload", // consumer name
             &format!("{}.{}", host_pubkey, workload_uninstall_subject), // consumer stream subj
             EndpointType::Async(
@@ -142,7 +142,7 @@ pub async fn run(
         .await?;
 
     workload_service
-        .add_consumer::<ApiResult>(
+        .add_consumer::<WorkloadApiResult>(
             "send_workload_status", // consumer name
             &format!("{}.{}", host_pubkey, workload_send_status_subject), // consumer stream subj
             EndpointType::Async(
