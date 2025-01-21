@@ -97,8 +97,15 @@ impl WorkloadApi {
             WorkloadState::Running,
             |workload: schemas::Workload| async move {
                 let workload_query = doc! { "_id":  workload._id };
-                let updated_workload = to_document(&workload)?;
+
+                // update workload updated_at
+                let mut workload_doc = workload.clone();
+                workload_doc.updated_at = Some(DateTime::from_chrono(chrono::Utc::now()));
+
+                // convert workload to document and submit to mongodb
+                let updated_workload = to_document(&workload_doc)?;
                 self.workload_collection.update_one_within(workload_query, UpdateModifications::Document(doc!{ "$set": updated_workload })).await?;
+
                 log::info!("Successfully updated workload. MongodDB Workload ID={:?}", workload._id);
                 Ok(types::ApiResult(
                     WorkloadStatus {
@@ -130,7 +137,7 @@ impl WorkloadApi {
                             "deleted_at": DateTime::from_chrono(chrono::Utc::now())
                         }
                     })
-                );
+                ).await?;
                 log::info!(
                     "Successfully removed workload from the Workload Collection. MongodDB Workload ID={:?}",
                     workload_id
@@ -264,23 +271,26 @@ impl WorkloadApi {
             doc!{},
             UpdateModifications::Document(doc!{ "$pull": { "assigned_workloads": workload._id } })
         ).await?;
+        log::info!("Removed workload from previous hosts. Workload={:#?}", workload._id);
 
         // 3. add workload to specific hosts
         self.host_collection.update_one_within(
             doc!{ "_id": { "$in": workload.clone().assigned_hosts } },
             UpdateModifications::Document(doc!{ "$push": { "assigned_workloads": workload._id } })
         ).await?;
+        log::info!("Added workload to new hosts. Workload={:#?}", workload._id);
 
         let success_status = WorkloadStatus {
             id: workload._id.map(|oid| oid.to_hex()),
             desired: WorkloadState::Updating,
             actual: WorkloadState::Updating,
         };
+        log::info!("Workload update successful. Workload={:#?}", workload._id);
         
         Ok(types::ApiResult(success_status, None))
     }
   
-    // deprecated?
+    // !!!!!!!!!!!!!!DEPRECATED?!!!!!!!!!!!!!!!!!!
     // NB: This is the stream that is automatically published by the nats-db-connector
     // triggers on mongodb [workload] collection (delete)
     pub async fn handle_db_deletion(&self, msg: Arc<Message>) -> Result<types::ApiResult, anyhow::Error> {
