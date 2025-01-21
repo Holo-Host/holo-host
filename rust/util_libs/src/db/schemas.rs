@@ -33,53 +33,21 @@ pub enum UserPermission {
     Admin
 }
 
-pub struct BaseMongoStruct {
-    pub deleted: bool,
-    pub deleted_at: DateTime,
-    pub created_at: DateTime,
-    pub updated_at: DateTime,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, Default)]
-pub struct UserInfo  {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub _id: Option<MongoDbId>,
-    pub email: String,
-    pub given_names: String,
-    pub family_name: String,
-}
-
-impl IntoIndexes for UserInfo {
-    fn into_indices(self) -> Result<Vec<(Document, Option<IndexOptions>)>> {
-        let mut indices = vec![];
-
-        // add email index
-        let email_index_doc = doc! { "email": 1 };
-        let email_index_opts = Some(
-            IndexOptions::builder()
-                .name(Some("email_index".to_string()))
-                .build(),
-        );
-        indices.push((email_index_doc, email_index_opts));
-
-        Ok(indices)
-    }
-}
-
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct User {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub _id: Option<MongoDbId>,
     pub jurisdiction: String,
     pub permissions: Vec<UserPermission>,
+    pub user_info: Option<MongoDbId>,
+    pub developer: Option<MongoDbId>,
+    pub host: Option<MongoDbId>,
+
+    // base
     pub deleted: bool,
     pub deleted_at: Option<DateTime>,
     pub updated_at: Option<DateTime>,
     pub created_at: Option<DateTime>,
-
-    pub user_info: Option<MongoDbId>,
-    pub developer: Option<MongoDbId>,
-    pub host: Option<MongoDbId>,
 }
 
 // No Additional Indexing for Developer
@@ -113,6 +81,33 @@ impl IntoIndexes for User {
                 .build(),
         );
         indices.push((host_index_doc, host_index_opts));
+
+        Ok(indices)
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+pub struct UserInfo  {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub _id: Option<MongoDbId>,
+    pub user: MongoDbId,
+    pub email: String,
+    pub given_names: String,
+    pub family_name: String,
+}
+
+impl IntoIndexes for UserInfo {
+    fn into_indices(self) -> Result<Vec<(Document, Option<IndexOptions>)>> {
+        let mut indices = vec![];
+
+        // add email index
+        let email_index_doc = doc! { "email": 1 };
+        let email_index_opts = Some(
+            IndexOptions::builder()
+                .name(Some("email_index".to_string()))
+                .build(),
+        );
+        indices.push((email_index_doc, email_index_opts));
 
         Ok(indices)
     }
