@@ -4,7 +4,7 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs?ref=nixos-24.11";
     nixpkgs-unstable.url = "github:NixOS/nixpkgs?ref=nixos-unstable";
-    blueprint.url = "github:numtide/blueprint";
+    blueprint.url = "github:steveej-forks/blueprint/fix-checks-import";
     blueprint.inputs.nixpkgs.follows = "nixpkgs";
     treefmt-nix.url = "github:numtide/treefmt-nix";
     treefmt-nix.inputs.nixpkgs.follows = "nixpkgs";
@@ -21,6 +21,9 @@
       url = "github:oxalica/rust-overlay";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+
+    extra-container.url = "github:erikarvstedt/extra-container";
+    extra-container.inputs.nixpkgs.follows = "nixpkgs";
   };
 
   outputs =
