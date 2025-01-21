@@ -100,7 +100,7 @@ impl WorkloadApi {
 
                 // update workload updated_at
                 let mut workload_doc = workload.clone();
-                workload_doc.updated_at = Some(DateTime::from_chrono(chrono::Utc::now()));
+                workload_doc.metadata.updated_at = Some(DateTime::now());
 
                 // convert workload to document and submit to mongodb
                 let updated_workload = to_document(&workload_doc)?;
@@ -133,8 +133,8 @@ impl WorkloadApi {
                     workload_query,
                     UpdateModifications::Document(doc! {
                         "$set": {
-                            "deleted": true,
-                            "deleted_at": DateTime::from_chrono(chrono::Utc::now())
+                            "metadata.is_deleted": true,
+                            "metadata.deleted_at": DateTime::now()
                         }
                     })
                 ).await?;
@@ -344,8 +344,8 @@ impl WorkloadApi {
         self.workload_collection.update_one_within(
             doc! { "_id":  workload_status.id.clone() },
             UpdateModifications::Document(doc!{ "$set": {
-                "deleted": true,
-                "deletedAt": DateTime::from_chrono(chrono::Utc::now())
+                "metadata.is_deleted": true,
+                "metadata.deleted_at": DateTime::now()
             }
         })).await?;
         

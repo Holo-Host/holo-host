@@ -34,20 +34,23 @@ pub enum UserPermission {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
+pub struct Metadata {
+    pub is_deleted: bool,
+    pub deleted_at: Option<DateTime>,
+    pub updated_at: Option<DateTime>,
+    pub created_at: Option<DateTime>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct User {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub _id: Option<MongoDbId>,
+    pub metadata: Metadata,
     pub jurisdiction: String,
     pub permissions: Vec<UserPermission>,
     pub user_info: Option<MongoDbId>,
     pub developer: Option<MongoDbId>,
     pub host: Option<MongoDbId>,
-
-    // base
-    pub deleted: bool,
-    pub deleted_at: Option<DateTime>,
-    pub updated_at: Option<DateTime>,
-    pub created_at: Option<DateTime>,
 }
 
 // No Additional Indexing for Developer
@@ -90,6 +93,7 @@ impl IntoIndexes for User {
 pub struct UserInfo  {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub _id: Option<MongoDbId>,
+    pub metadata: Metadata,
     pub user: MongoDbId,
     pub email: String,
     pub given_names: String,
@@ -118,6 +122,7 @@ impl IntoIndexes for UserInfo {
 pub struct Developer {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub _id: Option<MongoDbId>,
+    pub metadata: Metadata,
     pub user_id: String, // MongoDB ID ref to `user._id` (which stores the hoster's pubkey, jurisdiction and email)
     pub active_workloads: Vec<MongoDbId>, // MongoDB ID refs to `workload._id`
 }
@@ -134,6 +139,7 @@ impl IntoIndexes for Developer {
 pub struct Hoster {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub _id: Option<MongoDbId>,
+    pub metadata: Metadata,
     pub user_id: String, // MongoDB ID ref to `user.id` (which stores the hoster's pubkey, jurisdiction and email)
     pub assigned_hosts: Vec<MongoDbId>, // MongoDB ID refs to `host._id`
 }
@@ -157,6 +163,7 @@ pub struct Capacity {
 pub struct Host {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub _id: Option<MongoDbId>,
+    pub metadata: Metadata,
     pub assigned_hoster: MongoDbId,
     pub device_id: String, // *INDEXED*, Auto-generated Nats server ID
     pub ip_address: String,
@@ -201,7 +208,7 @@ pub enum WorkloadState {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorkloadStatus {
-    pub id: Option<String>, 
+    pub id: Option<String>,
     pub desired: WorkloadState,
     pub actual: WorkloadState,
 }
@@ -217,15 +224,13 @@ pub struct SystemSpecs {
 pub struct Workload {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub _id: Option<MongoDbId>,
+    pub metadata: Metadata,
     pub assigned_developer: MongoDbId, // *INDEXED*, Developer Mongodb ID
     pub version: SemVer,
     pub nix_pkg: String, // (Includes everthing needed to deploy workload - ie: binary & env pkg & deps, etc)
     pub min_hosts: u16,
     pub system_specs: SystemSpecs,
     pub assigned_hosts: Vec<MongoDbId>, // Host Device IDs (eg: assigned nats server id)
-    pub deleted: bool,
-    pub deleted_at: Option<DateTime>,
-    pub updated_at: Option<DateTime>,
     // pub status: WorkloadStatus,
 }
 
@@ -243,6 +248,12 @@ impl Default for Workload {
 
         Self {
             _id: None,
+            metadata: Metadata {
+                is_deleted: false,
+                created_at: Some(DateTime::now()),
+                updated_at: Some(DateTime::now()),
+                deleted_at: None
+            },
             version: semver,
             nix_pkg: String::new(),
             assigned_developer: MongoDbId::new(),
@@ -255,9 +266,6 @@ impl Default for Workload {
                 }
             },
             assigned_hosts: Vec::new(),
-            deleted: false,
-            deleted_at: None,
-            updated_at: None,
         }
     }
 }
