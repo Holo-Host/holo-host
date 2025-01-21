@@ -1,10 +1,21 @@
 /*
- This client is associated with the:
-- auth account
-- orchestrator user
+This client is associated with the:
+    - AUTH account
+    - orchestrator user
 
-// This client is responsible for:
-//// auth_endpoint_subject = "AUTH.{host_id}.file.transfer.JWT-User"
+This client is responsible for:
+    - initalizing connection and handling interface with db
+    - registering with the host auth service to:
+        - handling inital auth requests
+            - validating user signature
+            - validating hoster pubkey
+            - validating hoster email
+            - bidirectionally pairing hoster and host
+            - sending hub jwt files back to user (once validated) 
+        - handling request to add user pubkey and generate signed user jwt 
+            - interfacing with hub nsc resolver and hub credential files
+            - sending user jwt file back to user
+    - keeping service running until explicitly cancelled out
 */
 
 use crate::utils as local_utils;
@@ -14,7 +25,7 @@ use std::{collections::HashMap, sync::Arc, time::Duration};
 // use std::process::Command;
 use async_nats::Message;
 use mongodb::{options::ClientOptions, Client as MongoDBClient};
-use authentication::{self, types::AuthServiceSubjects, AuthServiceApi, orchestrator_api::OrchestratorAuthApi, AUTH_SRV_DESC, AUTH_SRV_NAME, AUTH_SRV_SUBJ, AUTH_SRV_VERSION};
+use authentication::{self, types::{AuthServiceSubjects, AuthApiResult}, AuthServiceApi, orchestrator_api::OrchestratorAuthApi, AUTH_SRV_DESC, AUTH_SRV_NAME, AUTH_SRV_SUBJ, AUTH_SRV_VERSION};
 use util_libs::{
     db::mongodb::get_mongodb_url,
     js_stream_service::{JsServiceParamsPartial, ResponseSubjectsGenerator},
@@ -85,7 +96,7 @@ pub async fn run() -> Result<(), async_nats::Error> {
         ))?;    
     
     auth_service
-        .add_consumer::<authentication::types::ApiResult>(
+        .add_consumer::<AuthApiResult>(
             "start_handshake", // consumer name
             &auth_start_subject, // consumer stream subj
             EndpointType::Async(auth_api.call(|api: OrchestratorAuthApi, msg: Arc<Message>| {
@@ -98,7 +109,7 @@ pub async fn run() -> Result<(), async_nats::Error> {
         .await?;
         
     auth_service
-        .add_consumer::<authentication::types::ApiResult>(
+        .add_consumer::<AuthApiResult>(
             "add_user_pubkey", // consumer name
             &auth_p2_subject, // consumer stream subj
             EndpointType::Async(auth_api.call(|api: OrchestratorAuthApi, msg: Arc<Message>| {

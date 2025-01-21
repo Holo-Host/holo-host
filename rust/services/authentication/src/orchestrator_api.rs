@@ -1,27 +1,15 @@
 /*
-Service Name: AUTH
-Subject: "AUTH.>"
-Provisioning Account: AUTH Account
-Importing Account: Auth/NoAuth Account
-
-This service should be run on the ORCHESTRATOR side and called from the HPOS side.
-The NoAuth/Auth Server will import this service on the hub side and read local jwt files once the agent is validated.
-NB: subject pattern = "<SERVICE_NAME>.<Subject>.<DirectObject>.<Verb>.<Details>"
-This service handles the the "AUTH.<host_id>.file.transfer.JWT-<hoster_pubkey>.<chunk_id>" subject
-
 Endpoints & Managed Subjects:
-    - start_hub_handshake
-    - end_hub_handshake
-    - save_hub_auth
-    - save_user_auth
-
+    - handle_handshake_request: AUTH.start_handshake
+    - add_user_pubkey: AUTH.handle_handshake_p2
 */
+
 use super::{AuthServiceApi, types, utils};
 use anyhow::Result;
 use async_nats::{Message, HeaderValue};
 use async_nats::jetstream::ErrorCode;
 use nkeys::KeyPair;
-use types::AuthResult;
+use types::{AuthApiResult, AuthResult};
 use utils::handle_internal_err;
 use core::option::Option::None;
 use std::collections::HashMap;
@@ -69,7 +57,7 @@ impl OrchestratorAuthApi {
         &self,
         msg: Arc<Message>,
         creds_dir_path: &str,
-    ) -> Result<types::ApiResult, ServiceError> {
+    ) -> Result<AuthApiResult, ServiceError> {
         log::warn!("INCOMING Message for 'AUTH.start_handshake' : {:?}", msg);
 
         // 1. Verify expected data was received
@@ -170,7 +158,7 @@ impl OrchestratorAuthApi {
         let mut tag_map: HashMap<String, String> = HashMap::new();
         tag_map.insert("host_pubkey".to_string(), host_pubkey.clone());
 
-        Ok(types::ApiResult {
+        Ok(AuthApiResult {
             status: types::AuthStatus { 
                 host_pubkey: host_pubkey.clone(),
                 status: types::AuthState::Requested
@@ -182,7 +170,7 @@ impl OrchestratorAuthApi {
         })
     }
 
-    pub async fn add_user_pubkey(&self, msg: Arc<Message>) -> Result<types::ApiResult, ServiceError> {
+    pub async fn add_user_pubkey(&self, msg: Arc<Message>) -> Result<AuthApiResult, ServiceError> {
         log::warn!("INCOMING Message for 'AUTH.handle_handshake_p2' : {:?}", msg);
 
         // 1. Verify expected payload was received
@@ -203,7 +191,7 @@ impl OrchestratorAuthApi {
         let user_jwt: Vec<u8> = std::fs::read(user_jwt_path).map_err(|e| ServiceError::Internal(e.to_string()))?;
 
         // 5. Respond to endpoint request
-        Ok(types::ApiResult {
+        Ok(AuthApiResult {
             status: types::AuthStatus { 
                 host_pubkey,
                 status: types::AuthState::ValidatedAgent

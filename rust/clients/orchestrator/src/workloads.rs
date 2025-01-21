@@ -1,13 +1,17 @@
 /*
- This client is associated with the:
-- WORKLOAD account
-- orchestrator user
-// This client is responsible for:
-    - handling requests to add workloads
-    - handling requests to update workloads
-    - handling requests to remove workloads
-    - handling workload status updates
-    - interfacing with mongodb DB
+This client is associated with the:
+    - WORKLOAD account
+    - orchestrator user
+
+This client is responsible for:
+    - initalizing connection and handling interface with db
+    - registering with the host worklload service to:
+        - handling requests to add workloads
+        - handling requests to update workloads
+        - handling requests to remove workloads
+        - handling workload status updates
+        - interfacing with mongodb DB
+    - keeping service running until explicitly cancelled out
 */
 
 use anyhow::{anyhow, Result};
@@ -15,7 +19,7 @@ use std::{collections::HashMap, sync::Arc, time::Duration};
 use async_nats::Message;
 use mongodb::{options::ClientOptions, Client as MongoDBClient};
 use workload::{
-    WorkloadServiceApi, orchestrator_api::OrchestratorWorkloadApi, WORKLOAD_SRV_DESC, WORKLOAD_SRV_NAME, WORKLOAD_SRV_SUBJ, WORKLOAD_SRV_VERSION, types::{WorkloadServiceSubjects, ApiResult}
+    WorkloadServiceApi, orchestrator_api::OrchestratorWorkloadApi, WORKLOAD_SRV_DESC, WORKLOAD_SRV_NAME, WORKLOAD_SRV_SUBJ, WORKLOAD_SRV_VERSION, types::{WorkloadServiceSubjects, WorkloadApiResult}
 };
 use util_libs::{
     db::mongodb::get_mongodb_url,
@@ -101,7 +105,7 @@ pub async fn run() -> Result<(), async_nats::Error> {
 
     // Published by Developer
     workload_service
-        .add_consumer::<ApiResult>(
+        .add_consumer::<WorkloadApiResult>(
             "add_workload", // consumer name
              &workload_add_subject, // consumer stream subj
             EndpointType::Async(workload_api.call(|api: OrchestratorWorkloadApi, msg: Arc<Message>| {
@@ -114,7 +118,7 @@ pub async fn run() -> Result<(), async_nats::Error> {
         .await?;
 
         workload_service
-        .add_consumer::<ApiResult>(
+        .add_consumer::<WorkloadApiResult>(
             "update_workload", // consumer name
              &workload_update_subject, // consumer stream subj
             EndpointType::Async(workload_api.call(|api: OrchestratorWorkloadApi, msg: Arc<Message>| {
@@ -128,7 +132,7 @@ pub async fn run() -> Result<(), async_nats::Error> {
 
     
     workload_service
-        .add_consumer::<ApiResult>(
+        .add_consumer::<WorkloadApiResult>(
             "remove_workload", // consumer name
              &workload_remove_subject, // consumer stream subj
             EndpointType::Async(workload_api.call(|api: OrchestratorWorkloadApi, msg: Arc<Message>| {
@@ -142,7 +146,7 @@ pub async fn run() -> Result<(), async_nats::Error> {
     
     // Automatically published by the Nats-DB-Connector
     workload_service
-        .add_consumer::<ApiResult>(
+        .add_consumer::<WorkloadApiResult>(
             "handle_db_insertion", // consumer name
              &workload_db_insert_subject, // consumer stream subj
             EndpointType::Async(workload_api.call(|api: OrchestratorWorkloadApi, msg: Arc<Message>| {
@@ -155,7 +159,7 @@ pub async fn run() -> Result<(), async_nats::Error> {
         .await?;
 
     workload_service
-        .add_consumer::<ApiResult>(
+        .add_consumer::<WorkloadApiResult>(
             "handle_db_modification", // consumer name
                 &workload_db_modification_subject, // consumer stream subj
             EndpointType::Async(workload_api.call(|api: OrchestratorWorkloadApi, msg: Arc<Message>| {
@@ -169,7 +173,7 @@ pub async fn run() -> Result<(), async_nats::Error> {
 
     // Published by the Host Agent
     workload_service
-    .add_consumer::<ApiResult>(
+    .add_consumer::<WorkloadApiResult>(
         "handle_status_update", // consumer name
         &workload_handle_status_subject, // consumer stream subj
         EndpointType::Async(workload_api.call(|api: OrchestratorWorkloadApi, msg: Arc<Message>| {

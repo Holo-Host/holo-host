@@ -1,13 +1,9 @@
 /*
 Service Name: AUTH
 Subject: "AUTH.>"
-Provisioning Account: AUTH Account
-Importing Account: Auth/NoAuth Account
+Provisioning Account: AUTH Account (ie: This service is exclusively permissioned to the AUTH account.)
+Users: orchestrator & noauth
 
-This service should be run on the ORCHESTRATOR side and called from the HPOS side.
-The NoAuth/Auth Server will import this service on the hub side and read local jwt files once the agent is validated.
-NB: subject pattern = "<SERVICE_NAME>.<Subject>.<DirectObject>.<Verb>.<Details>"
-This service handles the the "AUTH.<host_id>.file.transfer.JWT-<hoster_pubkey>.<chunk_id>" subject
 */
 
 pub mod orchestrator_api;
@@ -22,6 +18,7 @@ use async_trait::async_trait;
 use std::sync::Arc;
 use std::future::Future;
 use serde::Deserialize;
+use types::AuthApiResult;
 use util_libs::nats_js_client::{ServiceError, AsyncEndpointHandler, JsServiceResponse};
 
 pub const AUTH_SRV_NAME: &str = "AUTH";
@@ -38,14 +35,14 @@ where
     fn call<F, Fut>(
         &self,
         handler: F,
-    ) -> AsyncEndpointHandler<types::ApiResult>
+    ) -> AsyncEndpointHandler<AuthApiResult>
     where
         F: Fn(Self, Arc<Message>) -> Fut + Send + Sync + 'static,
-        Fut: Future<Output = Result<types::ApiResult, ServiceError>> + Send + 'static,
+        Fut: Future<Output = Result<AuthApiResult, ServiceError>> + Send + 'static,
         Self: Send + Sync
     {
         let api = self.to_owned(); 
-        Arc::new(move |msg: Arc<Message>| -> JsServiceResponse<types::ApiResult> {
+        Arc::new(move |msg: Arc<Message>| -> JsServiceResponse<AuthApiResult> {
             let api_clone = api.clone();
             Box::pin(handler(api_clone, msg))
         })

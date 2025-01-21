@@ -51,13 +51,13 @@ pub struct AuthResult {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct ApiResult {
+pub struct AuthApiResult {
     pub status: AuthStatus,
     pub result: AuthResult,
     pub maybe_response_tags: Option<HashMap<String, String>>
 }
-impl EndpointTraits for ApiResult {}
-impl CreateTag for ApiResult {
+impl EndpointTraits for AuthApiResult {}
+impl CreateTag for AuthApiResult {
     fn get_tags(&self) -> HashMap<String, String> {
         self.maybe_response_tags.clone().unwrap_or_default()
     }
