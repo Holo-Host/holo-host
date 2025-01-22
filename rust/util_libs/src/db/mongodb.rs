@@ -25,7 +25,11 @@ where
     async fn get_many_from(&self, filter: Document) -> Result<Vec<T>>;
     async fn insert_one_into(&self, item: T) -> Result<String>;
     async fn insert_many_into(&self, items: Vec<T>) -> Result<Vec<String>>;
-    async fn update_one_within(&self, query: Document, updated_doc: UpdateModifications) -> Result<UpdateResult>;
+    async fn update_one_within(
+        &self,
+        query: Document,
+        updated_doc: UpdateModifications,
+    ) -> Result<UpdateResult>;
     async fn delete_one_from(&self, query: Document) -> Result<DeleteResult>;
     async fn delete_all_from(&self) -> Result<DeleteResult>;
 }
@@ -134,7 +138,11 @@ where
         Ok(ids)
     }
 
-    async fn update_one_within(&self, query: Document, updated_doc: UpdateModifications) -> Result<UpdateResult> {
+    async fn update_one_within(
+        &self,
+        query: Document,
+        updated_doc: UpdateModifications,
+    ) -> Result<UpdateResult> {
         self.collection
             .update_one(query, updated_doc)
             .await
@@ -273,7 +281,7 @@ mod tests {
                 remaining_capacity: Capacity {
                     memory: 16,
                     disk: 200,
-                    cores: 16
+                    cores: 16,
                 },
                 avg_uptime: 95,
                 avg_network_speed: 500,

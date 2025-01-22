@@ -12,25 +12,29 @@
 */
 
 use anyhow::{anyhow, Result};
+use async_nats::Message;
 use mongodb::{options::ClientOptions, Client as MongoDBClient};
-use std::{sync::Arc, time::Duration};
+use std::{path::PathBuf, sync::Arc, time::Duration};
 use util_libs::{
     db::mongodb::get_mongodb_url,
     js_stream_service::JsServiceParamsPartial,
-    nats_js_client::{self, EndpointType,  },
+    nats_js_client::{self, EndpointType},
 };
 use workload::{
     WorkloadApi, WORKLOAD_SRV_DESC, WORKLOAD_SRV_NAME, WORKLOAD_SRV_SUBJ, WORKLOAD_SRV_VERSION,
 };
-use async_nats::Message;
 
 const HOST_AGENT_CLIENT_NAME: &str = "Host Agent";
 const HOST_AGENT_INBOX_PREFIX: &str = "_host_inbox";
 
 // TODO: Use _host_creds_path for auth once we add in the more resilient auth pattern.
-pub async fn run(host_pubkey: &str, host_creds_path: &str) -> Result<(), async_nats::Error> {
+pub async fn run(
+    host_pubkey: &str,
+    host_creds_path: &Option<PathBuf>,
+    nats_connect_timeout_secs: u64,
+) -> Result<nats_js_client::JsClient, async_nats::Error> {
     log::info!("HPOS Agent Client: Connecting to server...");
-    log::info!("host_creds_path : {}", host_creds_path);
+    log::info!("host_creds_path : {:?}", host_creds_path);
     log::info!("host_pubkey : {}", host_pubkey);
 
     // ==================== NATS Setup ====================
@@ -49,21 +53,41 @@ pub async fn run(host_pubkey: &str, host_creds_path: &str) -> Result<(), async_n
     };
 
     // Spin up Nats Client and loaded in the Js Stream Service
-    let host_workload_client =
-        nats_js_client::JsClient::new(nats_js_client::NewJsClientParams {
-            nats_url,
-            name: HOST_AGENT_CLIENT_NAME.to_string(),
-            inbox_prefix: format!(
-                "{}_{}",
-                HOST_AGENT_INBOX_PREFIX, host_pubkey
-            ),
-            service_params: vec![workload_stream_service_params],
-            credentials_path: Some(host_creds_path.to_string()),
-            opts: vec![nats_js_client::with_event_listeners(event_listeners)],
-            ping_interval: Some(Duration::from_secs(10)),
-            request_timeout: Some(Duration::from_secs(5)),
-        })
-        .await?;
+    // Nats takes a moment to become responsive, so we try to connecti in a loop for a few seconds.
+    // TODO: how do we recover from a connection loss to Nats in case it crashes or something else?
+    let host_workload_client = tokio::select! {
+        client = async {loop {
+                let host_workload_client = nats_js_client::JsClient::new(nats_js_client::NewJsClientParams {
+                    nats_url: nats_url.clone(),
+                    name: HOST_AGENT_CLIENT_NAME.to_string(),
+                    inbox_prefix: format!("{}_{}", HOST_AGENT_INBOX_PREFIX, host_pubkey),
+                    service_params: vec![workload_stream_service_params.clone()],
+                    credentials_path: host_creds_path
+                        .as_ref()
+                        .map(|path| path.to_string_lossy().to_string()),
+                    opts: vec![nats_js_client::with_event_listeners(event_listeners.clone())],
+                    ping_interval: Some(Duration::from_secs(10)),
+                    request_timeout: Some(Duration::from_secs(29)),
+                })
+                .await
+                .map_err(|e| anyhow::anyhow!("connecting to NATS via {nats_url}: {e}"));
+
+                match host_workload_client {
+                    Ok(client) => break client,
+                    Err(e) => {
+                        let duration = tokio::time::Duration::from_millis(100);
+                        log::warn!("{}, retrying in {duration:?}", e);
+                        tokio::time::sleep(duration).await;
+                    }
+                }
+            }} => client,
+        _ = {
+            log::debug!("will time out waiting for NATS after {nats_connect_timeout_secs:?}");
+            tokio::time::sleep(tokio::time::Duration::from_secs(nats_connect_timeout_secs))
+         } => {
+            return Err(format!("timed out waiting for NATS on {nats_url}").into());
+        }
+    };
 
     // ==================== DB Setup ====================
     // Create a new MongoDB Client and connect it to the cluster
@@ -88,11 +112,9 @@ pub async fn run(host_pubkey: &str, host_creds_path: &str) -> Result<(), async_n
         .add_local_consumer::<workload::types::ApiResult>(
             "start_workload",
             "start",
-            EndpointType::Async(workload_api.call(|api: WorkloadApi, msg: Arc<Message>| {
-                async move {
-                    api.start_workload(msg).await
-                }
-            })),
+            EndpointType::Async(workload_api.call(
+                |api: WorkloadApi, msg: Arc<Message>| async move { api.start_workload(msg).await },
+            )),
             None,
         )
         .await?;
@@ -101,11 +123,11 @@ pub async fn run(host_pubkey: &str, host_creds_path: &str) -> Result<(), async_n
         .add_local_consumer::<workload::types::ApiResult>(
             "send_workload_status",
             "send_status",
-            EndpointType::Async(workload_api.call(|api: WorkloadApi, msg: Arc<Message>| {
-                async move {
+            EndpointType::Async(
+                workload_api.call(|api: WorkloadApi, msg: Arc<Message>| async move {
                     api.send_workload_status(msg).await
-                }
-            })),
+                }),
+            ),
             None,
         )
         .await?;
@@ -114,19 +136,14 @@ pub async fn run(host_pubkey: &str, host_creds_path: &str) -> Result<(), async_n
         .add_local_consumer::<workload::types::ApiResult>(
             "uninstall_workload",
             "uninstall",
-            EndpointType::Async(workload_api.call(|api: WorkloadApi, msg: Arc<Message>| {
-                async move {
+            EndpointType::Async(
+                workload_api.call(|api: WorkloadApi, msg: Arc<Message>| async move {
                     api.uninstall_workload(msg).await
-                }
-            })),
+                }),
+            ),
             None,
         )
         .await?;
 
-    // Only exit program when explicitly requested
-    tokio::signal::ctrl_c().await?;
-
-    // Close client and drain internal buffer before exiting to make sure all messages are sent
-    host_workload_client.close().await?;
-    Ok(())
+    Ok(host_workload_client)
 }
