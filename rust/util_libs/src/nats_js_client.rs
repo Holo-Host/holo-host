@@ -1,7 +1,8 @@
 use super::js_stream_service::{CreateTag, JsServiceParamsPartial, JsStreamService};
+use crate::nats_server::LEAF_SERVER_DEFAULT_LISTEN_PORT;
+
 use anyhow::Result;
-use async_nats::jetstream;
-use async_nats::{Message, ServerInfo};
+use async_nats::{jetstream, Message, ServerInfo};
 use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::fmt;
@@ -11,7 +12,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-pub type EventListener = Box<dyn Fn(&mut JsClient) + Send + Sync>;
+pub type EventListener = Arc<Box<dyn Fn(&mut JsClient) + Send + Sync>>;
 pub type EventHandler = Pin<Box<dyn Fn(&str, &str, Duration) + Send + Sync>>;
 pub type JsServiceResponse<T> = Pin<Box<dyn Future<Output = Result<T, anyhow::Error>> + Send>>;
 pub type EndpointHandler<T> = Arc<dyn Fn(&Message) -> Result<T, anyhow::Error> + Send + Sync>;
@@ -254,11 +255,11 @@ impl JsClient {
 
 // Client Options:
 pub fn with_event_listeners(listeners: Vec<EventListener>) -> EventListener {
-    Box::new(move |c: &mut JsClient| {
+    Arc::new(Box::new(move |c: &mut JsClient| {
         for listener in &listeners {
             listener(c);
         }
-    })
+    }))
 }
 
 // Event Listener Options:
@@ -266,21 +267,39 @@ pub fn on_msg_published_event<F>(f: F) -> EventListener
 where
     F: Fn(&str, &str, Duration) + Send + Sync + Clone + 'static,
 {
-    Box::new(move |c: &mut JsClient| {
+    Arc::new(Box::new(move |c: &mut JsClient| {
         c.on_msg_published_event = Some(Box::pin(f.clone()));
-    })
+    }))
 }
 
 pub fn on_msg_failed_event<F>(f: F) -> EventListener
 where
     F: Fn(&str, &str, Duration) + Send + Sync + Clone + 'static,
 {
-    Box::new(move |c: &mut JsClient| {
+    Arc::new(Box::new(move |c: &mut JsClient| {
         c.on_msg_failed_event = Some(Box::pin(f.clone()));
-    })
+    }))
 }
 
 // Helpers:
+// TODO: there's overlap with the NATS_LISTEN_PORT. refactor this to e.g. read NATS_LISTEN_HOST and NATS_LISTEN_PORT
+pub fn get_nats_url() -> String {
+    std::env::var("NATS_URL").unwrap_or_else(|_| {
+        let default = format!("127.0.0.1:{}", LEAF_SERVER_DEFAULT_LISTEN_PORT);
+        log::debug!("using default for NATS_URL: {default}");
+        default
+    })
+}
+
+pub fn get_nats_client_creds(operator: &str, account: &str, user: &str) -> String {
+    std::env::var("HOST_CREDS_FILE_PATH").unwrap_or_else(|_| {
+        format!(
+            "/.local/share/nats/nsc/keys/creds/{}/{}/{}.creds",
+            operator, account, user
+        )
+    })
+}
+
 pub fn get_event_listeners() -> Vec<EventListener> {
     // TODO: Use duration in handlers..
     let published_msg_handler = move |msg: &str, client_name: &str, _duration: Duration| {
@@ -300,19 +319,6 @@ pub fn get_event_listeners() -> Vec<EventListener> {
     ];
 
     event_listeners
-}
-
-pub fn get_nats_url() -> String {
-    std::env::var("NATS_URL").unwrap_or_else(|_| "127.0.0.1:4111".to_string())
-}
-
-pub fn get_nats_client_creds(operator: &str, account: &str, user: &str) -> String {
-    std::env::var("HOST_CREDS_FILE_PATH").unwrap_or_else(|_| {
-        format!(
-            "/.local/share/nats/nsc/keys/creds/{}/{}/{}.creds",
-            operator, account, user
-        )
-    })
 }
 
 #[cfg(feature = "tests_integration_nats")]
