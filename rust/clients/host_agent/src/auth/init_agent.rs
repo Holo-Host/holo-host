@@ -71,6 +71,7 @@ pub async fn run() -> Result<String, async_nats::Error> {
     // NB: This nkey keypair is a `ed25519_dalek::VerifyingKey` that is `BASE_32` encoded and returned as a String.
     let host_user_keys = KeyPair::new_user();
     let host_pubkey = host_user_keys.public_key();
+    // QUESTION: Where is this nkey file saved?
     
     // Discover the server Node ID via INFO response
     let server_node_id = host_auth_client.get_server_info().server_id;
@@ -123,7 +124,7 @@ pub async fn run() -> Result<String, async_nats::Error> {
             &format!("{}.{}", host_pubkey, auth_p1_subject), // consumer stream subj
             EndpointType::Async(auth_api.call(|api: HostAuthApi, msg: Arc<Message>| {
                 async move {
-                    api.save_hub_jwts(msg).await
+                    api.save_hub_jwts(msg, &get_nats_client_creds("HOLO", "HPOS", "host")).await
                 }
             })),
             Some(create_callback_subject_to_orchestrator(auth_p2_subject)),

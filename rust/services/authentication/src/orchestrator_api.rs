@@ -78,7 +78,7 @@ impl OrchestratorAuthApi {
             }
         };
 
-        let types::AuthRequestPayload { host_pubkey, email, hoster_pubkey, nonce: _ } = Self::convert_to_type::<types::AuthRequestPayload>(msg.clone())?;
+        let types::AuthRequestPayload { host_pubkey, email, hoster_pubkey, nonce: _ } = Self::convert_msg_to_type::<types::AuthRequestPayload>(msg.clone())?;
 
         // 2. Validate signature
         let user_verifying_keypair = KeyPair::from_public_key(&host_pubkey).map_err(|e| ServiceError::Internal(e.to_string()))?;
@@ -150,54 +150,105 @@ impl OrchestratorAuthApi {
 
         // 4. Read operator and sys account jwts and prepare them to be sent as a payload in the publication callback
         let operator_path = utils::get_file_path_buf(&format!("{}/operator.creds", creds_dir_path));
-        let hub_operator_creds: Vec<u8> = std::fs::read(operator_path).map_err(|e| ServiceError::Internal(e.to_string()))?;
+        let hub_operator_jwt: Vec<u8> = std::fs::read(operator_path).map_err(|e| ServiceError::Internal(e.to_string()))?;
 
-        let sys_path = utils::get_file_path_buf(&format!("{}/sys.creds", creds_dir_path));
-        let hub_sys_creds: Vec<u8> = std::fs::read(sys_path).map_err(|e| ServiceError::Internal(e.to_string()))?;
+        let sys_account_path = utils::get_file_path_buf(&format!("{}/account_sys.creds", creds_dir_path));
+        let hub_sys_account_jwt: Vec<u8> = std::fs::read(sys_account_path).map_err(|e| ServiceError::Internal(e.to_string()))?;
+
+        let workload_account_path = utils::get_file_path_buf(&format!("{}/account_workload.creds", creds_dir_path));
+        let hub_workload_account_jwt: Vec<u8> = std::fs::read(workload_account_path).map_err(|e| ServiceError::Internal(e.to_string()))?;
 
         let mut tag_map: HashMap<String, String> = HashMap::new();
         tag_map.insert("host_pubkey".to_string(), host_pubkey.clone());
 
+        let mut result_hash_map: HashMap<String, Vec<u8>> = HashMap::new();
+        result_hash_map.insert("operator_jwt".to_string(), hub_operator_jwt);
+        result_hash_map.insert("sys_account_jwt".to_string(), hub_sys_account_jwt);
+        result_hash_map.insert("workload_account_jwt".to_string(), hub_workload_account_jwt);
+
         Ok(AuthApiResult {
-            status: types::AuthStatus { 
-                host_pubkey: host_pubkey.clone(),
-                status: types::AuthState::Requested
-            },
             result: AuthResult {
-                data: types::AuthResultType::Multiple(vec![hub_operator_creds, hub_sys_creds])
+                status: types::AuthStatus { 
+                    host_pubkey: host_pubkey.clone(),
+                    status: types::AuthState::Requested
+                },
+                data: types::AuthResultData { inner: result_hash_map }
             },
             maybe_response_tags: Some(tag_map) // used to inject as tag in response subject
         })
     }
 
-    pub async fn add_user_pubkey(&self, msg: Arc<Message>) -> Result<AuthApiResult, ServiceError> {
-        log::warn!("INCOMING Message for 'AUTH.handle_handshake_p2' : {:?}", msg);
+    pub async fn add_user_nkey(&self,
+        msg: Arc<Message>,
+        creds_dir_path: &str,
+    ) -> Result<AuthApiResult, ServiceError> {
+        let msg_subject = &msg.subject.clone().into_string(); // AUTH.handle_handshake_p2
+        log::trace!("Incoming message for '{}'", msg_subject);
 
         // 1. Verify expected payload was received
-        let host_pubkey = Self::convert_to_type::<String>(msg.clone())?;
+        let message_payload = Self::convert_msg_to_type::<AuthResult>(msg.clone())?;
+        log::debug!("Message payload '{}' : {:?}", msg_subject, message_payload);
 
-        // 2. Add User keys to Orchestrator nsc resolver
+        let host_user_nkey_bytes = message_payload.data.inner.get("host_user_nkey").ok_or_else(|| {
+            let err_msg = format!("Error: . Subject='{}'.", msg_subject);
+            handle_internal_err(&err_msg)
+        })?;
+        let host_user_nkey = Self::convert_to_type::<String>(host_user_nkey_bytes.to_owned(), msg_subject)?;
+
+        let host_pubkey = &message_payload.status.host_pubkey;
+
+        // 2. Add User keys to nsc resolver (and automatically create account-signed refernce to user key)
         Command::new("nsc")
-            .arg("...")
+            .arg(format!("add user -a SYS -n user_sys_host_{} -k {}", host_pubkey, host_user_nkey))
             .output()
-            .expect("Failed to add user with provided keys");
-        
-        // 3. Create and sign User JWT
-        let account_signing_key = utils::get_account_signing_key();
-        utils::generate_user_jwt(&host_pubkey, &account_signing_key);
+            .expect("Failed to add host sys user with provided keys");
+
+        Command::new("nsc")
+            .arg(format!("add user -a WORKLOAD -n user_host_{} -k {}", host_pubkey, host_user_nkey))
+            .output()
+            .expect("Failed to add host user with provided keys");
+
+        // ..and push auth updates to hub server
+        Command::new("nsc")
+            .arg("push -A")
+            .output()
+            .expect("Failed to update resolver config file");    
+
+        // 3. Create User JWT files (automatically signed with respective account key)
+        let host_sys_user_file_name = format!("{}/user_sys_host_{}.jwt", creds_dir_path, host_pubkey);
+        Command::new("nsc") 
+            .arg(format!("describe user -a SYS -n user_sys_host_{} --raw --output-file {}", host_pubkey, host_sys_user_file_name))
+            .output()
+            .expect("Failed to generate host sys user jwt file");
+
+        let host_user_file_name = format!("{}/user_host_{}.jwt", creds_dir_path, host_pubkey);
+        Command::new("nsc") 
+            .arg(format!("describe user -a WORKLOAD -n user_host_{} --raw --output-file {}", host_pubkey, host_user_file_name))
+            .output()
+            .expect("Failed to generate host user jwt file");        
+    
+        // let account_signing_key = utils::get_account_signing_key();
+        // utils::generate_user_jwt(&user_nkey, &account_signing_key);
 
         // 4. Prepare User JWT to be sent as a payload in the publication callback
-        let user_jwt_path = utils::get_file_path_buf("user_jwt_path");
-        let user_jwt: Vec<u8> = std::fs::read(user_jwt_path).map_err(|e| ServiceError::Internal(e.to_string()))?;
+        let host_sys_user_jwt_path = utils::get_file_path_buf(&host_sys_user_file_name);
+        let host_sys_user_jwt: Vec<u8> = std::fs::read(host_sys_user_jwt_path).map_err(|e| ServiceError::Internal(e.to_string()))?;
+
+        let host_user_jwt_path = utils::get_file_path_buf(&host_user_file_name);
+        let host_user_jwt: Vec<u8> = std::fs::read(host_user_jwt_path).map_err(|e| ServiceError::Internal(e.to_string()))?;
+        
+        let mut result_hash_map: HashMap<String, Vec<u8>> = HashMap::new();
+        result_hash_map.insert("host_sys_user_jwt".to_string(), host_sys_user_jwt);
+        result_hash_map.insert("host_user_jwt".to_string(), host_user_jwt);
 
         // 5. Respond to endpoint request
         Ok(AuthApiResult {
-            status: types::AuthStatus { 
-                host_pubkey,
-                status: types::AuthState::ValidatedAgent
-            },
             result: AuthResult {
-                data: types::AuthResultType::Single(user_jwt)
+                status: types::AuthStatus { 
+                    host_pubkey: message_payload.status.host_pubkey,
+                    status: types::AuthState::ValidatedAgent
+                },
+                data: types::AuthResultData { inner: result_hash_map }
             },
             maybe_response_tags: None
         })

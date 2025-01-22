@@ -114,7 +114,7 @@ pub async fn run() -> Result<(), async_nats::Error> {
             &auth_p2_subject, // consumer stream subj
             EndpointType::Async(auth_api.call(|api: OrchestratorAuthApi, msg: Arc<Message>| {
                 async move {
-                    api.add_user_pubkey(msg).await
+                    api.add_user_nkey(msg, &local_utils::get_orchestrator_credentials_dir_path()).await
                 }
             })),
             Some(create_callback_subject_to_host("host_pubkey".to_string(), auth_end_subject)),

@@ -17,7 +17,7 @@ use std::{fmt::Debug, sync::Arc};
 use async_nats::Message;
 use std::future::Future;
 use serde::Deserialize;
-use types::WorkloadApiResult;
+use types::{WorkloadApiResult, WorkloadResult};
 use util_libs::{
     nats_js_client::{ServiceError, AsyncEndpointHandler, JsServiceResponse},
     db::schemas::{WorkloadState, WorkloadStatus}
@@ -50,13 +50,13 @@ where
         })
     }
 
-    fn convert_to_type<T>(msg: Arc<Message>) -> Result<T, ServiceError>
+    fn convert_msg_to_type<T>(msg: Arc<Message>) -> Result<T, ServiceError>
     where
         T: for<'de> Deserialize<'de> + Send + Sync,
     {
         let payload_buf = msg.payload.to_vec();
         serde_json::from_slice::<T>(&payload_buf).map_err(|e| {
-            let err_msg = format!("Error: Failed to deserialize payload. Subject='{}' Err={}", msg.subject, e);
+            let err_msg = format!("Error: Failed to deserialize payload. Subject='{}' Err={}", msg.subject.clone().into_string(), e);
             log::error!("{}", err_msg);
             ServiceError::Request(format!("{} Code={:?}", err_msg, ErrorCode::BAD_REQUEST))
         })
@@ -77,13 +77,13 @@ where
         Fut: Future<Output = Result<WorkloadApiResult, ServiceError>> + Send,
     {
         // 1. Deserialize payload into the expected type
-        let payload: T = Self::convert_to_type::<T>(msg.clone())?;
+        let payload: T = Self::convert_msg_to_type::<T>(msg.clone())?;
 
         // 2. Call callback handler
         Ok(match cb_fn(payload.clone()).await {
             Ok(r) => r,
             Err(e) => {
-                let err_msg = format!("Failed to process Workload Service Endpoint. Subject={} Payload={:?}, Error={:?}", msg.subject, payload, e);
+                let err_msg = format!("Failed to process Workload Service Endpoint. Subject={} Payload={:?}, Error={:?}", msg.subject.clone().into_string(), payload, e);
                 log::error!("{}", err_msg);
                 let status = WorkloadStatus {
                     id: None,
@@ -92,7 +92,13 @@ where
                 };
 
                 // 3. return response for stream
-                WorkloadApiResult(status, None)
+                WorkloadApiResult {
+                    result: WorkloadResult {
+                        status,
+                        workload: None
+                    },
+                    maybe_response_tags: None
+                }
             }
         })
     }

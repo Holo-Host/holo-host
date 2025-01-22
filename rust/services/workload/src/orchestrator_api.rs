@@ -8,6 +8,8 @@ Endpoints & Managed Subjects:
     - `handle_status_update`: handles the "WORKLOAD.handle_status_update" subject // published by hosting agent
 */
 
+use crate::types::WorkloadResult;
+
 use super::{types::WorkloadApiResult, WorkloadServiceApi};
 use anyhow::Result;
 use core::option::Option::None;
@@ -55,14 +57,17 @@ impl OrchestratorWorkloadApi {
                     _id: Some(workload_id),
                     ..workload
                 };
-                Ok(WorkloadApiResult(
-                    WorkloadStatus {
-                        id: new_workload._id,
-                        desired: WorkloadState::Reported,
-                        actual: WorkloadState::Reported,
+                Ok(WorkloadApiResult {
+                    result: WorkloadResult {
+                        status: WorkloadStatus {
+                            id: new_workload._id,
+                            desired: WorkloadState::Reported,
+                            actual: WorkloadState::Reported,
+                        },
+                        workload: None
                     },
-                    None
-                ))
+                    maybe_response_tags: None
+                })
             },
             WorkloadState::Error,
         )
@@ -79,14 +84,17 @@ impl OrchestratorWorkloadApi {
                 let updated_workload_doc = to_document(&workload).map_err(|e| ServiceError::Internal(e.to_string()))?;
                 self.workload_collection.update_one_within(workload_query, UpdateModifications::Document(updated_workload_doc)).await?;
                 log::info!("Successfully updated workload. MongodDB Workload ID={:?}", workload._id);
-                Ok(WorkloadApiResult(
-                    WorkloadStatus {
-                        id: workload._id,
-                        desired: WorkloadState::Reported,
-                        actual: WorkloadState::Reported,
+                Ok(WorkloadApiResult {
+                    result: WorkloadResult {
+                        status: WorkloadStatus {
+                            id: workload._id,
+                            desired: WorkloadState::Reported,
+                            actual: WorkloadState::Reported,
+                        },
+                        workload: None
                     },
-                    None
-                ))
+                    maybe_response_tags: None
+                })
             },
             WorkloadState::Error,
         )
@@ -106,14 +114,17 @@ impl OrchestratorWorkloadApi {
                     "Successfully removed workload from the Workload Collection. MongodDB Workload ID={:?}",
                     workload_id
                 );
-                Ok(WorkloadApiResult(
-                    WorkloadStatus {
-                        id: Some(workload_id),
-                        desired: WorkloadState::Removed,
-                        actual: WorkloadState::Removed,
+                Ok(WorkloadApiResult {
+                    result: WorkloadResult {
+                        status: WorkloadStatus {
+                            id: Some(workload_id),
+                            desired: WorkloadState::Removed,
+                            actual: WorkloadState::Removed,
+                        },
+                        workload: None
                     },
-                    None
-                ))
+                    maybe_response_tags: None
+                })
             },
             WorkloadState::Error,
         )
@@ -144,14 +155,18 @@ impl OrchestratorWorkloadApi {
                     for (index, host_pubkey) in workload.assigned_hosts.into_iter().enumerate() {
                         tag_map.insert(format!("assigned_host_{}", index), host_pubkey);
                     }
-                    return Ok(WorkloadApiResult( 
-                        WorkloadStatus {
-                            id: Some(workload_id),
-                            desired: WorkloadState::Assigned,
-                            actual: WorkloadState::Assigned,
+
+                    return Ok(WorkloadApiResult {
+                        result: WorkloadResult {
+                            status: WorkloadStatus {
+                                id: Some(workload_id),
+                                desired: WorkloadState::Assigned,
+                                actual: WorkloadState::Assigned,
+                            },
+                            workload: None
                         },
-                        Some(tag_map)
-                    ));
+                        maybe_response_tags: Some(tag_map)
+                    });
                 }
 
                 // 2. Otherwise call mongodb to get host collection to get hosts that meet the capacity requirements
@@ -206,14 +221,17 @@ impl OrchestratorWorkloadApi {
                 for (index, host_pubkey) in updated_workload.assigned_hosts.iter().cloned().enumerate() {
                     tag_map.insert(format!("assigned_host_{}", index), host_pubkey);
                 }
-                Ok(WorkloadApiResult(
-                    WorkloadStatus {
-                        id: Some(workload_id),
-                        desired: WorkloadState::Assigned,
-                        actual: WorkloadState::Assigned,
+                Ok(WorkloadApiResult {
+                    result: WorkloadResult {
+                        status: WorkloadStatus {
+                            id: Some(workload_id),
+                            desired: WorkloadState::Assigned,
+                            actual: WorkloadState::Assigned,
+                        },
+                        workload: None
                     },
-                    Some(tag_map)
-                ))
+                    maybe_response_tags: Some(tag_map)
+                })
         },
             WorkloadState::Error,
         )
@@ -225,30 +243,44 @@ impl OrchestratorWorkloadApi {
     pub async fn handle_db_modification(&self, msg: Arc<Message>) -> Result<WorkloadApiResult, ServiceError> {
         log::debug!("Incoming message for 'WORKLOAD.modify'");
         
-        let workload = Self::convert_to_type::<schemas::Workload>(msg)?;
+        let workload = Self::convert_msg_to_type::<schemas::Workload>(msg)?;
         log::trace!("New workload to assign. Workload={:#?}", workload);
         
         // TODO: ...handle the use case for the update entry change stream 
 
+        // let workload_request_bytes = serde_json::to_vec(&workload).map_err(|e| ServiceError::Internal(e.to_string()))?;
+
         let success_status = WorkloadStatus {
-            id: workload._id,
+            id: workload._id.clone(),
             desired: WorkloadState::Running,
             actual: WorkloadState::Running,
         };
-        
-        Ok(WorkloadApiResult(success_status, None))
+
+        Ok(WorkloadApiResult {
+            result: WorkloadResult {
+                status: success_status,
+                workload: Some(workload)
+            },
+            maybe_response_tags: None
+        })
     }
 
     // NB: Published by the Hosting Agent whenever the status of a workload changes
     pub async fn handle_status_update(&self, msg: Arc<Message>) -> Result<WorkloadApiResult, ServiceError> {
         log::debug!("Incoming message for 'WORKLOAD.handle_status_update'");
 
-        let workload_status = Self::convert_to_type::<WorkloadStatus>(msg)?;
+        let workload_status = Self::convert_msg_to_type::<WorkloadResult>(msg)?.status;
         log::trace!("Workload status to update. Status={:?}", workload_status);
 
         // TODO: ...handle the use case for the workload status update within the orchestrator
-        
-        Ok(WorkloadApiResult(workload_status, None))
+
+        Ok(WorkloadApiResult {
+            result: WorkloadResult {
+                status: workload_status,
+                workload: None
+            },
+            maybe_response_tags: None
+        })
     }
 
     // Helper function to initialize mongodb collections

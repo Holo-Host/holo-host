@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use util_libs::js_stream_service::{CreateTag, EndpointTraits};
+use util_libs::js_stream_service::{CreateResponse, CreateTag, EndpointTraits};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -40,19 +40,18 @@ pub struct AuthRequestPayload {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub enum AuthResultType {
-    Single(Vec<u8>),
-    Multiple(Vec<Vec<u8>>)
+pub struct AuthResultData {
+    pub inner: HashMap<String,Vec<u8>>
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct AuthResult {
-    pub data: AuthResultType,
+    pub status: AuthStatus,
+    pub data: AuthResultData,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct AuthApiResult {
-    pub status: AuthStatus,
     pub result: AuthResult,
     pub maybe_response_tags: Option<HashMap<String, String>>
 }
@@ -60,5 +59,14 @@ impl EndpointTraits for AuthApiResult {}
 impl CreateTag for AuthApiResult {
     fn get_tags(&self) -> HashMap<String, String> {
         self.maybe_response_tags.clone().unwrap_or_default()
+    }
+}
+impl CreateResponse for AuthApiResult {
+    fn get_response(&self) -> bytes::Bytes {
+        let r = self.result.clone();
+        match serde_json::to_vec(&r) {
+            Ok(r) => r.into(),
+            Err(e) => e.to_string().into(),
+        }
     }
 }

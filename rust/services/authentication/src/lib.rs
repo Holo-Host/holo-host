@@ -48,13 +48,25 @@ where
         })
     }
 
-    fn convert_to_type<T>(msg: Arc<Message>) -> Result<T, ServiceError>
+    fn convert_to_type<T>(data: Vec<u8>, msg_subject: &str) -> Result<T, ServiceError>
+    where
+        T: for<'de> Deserialize<'de> + Send + Sync,
+    {
+        serde_json::from_slice::<T>(&data).map_err(|e| {
+            let err_msg = format!("Error: Failed to deserialize payload data. Subject='{}' Err={}", msg_subject, e);
+            log::error!("{}", err_msg);
+            ServiceError::Internal(err_msg.to_string())
+        })
+        
+    }
+
+    fn convert_msg_to_type<T>(msg: Arc<Message>) -> Result<T, ServiceError>
     where
         T: for<'de> Deserialize<'de> + Send + Sync,
     {
         let payload_buf = msg.payload.to_vec();
         serde_json::from_slice::<T>(&payload_buf).map_err(|e| {
-            let err_msg = format!("Error: Failed to deserialize payload. Subject='{}' Err={}", msg.subject, e);
+            let err_msg = format!("Error: Failed to deserialize payload. Subject='{}' Err={}", msg.subject.clone().into_string(), e);
             log::error!("{}", err_msg);
             ServiceError::Request(format!("{} Code={:?}", err_msg, ErrorCode::BAD_REQUEST))
         })

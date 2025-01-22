@@ -1,8 +1,6 @@
 use anyhow::Result;
 use async_nats::jetstream::Context;
-use async_nats::Message;
 use util_libs::nats_js_client::ServiceError;
-use std::sync::Arc;
 use std::io::Write;
 use std::path::PathBuf;
 
@@ -19,19 +17,19 @@ pub fn get_file_path_buf(
 }
 
 pub async fn receive_and_write_file(
-    msg: Arc<Message>,
+    data: Vec<u8>,
     output_dir: &str,
     file_name: &str,
-) -> Result<()> {
+) -> Result<String> {
     let output_path = format!("{}/{}", output_dir, file_name);
     let mut file = std::fs::OpenOptions::new()
         .create(true)
         .append(true)
         .open(&output_path)?;
 
-    file.write_all(&msg.payload)?;
+    file.write_all(&data)?;
     file.flush()?;
-    Ok(())
+    Ok(output_path)
 }
 
 pub async fn publish_chunks(js: &Context, subject: &str, file_name: &str, data: Vec<u8>) -> Result<()> {
