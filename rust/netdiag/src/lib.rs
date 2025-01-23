@@ -218,7 +218,6 @@ pub fn do_requests(cfg: &NetDiagConfig) -> Vec<RequestStats> {
             "Querying: {}:{} via DNS server {}",
             query.hostname, query.port, query.nameserver
         );
-        // TODO: do_request() should always return a RequestStats object -- even on failure.
         let req = do_request(query, &cfg.global.ip_version);
         ret.push(req);
     }
@@ -248,7 +247,6 @@ pub fn do_request(cfg: &QueryDefinition, ip_ver: &IPVersion) -> RequestStats {
 
     let host = format!("{}:{}", ip, cfg.port);
     stats.start_phase(PhaseType::TcpConnect);
-    // TODO: replace all unwraps and expects, and bubble it all upward
     let result = TcpStream::connect(host);
     let mut sock = match result {
         Ok(sock) => sock,
