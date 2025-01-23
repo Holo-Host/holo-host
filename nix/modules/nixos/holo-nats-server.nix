@@ -22,12 +22,16 @@ in
       type = lib.types.int;
       default = 7422;
     };
+
+    openFirewall = lib.mkOption {
+      default = false;
+    };
   };
 
   config = lib.mkIf cfg.enable {
-    networking.firewall.allowedTCPPorts = [
-      config.services.nats.port
-      config.services.nats.settings.leafnodes.port
+    networking.firewall.allowedTCPPorts = lib.optionals cfg.openFirewall [
+      cfg.port
+      cfg.leafnodePort
     ];
 
     services.nats = {
