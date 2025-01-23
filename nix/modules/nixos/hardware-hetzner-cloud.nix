@@ -1,6 +1,6 @@
 # This is an opinionated module to configure Hetzner Cloud instances.
-
-{ inputs, lib, ... }:
+{ inputs, ... }:
+{ lib, ... }:
 {
   imports = [
     inputs.srvos.nixosModules.server
