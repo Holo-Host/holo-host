@@ -57,7 +57,7 @@ async fn daemonize(args: &DaemonzeArgs) -> Result<(), async_nats::Error> {
     )
     .await;
 
-    let _ = workload_manager::run(
+    let host_client = workload_manager::run(
         "host_id_placeholder>",
         &args.nats_leafnode_client_creds_path,
         args.nats_connect_timeout_secs,
@@ -66,6 +66,7 @@ async fn daemonize(args: &DaemonzeArgs) -> Result<(), async_nats::Error> {
 
     // Only exit program when explicitly requested
     tokio::signal::ctrl_c().await?;
-
+    
+    host_client.close().await?;
     Ok(())
 }
