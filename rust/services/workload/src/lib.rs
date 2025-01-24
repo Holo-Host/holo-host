@@ -326,12 +326,16 @@ impl WorkloadApi {
             log::info!("Removed workload from previous hosts. Workload={:#?}", workload._id);
         }
 
-        // 3. add workload to specific hosts
-        self.host_collection.update_one_within(
-            doc!{ "_id": { "$in": workload.clone().assigned_hosts } },
-            UpdateModifications::Document(doc!{ "$push": { "assigned_workloads": workload._id } })
-        ).await?;
-        log::info!("Added workload to new hosts. Workload={:#?}", workload._id);
+        if workload.metadata.is_deleted == false {
+            // 3. add workload to specific hosts
+            self.host_collection.update_one_within(
+                doc!{ "_id": { "$in": workload.clone().assigned_hosts } },
+                UpdateModifications::Document(doc!{ "$push": { "assigned_workloads": workload._id } })
+            ).await?;
+            log::info!("Added workload to new hosts. Workload={:#?}", workload._id);
+        } else {
+            log::info!("Skipping (reason: deleted) - Added workload to new hosts. Workload={:#?}", workload._id);
+        }
 
         let success_status = WorkloadStatus {
             id: workload._id.map(|oid| oid.to_hex()),
