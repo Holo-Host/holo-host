@@ -16,6 +16,10 @@ pkgs.testers.runNixOSTest (
     name = "host-agent-integration-nixos";
     meta.platforms = lib.lists.intersectLists lib.platforms.linux lib.platforms.x86_64;
 
+    defaults.networking.hosts = {
+      hubIP = [ "${nodes.hub.networking.fqdn}" ];
+    };
+
     nodes.hub =
       { ... }:
       {
@@ -23,6 +27,8 @@ pkgs.testers.runNixOSTest (
           flake.nixosModules.holo-nats-server
           # flake.nixosModules.holo-orchestrator
         ];
+
+        networking.domain = "local";
 
         # holo.orchestrator.enable = true;
         holo.nats-server.enable = true;
@@ -66,10 +72,8 @@ pkgs.testers.runNixOSTest (
             backtrace = "trace";
           };
 
-          nats = {
-            # url = "agent:${builtins.toString config.services.nats.port}";
-            hubServerUrl = "nats://${hubIP}:${builtins.toString nodes.hub.holo.nats-server.leafnodePort}";
-          };
+          nats.hub.url = "wss://${nodes.hub.networking.fqdn}:${builtins.toString nodes.hub.holo.nats-server.websocket.externalPort}";
+          nats.hub.tlsInsecure = true;
         };
 
         holo.nats-server.enable = hostUseOsNats;
@@ -202,6 +206,11 @@ pkgs.testers.runNixOSTest (
         with subtest("start the hub and run the testscript"):
           hub.start()
           hub.wait_for_unit("nats.service")
+          hub.wait_for_open_port(port = ${builtins.toString nodes.hub.holo.nats-server.websocket.port}, timeout = 1)
+
+          hub.wait_for_unit("caddy.service")
+          hub.wait_for_open_port(port = ${builtins.toString nodes.hub.holo.nats-server.websocket.externalPort}, timeout = 1)
+
           hub.succeed("${hubTestScript}")
 
         with subtest("starting the host and waiting for holo-host-agent to be ready"):
@@ -212,6 +221,9 @@ pkgs.testers.runNixOSTest (
             else
               "host.wait_for_unit('holo-host-agent')"
           }
+
+          host.wait_for_open_port(addr = "${nodes.hub.networking.fqdn}", port = ${builtins.toString nodes.hub.holo.nats-server.websocket.externalPort}, timeout = 10)
+
 
         with subtest("running the host testscript"):
           host.succeed("${hostTestScript}", timeout = 10)
