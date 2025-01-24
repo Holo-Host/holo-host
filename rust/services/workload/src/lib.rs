@@ -156,6 +156,7 @@ impl WorkloadApi {
         .await)
     }
 
+    // verifies if a host meets the workload criteria
     pub fn verify_host_meets_workload_criteria(&self, workload: Workload, assigned_host: Host) -> bool {
         if assigned_host.remaining_capacity.disk < workload.system_specs.capacity.disk {
             return false;
@@ -169,6 +170,9 @@ impl WorkloadApi {
         
         return true;
     }
+
+    // looks through existing hosts to find possible hosts for a given workload
+    // returns the minimum number of hosts required for workload
     pub async fn find_hosts_meeting_workload_criteria(&self, workload: Workload) -> Result<Vec<Host>, anyhow::Error> {
         let pipeline = vec! [
             doc! {
@@ -301,12 +305,26 @@ impl WorkloadApi {
         let workload: schemas::Workload = serde_json::from_slice(&payload_buf)?;
         log::trace!("Workload to update. Workload={:#?}", workload.clone());
 
-        // 1. remove workload from all hosts
-        self.host_collection.update_one_within(
-            doc!{},
-            UpdateModifications::Document(doc!{ "$pull": { "assigned_workloads": workload._id } })
-        ).await?;
-        log::info!("Removed workload from previous hosts. Workload={:#?}", workload._id);
+        // 1. find all hosts that are assigned the current workload
+        let existing_hosts = self.host_collection.aggregate(vec! [
+            doc! {
+                "$match": {
+                    "assigned_workloads": workload._id
+                }
+            }
+        ]).await?;
+        let existing_host_ids: Vec<Option<MongoDbId>> = existing_hosts
+            .into_iter().map(|host| host._id).collect();
+        log::info!("Found {:#?} hosts that are assigned to this workload.", existing_host_ids.len());
+
+        // 2. remove workload from existing hosts
+        if existing_host_ids.len() > 0 {
+            self.host_collection.update_one_within(
+                doc!{ "_id": { "$in": existing_host_ids } },
+                UpdateModifications::Document(doc!{ "$pull": { "assigned_workloads": workload._id } })
+            ).await?;
+            log::info!("Removed workload from previous hosts. Workload={:#?}", workload._id);
+        }
 
         // 3. add workload to specific hosts
         self.host_collection.update_one_within(
@@ -325,28 +343,6 @@ impl WorkloadApi {
         Ok(types::ApiResult(success_status, None))
     }
   
-    // !!!!!!!!!!!!!!DEPRECATED?!!!!!!!!!!!!!!!!!!
-    // NB: This is the stream that is automatically published by the nats-db-connector
-    // triggers on mongodb [workload] collection (delete)
-    pub async fn handle_db_deletion(&self, msg: Arc<Message>) -> Result<types::ApiResult, anyhow::Error> {
-
-        log::debug!("Incoming message for 'WORKLOAD.delete'");
-        
-        let payload_buf = msg.payload.to_vec();
-        let workload: schemas::Workload = serde_json::from_slice(&payload_buf)?;
-        log::trace!("New workload to assign. Workload={:#?}", workload);
-        
-        // TODO: ...handle the use case for the delete entry change stream
-
-        let success_status = WorkloadStatus {
-            id: workload._id.map(|oid| oid.to_hex()),
-            desired: WorkloadState::Removed,
-            actual: WorkloadState::Removed,
-        };
-        
-        Ok(types::ApiResult(success_status, None))
-    }
-
     // NB: Published by the Hosting Agent whenever the status of a workload changes
     pub async fn handle_status_update(&self, msg: Arc<Message>) -> Result<types::ApiResult, anyhow::Error> {
         log::debug!("Incoming message for 'WORKLOAD.read_status_update'");
@@ -354,37 +350,25 @@ impl WorkloadApi {
         let payload_buf = msg.payload.to_vec();
         let workload_status: WorkloadStatus = serde_json::from_slice(&payload_buf)?;
         log::trace!("Workload status to update. Status={:?}", workload_status);
-
-        // 1. fetch the workload document
-        match self.workload_collection.get_one_from(doc! { "_id": workload_status.id.clone() }).await?{
-            Some(workload_doc) => {
-                // 2. remove workload from hosts
-                self.host_collection.update_one_within(
-                    doc!{ "_id": { "$in": workload_doc.assigned_hosts } },
-                    UpdateModifications::Document(doc!{ "$pull": { "assigned_workloads": workload_doc._id } })
-                ).await?;
-                
-                // 3. remove workload from developers
-                self.developer_collection.update_one_within(
-                    doc!{ "_id": { "$in": workload_doc.assigned_developer } },
-                    UpdateModifications::Document(doc!{ "$pull": { "assigned_workloads": workload_doc._id } })
-                ).await?;
-            },
-            None => {
-                log::warn!("Workload not found. Unable to remove workload.");
-            }
+        if workload_status.id == None {
+            return Err(anyhow!("Got a status update for workload without an id!"));
         }
+        let workload_status_id = workload_status.id.clone().unwrap();
 
-        // 4. mark workload as deleted
-        self.workload_collection.update_one_within(
-            doc! { "_id":  workload_status.id.clone() },
-            UpdateModifications::Document(doc!{ "$set": {
-                "metadata.is_deleted": true,
-                "metadata.deleted_at": DateTime::now()
-            }
-        })).await?;
+        // todo: handle othercases
+        if matches!(workload_status.desired, WorkloadState::Removed) {
+            self.workload_collection.update_one_within(
+                doc! { "_id": MongoDbId::parse_str(workload_status_id)? },
+                UpdateModifications::Document(doc!{
+                    "$set": {
+                        "metadata.is_deleted": true,
+                        "deleted_at": Some(DateTime::now())
+                    }
+                })
+            ).await?;
+        }
         
-        Ok(types::ApiResult(workload_status, None))
+        return Ok(types::ApiResult(workload_status, None))
     }    
 
      /*******************************   For Host Agent   *********************************/
