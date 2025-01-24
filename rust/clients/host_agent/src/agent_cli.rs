@@ -13,7 +13,7 @@ use clap::{Args, Parser, Subcommand};
 )]
 pub struct Root {
     #[command(subcommand)]
-    pub scope: Option<CommandScopes>,
+    pub scope: CommandScopes,
 }
 
 #[derive(Subcommand, Clone)]
@@ -32,7 +32,7 @@ pub enum CommandScopes {
     },
 }
 
-#[derive(Args, Clone, Debug, Default)]
+#[derive(Args, Clone, Debug)]
 pub struct DaemonzeArgs {
     #[arg(long, help = "directory to contain the NATS persistence")]
     pub(crate) store_dir: Option<PathBuf>,

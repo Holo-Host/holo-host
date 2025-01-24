@@ -36,18 +36,12 @@ async fn main() -> Result<(), AgentCliError> {
 
     let cli = agent_cli::Root::parse();
     match &cli.scope {
-        Some(agent_cli::CommandScopes::Daemonize(daemonize_args)) => {
+        agent_cli::CommandScopes::Daemonize(daemonize_args) => {
             log::info!("Spawning host agent.");
             daemonize(daemonize_args).await?;
         }
-        Some(agent_cli::CommandScopes::Host { command }) => host_cmds::host_command(command)?,
-        Some(agent_cli::CommandScopes::Support { command }) => {
-            support_cmds::support_command(command)?
-        }
-        None => {
-            log::warn!("No arguments given. Spawning host agent.");
-            daemonize(&Default::default()).await?;
-        }
+        agent_cli::CommandScopes::Host { command } => host_cmds::host_command(command)?,
+        agent_cli::CommandScopes::Support { command } => support_cmds::support_command(command)?,
     }
 
     Ok(())
