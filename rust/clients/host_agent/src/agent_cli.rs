@@ -13,7 +13,7 @@ use clap::{Args, Parser, Subcommand};
 )]
 pub struct Root {
     #[command(subcommand)]
-    pub scope: Option<CommandScopes>,
+    pub scope: CommandScopes,
 }
 
 #[derive(Subcommand, Clone)]
@@ -32,15 +32,28 @@ pub enum CommandScopes {
     },
 }
 
-#[derive(Args, Clone, Debug, Default)]
+#[derive(Args, Clone, Debug)]
 pub struct DaemonzeArgs {
-    #[arg(help = "directory to contain the NATS persistence")]
+    #[arg(long, help = "directory to contain the NATS persistence")]
     pub(crate) store_dir: Option<PathBuf>,
 
-    #[arg(help = "path to NATS credentials used for the LeafNode client connection")]
+    #[arg(
+        long,
+        help = "path to NATS credentials used for the LeafNode client connection"
+    )]
     pub(crate) nats_leafnode_client_creds_path: Option<PathBuf>,
 
+    #[arg(long, help = "connection URL to the hub")]
+    pub(crate) hub_url: String,
+
     #[arg(
+        long,
+        help = "whether to tolerate unknown remote TLS certificates for the connection to the hub"
+    )]
+    pub(crate) hub_tls_insecure: bool,
+
+    #[arg(
+        long,
         help = "try to connect to the (internally spawned) Nats instance for the given duration in seconds before giving up",
         default_value = "30"
     )]
