@@ -18,11 +18,10 @@ use anyhow::{anyhow, Result};
 use async_nats::Message;
 use mongodb::{options::UpdateModifications, Client as MongoDBClient};
 use std::{fmt::Debug, sync::Arc};
-use util_libs::{db::{mongodb::{IntoIndexes, MongoCollection, MongoDbAPI}, schemas::{self, Host, Workload, WorkloadState, WorkloadStatus}}, nats_js_client};
-use rand::seq::SliceRandom;
+use util_libs::{db::{mongodb::{IntoIndexes, MongoCollection, MongoDbAPI}, schemas::{self, Host, Workload, WorkloadState, WorkloadStatus, MongoDbId}}, nats_js_client};
 use std::future::Future;
 use serde::{Deserialize, Serialize};
-use bson::{self, doc, to_document};
+use bson::{self, doc, to_document, DateTime};
 
 pub const WORKLOAD_SRV_NAME: &str = "WORKLOAD";
 pub const WORKLOAD_SRV_SUBJ: &str = "WORKLOAD";
@@ -35,6 +34,7 @@ pub struct WorkloadApi {
     pub workload_collection: MongoCollection<schemas::Workload>,
     pub host_collection: MongoCollection<schemas::Host>,
     pub user_collection: MongoCollection<schemas::User>,
+    pub developer_collection: MongoCollection<schemas::Developer>,
 }
 
 impl WorkloadApi {
@@ -43,6 +43,7 @@ impl WorkloadApi {
             workload_collection: Self::init_collection(client, schemas::WORKLOAD_COLLECTION_NAME).await?,
             host_collection: Self::init_collection(client, schemas::HOST_COLLECTION_NAME).await?,
             user_collection: Self::init_collection(client, schemas::USER_COLLECTION_NAME).await?,
+            developer_collection: Self::init_collection(client, schemas::DEVELOPER_COLLECTION_NAME).await?,
         })
     }
 
@@ -71,12 +72,12 @@ impl WorkloadApi {
                 let workload_id = self.workload_collection.insert_one_into(workload.clone()).await?;
                 log::info!("Successfully added workload. MongodDB Workload ID={:?}", workload_id);
                 let updated_workload = schemas::Workload {
-                    _id: Some(workload_id),
+                    _id: Some(MongoDbId::parse_str(workload_id)?),
                     ..workload
                 };
                 Ok(types::ApiResult(
                     WorkloadStatus {
-                        id: updated_workload._id,
+                        id: updated_workload._id.map(|oid| oid.to_hex()),
                         desired: WorkloadState::Reported,
                         actual: WorkloadState::Reported,
                     },
@@ -94,13 +95,20 @@ impl WorkloadApi {
             msg,
             WorkloadState::Running,
             |workload: schemas::Workload| async move {
-                let workload_query = doc! { "_id":  workload._id.clone() };
-                let updated_workload = to_document(&workload)?;
-                self.workload_collection.update_one_within(workload_query, UpdateModifications::Document(updated_workload)).await?;
+                let workload_query = doc! { "_id":  workload._id };
+
+                // update workload updated_at
+                let mut workload_doc = workload.clone();
+                workload_doc.metadata.updated_at = Some(DateTime::now());
+
+                // convert workload to document and submit to mongodb
+                let updated_workload = to_document(&workload_doc)?;
+                self.workload_collection.update_one_within(workload_query, UpdateModifications::Document(doc!{ "$set": updated_workload })).await?;
+
                 log::info!("Successfully updated workload. MongodDB Workload ID={:?}", workload._id);
                 Ok(types::ApiResult(
                     WorkloadStatus {
-                        id: workload._id,
+                        id: workload._id.map(|oid| oid.to_hex()),
                         desired: WorkloadState::Reported,
                         actual: WorkloadState::Reported,
                     },
@@ -119,15 +127,23 @@ impl WorkloadApi {
             msg,
             WorkloadState::Removed,
             |workload_id: schemas::MongoDbId| async move {
-                let workload_query = doc! { "_id":  workload_id.clone() };
-                self.workload_collection.delete_one_from(workload_query).await?;
+                let workload_query = doc! { "_id":  workload_id };
+                self.workload_collection.update_one_within(
+                    workload_query,
+                    UpdateModifications::Document(doc! {
+                        "$set": {
+                            "metadata.is_deleted": true,
+                            "metadata.deleted_at": DateTime::now()
+                        }
+                    })
+                ).await?;
                 log::info!(
                     "Successfully removed workload from the Workload Collection. MongodDB Workload ID={:?}",
                     workload_id
                 );
                 Ok(types::ApiResult(
                     WorkloadStatus {
-                        id: Some(workload_id),
+                        id: Some(workload_id.to_hex()),
                         desired: WorkloadState::Removed,
                         actual: WorkloadState::Removed,
                     },
@@ -139,7 +155,51 @@ impl WorkloadApi {
         .await)
     }
 
+    // verifies if a host meets the workload criteria
+    pub fn verify_host_meets_workload_criteria(&self, workload: Workload, assigned_host: Host) -> bool {
+        if assigned_host.remaining_capacity.disk < workload.system_specs.capacity.disk {
+            return false;
+        }
+        if assigned_host.remaining_capacity.memory < workload.system_specs.capacity.memory {
+            return false;
+        }
+        if assigned_host.remaining_capacity.cores < workload.system_specs.capacity.cores {
+            return false;
+        }
+        
+        return true;
+    }
+
+    // looks through existing hosts to find possible hosts for a given workload
+    // returns the minimum number of hosts required for workload
+    pub async fn find_hosts_meeting_workload_criteria(&self, workload: Workload) -> Result<Vec<Host>, anyhow::Error> {
+        let pipeline = vec! [
+            doc! {
+                "$match": {
+                    // verify there are enough system resources
+                    "remaining_capacity.disk": { "$gte": workload.system_specs.capacity.disk },
+                    "remaining_capacity.memory": { "$gte": workload.system_specs.capacity.memory },
+                    "remaining_capacity.cores": { "$gte": workload.system_specs.capacity.cores },
+
+                    // limit how many workloads a single host can have
+                    "assigned_workloads": { "$lt": 1 }
+                }
+            },
+            doc! {
+                // the maximum number of hosts returned should be the minimum hosts required by workload
+                // sample randomized results and always return back atleast 1 result
+                "$sample": std::cmp::min(workload.min_hosts as i32, 1)
+            }
+        ];
+        let results = self.host_collection.aggregate(pipeline).await?;
+        if results.len() == 0 {
+            return Err(anyhow!("Could not find a compatible host for this workload={:#?}", workload._id));
+        }
+        Ok(results)
+    }
+
     // NB: Automatically published by the nats-db-connector
+    // trigger on mongodb [workload] collection (insert)
     pub async fn handle_db_insertion(&self, msg: Arc<Message>) -> Result<types::ApiResult, anyhow::Error> {
         log::debug!("Incoming message for 'WORKLOAD.insert'");
         Ok(self.process_request(
@@ -160,32 +220,22 @@ impl WorkloadApi {
                 if !workload.assigned_hosts.is_empty() {
                     log::warn!("Attempted to assign host for new workload, but host already exists.");
                     return Ok(types::ApiResult( 
-                    WorkloadStatus {
-                        id: Some(workload_id),
-                        desired: WorkloadState::Assigned,
-                        actual: WorkloadState::Assigned,
-                    },
-                    Some(workload.assigned_hosts)));
+                        WorkloadStatus {
+                            id: Some(workload_id.to_hex()),
+                            desired: WorkloadState::Assigned,
+                            actual: WorkloadState::Assigned,
+                        },
+                        Some(
+                            workload.assigned_hosts
+                            .iter().map(|id| id.to_hex()).collect())
+                        )
+                    );
                 }
 
                 // 2. Otherwise call mongodb to get host collection to get hosts that meet the capacity requirements
-                let host_filter = doc! {
-                    "remaining_capacity.cores": { "$gte": workload.system_specs.capacity.cores },      
-                    "remaining_capacity.memory": { "$gte": workload.system_specs.capacity.memory },
-                    "remaining_capacity.disk": { "$gte": workload.system_specs.capacity.disk }
-                };
-                let eligible_hosts = self.host_collection.get_many_from(host_filter).await? ;
+                let eligible_hosts = self.find_hosts_meeting_workload_criteria(workload.clone()).await?;
                 log::debug!("Eligible hosts for new workload. MongodDB Host IDs={:?}", eligible_hosts);
-
-                // 3. Randomly choose host/node
-                let host = match eligible_hosts.choose(&mut rand::thread_rng()) {
-                    Some(h) => h,
-                    None => {
-                        // todo: Try to get another host up to 5 times, if fails thereafter, return error
-                        let err_msg = format!("Failed to locate an eligible host to support the required workload capacity. Workload={:?}", workload);
-                        return Err(anyhow!(err_msg));
-                    }
-                };
+                let host = eligible_hosts[0].clone();
 
                 // Note: The `_id` is an option because it is only generated upon the intial insertion of a record in
                 // a mongodb collection. This also means that whenever a record is fetched from mongodb, it must have the `_id` feild.
@@ -193,7 +243,7 @@ impl WorkloadApi {
                 let host_id = host._id.to_owned().unwrap();
                 
                 // 4. Update the Workload Collection with the assigned Host ID
-                let workload_query = doc! { "_id":  workload_id.clone() };
+                let workload_query = doc! { "_id":  workload_id };
                 let updated_workload = &Workload {
                     assigned_hosts: vec![host_id],
                     ..workload.clone()
@@ -208,7 +258,7 @@ impl WorkloadApi {
                 // 5. Update the Host Collection with the assigned Workload ID
                 let host_query = doc! { "_id":  host.clone()._id };
                 let updated_host_doc =  to_document(&Host {
-                    assigned_workloads: vec![workload_id.clone()],
+                    assigned_workloads: vec![workload_id.to_hex()],
                     ..host.to_owned()
                 })?;
                 let updated_host_result = self.host_collection.update_one_within(host_query, UpdateModifications::Document(updated_host_doc)).await?;
@@ -219,11 +269,14 @@ impl WorkloadApi {
      
                 Ok(types::ApiResult(
                     WorkloadStatus {
-                        id: Some(workload_id),
+                        id: Some(workload_id.to_hex()),
                         desired: WorkloadState::Assigned,
                         actual: WorkloadState::Assigned,
                     },
-                    Some(updated_workload.assigned_hosts.to_owned())
+                    Some(
+                        updated_workload.assigned_hosts.to_owned()
+                        .iter().map(|host| host.to_hex()).collect()
+                    )
                 ))
         },
             WorkloadState::Error,
@@ -231,46 +284,48 @@ impl WorkloadApi {
         .await)
     }
 
-    // Zeeshan to take a look:
     // NB: Automatically published by the nats-db-connector
+    // triggers on mongodb [workload] collection (update)
     pub async fn handle_db_update(&self, msg: Arc<Message>) -> Result<types::ApiResult, anyhow::Error> {
         log::debug!("Incoming message for 'WORKLOAD.update'");
         
         let payload_buf = msg.payload.to_vec();
+
         let workload: schemas::Workload = serde_json::from_slice(&payload_buf)?;
-        log::trace!("New workload to assign. Workload={:#?}", workload);
-        
-        // TODO: ...handle the use case for the update entry change stream 
+        log::trace!("Workload to update. Workload={:#?}", workload.clone());
+
+        // 1. remove workloads from existing hosts
+        self.host_collection.mongo_error_handler(
+            self.host_collection.collection.update_many(
+                doc! {},
+                doc!{ "$pull": { "assigned_workloads": workload._id } }
+            ).await
+        )?;
+        log::info!("Remove workload from previous hosts. Workload={:#?}", workload._id);
+
+        if workload.metadata.is_deleted == false {
+            // 3. add workload to specific hosts
+            self.host_collection.mongo_error_handler(
+                self.host_collection.collection.update_one(
+                    doc! { "_id": { "$in": workload.clone().assigned_hosts } },
+                    doc! { "$push": { "assigned_workloads": workload._id } }
+                ).await
+            )?;
+            log::info!("Added workload to new hosts. Workload={:#?}", workload._id);
+        } else {
+            log::info!("Skipping (reason: deleted) - Added workload to new hosts. Workload={:#?}", workload._id);
+        }
 
         let success_status = WorkloadStatus {
-            id: workload._id,
-            desired: WorkloadState::Running,
-            actual: WorkloadState::Running,
+            id: workload._id.map(|oid| oid.to_hex()),
+            desired: WorkloadState::Updating,
+            actual: WorkloadState::Updating,
         };
+        log::info!("Workload update successful. Workload={:#?}", workload._id);
         
         Ok(types::ApiResult(success_status, None))
     }
-
-    // Zeeshan to take a look:
-    // NB: Automatically published by the nats-db-connector
-    pub async fn handle_db_deletion(&self, msg: Arc<Message>) -> Result<types::ApiResult, anyhow::Error> {
-        log::debug!("Incoming message for 'WORKLOAD.delete'");
-        
-        let payload_buf = msg.payload.to_vec();
-        let workload: schemas::Workload = serde_json::from_slice(&payload_buf)?;
-        log::trace!("New workload to assign. Workload={:#?}", workload);
-        
-        // TODO: ...handle the use case for the delete entry change stream
-
-        let success_status = WorkloadStatus {
-            id: workload._id,
-            desired: WorkloadState::Removed,
-            actual: WorkloadState::Removed,
-        };
-        
-        Ok(types::ApiResult(success_status, None))
-    }
-
+  
     // NB: Published by the Hosting Agent whenever the status of a workload changes
     pub async fn handle_status_update(&self, msg: Arc<Message>) -> Result<types::ApiResult, anyhow::Error> {
         log::debug!("Incoming message for 'WORKLOAD.read_status_update'");
@@ -278,10 +333,27 @@ impl WorkloadApi {
         let payload_buf = msg.payload.to_vec();
         let workload_status: WorkloadStatus = serde_json::from_slice(&payload_buf)?;
         log::trace!("Workload status to update. Status={:?}", workload_status);
+        if workload_status.id == None {
+            return Err(anyhow!("Got a status update for workload without an id!"));
+        }
+        let workload_status_id = workload_status.id.clone().unwrap();
 
-        // TODO: ...handle the use case for the workload status update
+        // todo: handle othercases
+        if matches!(workload_status.desired, WorkloadState::Removed) {
+            self.workload_collection.mongo_error_handler(
+                self.workload_collection.collection.update_one(
+                    doc! { "_id": MongoDbId::parse_str(workload_status_id)? },
+                    doc! {
+                        "$set": {
+                            "metadata.is_deleted": true,
+                            "deleted_at": Some(DateTime::now())
+                        }
+                    }
+                ).await
+            )?;
+        }
         
-        Ok(types::ApiResult(workload_status, None))
+        return Ok(types::ApiResult(workload_status, None))
     }    
 
      /*******************************   For Host Agent   *********************************/
@@ -297,7 +369,7 @@ impl WorkloadApi {
 
         // 2. Respond to endpoint request
         let status = WorkloadStatus {
-            id: workload._id,
+            id: workload._id.map(|oid| oid.to_hex()),
             desired: WorkloadState::Running,
             actual: WorkloadState::Unknown("..".to_string()),
         };

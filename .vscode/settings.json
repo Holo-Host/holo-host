@@ -14,5 +14,12 @@
         "command": ["treefmt-nix", "--stdin", "neverexists.nix"]
       }
     }
-  }
+  },
+  "[rust]": {
+    "editor.defaultFormatter": "rust-lang.rust-analyzer",
+  },
+  "files.readonlyInclude": {
+    "**/.cargo/registry/src/**/*.rs": true,
+    "**/lib/rustlib/src/rust/library/**/*.rs": true,
+  },
 }
