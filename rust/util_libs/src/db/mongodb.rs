@@ -1,4 +1,5 @@
 use anyhow::{anyhow, Context, Result};
+use async_nats::Error;
 use async_trait::async_trait;
 use bson::{self, doc, Document};
 use futures::stream::TryStreamExt;
@@ -21,6 +22,8 @@ pub trait MongoDbAPI<T>
 where
     T: Serialize + for<'de> Deserialize<'de> + Unpin + Send + Sync,
 {
+    fn mongo_error_handler<ReturnType>(&self, result: Result<ReturnType, mongodb::error::Error>) -> Result<ReturnType>;
+    async fn mongo_cursor_to_list(&self, cursor: mongodb::Cursor<T>) -> Result<Vec<T>>;
     async fn aggregate(&self, pipeline: Vec<Document>) -> Result<Vec<T>>;
     async fn get_one_from(&self, filter: Document) -> Result<Option<T>>;
     async fn get_many_from(&self, filter: Document) -> Result<Vec<T>>;
@@ -40,7 +43,7 @@ pub struct MongoCollection<T>
 where
     T: Serialize + for<'de> Deserialize<'de> + Unpin + Send + Sync + Default + IntoIndexes,
 {
-    collection: Collection<T>,
+    pub collection: Collection<T>,
     indices: Vec<IndexModel>,
 }
 
@@ -91,6 +94,18 @@ impl<T> MongoDbAPI<T> for MongoCollection<T>
 where
     T: Serialize + for<'de> Deserialize<'de> + Unpin + Send + Sync + Default + IntoIndexes + Debug,
 {
+    
+    fn mongo_error_handler<ReturnType>(&self, result: Result<ReturnType, mongodb::error::Error>) -> Result<ReturnType>
+    {
+        let rtn = result.map_err(ServiceError::Database)?;
+        Ok(rtn)
+    }
+
+    async fn mongo_cursor_to_list(&self, cursor: mongodb::Cursor<T>) -> Result<Vec<T>> {
+        let results: Vec<T> = cursor.try_collect().await.map_err(ServiceError::Database)?;
+        return Ok(results);
+    }
+
     async fn aggregate(&self, pipeline: Vec<Document>) -> Result<Vec<T>> {
         log::info!("aggregate pipeline {:?}", pipeline);
         let cursor = self.collection.aggregate(pipeline).await?;

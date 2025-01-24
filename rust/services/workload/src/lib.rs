@@ -19,7 +19,6 @@ use async_nats::Message;
 use mongodb::{options::UpdateModifications, Client as MongoDBClient};
 use std::{fmt::Debug, sync::Arc};
 use util_libs::{db::{mongodb::{IntoIndexes, MongoCollection, MongoDbAPI}, schemas::{self, Host, Workload, WorkloadState, WorkloadStatus, MongoDbId}}, nats_js_client};
-use rand::seq::SliceRandom;
 use std::future::Future;
 use serde::{Deserialize, Serialize};
 use bson::{self, doc, to_document, DateTime};
@@ -188,10 +187,14 @@ impl WorkloadApi {
             },
             doc! {
                 // the maximum number of hosts returned should be the minimum hosts required by workload
-                "$take": workload.min_hosts as i32
+                // sample randomized results and always return back atleast 1 result
+                "$sample": std::cmp::min(workload.min_hosts as i32, 1)
             }
         ];
         let results = self.host_collection.aggregate(pipeline).await?;
+        if results.len() == 0 {
+            return Err(anyhow!("Could not find a compatible host for this workload={:#?}", workload._id));
+        }
         Ok(results)
     }
 
@@ -230,23 +233,9 @@ impl WorkloadApi {
                 }
 
                 // 2. Otherwise call mongodb to get host collection to get hosts that meet the capacity requirements
-                let host_filter = doc! {
-                    "remaining_capacity.cores": { "$gte": workload.system_specs.capacity.cores },      
-                    "remaining_capacity.memory": { "$gte": workload.system_specs.capacity.memory },
-                    "remaining_capacity.disk": { "$gte": workload.system_specs.capacity.disk }
-                };
-                let eligible_hosts = self.host_collection.get_many_from(host_filter).await? ;
+                let eligible_hosts = self.find_hosts_meeting_workload_criteria(workload.clone()).await?;
                 log::debug!("Eligible hosts for new workload. MongodDB Host IDs={:?}", eligible_hosts);
-
-                // 3. Randomly choose host/node
-                let host = match eligible_hosts.choose(&mut rand::thread_rng()) {
-                    Some(h) => h,
-                    None => {
-                        // todo: Try to get another host up to 5 times, if fails thereafter, return error
-                        let err_msg = format!("Failed to locate an eligible host to support the required workload capacity. Workload={:?}", workload);
-                        return Err(anyhow!(err_msg));
-                    }
-                };
+                let host = eligible_hosts[0].clone();
 
                 // Note: The `_id` is an option because it is only generated upon the intial insertion of a record in
                 // a mongodb collection. This also means that whenever a record is fetched from mongodb, it must have the `_id` feild.
@@ -305,33 +294,23 @@ impl WorkloadApi {
         let workload: schemas::Workload = serde_json::from_slice(&payload_buf)?;
         log::trace!("Workload to update. Workload={:#?}", workload.clone());
 
-        // 1. find all hosts that are assigned the current workload
-        let existing_hosts = self.host_collection.aggregate(vec! [
-            doc! {
-                "$match": {
-                    "assigned_workloads": workload._id
-                }
-            }
-        ]).await?;
-        let existing_host_ids: Vec<Option<MongoDbId>> = existing_hosts
-            .into_iter().map(|host| host._id).collect();
-        log::info!("Found {:#?} hosts that are assigned to this workload.", existing_host_ids.len());
-
-        // 2. remove workload from existing hosts
-        if existing_host_ids.len() > 0 {
-            self.host_collection.update_one_within(
-                doc!{ "_id": { "$in": existing_host_ids } },
-                UpdateModifications::Document(doc!{ "$pull": { "assigned_workloads": workload._id } })
-            ).await?;
-            log::info!("Removed workload from previous hosts. Workload={:#?}", workload._id);
-        }
+        // 1. remove workloads from existing hosts
+        self.host_collection.mongo_error_handler(
+            self.host_collection.collection.update_many(
+                doc! {},
+                doc!{ "$pull": { "assigned_workloads": workload._id } }
+            ).await
+        )?;
+        log::info!("Remove workload from previous hosts. Workload={:#?}", workload._id);
 
         if workload.metadata.is_deleted == false {
             // 3. add workload to specific hosts
-            self.host_collection.update_one_within(
-                doc!{ "_id": { "$in": workload.clone().assigned_hosts } },
-                UpdateModifications::Document(doc!{ "$push": { "assigned_workloads": workload._id } })
-            ).await?;
+            self.host_collection.mongo_error_handler(
+                self.host_collection.collection.update_one(
+                    doc! { "_id": { "$in": workload.clone().assigned_hosts } },
+                    doc! { "$push": { "assigned_workloads": workload._id } }
+                ).await
+            )?;
             log::info!("Added workload to new hosts. Workload={:#?}", workload._id);
         } else {
             log::info!("Skipping (reason: deleted) - Added workload to new hosts. Workload={:#?}", workload._id);
@@ -361,15 +340,17 @@ impl WorkloadApi {
 
         // todo: handle othercases
         if matches!(workload_status.desired, WorkloadState::Removed) {
-            self.workload_collection.update_one_within(
-                doc! { "_id": MongoDbId::parse_str(workload_status_id)? },
-                UpdateModifications::Document(doc!{
-                    "$set": {
-                        "metadata.is_deleted": true,
-                        "deleted_at": Some(DateTime::now())
+            self.workload_collection.mongo_error_handler(
+                self.workload_collection.collection.update_one(
+                    doc! { "_id": MongoDbId::parse_str(workload_status_id)? },
+                    doc! {
+                        "$set": {
+                            "metadata.is_deleted": true,
+                            "deleted_at": Some(DateTime::now())
+                        }
                     }
-                })
-            ).await?;
+                ).await
+            )?;
         }
         
         return Ok(types::ApiResult(workload_status, None))
