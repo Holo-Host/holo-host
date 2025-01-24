@@ -34,12 +34,15 @@ pub enum CommandScopes {
 
 #[derive(Args, Clone, Debug, Default)]
 pub struct DaemonzeArgs {
+    #[arg(help = "directory to contain the NATS persistence")]
+    pub(crate) store_dir: Option<PathBuf>,
+
     #[arg(help = "path to NATS credentials used for the LeafNode client connection")]
     pub(crate) nats_leafnode_client_creds_path: Option<PathBuf>,
 
     #[arg(
         help = "try to connect to the (internally spawned) Nats instance for the given duration in seconds before giving up",
-        default_value = "10"
+        default_value = "30"
     )]
     pub(crate) nats_connect_timeout_secs: u64,
 }

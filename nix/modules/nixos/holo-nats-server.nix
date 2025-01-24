@@ -32,12 +32,12 @@ in
 
     services.nats = {
       serverName = lib.mkDefault config.networking.hostName;
-      enable = true;
-      jetstream = true;
+      enable = lib.mkDefault true;
+      jetstream = lib.mkDefault true;
 
       settings = {
-        inherit (cfg) port;
-        leafnodes.port = cfg.leafnodePort;
+        port = lib.mkDefault cfg.port;
+        leafnodes.port = lib.mkDefault cfg.leafnodePort;
       };
     };
   };

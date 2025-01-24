@@ -74,7 +74,7 @@ in
     systemd.services.holo-host-agent = {
       enable = true;
 
-      wants = [ "network-online.target" ];
+      after = [ "network.target" ];
       wantedBy = lib.lists.optional cfg.autoStart "multi-user.target";
 
       environment =

@@ -14,11 +14,11 @@ mod hostd;
 pub mod agent_cli;
 pub mod host_cmds;
 pub mod support_cmds;
+use agent_cli::DaemonzeArgs;
 use anyhow::Result;
 use clap::Parser;
 use dotenv::dotenv;
 use thiserror::Error;
-use agent_cli::DaemonzeArgs;
 
 #[derive(Error, Debug)]
 pub enum AgentCliError {
@@ -54,13 +54,20 @@ async fn main() -> Result<(), AgentCliError> {
 
 async fn daemonize(args: &DaemonzeArgs) -> Result<(), async_nats::Error> {
     // let host_pubkey = auth::init_agent::run().await?;
-    let host_pubkey = "host_id_placeholder>";
-    hostd::gen_leaf_server::run(&args.nats_leafnode_client_creds_path).await;
-    hostd::workload_manager::run(
-        host_pubkey,
+    let _ = hostd::gen_leaf_server::run(&args.nats_leafnode_client_creds_path, &args.store_dir).await;
+
+    let host_workload_client = hostd::workload_manager::run(
+        "host_id_placeholder>",
         &args.nats_leafnode_client_creds_path,
         args.nats_connect_timeout_secs,
     )
     .await?;
+
+    // Only exit program when explicitly requested
+    tokio::signal::ctrl_c().await?;
+
+    // Close client and drain internal buffer before exiting to make sure all messages are sent
+    host_workload_client.close().await?;
+
     Ok(())
 }

@@ -17,7 +17,7 @@ pub const LEAF_SERVER_DEFAULT_LISTEN_PORT: u16 = 4111;
 
 #[derive(Debug, Clone)]
 pub struct JetStreamConfig {
-    pub store_dir: String,
+    pub store_dir: PathBuf,
     pub max_memory_store: u64,
     pub max_file_store: u64,
 }
@@ -88,25 +88,24 @@ impl LeafServer {
             .leaf_node_remotes
             .iter()
             .map(|remote| {
+                let url = &remote.url;
                 if let Some(credentials_path) = &remote.credentials_path {
+                    let credentials = credentials_path.as_path().as_os_str().to_string_lossy();
                     format!(
                         r#"
         {{
-            url: "{}",
-            credentials: "{}",
+            url: "{url}",
+            credentials: "{credentials}",
         }}
                     "#,
-                        remote.url,
-                        credentials_path.as_path().as_os_str().to_string_lossy(), // Unwrap is safe here as the check for `Some()` wraps this condition
                     )
                 } else {
                     format!(
                         r#"
         {{
-            url: "{}",
+            url: "{url}",
         }}
                     "#,
-                        remote.url
                     )
                 }
             })
@@ -114,11 +113,11 @@ impl LeafServer {
             .join(",\n");
 
         // Write the full config file
-        write!(
-            config_file,
+        // TODO: replace this with a struct that's serialized to JSON
+        let config_str = format!(
             r#"
-server_name: {}
-listen: "{}:{}"
+server_name: "{}",
+listen: "{}:{}",
 
 jetstream {{
     domain: "leaf",
@@ -138,18 +137,24 @@ leafnodes {{
             self.name,
             self.host,
             self.port,
-            self.jetstream_config.store_dir,
+            self.jetstream_config.store_dir.to_string_lossy(),
             self.jetstream_config.max_memory_store,
             self.jetstream_config.max_file_store,
-        )?;
+        );
+
+        log::trace!("NATS leaf config:\n{config_str}");
+
+        config_file
+            .write_all(config_str.as_bytes())
+            .context("writing config to config at {config_path}")?;
 
         // Run the server with the generated config
         let child = Command::new("nats-server")
             .arg("-c")
             .arg(&self.config_path)
-            // TODO: direct these to a file or make it conditional. this is silenced because it was very verbose
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
+            // TODO: make this configurable and give options to log it to a seperate log file
+            .stdout(Stdio::inherit())
+            .stderr(Stdio::inherit())
             .spawn()
             .expect("Failed to start NATS server");
 
