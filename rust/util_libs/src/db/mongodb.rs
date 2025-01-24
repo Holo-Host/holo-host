@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use bson::{self, doc, Document};
 use futures::stream::TryStreamExt;
@@ -21,6 +21,7 @@ pub trait MongoDbAPI<T>
 where
     T: Serialize + for<'de> Deserialize<'de> + Unpin + Send + Sync,
 {
+    async fn aggregate(&self, pipeline: Vec<Document>) -> Result<Vec<T>>;
     async fn get_one_from(&self, filter: Document) -> Result<Option<T>>;
     async fn get_many_from(&self, filter: Document) -> Result<Vec<T>>;
     async fn insert_one_into(&self, item: T) -> Result<String>;
@@ -90,6 +91,19 @@ impl<T> MongoDbAPI<T> for MongoCollection<T>
 where
     T: Serialize + for<'de> Deserialize<'de> + Unpin + Send + Sync + Default + IntoIndexes + Debug,
 {
+    async fn aggregate(&self, pipeline: Vec<Document>) -> Result<Vec<T>> {
+        log::info!("aggregate pipeline {:?}", pipeline);
+        let cursor = self.collection.aggregate(pipeline).await?;
+
+        let results_doc: Vec<bson::Document> = cursor.try_collect().await.map_err(ServiceError::Database)?;
+        
+        let results: Vec<T> = results_doc.into_iter().map(
+            |doc| bson::from_document::<T>(doc).with_context(|| "failed to deserialize document")
+        ).collect::<Result<Vec<T>>>()?;
+
+        Ok(results)
+    }
+
     async fn get_one_from(&self, filter: Document) -> Result<Option<T>> {
         log::info!("get_one_from filter {:?}", filter);
 
@@ -245,8 +259,8 @@ mod tests {
     }
 
     use super::*;
-    use crate::db::schemas::{self, Capacity};
-    use bson::{self, doc, oid};
+    use crate::db::schemas::{self, Capacity, Metadata};
+    use bson::{self, doc, oid, DateTime};
     use dotenv::dotenv;
 
     #[tokio::test]
@@ -268,6 +282,12 @@ mod tests {
         fn get_mock_host() -> schemas::Host {
             schemas::Host {
                 _id: Some(oid::ObjectId::new()),
+                metadata: Metadata {
+                    is_deleted: false,
+                    created_at: Some(DateTime::now()),
+                    updated_at: Some(DateTime::now()),
+                    deleted_at: None,
+                },
                 device_id: "Vf3IceiD".to_string(),
                 ip_address: "127.0.0.1".to_string(),
                 remaining_capacity: Capacity {
@@ -313,7 +333,7 @@ mod tests {
         let fetched_hosts = host_api.get_many_from(filter_many.clone()).await?;
 
         assert_eq!(fetched_hosts.len(), 3);
-        let ids: Vec<String> = fetched_hosts.into_iter().map(|h| h._id.unwrap.or(oid::ObjectId::new()).to_hex()).collect();
+        let ids: Vec<String> = fetched_hosts.into_iter().map(|h| h._id.unwrap_or(oid::ObjectId::new()).to_hex()).collect();
         assert!(ids.contains(&ids[0]));
         assert!(ids.contains(&ids[1]));
         assert!(ids.contains(&ids[2]));

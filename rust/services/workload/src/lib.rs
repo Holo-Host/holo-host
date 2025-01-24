@@ -156,6 +156,41 @@ impl WorkloadApi {
         .await)
     }
 
+    pub fn verify_host_meets_workload_criteria(&self, workload: Workload, assigned_host: Host) -> bool {
+        if assigned_host.remaining_capacity.disk < workload.system_specs.capacity.disk {
+            return false;
+        }
+        if assigned_host.remaining_capacity.memory < workload.system_specs.capacity.memory {
+            return false;
+        }
+        if assigned_host.remaining_capacity.cores < workload.system_specs.capacity.cores {
+            return false;
+        }
+        
+        return true;
+    }
+    pub async fn find_hosts_meeting_workload_criteria(&self, workload: Workload) -> Result<Vec<Host>, anyhow::Error> {
+        let pipeline = vec! [
+            doc! {
+                "$match": {
+                    // verify there are enough system resources
+                    "remaining_capacity.disk": { "$gte": workload.system_specs.capacity.disk },
+                    "remaining_capacity.memory": { "$gte": workload.system_specs.capacity.memory },
+                    "remaining_capacity.cores": { "$gte": workload.system_specs.capacity.cores },
+
+                    // limit how many workloads a single host can have
+                    "assigned_workloads": { "$lt": 1 }
+                }
+            },
+            doc! {
+                // the maximum number of hosts returned should be the minimum hosts required by workload
+                "$take": workload.min_hosts as i32
+            }
+        ];
+        let results = self.host_collection.aggregate(pipeline).await?;
+        Ok(results)
+    }
+
     // NB: Automatically published by the nats-db-connector
     // trigger on mongodb [workload] collection (insert)
     pub async fn handle_db_insertion(&self, msg: Arc<Message>) -> Result<types::ApiResult, anyhow::Error> {
