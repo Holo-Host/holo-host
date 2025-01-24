@@ -3,15 +3,16 @@ use std::path::PathBuf;
 use anyhow::Context;
 use tempfile::tempdir;
 use util_libs::nats_server::{
-    self, JetStreamConfig, LeafNodeRemote, LeafServer, LoggingOptions, LEAF_SERVER_CONFIG_PATH,
-    LEAF_SERVER_DEFAULT_LISTEN_PORT, LEAF_SERVE_NAME,
+    JetStreamConfig, LeafNodeRemote, LeafNodeRemoteTlsConfig, LeafServer, LoggingOptions,
+    LEAF_SERVER_CONFIG_PATH, LEAF_SERVER_DEFAULT_LISTEN_PORT, LEAF_SERVE_NAME,
 };
 
 pub async fn run(
     user_creds_path: &Option<PathBuf>,
     maybe_store_dir: &Option<PathBuf>,
+    hub_url: String,
+    hub_tls_insecure: bool,
 ) -> anyhow::Result<()> {
-    let leaf_server_remote_conn_url = nats_server::get_hub_server_url();
     let leaf_client_conn_domain = "127.0.0.1";
     let leaf_client_conn_port = std::env::var("NATS_LISTEN_PORT")
         .map(|var| var.parse().expect("can't parse into number"))
@@ -47,8 +48,12 @@ pub async fn run(
     // Instantiate the Leaf Server with the user cred file
     let leaf_node_remotes = vec![LeafNodeRemote {
         // sys account user (automated)
-        url: leaf_server_remote_conn_url.to_string(),
-        credentials_path: user_creds_path.clone(),
+        url: hub_url,
+        credentials: user_creds_path.clone(),
+        tls: LeafNodeRemoteTlsConfig {
+            insecure: hub_tls_insecure,
+            ..Default::default()
+        },
     }];
 
     // Create a new Leaf Server instance
