@@ -16,7 +16,8 @@
         "type": "github"
       },
       "original": {
-        "owner": "numtide",
+        "owner": "steveej-forks",
+        "ref": "fix-checks-import",
         "repo": "blueprint",
         "type": "github"
       }
