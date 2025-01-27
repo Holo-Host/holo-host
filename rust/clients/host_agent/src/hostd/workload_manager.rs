@@ -1,27 +1,25 @@
 /*
  This client is associated with the:
-- WORKLOAD account
-- hpos user
+    - WORKLOAD account
+    - host user
 
-// This client is responsible for:
-  - subscribing to workload streams
-    - installing new workloads
-    - removing workloads
+This client is responsible for subscribing to workload streams that handle:
+    - installing new workloads onto the hosting device
+    - removing workloads from the hosting device
     - sending workload status upon request
-    - sending active periodic workload reports
+    - sending out active periodic workload reports
 */
 
 use anyhow::{anyhow, Result};
 use async_nats::Message;
-use mongodb::{options::ClientOptions, Client as MongoDBClient};
 use std::{path::PathBuf, sync::Arc, time::Duration};
 use util_libs::{
-    db::mongodb::get_mongodb_url,
     js_stream_service::JsServiceParamsPartial,
     nats_js_client::{self, EndpointType},
 };
 use workload::{
-    WorkloadApi, WORKLOAD_SRV_DESC, WORKLOAD_SRV_NAME, WORKLOAD_SRV_SUBJ, WORKLOAD_SRV_VERSION,
+    WorkloadServiceApi, host_api::HostWorkloadApi, WORKLOAD_SRV_DESC, WORKLOAD_SRV_NAME, WORKLOAD_SRV_SUBJ, WORKLOAD_SRV_VERSION,
+    types::{WorkloadServiceSubjects, WorkloadApiResult}
 };
 
 const HOST_AGENT_CLIENT_NAME: &str = "Host Agent";
@@ -33,11 +31,11 @@ pub async fn run(
     host_creds_path: &Option<PathBuf>,
     nats_connect_timeout_secs: u64,
 ) -> Result<nats_js_client::JsClient, async_nats::Error> {
-    log::info!("HPOS Agent Client: Connecting to server...");
+    log::info!("Host Agent Client: Connecting to server...");
     log::info!("host_creds_path : {:?}", host_creds_path);
     log::info!("host_pubkey : {}", host_pubkey);
 
-    // ==================== NATS Setup ====================
+    // ==================== Setup NATS ====================
     // Connect to Nats server
     let nats_url = nats_js_client::get_nats_url();
     log::info!("nats_url : {}", nats_url);
@@ -53,7 +51,7 @@ pub async fn run(
     };
 
     // Spin up Nats Client and loaded in the Js Stream Service
-    // Nats takes a moment to become responsive, so we try to connecti in a loop for a few seconds.
+    // Nats takes a moment to become responsive, so we try to connect in a loop for a few seconds.
     // TODO: how do we recover from a connection loss to Nats in case it crashes or something else?
     let host_workload_client = tokio::select! {
         client = async {loop {
@@ -89,18 +87,17 @@ pub async fn run(
         }
     };
 
-    // ==================== DB Setup ====================
-    // Create a new MongoDB Client and connect it to the cluster
-    let mongo_uri = get_mongodb_url();
-    let client_options = ClientOptions::parse(mongo_uri).await?;
-    let client = MongoDBClient::with_options(client_options)?;
+    // ==================== Setup API & Register Endpoints ====================
+    // Instantiate the Workload API
+    let workload_api = HostWorkloadApi::default();
+    
+    // Register Workload Streams for Host Agent to consume and process
+    // NB: Subjects are published by orchestrator
+    let workload_start_subject = serde_json::to_string(&WorkloadServiceSubjects::Start)?;
+    let workload_send_status_subject = serde_json::to_string(&WorkloadServiceSubjects::SendStatus)?;
+    let workload_uninstall_subject = serde_json::to_string(&WorkloadServiceSubjects::Uninstall)?;
+    let workload_update_installed_subject = serde_json::to_string(&WorkloadServiceSubjects::UpdateInstalled)?;
 
-    // Generate the Workload API with access to db
-    let workload_api = WorkloadApi::new(&client).await?;
-
-    // ==================== API ENDPOINTS ====================
-    // Register Workload Streams for Host Agent to consume
-    // NB: Subjects are published by orchestrator or nats-db-connector
     let workload_service = host_workload_client
         .get_js_service(WORKLOAD_SRV_NAME.to_string())
         .await
@@ -109,23 +106,38 @@ pub async fn run(
         ))?;
 
     workload_service
-        .add_local_consumer::<workload::types::ApiResult>(
-            "start_workload",
-            "start",
-            EndpointType::Async(workload_api.call(
-                |api: WorkloadApi, msg: Arc<Message>| async move { api.start_workload(msg).await },
-            )),
+        .add_consumer::<WorkloadApiResult>(
+            "start_workload", // consumer name
+            &format!("{}.{}", host_pubkey, workload_start_subject), // consumer stream subj
+            EndpointType::Async(
+                workload_api.call(|api: HostWorkloadApi, msg: Arc<Message>| async move {
+                    api.start_workload(msg).await
+                })
+            ),
             None,
         )
         .await?;
 
     workload_service
-        .add_local_consumer::<workload::types::ApiResult>(
-            "send_workload_status",
-            "send_status",
+        .add_consumer::<WorkloadApiResult>(
+            "update_installed_workload", // consumer name
+            &format!("{}.{}", host_pubkey, workload_update_installed_subject), // consumer stream subj
             EndpointType::Async(
-                workload_api.call(|api: WorkloadApi, msg: Arc<Message>| async move {
-                    api.send_workload_status(msg).await
+                workload_api.call(|api: HostWorkloadApi, msg: Arc<Message>| async move {
+                    api.update_workload(msg).await
+                })
+            ),
+            None,
+        )
+        .await?;
+
+    workload_service
+        .add_consumer::<WorkloadApiResult>(
+            "uninstall_workload", // consumer name
+            &format!("{}.{}", host_pubkey, workload_uninstall_subject), // consumer stream subj
+            EndpointType::Async(
+                workload_api.call(|api: HostWorkloadApi, msg: Arc<Message>| async move {
+                    api.uninstall_workload(msg).await
                 }),
             ),
             None,
@@ -133,13 +145,13 @@ pub async fn run(
         .await?;
 
     workload_service
-        .add_local_consumer::<workload::types::ApiResult>(
-            "uninstall_workload",
-            "uninstall",
+        .add_consumer::<WorkloadApiResult>(
+            "send_workload_status", // consumer name
+            &format!("{}.{}", host_pubkey, workload_send_status_subject), // consumer stream subj
             EndpointType::Async(
-                workload_api.call(|api: WorkloadApi, msg: Arc<Message>| async move {
-                    api.uninstall_workload(msg).await
-                }),
+                workload_api.call(|api: HostWorkloadApi, msg: Arc<Message>| async move {
+                    api.send_workload_status(msg).await
+                })
             ),
             None,
         )

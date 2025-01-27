@@ -2,7 +2,8 @@ use super::js_stream_service::{CreateTag, JsServiceParamsPartial, JsStreamServic
 use crate::nats_server::LEAF_SERVER_DEFAULT_LISTEN_PORT;
 
 use anyhow::Result;
-use async_nats::{jetstream, Message, ServerInfo};
+use core::option::Option::None;
+use async_nats::{jetstream, HeaderMap, Message, ServerInfo};
 use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::fmt;
@@ -12,12 +13,24 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+#[derive(thiserror::Error, Debug, Clone)]
+pub enum ServiceError {
+    #[error("Request Error: {0}")]
+    Request(String),
+    #[error(transparent)]
+    Database(#[from] mongodb::error::Error),
+    #[error("Nats Error: {0}")]
+    NATS(String),
+    #[error("Internal Error: {0}")]
+    Internal(String),
+}
+
 pub type EventListener = Arc<Box<dyn Fn(&mut JsClient) + Send + Sync>>;
 pub type EventHandler = Pin<Box<dyn Fn(&str, &str, Duration) + Send + Sync>>;
-pub type JsServiceResponse<T> = Pin<Box<dyn Future<Output = Result<T, anyhow::Error>> + Send>>;
-pub type EndpointHandler<T> = Arc<dyn Fn(&Message) -> Result<T, anyhow::Error> + Send + Sync>;
+pub type JsServiceResponse<T> = Pin<Box<dyn Future<Output = Result<T, ServiceError>> + Send>>;
+pub type EndpointHandler<T> = Arc<dyn Fn(&Message) -> Result<T, ServiceError> + Send + Sync>;
 pub type AsyncEndpointHandler<T> = Arc<
-    dyn Fn(Arc<Message>) -> Pin<Box<dyn Future<Output = Result<T, anyhow::Error>> + Send>>
+    dyn Fn(Arc<Message>) -> Pin<Box<dyn Future<Output = Result<T, ServiceError>> + Send>>
         + Send
         + Sync,
 >;
@@ -46,10 +59,11 @@ where
 }
 
 #[derive(Clone, Debug)]
-pub struct SendRequest {
+pub struct PublishInfo {
     pub subject: String,
     pub msg_id: String,
     pub data: Vec<u8>,
+    pub headers: Option<HeaderMap> 
 }
 
 #[derive(Debug)]
@@ -204,16 +218,18 @@ impl JsClient {
         Ok(())
     }
 
-    pub async fn request(&self, _payload: &SendRequest) -> Result<(), async_nats::Error> {
-        Ok(())
-    }
-
-    pub async fn publish(&self, payload: &SendRequest) -> Result<(), async_nats::Error> {
+    pub async fn publish(&self, payload: PublishInfo) -> Result<(), async_nats::Error> {
         let now = Instant::now();
-        let result = self
-            .js
-            .publish(payload.subject.clone(), payload.data.clone().into())
-            .await;
+        let result = match payload.headers {
+            Some(h) => self
+                .js
+                .publish_with_headers(payload.subject.clone(), h, payload.data.clone().into())
+                .await,
+            None => self
+                .js
+                .publish(payload.subject.clone(), payload.data.clone().into())
+                .await
+        };
 
         let duration = now.elapsed();
         if let Err(err) = result {
@@ -353,7 +369,7 @@ mod tests {
     async fn test_nats_js_client_publish() {
         let params = get_default_params();
         let client = JsClient::new(params).await.unwrap();
-        let payload = SendRequest {
+        let payload = PublishInfo {
             subject: "test_subject".to_string(),
             msg_id: "test_msg".to_string(),
             data: b"Hello, NATS!".to_vec(),

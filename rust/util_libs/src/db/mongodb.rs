@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use async_trait::async_trait;
 use bson::{self, doc, Document};
 use futures::stream::TryStreamExt;
@@ -7,31 +7,26 @@ use mongodb::results::{DeleteResult, UpdateResult};
 use mongodb::{options::IndexOptions, Client, Collection, IndexModel};
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
-
-#[derive(thiserror::Error, Debug, Clone)]
-pub enum ServiceError {
-    #[error("Internal Error: {0}")]
-    Internal(String),
-    #[error(transparent)]
-    Database(#[from] mongodb::error::Error),
-}
+use crate::nats_js_client::ServiceError;
 
 #[async_trait]
 pub trait MongoDbAPI<T>
 where
     T: Serialize + for<'de> Deserialize<'de> + Unpin + Send + Sync,
 {
-    async fn get_one_from(&self, filter: Document) -> Result<Option<T>>;
-    async fn get_many_from(&self, filter: Document) -> Result<Vec<T>>;
-    async fn insert_one_into(&self, item: T) -> Result<String>;
-    async fn insert_many_into(&self, items: Vec<T>) -> Result<Vec<String>>;
+    type Error;
+
+    async fn get_one_from(&self, filter: Document) -> Result<Option<T>, Self::Error>;
+    async fn get_many_from(&self, filter: Document) -> Result<Vec<T>, Self::Error>;
+    async fn insert_one_into(&self, item: T) -> Result<String, Self::Error>;
+    async fn insert_many_into(&self, items: Vec<T>) -> Result<Vec<String>, Self::Error>;
     async fn update_one_within(
         &self,
         query: Document,
-        updated_doc: UpdateModifications,
-    ) -> Result<UpdateResult>;
-    async fn delete_one_from(&self, query: Document) -> Result<DeleteResult>;
-    async fn delete_all_from(&self) -> Result<DeleteResult>;
+        updated_doc: UpdateModifications
+    ) -> Result<UpdateResult, Self::Error>;
+    async fn delete_one_from(&self, query: Document) -> Result<DeleteResult, Self::Error>;
+    async fn delete_all_from(&self) -> Result<DeleteResult, Self::Error>;
 }
 
 pub trait IntoIndexes {
@@ -94,7 +89,9 @@ impl<T> MongoDbAPI<T> for MongoCollection<T>
 where
     T: Serialize + for<'de> Deserialize<'de> + Unpin + Send + Sync + Default + IntoIndexes + Debug,
 {
-    async fn get_one_from(&self, filter: Document) -> Result<Option<T>> {
+    type Error = ServiceError;
+
+    async fn get_one_from(&self, filter: Document) -> Result<Option<T>, Self::Error> {
         log::info!("get_one_from filter {:?}", filter);
 
         let item = self
@@ -107,13 +104,13 @@ where
         Ok(item)
     }
 
-    async fn get_many_from(&self, filter: Document) -> Result<Vec<T>> {
+    async fn get_many_from(&self, filter: Document) -> Result<Vec<T>, Self::Error> {
         let cursor = self.collection.find(filter).await?;
         let results: Vec<T> = cursor.try_collect().await.map_err(ServiceError::Database)?;
         Ok(results)
     }
 
-    async fn insert_one_into(&self, item: T) -> Result<String> {
+    async fn insert_one_into(&self, item: T) -> Result<String, Self::Error> {
         let result = self
             .collection
             .insert_one(item)
@@ -123,7 +120,7 @@ where
         Ok(result.inserted_id.to_string())
     }
 
-    async fn insert_many_into(&self, items: Vec<T>) -> Result<Vec<String>> {
+    async fn insert_many_into(&self, items: Vec<T>) -> Result<Vec<String>, Self::Error> {
         let result = self
             .collection
             .insert_many(items)
@@ -141,26 +138,26 @@ where
     async fn update_one_within(
         &self,
         query: Document,
-        updated_doc: UpdateModifications,
-    ) -> Result<UpdateResult> {
+        updated_doc: UpdateModifications
+    ) -> Result<UpdateResult, Self::Error> {
         self.collection
             .update_one(query, updated_doc)
             .await
-            .map_err(|e| anyhow!(e))
+            .map_err(ServiceError::Database)
     }
 
-    async fn delete_one_from(&self, query: Document) -> Result<DeleteResult> {
+    async fn delete_one_from(&self, query: Document) -> Result<DeleteResult, Self::Error> {
         self.collection
             .delete_one(query)
             .await
-            .map_err(|e| anyhow!(e))
+            .map_err(ServiceError::Database)
     }
 
-    async fn delete_all_from(&self) -> Result<DeleteResult> {
+    async fn delete_all_from(&self) -> Result<DeleteResult, Self::Error> {
         self.collection
             .delete_many(doc! {})
             .await
-            .map_err(|e| anyhow!(e))
+            .map_err(ServiceError::Database)
     }
 }
 
@@ -276,7 +273,7 @@ mod tests {
         fn get_mock_host() -> schemas::Host {
             schemas::Host {
                 _id: Some(oid::ObjectId::new().to_string()),
-                device_id: "Vf3IceiD".to_string(),
+                pubkey: "placeholder_pubkey".to_string(),
                 ip_address: "127.0.0.1".to_string(),
                 remaining_capacity: Capacity {
                     memory: 16,

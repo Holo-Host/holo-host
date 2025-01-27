@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-/// MOdule containing all of the Clap Derive structs/definitions that make up the agent's
+/// Module containing all of the Clap Derive structs/definitions that make up the agent's
 /// command line. To start the agent daemon (usually from systemd), use `host_agent daemonize`.
 use clap::{Args, Parser, Subcommand};
 
