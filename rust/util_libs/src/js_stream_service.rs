@@ -2,7 +2,6 @@ use super::nats_js_client::EndpointType;
 
 use anyhow::{anyhow, Result};
 use std::any::Any;
-// use async_nats::jetstream::message::Message;
 use async_nats::jetstream::consumer::{self, AckPolicy, PullConsumer};
 use async_nats::jetstream::stream::{self, Info, Stream};
 use async_nats::jetstream::Context;
@@ -20,10 +19,13 @@ pub trait CreateTag: Send + Sync {
     fn get_tags(&self) -> HashMap<String, String>;
 }
 
-pub trait EndpointTraits:
-    Serialize + for<'de> Deserialize<'de> + Send + Sync + Clone + Debug + CreateTag + 'static
-{
+pub trait CreateResponse: Send + Sync {
+    fn get_response(&self) -> bytes::Bytes;
 }
+
+pub trait EndpointTraits:
+    Serialize + for<'de> Deserialize<'de> + Send + Sync + Clone + Debug + CreateTag + CreateResponse + 'static
+{}
 
 #[async_trait]
 pub trait ConsumerExtTrait: Send + Sync + Debug + 'static {
@@ -338,10 +340,7 @@ impl JsStreamService {
 
             let (response_bytes, maybe_subject_tags) = match result {
                 Ok(r) => {
-                    let bytes: bytes::Bytes = match serde_json::to_vec(&r) {
-                        Ok(r) => r.into(),
-                        Err(e) => e.to_string().into(),
-                    };
+                    let bytes = r.get_response();
                     let maybe_subject_tags = r.get_tags();
                     (bytes, maybe_subject_tags)
                 },

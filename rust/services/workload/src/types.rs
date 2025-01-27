@@ -1,9 +1,6 @@
 use std::collections::HashMap;
+use util_libs::{db::schemas::{self, WorkloadStatus}, js_stream_service::{CreateResponse, CreateTag, EndpointTraits}};
 use serde::{Deserialize, Serialize};
-use util_libs::{
-    db::schemas::WorkloadStatus,
-    js_stream_service::{CreateTag, EndpointTraits},
-};
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "snake_case")]
@@ -21,10 +18,28 @@ pub enum WorkloadServiceSubjects {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct WorkloadApiResult (pub WorkloadStatus, pub Option<HashMap<String, String>>);
+pub struct WorkloadResult {
+    pub status: WorkloadStatus,
+    pub workload: Option<schemas::Workload>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorkloadApiResult {
+    pub result: WorkloadResult,
+    pub maybe_response_tags: Option<HashMap<String, String>>
+}
 impl EndpointTraits for WorkloadApiResult {}
 impl CreateTag for WorkloadApiResult {
     fn get_tags(&self) -> HashMap<String, String> {
-        self.1.clone().unwrap_or_default()
+        self.maybe_response_tags.clone().unwrap_or_default()
+    }
+}
+impl CreateResponse for WorkloadApiResult {
+    fn get_response(&self) -> bytes::Bytes {
+        let r = self.result.clone();
+        match serde_json::to_vec(&r) {
+            Ok(r) => r.into(),
+            Err(e) => e.to_string().into(),
+        }
     }
 }
