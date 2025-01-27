@@ -1,12 +1,12 @@
-use super::js_stream_service::{JsServiceParamsPartial, JsStreamService, CreateTag};
+use super::js_stream_service::{CreateTag, JsServiceParamsPartial, JsStreamService};
 use anyhow::Result;
 use async_nats::jetstream;
 use async_nats::{Message, ServerInfo};
 use serde::{Deserialize, Serialize};
-use std::future::Future;
 use std::error::Error;
 use std::fmt;
 use std::fmt::Debug;
+use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -22,7 +22,7 @@ pub type AsyncEndpointHandler<T> = Arc<
 >;
 
 #[derive(Clone)]
-pub enum EndpointType<T> 
+pub enum EndpointType<T>
 where
     T: Serialize + for<'de> Deserialize<'de> + Send + Sync + CreateTag,
 {
@@ -136,7 +136,11 @@ impl JsClient {
             services.push(service);
         }
 
-        let js_services = if services.is_empty() { None } else { Some(services) };
+        let js_services = if services.is_empty() {
+            None
+        } else {
+            Some(services)
+        };
 
         let service_log_prefix = format!("NATS-CLIENT-LOG::{}::", p.name);
 
@@ -198,7 +202,7 @@ impl JsClient {
         );
         Ok(())
     }
-    
+
     pub async fn request(&self, _payload: &SendRequest) -> Result<(), async_nats::Error> {
         Ok(())
     }
@@ -250,7 +254,7 @@ impl JsClient {
 
 // Client Options:
 pub fn with_event_listeners(listeners: Vec<EventListener>) -> EventListener {
-    Box::new(move |c: &mut JsClient | {
+    Box::new(move |c: &mut JsClient| {
         for listener in &listeners {
             listener(c);
         }
@@ -260,7 +264,7 @@ pub fn with_event_listeners(listeners: Vec<EventListener>) -> EventListener {
 // Event Listener Options:
 pub fn on_msg_published_event<F>(f: F) -> EventListener
 where
-        F: Fn(&str, &str, Duration) + Send + Sync + Clone + 'static,
+    F: Fn(&str, &str, Duration) + Send + Sync + Clone + 'static,
 {
     Box::new(move |c: &mut JsClient| {
         c.on_msg_published_event = Some(Box::pin(f.clone()));
@@ -269,7 +273,7 @@ where
 
 pub fn on_msg_failed_event<F>(f: F) -> EventListener
 where
-        F: Fn(&str, &str, Duration) + Send + Sync + Clone + 'static,
+    F: Fn(&str, &str, Duration) + Send + Sync + Clone + 'static,
 {
     Box::new(move |c: &mut JsClient| {
         c.on_msg_failed_event = Some(Box::pin(f.clone()));
