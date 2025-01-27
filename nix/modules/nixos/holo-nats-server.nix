@@ -27,10 +27,6 @@ in
       default = 7422;
     };
 
-<<<<<<< HEAD
-    openFirewall = lib.mkOption {
-      default = false;
-=======
     websocket = {
       port = lib.mkOption {
         description = "websocket listen port";
@@ -69,16 +65,10 @@ in
     extraAttrs = lib.mkOption {
       description = "extra attributes passed to `services.nats`";
       default = { };
->>>>>>> 047af97b9f78b0469816f37310fb2ad21762f136
     };
   };
 
   config = lib.mkIf cfg.enable {
-<<<<<<< HEAD
-    networking.firewall.allowedTCPPorts = lib.optionals cfg.openFirewall [
-      cfg.port
-      cfg.leafnodePort
-=======
     networking.firewall.allowedTCPPorts =
       # need port 80 to receive well-known ACME requests
       lib.optional cfg.caddy.enable 80
@@ -102,7 +92,6 @@ in
         };
       }
       cfg.extraAttrs
->>>>>>> 047af97b9f78b0469816f37310fb2ad21762f136
     ];
 
     services.caddy = lib.mkIf cfg.caddy.enable (

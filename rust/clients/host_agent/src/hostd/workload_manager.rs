@@ -73,7 +73,7 @@ pub async fn run(
                 match host_workload_client {
                     Ok(client) => break client,
                     Err(e) => {
-                        let duration =tokio::time::Duration::from_millis(100);
+                        let duration = tokio::time::Duration::from_millis(100);
                         log::warn!("{}, retrying in {duration:?}", e);
                         tokio::time::sleep(duration).await;
                     }
