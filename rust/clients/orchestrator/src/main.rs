@@ -1,17 +1,23 @@
+mod auth;
+mod utils;
 mod workloads;
 use anyhow::Result;
 use dotenv::dotenv;
+use tokio::task::spawn;
 
 #[tokio::main]
 async fn main() -> Result<(), async_nats::Error> {
     dotenv().ok();
     env_logger::init();
-    // Run auth service
-    // TODO: invoke auth service (once ready)
-
-    // Run workload service
-    if let Err(e) = workloads::run().await {
-        log::error!("{}", e)
-    }
+    spawn(async move { 
+        if let Err(e) = auth::run().await {
+            log::error!("{}", e)
+        }
+    });
+    spawn(async move {
+        if let Err(e) = workloads::run().await {
+            log::error!("{}", e)
+        } 
+    });
     Ok(())
 }
