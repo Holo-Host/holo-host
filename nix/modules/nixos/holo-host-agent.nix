@@ -64,8 +64,20 @@ in
         default = "${cfg.nats.listenHost}:${builtins.toString cfg.nats.listenPort}";
       };
 
-      hubServerUrl = lib.mkOption {
-        type = lib.types.str;
+      hub = {
+        url = lib.mkOption {
+          type = lib.types.str;
+        };
+        tlsInsecure = lib.mkOption {
+          type = lib.types.bool;
+        };
+      };
+
+      extraDaemonizeArgs = lib.mkOption {
+        # forcing everything to be a string because the bool -> str conversion is strange (true -> "1" and false -> "")
+        type = lib.types.attrs;
+        default = {
+        };
       };
     };
   };
@@ -74,14 +86,16 @@ in
     systemd.services.holo-host-agent = {
       enable = true;
 
-      wants = [ "network-online.target" ];
+      after = [
+        "network.target"
+        "network-online.target"
+      ];
       wantedBy = lib.lists.optional cfg.autoStart "multi-user.target";
 
       environment =
         {
           RUST_LOG = cfg.rust.log;
           RUST_BACKTRACE = cfg.rust.backtrace;
-          NATS_HUB_SERVER_URL = cfg.nats.hubServerUrl;
           NATS_LISTEN_PORT = builtins.toString cfg.nats.listenPort;
         }
         // lib.attrsets.optionalAttrs (cfg.nats.url != null) {
@@ -92,13 +106,31 @@ in
         pkgs.nats-server
       ];
 
-      script = builtins.toString (
-        pkgs.writeShellScript "holo-host-agent" ''
-          ${lib.getExe' cfg.package "host_agent"} daemonize
-        ''
-      );
+      script =
+        let
+          extraDaemonizeArgsList = lib.attrsets.mapAttrsToList (
+            name: value:
+            let
+              type = lib.typeOf value;
+            in
+            if type == lib.types.str then
+              "--${name}=${value}"
+            else if (type == lib.types.int || type == lib.types.path) then
+              "--${name}=${builtins.toString value}"
+            else if type == lib.types.bool then
+              (lib.optionalString value name)
+            else
+              throw "don't know how to handle type ${type}"
+          ) cfg.nats.extraDaemonizeArgs;
+        in
+        builtins.toString (
+          pkgs.writeShellScript "holo-host-agent" ''
+            ${lib.getExe' cfg.package "host_agent"} daemonize \
+              --hub-url=${cfg.nats.hub.url} \
+              ${lib.optionalString cfg.nats.hub.tlsInsecure "--hub-tls-insecure"} \
+              ${builtins.concatStringsSep " " extraDaemonizeArgsList}
+          ''
+        );
     };
-
-    # TODO: add nats server here or is it started by the host-agent?
   };
 }

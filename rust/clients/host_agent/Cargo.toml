@@ -27,3 +27,4 @@ util_libs = { path = "../../util_libs" }
 workload = { path = "../../services/workload" }
 authentication = { path = "../../services/authentication" }
 hpos-hal = { path = "../../hpos-hal" }
+tempfile = "3.15.0"

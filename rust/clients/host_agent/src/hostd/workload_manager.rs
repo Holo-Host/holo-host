@@ -30,7 +30,7 @@ pub async fn run(
     host_pubkey: &str,
     host_creds_path: &Option<PathBuf>,
     nats_connect_timeout_secs: u64,
-) -> Result<(), async_nats::Error> {
+) -> Result<nats_js_client::JsClient, async_nats::Error> {
     log::info!("Host Agent Client: Connecting to server...");
     log::info!("host_creds_path : {:?}", host_creds_path);
     log::info!("host_pubkey : {}", host_pubkey);
@@ -73,13 +73,16 @@ pub async fn run(
                 match host_workload_client {
                     Ok(client) => break client,
                     Err(e) => {
-                        let duration =tokio::time::Duration::from_millis(100);
+                        let duration = tokio::time::Duration::from_millis(100);
                         log::warn!("{}, retrying in {duration:?}", e);
                         tokio::time::sleep(duration).await;
                     }
                 }
             }} => client,
-        _ = tokio::time::sleep(tokio::time::Duration::from_secs(nats_connect_timeout_secs)) => {
+        _ = {
+            log::debug!("will time out waiting for NATS after {nats_connect_timeout_secs:?}");
+            tokio::time::sleep(tokio::time::Duration::from_secs(nats_connect_timeout_secs))
+         } => {
             return Err(format!("timed out waiting for NATS on {nats_url}").into());
         }
     };
@@ -154,11 +157,5 @@ pub async fn run(
         )
         .await?;
 
-    // ==================== Close and Clean Client ====================
-    // Only exit program when explicitly requested
-    tokio::signal::ctrl_c().await?;
-
-    // Close client and drain internal buffer before exiting to make sure all messages are sent
-    host_workload_client.close().await?;
-    Ok(())
+    Ok(host_workload_client)
 }
