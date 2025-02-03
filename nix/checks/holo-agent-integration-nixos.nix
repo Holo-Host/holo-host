@@ -9,15 +9,15 @@ pkgs.testers.runNixOSTest (
   let
     hubIP = (pkgs.lib.head nodes.hub.networking.interfaces.eth1.ipv4.addresses).address;
     hubJsDomain = "hub";
-
-    hostUseOsNats = false;
   in
   {
     name = "host-agent-integration-nixos";
     meta.platforms = lib.lists.intersectLists lib.platforms.linux lib.platforms.x86_64;
 
     defaults.networking.hosts = {
-      hubIP = [ "${nodes.hub.networking.fqdn}" ];
+      "${hubIP}" = [
+        "${nodes.hub.networking.fqdn}"
+      ];
     };
 
     nodes.hub =
@@ -57,16 +57,15 @@ pkgs.testers.runNixOSTest (
         };
       };
 
-    nodes.host =
+    nodes.host1 =
       { ... }:
       {
         imports = [
-          flake.nixosModules.holo-nats-server
           flake.nixosModules.holo-host-agent
         ];
 
         holo.host-agent = {
-          enable = !hostUseOsNats;
+          enable = true;
           rust = {
             log = "trace";
             backtrace = "trace";
@@ -74,37 +73,6 @@ pkgs.testers.runNixOSTest (
 
           nats.hub.url = "wss://${nodes.hub.networking.fqdn}:${builtins.toString nodes.hub.holo.nats-server.websocket.externalPort}";
           nats.hub.tlsInsecure = true;
-        };
-
-        holo.nats-server.enable = hostUseOsNats;
-        services.nats.settings = {
-          accounts = {
-            SYS = {
-              users = [
-                {
-                  user = "admin";
-                  "password" = "admin";
-                }
-              ];
-            };
-          };
-          system_account = "SYS";
-
-          jetstream = {
-            domain = "leaf";
-            enabled = true;
-          };
-
-          leafnodes = {
-            remotes = [
-              { url = "nats://${hubIP}:${builtins.toString nodes.hub.holo.nats-server.leafnodePort}"; }
-            ];
-          };
-
-          # logging options
-          debug = true;
-          trace = false;
-          logtime = false;
         };
       };
 
@@ -187,11 +155,7 @@ pkgs.testers.runNixOSTest (
 
         hostTestScript =
           let
-            natsServer =
-              if hostUseOsNats then
-                "nats://127.0.0.1:${builtins.toString nodes.host.holo.nats-server.port}"
-              else
-                "nats://127.0.0.1:${builtins.toString nodes.host.holo.host-agent.nats.listenPort}";
+            natsServer = "nats://127.0.0.1:${builtins.toString nodes.host1.holo.host-agent.nats.listenPort}";
           in
           pkgs.writeShellScript "cmd" ''
             set -xe
@@ -213,20 +177,14 @@ pkgs.testers.runNixOSTest (
 
           hub.succeed("${hubTestScript}")
 
-        with subtest("starting the host and waiting for holo-host-agent to be ready"):
-          host.start()
-          ${
-            if hostUseOsNats then
-              "host.wait_for_unit('nats.service')"
-            else
-              "host.wait_for_unit('holo-host-agent')"
-          }
+        with subtest("starting the host1 and waiting for holo-host-agent to be ready"):
+          host1.start()
+          host1.wait_for_unit('holo-host-agent')
 
-          host.wait_for_open_port(addr = "${nodes.hub.networking.fqdn}", port = ${builtins.toString nodes.hub.holo.nats-server.websocket.externalPort}, timeout = 10)
+          host1.wait_for_open_port(addr = "${nodes.hub.networking.fqdn}", port = ${builtins.toString nodes.hub.holo.nats-server.websocket.externalPort}, timeout = 10)
 
-
-        with subtest("running the host testscript"):
-          host.succeed("${hostTestScript}", timeout = 10)
+        with subtest("running the host1 testscript"):
+          host1.succeed("${hostTestScript}", timeout = 10)
       '';
   }
 )
