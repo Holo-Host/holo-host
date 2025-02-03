@@ -9,6 +9,26 @@ pkgs.testers.runNixOSTest (
   let
     hubIP = (pkgs.lib.head nodes.hub.networking.interfaces.eth1.ipv4.addresses).address;
     hubJsDomain = "hub";
+
+    mkHost =
+      _:
+      { ... }:
+      {
+        imports = [
+          flake.nixosModules.holo-host-agent
+        ];
+
+        holo.host-agent = {
+          enable = true;
+          rust = {
+            log = "trace";
+            backtrace = "trace";
+          };
+
+          nats.hub.url = "wss://${nodes.hub.networking.fqdn}:${builtins.toString nodes.hub.holo.nats-server.websocket.externalPort}";
+          nats.hub.tlsInsecure = true;
+        };
+      };
   in
   {
     name = "host-agent-integration-nixos";
@@ -57,24 +77,9 @@ pkgs.testers.runNixOSTest (
         };
       };
 
-    nodes.host1 =
-      { ... }:
-      {
-        imports = [
-          flake.nixosModules.holo-host-agent
-        ];
-
-        holo.host-agent = {
-          enable = true;
-          rust = {
-            log = "trace";
-            backtrace = "trace";
-          };
-
-          nats.hub.url = "wss://${nodes.hub.networking.fqdn}:${builtins.toString nodes.hub.holo.nats-server.websocket.externalPort}";
-          nats.hub.tlsInsecure = true;
-        };
-      };
+    nodes.host1 = mkHost { };
+    nodes.host2 = mkHost { };
+    nodes.host3 = mkHost { };
 
     # takes args which are currently removed by deadnix:
     # { nodes, ... }
@@ -140,31 +145,27 @@ pkgs.testers.runNixOSTest (
               "consumer_limits": {}
           }
         '';
-        hubTestScript =
-          let
-            natsServer = "nats://127.0.0.1:${builtins.toString nodes.hub.holo.nats-server.port}";
-          in
-          pkgs.writeShellScript "cmd" ''
-            set -xe
 
-            ${natsCli} -s "${natsServer}" stream add ${testStreamName} --config ${_testStreamHubConfig}
-            ${natsCli} -s "${natsServer}" pub --count=10 "${testStreamName}.integrate" --js-domain ${hubJsDomain} '{"message":"hello"}'
-            ${natsCli} -s "${natsServer}" stream ls
-            ${natsCli} -s "${natsServer}" sub --stream "${testStreamName}" "${testStreamName}.>" --count=10
-          '';
+        natsCmdHub = "${natsCli} -s nats://127.0.0.1:${builtins.toString nodes.hub.holo.nats-server.port}";
+        natsCmdHosts = "${natsCli} -s nats://127.0.0.1:${builtins.toString nodes.host1.holo.host-agent.nats.listenPort}";
 
-        hostTestScript =
-          let
-            natsServer = "nats://127.0.0.1:${builtins.toString nodes.host1.holo.host-agent.nats.listenPort}";
-          in
-          pkgs.writeShellScript "cmd" ''
-            set -xe
+        hubTestScript = pkgs.writeShellScript "cmd" ''
+          set -xe
+          ${natsCmdHub} stream add ${testStreamName} --config ${_testStreamHubConfig}
+          ${natsCmdHub} pub --count=10 "${testStreamName}.integrate" --js-domain ${hubJsDomain} '{"message":"hello"}'
+          ${natsCmdHub} stream ls
+          ${natsCmdHub} sub --stream "${testStreamName}" "${testStreamName}.>" --count=10
+        '';
 
-            ${natsCli} -s "${natsServer}" stream add ${testStreamName} --config ${_testStreamLeafConfig}
-            ${natsCli} -s "${natsServer}" stream ls
-            ${natsCli} -s "${natsServer}" stream info --json ${testStreamName}
-            ${natsCli} -s '${natsServer}' sub --stream "${testStreamName}" '${testStreamName}.>' --count=10
-          '';
+        hostTestScript = pkgs.writeShellScript "cmd" ''
+          set -xe
+
+          ${natsCmdHosts} stream add ${testStreamName} --config ${_testStreamLeafConfig}
+          ${natsCmdHosts} stream ls
+          ${natsCmdHosts} stream info --json ${testStreamName}
+          ${natsCmdHosts} sub --stream "${testStreamName}" '${testStreamName}.>' --count=10
+        '';
+
       in
       ''
         with subtest("start the hub and run the testscript"):
@@ -177,14 +178,34 @@ pkgs.testers.runNixOSTest (
 
           hub.succeed("${hubTestScript}")
 
-        with subtest("starting the host1 and waiting for holo-host-agent to be ready"):
+        with subtest("start the hosts and ensure they have TCP level connectivity to the hub"):
           host1.start()
+          host2.start()
+          host3.start()
+
           host1.wait_for_unit('holo-host-agent')
+          host2.wait_for_unit('holo-host-agent')
+          host3.wait_for_unit('holo-host-agent')
 
           host1.wait_for_open_port(addr = "${nodes.hub.networking.fqdn}", port = ${builtins.toString nodes.hub.holo.nats-server.websocket.externalPort}, timeout = 10)
+          host2.wait_for_open_port(addr = "${nodes.hub.networking.fqdn}", port = ${builtins.toString nodes.hub.holo.nats-server.websocket.externalPort}, timeout = 10)
+          host3.wait_for_open_port(addr = "${nodes.hub.networking.fqdn}", port = ${builtins.toString nodes.hub.holo.nats-server.websocket.externalPort}, timeout = 10)
 
-        with subtest("running the host1 testscript"):
+        with subtest("running the testscript on the hosts"):
           host1.succeed("${hostTestScript}", timeout = 10)
+          host2.succeed("${hostTestScript}", timeout = 10)
+          host3.succeed("${hostTestScript}", timeout = 10)
+
+        with subtest("publish more messages from the hub and ensure they arrive on all hosts"):
+          hub.succeed("${pkgs.writeShellScript "script" ''
+            ${natsCmdHub} pub --count=10 "${testStreamName}.host1" --js-domain ${hubJsDomain} '{"message":"hello host1"}'
+            ${natsCmdHub} pub --count=10 "${testStreamName}.host2" --js-domain ${hubJsDomain} '{"message":"hello host2"}'
+            ${natsCmdHub} pub --count=10 "${testStreamName}.host3" --js-domain ${hubJsDomain} '{"message":"hello host3"}'
+          ''}", timeout = 10)
+
+          host1.succeed("${pkgs.writeShellScript "script" ''${natsCmdHosts} sub --stream "${testStreamName}" '${testStreamName}.host1' --count=10''}", timeout = 10)
+          host2.succeed("${pkgs.writeShellScript "script" ''${natsCmdHosts} sub --stream "${testStreamName}" '${testStreamName}.host2' --count=10''}", timeout = 10)
+          host3.succeed("${pkgs.writeShellScript "script" ''${natsCmdHosts} sub --stream "${testStreamName}" '${testStreamName}.host2' --count=10''}", timeout = 10)
       '';
   }
 )
