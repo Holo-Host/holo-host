@@ -21,6 +21,9 @@
       url = "github:oxalica/rust-overlay";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+
+    extra-container.url = "github:erikarvstedt/extra-container";
+    extra-container.inputs.nixpkgs.follows = "nixpkgs";
   };
 
   outputs =
