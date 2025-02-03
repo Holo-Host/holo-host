@@ -37,6 +37,9 @@ pub struct DaemonzeArgs {
     #[arg(help = "path to NATS credentials used for the LeafNode client connection")]
     pub(crate) nats_leafnode_client_creds_path: Option<PathBuf>,
 
+    #[arg(help = "path to NATS credentials used for the LeafNode SYS user management")]
+    pub(crate) nats_leafnode_client_sys_creds_path: Option<PathBuf>,
+
     #[arg(
         help = "try to connect to the (internally spawned) Nats instance for the given duration in seconds before giving up",
         default_value = "10"

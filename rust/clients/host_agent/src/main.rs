@@ -12,6 +12,7 @@ This client is responsible for subscribing the host agent to workload stream end
 
 mod auth;
 mod hostd;
+mod keys;
 pub mod agent_cli;
 pub mod host_cmds;
 pub mod support_cmds;
@@ -20,6 +21,7 @@ use clap::Parser;
 use dotenv::dotenv;
 use thiserror::Error;
 use agent_cli::DaemonzeArgs;
+use util_libs::nats_js_client;
 
 #[derive(Error, Debug)]
 pub enum AgentCliError {
@@ -53,28 +55,21 @@ async fn main() -> Result<(), AgentCliError> {
     Ok(())
 }
 
-async fn daemonize(args: &DaemonzeArgs) -> Result<(), async_nats::Error> {
-    let creds_path_arg_clone = args.nats_leafnode_client_creds_path.clone();
-    let host_creds_path = creds_path_arg_clone.unwrap_or_else(|| {
-        authentication::utils::get_file_path_buf(
-            &util_libs::nats_js_client::get_nats_client_creds("HOLO", "HPOS", "host")
-        )
-    });
-    let host_pubkey: String = match host_creds_path.try_exists() {
-        Ok(_p) => {
-            // TODO: read creds file and parse out pubkey OR call nsc to read pubkey from file (whichever is cleaner)
-            "host_pubkey_placeholder>".to_string()
-        },
-        Err(_) => {
+async fn daemonize(args: &DaemonzeArgs) -> Result<(), async_nats::Error> {    
+    let host_agent_keys = match keys::Keys::try_from_storage(&args.nats_leafnode_client_creds_path, &args.nats_leafnode_client_sys_creds_path)? {
+        Some(k) => k,
+        None => {
             log::debug!("About to run the Hosting Agent Initialization Service");
-            auth::init_agent::run().await?
+            let mut keys = keys::Keys::new()?;
+            keys = auth::init::run(keys).await?;
+            keys
         }
     };
 
-    hostd::gen_leaf_server::run(&args.nats_leafnode_client_creds_path).await;
+    hostd::gen_leaf_server::run(&host_agent_keys.get_host_creds_path()).await;
     hostd::workload_manager::run(
-        &host_pubkey,
-        &args.nats_leafnode_client_creds_path,
+        &host_agent_keys.host_pubkey,
+        &host_agent_keys.get_host_creds_path(),
         args.nats_connect_timeout_secs,
     )
     .await?;

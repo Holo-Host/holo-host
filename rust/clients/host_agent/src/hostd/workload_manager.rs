@@ -15,7 +15,7 @@ use async_nats::Message;
 use std::{path::PathBuf, sync::Arc, time::Duration};
 use util_libs::{
     js_stream_service::JsServiceParamsPartial,
-    nats_js_client::{self, EndpointType},
+    nats_js_client::{self, Credentials, EndpointType},
 };
 use workload::{
     WorkloadServiceApi, host_api::HostWorkloadApi, WORKLOAD_SRV_DESC, WORKLOAD_SRV_NAME, WORKLOAD_SRV_SUBJ, WORKLOAD_SRV_VERSION,
@@ -23,7 +23,7 @@ use workload::{
 };
 
 const HOST_AGENT_CLIENT_NAME: &str = "Host Agent";
-const HOST_AGENT_INBOX_PREFIX: &str = "_host_inbox";
+const HOST_AGENT_INBOX_PREFIX: &str = "_workload_inbox";
 
 // TODO: Use _host_creds_path for auth once we add in the more resilient auth pattern.
 pub async fn run(
@@ -53,6 +53,11 @@ pub async fn run(
     // Spin up Nats Client and loaded in the Js Stream Service
     // Nats takes a moment to become responsive, so we try to connect in a loop for a few seconds.
     // TODO: how do we recover from a connection loss to Nats in case it crashes or something else?
+    let creds = match host_creds_path.to_owned() {
+        Some(p) => Some(Credentials::Path(p)),
+        _ => None
+    };
+
     let host_workload_client = tokio::select! {
         client = async {loop {
                 let host_workload_client = nats_js_client::JsClient::new(nats_js_client::NewJsClientParams {
@@ -60,12 +65,10 @@ pub async fn run(
                     name: HOST_AGENT_CLIENT_NAME.to_string(),
                     inbox_prefix: format!("{}_{}", HOST_AGENT_INBOX_PREFIX, host_pubkey),
                     service_params: vec![workload_stream_service_params.clone()],
-                    credentials_path: host_creds_path
-                        .as_ref()
-                        .map(|path| path.to_string_lossy().to_string()),
-                    opts: vec![nats_js_client::with_event_listeners(event_listeners.clone())],
+                    credentials: creds.clone(),
                     ping_interval: Some(Duration::from_secs(10)),
                     request_timeout: Some(Duration::from_secs(29)),
+                    listeners: vec![nats_js_client::with_event_listeners(event_listeners.clone())],
                 })
                 .await
                 .map_err(|e| anyhow::anyhow!("connecting to NATS via {nats_url}: {e}"));

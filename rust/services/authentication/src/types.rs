@@ -3,70 +3,39 @@ use std::collections::HashMap;
 use util_libs::js_stream_service::{CreateResponse, CreateTag, EndpointTraits};
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(rename_all = "snake_case")]
-pub enum AuthServiceSubjects {
-    StartHandshake,
-    HandleHandshakeP1,
-    HandleHandshakeP2,
-    EndHandshake,
-}
+pub const AUTH_SERVICE_SUBJECT: &str = "validate";
+
+// The workload_sk_role is assigned when the host agent is created during the auth flow.
+// NB: This role name *must* match the `ROLE_NAME_WORKLOAD` in the `orchestrator_setup.sh` script file.
+pub const WORKLOAD_SK_ROLE: &str = "workload-role";
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum AuthState {
-    Requested,
-    ValidatedAgent, //    AddedHostPubkey
-    SignedJWT,
-    Authenticated
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct AuthStatus {
-    pub host_pubkey: String,
-    pub status: AuthState
+    Unauthenticated,
+    Authenticated,
+    Forbidden,
+    Error(String)
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
-pub struct AuthHeaders {
-    signature: String,
+pub struct AuthGuardPayload {
+    pub host_pubkey: String, // nkey
+    pub hoster_pubkey: String, // nkey
+    pub email: String,
+    pub nonce: String
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct AuthRequestPayload {
-    pub hoster_pubkey: String,
-    pub email: String,
-    pub host_pubkey: String,
+    pub host_pubkey: String, // nkey
+    pub sys_pubkey: Option<String>, // nkey
     pub nonce: String
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct AuthResultData {
-    pub inner: HashMap<String,Vec<u8>>
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct AuthResult {
-    pub status: AuthStatus,
-    pub data: AuthResultData,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct AuthApiResult {
-    pub result: AuthResult,
-    pub maybe_response_tags: Option<HashMap<String, String>>
-}
-impl EndpointTraits for AuthApiResult {}
-impl CreateTag for AuthApiResult {
-    fn get_tags(&self) -> HashMap<String, String> {
-        self.maybe_response_tags.clone().unwrap_or_default()
-    }
-}
-impl CreateResponse for AuthApiResult {
-    fn get_response(&self) -> bytes::Bytes {
-        let r = self.result.clone();
-        match serde_json::to_vec(&r) {
-            Ok(r) => r.into(),
-            Err(e) => e.to_string().into(),
-        }
-    }
-}
+    pub host_pubkey: String,
+    pub status: AuthState,
+    pub host_jwt: String,
+    pub sys_jwt: String
+} 

@@ -17,13 +17,20 @@ thiserror = { workspace = true }
 env_logger = { workspace = true }
 url = { version = "2", features = ["serde"] }
 bson = { version = "2.6.1", features = ["chrono-0_4"] }
+ed25519-dalek = { version = "2.1.1" }
+nkeys = "=0.4.4"
+sha2 = "=0.10.8"
+nats-jwt = "0.3.0"
+data-encoding = "2.7.0"
+jsonwebtoken = "9.3.0"
 textnonce = "1.0.0"
 chrono = "0.4.0"
 mongodb = "3.1"
 bytes = "1.8.0"
-nkeys = "=0.4.4"
 rand = "0.8.5"
 util_libs = { path = "../../util_libs" }
 workload = { path = "../../services/workload" }
 authentication = { path = "../../services/authentication" }
 hpos-hal = { path = "../../hpos-hal" }
+hpos-config-core = { git = "https://github.com/holo-host/hpos-config.git", rev = "77d740c83a02e322e670e360eb450076b593b328" }
+hpos-config-seed-bundle-explorer = { git = "https://github.com/holo-host/hpos-config.git", rev = "77d740c83a02e322e670e360eb450076b593b328" }

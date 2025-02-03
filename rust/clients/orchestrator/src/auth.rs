@@ -1,31 +1,30 @@
 /*
 This client is associated with the:
-    - AUTH account
+    - ADMIN account
     - orchestrator user
 
 This client is responsible for:
     - initalizing connection and handling interface with db
     - registering with the host auth service to:
-        - handling inital auth requests
+        - handling auth requests by:
             - validating user signature
             - validating hoster pubkey
             - validating hoster email
             - bidirectionally pairing hoster and host
-            - sending hub jwt files back to user (once validated) 
-        - handling request to add user pubkey and generate signed user jwt 
             - interfacing with hub nsc resolver and hub credential files
-            - sending user jwt file back to user
+            - adding user to hub
+            - creating signed jwt for user
+            - adding user jwt file to user collection (with ttl)
     - keeping service running until explicitly cancelled out
 */
 
 use crate::utils as local_utils;
 
-use anyhow::{anyhow, Result};
 use std::{collections::HashMap, sync::Arc, time::Duration};
-// use std::process::Command;
+use anyhow::{anyhow, Result};
 use async_nats::Message;
 use mongodb::{options::ClientOptions, Client as MongoDBClient};
-use authentication::{self, types::{AuthServiceSubjects, AuthApiResult}, AuthServiceApi, orchestrator_api::OrchestratorAuthApi, AUTH_SRV_DESC, AUTH_SRV_NAME, AUTH_SRV_SUBJ, AUTH_SRV_VERSION};
+use authentication::{self, AuthServiceApi, types::{self, AuthApiResult}, AUTH_SRV_DESC, AUTH_SRV_NAME, AUTH_SRV_SUBJ, AUTH_SRV_VERSION};
 use util_libs::{
     db::mongodb::get_mongodb_url,
     js_stream_service::{JsServiceParamsPartial, ResponseSubjectsGenerator},
@@ -33,17 +32,7 @@ use util_libs::{
 };
 
 pub const ORCHESTRATOR_AUTH_CLIENT_NAME: &str = "Orchestrator Auth Agent";
-pub const ORCHESTRATOR_AUTH_CLIENT_INBOX_PREFIX: &str = "_orchestrator_auth_inbox";
-
-pub fn create_callback_subject_to_host(tag_name: String, sub_subject_name: String) -> ResponseSubjectsGenerator {
-    Arc::new(move |tag_map: HashMap<String, String>| -> Vec<String> {
-        if let Some(tag) = tag_map.get(&tag_name) {
-            return vec![format!("{}.{}", tag, &sub_subject_name)];
-        }
-        log::error!("Auth Error: Failed to find {}. Unable to send orchestrator response to hosting agent for subject {}. Fwding response to `AUTH.ERROR.INBOX`.", tag_name, sub_subject_name);
-        vec!["AUTH.ERROR.INBOX".to_string()]
-    })
-}
+pub const ORCHESTRATOR_AUTH_CLIENT_INBOX_PREFIX: &str = "_auth_inbox_orchestrator";
 
 pub async fn run() -> Result<(), async_nats::Error> {
     // ==================== Setup NATS ====================
@@ -79,15 +68,9 @@ pub async fn run() -> Result<(), async_nats::Error> {
     
     // ==================== Setup API & Register Endpoints ====================
     // Generate the Auth API with access to db
-    let auth_api = OrchestratorAuthApi::new(&client).await?;
+    let auth_api = AuthServiceApi::new(&client).await?;
     
-    // Register Auth Streams for Orchestrator to consume and proceess
-    // NB: The subjects below are published by the Host Agent
-    let auth_start_subject = serde_json::to_string(&AuthServiceSubjects::StartHandshake)?;
-    let auth_p1_subject = serde_json::to_string(&AuthServiceSubjects::HandleHandshakeP1)?;
-    let auth_p2_subject = serde_json::to_string(&AuthServiceSubjects::HandleHandshakeP2)?;
-    let auth_end_subject = serde_json::to_string(&AuthServiceSubjects::EndHandshake)?;
-
+    // Register Auth Stream for Orchestrator to consume and proceess
     let auth_service = orchestrator_auth_client
         .get_js_service(AUTH_SRV_NAME.to_string())
         .await
@@ -97,27 +80,14 @@ pub async fn run() -> Result<(), async_nats::Error> {
     
     auth_service
         .add_consumer::<AuthApiResult>(
-            "start_handshake", // consumer name
-            &auth_start_subject, // consumer stream subj
-            EndpointType::Async(auth_api.call(|api: OrchestratorAuthApi, msg: Arc<Message>| {
+            "validate", // consumer name
+            &types::AUTH_SERVICE_SUBJECT, // consumer stream subj
+            EndpointType::Async(auth_api.call(|api: AuthServiceApi, msg: Arc<Message>| {
                 async move {
                     api.handle_handshake_request(msg, &local_utils::get_orchestrator_credentials_dir_path()).await
                 }
             })),
-            Some(create_callback_subject_to_host("host_pubkey".to_string(), auth_p1_subject)),
-        )
-        .await?;
-        
-    auth_service
-        .add_consumer::<AuthApiResult>(
-            "add_user_pubkey", // consumer name
-            &auth_p2_subject, // consumer stream subj
-            EndpointType::Async(auth_api.call(|api: OrchestratorAuthApi, msg: Arc<Message>| {
-                async move {
-                    api.add_user_nkey(msg, &local_utils::get_orchestrator_credentials_dir_path()).await
-                }
-            })),
-            Some(create_callback_subject_to_host("host_pubkey".to_string(), auth_end_subject)),
+            Some(create_callback_subject_to_host("host_pubkey".to_string())),
         )
         .await?;
 
@@ -133,4 +103,14 @@ pub async fn run() -> Result<(), async_nats::Error> {
     orchestrator_auth_client.close().await?;
 
     Ok(())
+}
+
+pub fn create_callback_subject_to_host(tag_name: String) -> ResponseSubjectsGenerator {
+    Arc::new(move |tag_map: HashMap<String, String>| -> Vec<String> {
+        if let Some(tag) = tag_map.get(&tag_name) {
+            return vec![format!("AUTH.{}", tag)];
+        }
+        log::error!("Auth Error: Failed to find {}. Unable to send orchestrator response to hosting agent for subject 'AUTH.validate'. Fwding response to `AUTH.ERROR.INBOX`.", tag_name);
+        vec!["AUTH.ERROR.INBOX".to_string()]
+    })
 }

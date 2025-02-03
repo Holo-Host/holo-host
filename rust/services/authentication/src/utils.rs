@@ -2,21 +2,13 @@ use anyhow::Result;
 use async_nats::jetstream::Context;
 use util_libs::nats_js_client::ServiceError;
 use std::io::Write;
-use std::path::PathBuf;
 
 pub fn handle_internal_err(err_msg: &str) -> ServiceError {
     log::error!("{}", err_msg);
     ServiceError::Internal(err_msg.to_string())
 }
 
-pub fn get_file_path_buf(
-    file_name: &str,
-) -> PathBuf {
-    let root_path = std::env::current_dir().expect("Failed to locate root directory.");
-    root_path.join(file_name)
-}
-
-pub async fn receive_and_write_file(
+pub async fn write_file(
     data: Vec<u8>,
     output_dir: &str,
     file_name: &str,

@@ -24,11 +24,11 @@ use workload::{
 use util_libs::{
     db::mongodb::get_mongodb_url,
     js_stream_service::{JsServiceParamsPartial, ResponseSubjectsGenerator},
-    nats_js_client::{self, EndpointType, JsClient, NewJsClientParams},
+    nats_js_client::{self, Credentials, EndpointType, JsClient, NewJsClientParams, get_nats_url, get_nats_creds_by_nsc, get_event_listeners, get_file_path_buf},
 };
 
 const ORCHESTRATOR_WORKLOAD_CLIENT_NAME: &str = "Orchestrator Workload Agent";
-const ORCHESTRATOR_WORKLOAD_CLIENT_INBOX_PREFIX: &str = "_orchestrator_workload_inbox";
+const ORCHESTRATOR_WORKLOAD_CLIENT_INBOX_PREFIX: &str = "_workload_inbox_orchestrator";
 
 pub fn create_callback_subject_to_host(is_prefix: bool, tag_name: String, sub_subject_name: String) -> ResponseSubjectsGenerator {
     Arc::new(move |tag_map: HashMap<String, String>| -> Vec<String> {
@@ -50,9 +50,9 @@ pub fn create_callback_subject_to_host(is_prefix: bool, tag_name: String, sub_su
 
 pub async fn run() -> Result<(), async_nats::Error> {
     // ==================== Setup NATS ====================
-    let nats_url = nats_js_client::get_nats_url();
-    let creds_path = nats_js_client::get_nats_client_creds("HOLO", "WORKLOAD", "orchestrator");
-    let event_listeners = nats_js_client::get_event_listeners();
+    let nats_url = get_nats_url();
+    let creds_path = Credentials::Path(get_file_path_buf(&get_nats_creds_by_nsc("HOLO", "WORKLOAD", "orchestrator")));
+    let event_listeners = get_event_listeners();
 
     // Setup JS Stream Service
     let workload_stream_service_params = JsServiceParamsPartial {
@@ -68,10 +68,10 @@ pub async fn run() -> Result<(), async_nats::Error> {
             name: ORCHESTRATOR_WORKLOAD_CLIENT_NAME.to_string(),
             inbox_prefix: ORCHESTRATOR_WORKLOAD_CLIENT_INBOX_PREFIX.to_string(),
             service_params: vec![workload_stream_service_params],
-            credentials_path: Some(creds_path),
-            opts: vec![nats_js_client::with_event_listeners(event_listeners)],
-            ping_interval: Some(Duration::from_secs(10)),
+            credentials: Some(creds_path),
             request_timeout: Some(Duration::from_secs(5)),
+            ping_interval: Some(Duration::from_secs(10)),
+            listeners: vec![nats_js_client::with_event_listeners(event_listeners)],
         })
         .await?;
 

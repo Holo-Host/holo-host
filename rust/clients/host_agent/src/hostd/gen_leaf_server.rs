@@ -1,9 +1,9 @@
 use std::path::PathBuf;
 
-use util_libs::nats_server::{
+use util_libs::{nats_js_client, nats_server::{
     self, JetStreamConfig, LeafNodeRemote, LeafServer, LoggingOptions, LEAF_SERVER_CONFIG_PATH,
     LEAF_SERVER_DEFAULT_LISTEN_PORT, LEAF_SERVE_NAME,
-};
+}};
 
 pub async fn run(user_creds_path: &Option<PathBuf>) {
     let leaf_server_remote_conn_url = nats_server::get_hub_server_url();
@@ -12,8 +12,7 @@ pub async fn run(user_creds_path: &Option<PathBuf>) {
         .map(|var| var.parse().expect("can't parse into number"))
         .unwrap_or_else(|_| LEAF_SERVER_DEFAULT_LISTEN_PORT);
 
-    let nsc_path =
-        std::env::var("NSC_PATH").unwrap_or_else(|_| ".local/share/nats/nsc".to_string());
+    let nsc_path = nats_js_client::get_nsc_root_path();
 
     let jetstream_config = JetStreamConfig {
         store_dir: format!("{}/leaf_store", nsc_path),

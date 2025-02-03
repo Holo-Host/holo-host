@@ -2,8 +2,9 @@ use super::js_stream_service::{CreateTag, JsServiceParamsPartial, JsStreamServic
 use crate::nats_server::LEAF_SERVER_DEFAULT_LISTEN_PORT;
 
 use anyhow::Result;
-use core::option::Option::None;
-use async_nats::{jetstream, HeaderMap, Message, ServerInfo};
+use std::path::PathBuf;
+use core::marker::Sync;
+use async_nats::{jetstream, AuthError, HeaderMap, Message, ServerInfo};
 use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::fmt;
@@ -19,6 +20,8 @@ pub enum ServiceError {
     Request(String),
     #[error(transparent)]
     Database(#[from] mongodb::error::Error),
+    #[error(transparent)]
+    Authentication(#[from] AuthError),
     #[error("Nats Error: {0}")]
     NATS(String),
     #[error("Internal Error: {0}")]
@@ -99,21 +102,24 @@ pub struct JsClient {
     service_log_prefix: String,
 }
 
+#[derive(Clone)]
+pub enum Credentials {
+    Path(std::path::PathBuf), // String = pathbuf as string
+    Password(String, String)
+}   
+
 #[derive(Deserialize, Default)]
 pub struct NewJsClientParams {
     pub nats_url: String,
     pub name: String,
     pub inbox_prefix: String,
-    #[serde(default)]
     pub service_params: Vec<JsServiceParamsPartial>,
     #[serde(skip_deserializing)]
-    pub opts: Vec<EventListener>, // NB: These opts should not be required for client instantiation
-    #[serde(default)]
-    pub credentials_path: Option<String>,
-    #[serde(default)]
+    pub credentials: Option<Credentials>,
     pub ping_interval: Option<Duration>,
-    #[serde(default)]
     pub request_timeout: Option<Duration>, // Defaults to 5s
+    #[serde(skip_deserializing)]
+    pub listeners: Vec<EventListener>,
 }
 
 impl JsClient {
@@ -125,14 +131,22 @@ impl JsClient {
             .request_timeout(Some(p.request_timeout.unwrap_or(Duration::from_secs(10))))
             .custom_inbox_prefix(&p.inbox_prefix);
 
-        let client = match p.credentials_path {
-            Some(cp) => {
-                let path = std::path::Path::new(&cp);
-                connect_options
-                    .credentials_file(path)
-                    .await?
-                    .connect(&p.nats_url)
-                    .await?
+        let client = match p.credentials {
+            Some(c) => match c {
+                Credentials::Password(user, pw) => {
+                    connect_options
+                        .user_and_password(user, pw)
+                        .connect(&p.nats_url)
+                        .await?
+                },
+                Credentials::Path(cp) => {
+                    let path = std::path::Path::new(&cp);
+                    connect_options
+                        .credentials_file(path)
+                        .await?
+                        .connect(&p.nats_url)
+                        .await?
+                }
             }
             None => connect_options.connect(&p.nats_url).await?,
         };
@@ -159,7 +173,7 @@ impl JsClient {
 
         let service_log_prefix = format!("NATS-CLIENT-LOG::{}::", p.name);
 
-        let mut default_client = JsClient {
+        let mut js_client = JsClient {
             url: p.nats_url,
             name: p.name,
             on_msg_published_event: None,
@@ -170,43 +184,23 @@ impl JsClient {
             service_log_prefix: service_log_prefix.clone(),
         };
 
-        for opt in p.opts {
-            opt(&mut default_client);
+        for listener in p.listeners {
+            listener(&mut js_client);
         }
 
         log::info!(
             "{}Connected to NATS server at {}",
             service_log_prefix,
-            default_client.url
+            js_client.url
         );
-        Ok(default_client)
-    }
-
-    pub fn name(&self) -> &str {
-        &self.name
+        Ok(js_client)
     }
 
     pub fn get_server_info(&self) -> ServerInfo {
         self.client.server_info()
     }
 
-    pub async fn monitor(&self) -> Result<(), async_nats::Error> {
-        if let async_nats::connection::State::Disconnected = self.client.connection_state() {
-            Err(Box::new(ErrClientDisconnected))
-        } else {
-            Ok(())
-        }
-    }
-
-    pub async fn close(&self) -> Result<(), async_nats::Error> {
-        self.client.drain().await?;
-        Ok(())
-    }
-
-    pub async fn health_check_stream(&self, stream_name: &str) -> Result<(), async_nats::Error> {
-        if let async_nats::connection::State::Disconnected = self.client.connection_state() {
-            return Err(Box::new(ErrClientDisconnected));
-        }
+    pub async fn get_stream_info(&self, stream_name: &str) -> Result<(), async_nats::Error> {
         let stream = &self.js.get_stream(stream_name).await?;
         let info = stream.get_info().await?;
         log::debug!(
@@ -216,6 +210,15 @@ impl JsClient {
             info
         );
         Ok(())
+    }
+
+    pub async fn check_connection(&self) -> Result<async_nats::connection::State, async_nats::Error> {
+        let conn_state =self.client.connection_state();
+        if let async_nats::connection::State::Disconnected = conn_state {
+            Err(Box::new(ErrClientDisconnected))
+        } else {
+            Ok(conn_state)
+        }
     }
 
     pub async fn publish(&self, payload: PublishInfo) -> Result<(), async_nats::Error> {
@@ -267,6 +270,11 @@ impl JsClient {
         }
         None
     }
+
+    pub async fn close(&self) -> Result<(), async_nats::Error> {
+        self.client.drain().await?;
+        Ok(())
+    }
 }
 
 // Client Options:
@@ -307,13 +315,23 @@ pub fn get_nats_url() -> String {
     })
 }
 
-pub fn get_nats_client_creds(operator: &str, account: &str, user: &str) -> String {
-    std::env::var("HOST_CREDS_FILE_PATH").unwrap_or_else(|_| {
-        format!(
-            "/.local/share/nats/nsc/keys/creds/{}/{}/{}.creds",
-            operator, account, user
-        )
-    })
+pub fn get_nsc_root_path() -> String {
+    let nsc_path = std::env::var("NSC_PATH").unwrap_or_else(|_| "/.local/share/nats/nsc".to_string());
+    nsc_path
+}
+
+pub fn get_nats_creds_by_nsc(operator: &str, account: &str, user: &str) -> String {
+    format!(
+        "{}/keys/creds/{}/{}/{}.creds",
+        get_nsc_root_path(), operator, account, user
+    )
+}
+
+pub fn get_file_path_buf(
+    file_name: &str,
+) -> PathBuf {
+    let current_dir_path = std::env::current_dir().expect("Failed to locate current directory.");
+    current_dir_path.join(file_name)
 }
 
 pub fn get_event_listeners() -> Vec<EventListener> {
