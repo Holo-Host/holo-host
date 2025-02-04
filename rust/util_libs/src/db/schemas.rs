@@ -225,6 +225,7 @@ pub struct Workload {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub _id: Option<MongoDbId>,
     pub metadata: Metadata,
+    pub state: WorkloadState,
     pub assigned_developer: MongoDbId, // *INDEXED*, Developer Mongodb ID
     pub version: SemVer,
     pub nix_pkg: String, // (Includes everthing needed to deploy workload - ie: binary & env pkg & deps, etc)
@@ -254,6 +255,7 @@ impl Default for Workload {
                 updated_at: Some(DateTime::now()),
                 deleted_at: None
             },
+            state: WorkloadState::Reported,
             version: semver,
             nix_pkg: String::new(),
             assigned_developer: MongoDbId::new(),

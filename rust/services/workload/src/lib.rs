@@ -17,7 +17,7 @@ pub mod types;
 use anyhow::{anyhow, Result};
 use async_nats::Message;
 use mongodb::{options::UpdateModifications, Client as MongoDBClient};
-use std::{fmt::Debug, sync::Arc};
+use std::{fmt::Debug, str::FromStr, sync::Arc};
 use util_libs::{db::{mongodb::{IntoIndexes, MongoCollection, MongoDbAPI}, schemas::{self, Host, Workload, WorkloadState, WorkloadStatus, MongoDbId}}, nats_js_client};
 use std::future::Future;
 use serde::{Deserialize, Serialize};
@@ -338,20 +338,16 @@ impl WorkloadApi {
         }
         let workload_status_id = workload_status.id.clone().unwrap();
 
-        // todo: handle othercases
-        if matches!(workload_status.desired, WorkloadState::Removed) {
-            self.workload_collection.mongo_error_handler(
-                self.workload_collection.collection.update_one(
-                    doc! { "_id": MongoDbId::parse_str(workload_status_id)? },
-                    doc! {
-                        "$set": {
-                            "metadata.is_deleted": true,
-                            "deleted_at": Some(DateTime::now())
-                        }
-                    }
-                ).await
-            )?;
-        }
+        self.workload_collection.update_one_within(
+            doc! {
+                "_id": MongoDbId::parse_str(workload_status_id)?
+            },
+            UpdateModifications::Document(doc! {
+                "$set": {
+                    "state": bson::to_bson(&workload_status.actual).unwrap()
+                }
+            })
+        ).await?;
         
         return Ok(types::ApiResult(workload_status, None))
     }    
