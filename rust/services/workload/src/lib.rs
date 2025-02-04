@@ -17,7 +17,7 @@ pub mod types;
 use anyhow::{anyhow, Result};
 use async_nats::Message;
 use mongodb::{options::UpdateModifications, Client as MongoDBClient};
-use std::{fmt::Debug, str::FromStr, sync::Arc};
+use std::{fmt::Debug, sync::Arc};
 use util_libs::{db::{mongodb::{IntoIndexes, MongoCollection, MongoDbAPI}, schemas::{self, Host, Workload, WorkloadState, WorkloadStatus, MongoDbId}}, nats_js_client};
 use std::future::Future;
 use serde::{Deserialize, Serialize};
