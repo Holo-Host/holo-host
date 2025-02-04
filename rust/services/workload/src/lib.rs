@@ -364,7 +364,7 @@ impl WorkloadApi {
             },
             UpdateModifications::Document(doc! {
                 "$set": {
-                    "state": bson::to_bson(&workload_status.actual).unwrap()
+                    "state": bson::to_bson(&workload_status.actual)?
                 }
             })
         ).await?;
