@@ -356,7 +356,7 @@ impl WorkloadApi {
         if workload_status.id == None {
             return Err(anyhow!("Got a status update for workload without an id!"));
         }
-        let workload_status_id = workload_status.id.clone().unwrap();
+        let workload_status_id = workload_status.id.clone().expect("workload is not provided");
 
         self.workload_collection.update_one_within(
             doc! {
