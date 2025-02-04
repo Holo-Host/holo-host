@@ -269,7 +269,7 @@ pub fn do_request(cfg: &QueryDefinition, ip_ver: &IPVersion) -> RequestStats {
             // TODO: In future, we could/should also include support for using our host key(s) to
             // authenticate against the server as a test.
             let headers: Vec<(&str, &str)> = vec![
-                ("Host", &cfg.hostname.as_str()),
+                ("Host", cfg.hostname.as_str()),
                 ("User-Agent", "Holo-Netdiag"),
                 ("Accept", "*/*"),
                 ("Connection", "close"),

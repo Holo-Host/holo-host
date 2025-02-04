@@ -44,7 +44,7 @@ pub fn support_command(command: &SupportCommands) -> Result<(), std::io::Error> 
                 for phase in &stat.stats {
                     let result = match &phase.error {
                         None => {
-                            format!("succeeded")
+                            "succeeded".to_string()
                         }
                         Some(e) => {
                             format!("failed with: {}", e)
