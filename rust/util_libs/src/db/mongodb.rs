@@ -1,5 +1,4 @@
 use anyhow::{anyhow, Context, Result};
-use async_nats::Error;
 use async_trait::async_trait;
 use bson::{self, doc, Document};
 use futures::stream::TryStreamExt;

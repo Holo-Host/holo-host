@@ -16,25 +16,12 @@ pub mod types;
 
 use anyhow::{anyhow, Result};
 use async_nats::Message;
+use bson::{doc, to_document, DateTime};
 use mongodb::{options::UpdateModifications, Client as MongoDBClient};
-use std::{fmt::Debug, sync::Arc};
+use std::{fmt::Debug, str::FromStr, sync::Arc};
 use util_libs::{db::{mongodb::{IntoIndexes, MongoCollection, MongoDbAPI}, schemas::{self, Host, Workload, WorkloadState, WorkloadStatus, MongoDbId}}, nats_js_client};
 use std::future::Future;
 use serde::{Deserialize, Serialize};
-use bson::{self, doc, to_document, DateTime};
-use bson::{self, doc, to_document};
-use mongodb::{options::UpdateModifications, Client as MongoDBClient};
-use rand::seq::SliceRandom;
-use serde::{Deserialize, Serialize};
-use std::future::Future;
-use std::{fmt::Debug, sync::Arc};
-use util_libs::{
-    db::{
-        mongodb::{IntoIndexes, MongoCollection, MongoDbAPI},
-        schemas::{self, Host, Workload, WorkloadState, WorkloadStatus},
-    },
-    nats_js_client,
-};
 
 pub const WORKLOAD_SRV_NAME: &str = "WORKLOAD";
 pub const WORKLOAD_SRV_SUBJ: &str = "WORKLOAD";
@@ -91,12 +78,12 @@ impl WorkloadApi {
                         workload_id
                     );
                     let updated_workload = schemas::Workload {
-                        _id: Some(workload_id),
+                        _id: Some(MongoDbId::from_str(&workload_id)?),
                         ..workload
                     };
                     Ok(types::ApiResult(
                         WorkloadStatus {
-                            id: updated_workload._id,
+                            id: updated_workload._id.map(|oid| oid.to_hex()),
                             desired: WorkloadState::Reported,
                             actual: WorkloadState::Reported,
                         },
