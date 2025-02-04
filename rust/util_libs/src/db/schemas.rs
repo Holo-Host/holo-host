@@ -154,8 +154,8 @@ impl IntoIndexes for Hoster {
 // ==================== Host Schema ====================
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct Capacity {
-    pub memory: i64,  // GiB
-    pub disk: i64,  // ssd; GiB 
+    pub memory: i64, // GiB
+    pub disk: i64,   // ssd; GiB
     pub cores: i64,
 }
 
@@ -202,7 +202,7 @@ pub enum WorkloadState {
     Removed,
     Uninstalled,
     Updating,
-    Error(String), // String = error message
+    Error(String),   // String = error message
     Unknown(String), // String = context message
 }
 
@@ -215,9 +215,8 @@ pub struct WorkloadStatus {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct SystemSpecs {
-    pub capacity: Capacity
-    // network_speed: i64
-    // uptime: i64
+    pub capacity: Capacity, // network_speed: i64
+                            // uptime: i64
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -264,8 +263,8 @@ impl Default for Workload {
                 capacity: Capacity {
                     memory: 64,
                     disk: 400,
-                    cores: 20
-                }
+                    cores: 20,
+                },
             },
             assigned_hosts: Vec::new(),
         }

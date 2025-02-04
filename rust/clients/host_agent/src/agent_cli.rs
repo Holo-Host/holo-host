@@ -1,6 +1,9 @@
+use std::path::PathBuf;
+
 /// MOdule containing all of the Clap Derive structs/definitions that make up the agent's
 /// command line. To start the agent daemon (usually from systemd), use `host_agent daemonize`.
-use clap::{Parser, Subcommand};
+use netdiag::IPVersion;
+use clap::{Args, Parser, Subcommand};
 
 #[derive(Parser)]
 #[command(
@@ -11,13 +14,13 @@ use clap::{Parser, Subcommand};
 )]
 pub struct Root {
     #[command(subcommand)]
-    pub scope: Option<CommandScopes>,
+    pub scope: CommandScopes,
 }
 
 #[derive(Subcommand, Clone)]
 pub enum CommandScopes {
     /// Start the Holo Hosting Agent Daemon.
-    Daemonize,
+    Daemonize(DaemonzeArgs),
     /// Commmands for managing this host.
     Host {
         #[command(subcommand)]
@@ -28,6 +31,34 @@ pub enum CommandScopes {
         #[command(subcommand)]
         command: SupportCommands,
     },
+}
+
+#[derive(Args, Clone, Debug)]
+pub struct DaemonzeArgs {
+    #[arg(long, help = "directory to contain the NATS persistence")]
+    pub(crate) store_dir: Option<PathBuf>,
+
+    #[arg(
+        long,
+        help = "path to NATS credentials used for the LeafNode client connection"
+    )]
+    pub(crate) nats_leafnode_client_creds_path: Option<PathBuf>,
+
+    #[arg(long, help = "connection URL to the hub")]
+    pub(crate) hub_url: String,
+
+    #[arg(
+        long,
+        help = "whether to tolerate unknown remote TLS certificates for the connection to the hub"
+    )]
+    pub(crate) hub_tls_insecure: bool,
+
+    #[arg(
+        long,
+        help = "try to connect to the (internally spawned) Nats instance for the given duration in seconds before giving up",
+        default_value = "30"
+    )]
+    pub(crate) nats_connect_timeout_secs: u64,
 }
 
 /// A set of commands for being able to manage the local host. We may (later) want to gate some
@@ -46,7 +77,22 @@ pub enum HostCommands {
 #[derive(Subcommand, Clone)]
 pub enum SupportCommands {
     /// Run some basic network connectivity diagnostics.
-    NetTest,
+    NetTest {
+        #[arg(long, default_value("1.1.1.1:53"))]
+        nameserver: String,
+        // Once we have a URL we can use, make it the default.
+        #[arg(long, default_value("holo.host"))]
+        hostname: String,
+        #[arg(long, default_value("true"))]
+        use_tls: bool,
+        #[arg(long, default_value("443"))]
+        port: u16,
+        // As with the hostname, we should change this default once we have something public.
+        #[arg(long, default_value("/status"))]
+        http_path: String,
+        #[arg(long, default_value("ipv4"))]
+        ip_version: IPVersion,
+    },
     /// Enable or disable a tunnel for support to control this host remotely.
     SupportTunnel {
         #[arg(long)]

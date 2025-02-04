@@ -3,10 +3,10 @@ use super::nats_js_client::EndpointType;
 use anyhow::{anyhow, Result};
 use std::any::Any;
 // use async_nats::jetstream::message::Message;
-use async_trait::async_trait;
 use async_nats::jetstream::consumer::{self, AckPolicy, PullConsumer};
 use async_nats::jetstream::stream::{self, Info, Stream};
 use async_nats::jetstream::Context;
+use async_trait::async_trait;
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -20,7 +20,10 @@ pub trait CreateTag: Send + Sync {
     fn get_tags(&self) -> Option<Vec<String>>;
 }
 
-pub trait EndpointTraits:  Serialize + for<'de> Deserialize<'de> + Send + Sync + Clone + Debug + CreateTag + 'static {}
+pub trait EndpointTraits:
+    Serialize + for<'de> Deserialize<'de> + Send + Sync + Clone + Debug + CreateTag + 'static
+{
+}
 
 #[async_trait]
 pub trait ConsumerExtTrait: Send + Sync + Debug + 'static {
@@ -46,7 +49,7 @@ where
 }
 
 #[derive(Clone, derive_more::Debug)]
-pub struct ConsumerExt<T> 
+pub struct ConsumerExt<T>
 where
     T: EndpointTraits,
 {
@@ -54,11 +57,11 @@ where
     consumer: PullConsumer,
     handler: EndpointType<T>,
     #[debug(skip)]
-    response_subject_fn: Option<ResponseSubjectsGenerator>
+    response_subject_fn: Option<ResponseSubjectsGenerator>,
 }
 
 #[async_trait]
-impl<T> ConsumerExtTrait for ConsumerExt<T> 
+impl<T> ConsumerExtTrait for ConsumerExt<T>
 where
     T: EndpointTraits,
 {
@@ -92,7 +95,7 @@ struct LogInfo {
     endpoint_subject: String,
 }
 
-#[derive(Deserialize, Default)]
+#[derive(Clone, Deserialize, Default)]
 pub struct JsServiceParamsPartial {
     pub name: String,
     pub description: String,
@@ -123,9 +126,9 @@ impl JsStreamService {
         description: &str,
         version: &str,
         service_subject: &str,
-    ) -> Result<Self, async_nats::Error> 
+    ) -> Result<Self, async_nats::Error>
     where
-        Self: 'static
+        Self: 'static,
     {
         let stream = context
             .get_or_create_stream(&stream::Config {
@@ -158,7 +161,10 @@ impl JsStreamService {
         }
     }
 
-    pub async fn get_consumer_stream_info(&self, consumer_name: &str) -> Result<Option<consumer::Info>> {
+    pub async fn get_consumer_stream_info(
+        &self,
+        consumer_name: &str,
+    ) -> Result<Option<consumer::Info>> {
         if let Some(consumer_ext) = self
             .to_owned()
             .local_consumers
@@ -191,9 +197,9 @@ impl JsStreamService {
 
         Ok(ConsumerExt {
             name: consumer_ext.get_name().to_string(),
-            consumer:consumer_ext.get_consumer(),
+            consumer: consumer_ext.get_consumer(),
             handler,
-            response_subject_fn: consumer_ext.get_response()
+            response_subject_fn: consumer_ext.get_response(),
         })
     }
 
@@ -203,7 +209,7 @@ impl JsStreamService {
         endpoint_subject: &str,
         endpoint_type: EndpointType<T>,
         response_subject_fn: Option<ResponseSubjectsGenerator>,
-    ) -> Result<ConsumerExt<T>, async_nats::Error>  
+    ) -> Result<ConsumerExt<T>, async_nats::Error>
     where
         T: EndpointTraits,
     {
@@ -251,19 +257,20 @@ impl JsStreamService {
     pub async fn spawn_consumer_handler<T>(
         &self,
         consumer_name: &str,
-    ) -> Result<(), async_nats::Error> 
+    ) -> Result<(), async_nats::Error>
     where
         T: EndpointTraits,
     {
         if let Some(consumer_ext) = self
-        .to_owned()
-        .local_consumers
-        .write()
-        .await
-        .get_mut(&consumer_name.to_string())
+            .to_owned()
+            .local_consumers
+            .write()
+            .await
+            .get_mut(&consumer_name.to_string())
         {
             let consumer_details = consumer_ext.to_owned();
-            let endpoint_handler: EndpointType<T> = EndpointType::try_from(consumer_details.get_endpoint())?;
+            let endpoint_handler: EndpointType<T> =
+                EndpointType::try_from(consumer_details.get_endpoint())?;
             let maybe_response_generator = consumer_ext.get_response();
             let mut consumer = consumer_details.get_consumer();
             let messages = consumer
@@ -271,22 +278,17 @@ impl JsStreamService {
                 .heartbeat(std::time::Duration::from_secs(10))
                 .messages()
                 .await?;
-            
+
             let log_info = LogInfo {
                 prefix: self.service_log_prefix.clone(),
                 service_name: self.name.clone(),
                 service_subject: self.service_subject.clone(),
                 endpoint_name: consumer_details.get_name().to_owned(),
-                endpoint_subject: consumer
-                .info()
-                .await?
-                .config
-                .filter_subject
-                .clone()
+                endpoint_subject: consumer.info().await?.config.filter_subject.clone(),
             };
-            
+
             let service_context = self.js_context.clone();
-            
+
             tokio::spawn(async move {
                 Self::process_messages(
                     log_info,
@@ -331,20 +333,18 @@ impl JsStreamService {
 
             let result = match endpoint_handler {
                 EndpointType::Sync(ref handler) => handler(&js_msg.message),
-                EndpointType::Async(ref handler) => {
-                    handler(Arc::new(js_msg.clone().message)).await
-                }
+                EndpointType::Async(ref handler) => handler(Arc::new(js_msg.clone().message)).await,
             };
 
             let (response_bytes, maybe_subject_tags) = match result {
                 Ok(r) => {
                     let bytes: bytes::Bytes = match serde_json::to_vec(&r) {
                         Ok(r) => r.into(),
-                        Err(e) => e.to_string().into()
+                        Err(e) => e.to_string().into(),
                     };
                     let maybe_subject_tags = r.get_tags();
                     (bytes, maybe_subject_tags)
-                },
+                }
                 Err(err) => (err.to_string().into(), None),
             };
 
@@ -355,7 +355,10 @@ impl JsStreamService {
                     .read()
                     .await
                     .publish(
-                        format!("{}.{}.{}", reply, log_info.service_subject, log_info.endpoint_subject),
+                        format!(
+                            "{}.{}.{}",
+                            reply, log_info.service_subject, log_info.endpoint_subject
+                        ),
                         response_bytes.clone(),
                     )
                     .await
@@ -418,7 +421,6 @@ impl JsStreamService {
             }
         }
     }
-
 }
 
 #[cfg(feature = "tests_integration_nats")]

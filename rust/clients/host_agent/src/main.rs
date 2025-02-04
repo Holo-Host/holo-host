@@ -11,6 +11,7 @@ This client is responsible for subscribing the host agent to workload stream end
 */
 
 mod workload_manager;
+use agent_cli::DaemonzeArgs;
 use anyhow::Result;
 use clap::Parser;
 use dotenv::dotenv;
@@ -19,7 +20,6 @@ pub mod gen_leaf_server;
 pub mod host_cmds;
 pub mod support_cmds;
 use thiserror::Error;
-use util_libs::nats_js_client;
 
 #[derive(Error, Debug)]
 pub enum AgentCliError {
@@ -36,28 +36,37 @@ async fn main() -> Result<(), AgentCliError> {
 
     let cli = agent_cli::Root::parse();
     match &cli.scope {
-        Some(agent_cli::CommandScopes::Daemonize) => {
+        agent_cli::CommandScopes::Daemonize(daemonize_args) => {
             log::info!("Spawning host agent.");
-            daemonize().await?;
+            daemonize(daemonize_args).await?;
         }
-        Some(agent_cli::CommandScopes::Host { command }) => host_cmds::host_command(command)?,
-        Some(agent_cli::CommandScopes::Support { command }) => {
-            support_cmds::support_command(command)?
-        }
-        None => {
-            log::warn!("No arguments given. Spawning host agent.");
-            daemonize().await?;
-        }
+        agent_cli::CommandScopes::Host { command } => host_cmds::host_command(command)?,
+        agent_cli::CommandScopes::Support { command } => support_cmds::support_command(command)?,
     }
 
     Ok(())
 }
 
-async fn daemonize() -> Result<(), async_nats::Error> {
+async fn daemonize(args: &DaemonzeArgs) -> Result<(), async_nats::Error> {
     // let (host_pubkey, host_creds_path) = auth::initializer::run().await?;
-    let host_creds_path = nats_js_client::get_nats_client_creds("HOLO", "HPOS", "hpos");
-    let host_pubkey = "host_id_placeholder>";
-    gen_leaf_server::run(&host_creds_path).await;
-    workload_manager::run(host_pubkey, &host_creds_path).await?;
+    let _ = gen_leaf_server::run(
+        &args.nats_leafnode_client_creds_path,
+        &args.store_dir,
+        args.hub_url.clone(),
+        args.hub_tls_insecure,
+    )
+    .await;
+
+    let host_client = workload_manager::run(
+        "host_id_placeholder>",
+        &args.nats_leafnode_client_creds_path,
+        args.nats_connect_timeout_secs,
+    )
+    .await?;
+
+    // Only exit program when explicitly requested
+    tokio::signal::ctrl_c().await?;
+    
+    host_client.close().await?;
     Ok(())
 }
