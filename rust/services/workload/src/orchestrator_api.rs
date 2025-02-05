@@ -12,19 +12,19 @@ use crate::types::WorkloadResult;
 
 use super::{types::WorkloadApiResult, WorkloadServiceApi};
 use anyhow::Result;
-use core::option::Option::None;
-use std::{collections::HashMap, fmt::Debug, sync::Arc};
 use async_nats::Message;
+use bson::{self, doc, to_document};
+use core::option::Option::None;
 use mongodb::{options::UpdateModifications, Client as MongoDBClient};
 use rand::seq::SliceRandom;
 use serde::{Deserialize, Serialize};
-use bson::{self, doc, to_document};
+use std::{collections::HashMap, fmt::Debug, sync::Arc};
 use util_libs::{
-    nats_js_client::ServiceError,
     db::{
         mongodb::{IntoIndexes, MongoCollection, MongoDbAPI},
-        schemas::{self, Host, Workload, WorkloadState, WorkloadStatus}
-    }
+        schemas::{self, Host, Workload, WorkloadState, WorkloadStatus},
+    },
+    nats_js_client::ServiceError,
 };
 
 #[derive(Debug, Clone)]
@@ -39,7 +39,8 @@ impl WorkloadServiceApi for OrchestratorWorkloadApi {}
 impl OrchestratorWorkloadApi {
     pub async fn new(client: &MongoDBClient) -> Result<Self> {
         Ok(Self {
-            workload_collection: Self::init_collection(client, schemas::WORKLOAD_COLLECTION_NAME).await?,
+            workload_collection: Self::init_collection(client, schemas::WORKLOAD_COLLECTION_NAME)
+                .await?,
             host_collection: Self::init_collection(client, schemas::HOST_COLLECTION_NAME).await?,
             user_collection: Self::init_collection(client, schemas::USER_COLLECTION_NAME).await?,
         })
@@ -51,8 +52,14 @@ impl OrchestratorWorkloadApi {
             msg,
             WorkloadState::Reported,
             |workload: schemas::Workload| async move {
-                let workload_id = self.workload_collection.insert_one_into(workload.clone()).await?;
-                log::info!("Successfully added workload. MongodDB Workload ID={:?}", workload_id);
+                let workload_id = self
+                    .workload_collection
+                    .insert_one_into(workload.clone())
+                    .await?;
+                log::info!(
+                    "Successfully added workload. MongodDB Workload ID={:?}",
+                    workload_id
+                );
                 let new_workload = schemas::Workload {
                     _id: Some(workload_id),
                     ..workload
@@ -64,9 +71,9 @@ impl OrchestratorWorkloadApi {
                             desired: WorkloadState::Reported,
                             actual: WorkloadState::Reported,
                         },
-                        workload: None
+                        workload: None,
                     },
-                    maybe_response_tags: None
+                    maybe_response_tags: None,
                 })
             },
             WorkloadState::Error,
@@ -74,16 +81,28 @@ impl OrchestratorWorkloadApi {
         .await
     }
 
-    pub async fn update_workload(&self, msg: Arc<Message>) -> Result<WorkloadApiResult, ServiceError> {
+    pub async fn update_workload(
+        &self,
+        msg: Arc<Message>,
+    ) -> Result<WorkloadApiResult, ServiceError> {
         log::debug!("Incoming message for 'WORKLOAD.update'");
         self.process_request(
             msg,
             WorkloadState::Running,
             |workload: schemas::Workload| async move {
                 let workload_query = doc! { "_id":  workload._id.clone() };
-                let updated_workload_doc = to_document(&workload).map_err(|e| ServiceError::Internal(e.to_string()))?;
-                self.workload_collection.update_one_within(workload_query, UpdateModifications::Document(updated_workload_doc)).await?;
-                log::info!("Successfully updated workload. MongodDB Workload ID={:?}", workload._id);
+                let updated_workload_doc =
+                    to_document(&workload).map_err(|e| ServiceError::Internal(e.to_string()))?;
+                self.workload_collection
+                    .update_one_within(
+                        workload_query,
+                        UpdateModifications::Document(updated_workload_doc),
+                    )
+                    .await?;
+                log::info!(
+                    "Successfully updated workload. MongodDB Workload ID={:?}",
+                    workload._id
+                );
                 Ok(WorkloadApiResult {
                     result: WorkloadResult {
                         status: WorkloadStatus {
@@ -91,18 +110,20 @@ impl OrchestratorWorkloadApi {
                             desired: WorkloadState::Reported,
                             actual: WorkloadState::Reported,
                         },
-                        workload: None
+                        workload: None,
                     },
-                    maybe_response_tags: None
+                    maybe_response_tags: None,
                 })
             },
             WorkloadState::Error,
         )
         .await
-
     }
 
-    pub async fn remove_workload(&self, msg: Arc<Message>) -> Result<WorkloadApiResult, ServiceError> {
+    pub async fn remove_workload(
+        &self,
+        msg: Arc<Message>,
+    ) -> Result<WorkloadApiResult, ServiceError> {
         log::debug!("Incoming message for 'WORKLOAD.remove'");
         self.process_request(
             msg,
@@ -132,7 +153,10 @@ impl OrchestratorWorkloadApi {
     }
 
     // NB: Automatically published by the nats-db-connector
-    pub async fn handle_db_insertion(&self, msg: Arc<Message>) -> Result<WorkloadApiResult, ServiceError> {
+    pub async fn handle_db_insertion(
+        &self,
+        msg: Arc<Message>,
+    ) -> Result<WorkloadApiResult, ServiceError> {
         log::debug!("Incoming message for 'WORKLOAD.insert'");
         self.process_request(
             msg,
@@ -193,7 +217,7 @@ impl OrchestratorWorkloadApi {
                 let host_id = host._id
                     .to_owned()
                     .ok_or_else(|| ServiceError::Internal("Failed to read ._id from record".to_string()))?;
-                
+
                 // 4. Update the Workload Collection with the assigned Host ID
                 let workload_query = doc! { "_id":  workload_id.clone() };
                 let updated_workload = &Workload {
@@ -206,7 +230,7 @@ impl OrchestratorWorkloadApi {
                     "Successfully added new workload into the Workload Collection. MongodDB Workload ID={:?}",
                     updated_workload_result
                 );
-                
+
                 // 5. Update the Host Collection with the assigned Workload ID
                 let host_query = doc! { "_id":  host.clone()._id };
                 let updated_host_doc =  to_document(&Host {
@@ -241,13 +265,16 @@ impl OrchestratorWorkloadApi {
 
     // Zeeshan to take a look:
     // NB: Automatically published by the nats-db-connector
-    pub async fn handle_db_modification(&self, msg: Arc<Message>) -> Result<WorkloadApiResult, ServiceError> {
+    pub async fn handle_db_modification(
+        &self,
+        msg: Arc<Message>,
+    ) -> Result<WorkloadApiResult, ServiceError> {
         log::debug!("Incoming message for 'WORKLOAD.modify'");
-        
+
         let workload = Self::convert_msg_to_type::<schemas::Workload>(msg)?;
         log::trace!("New workload to assign. Workload={:#?}", workload);
-        
-        // TODO: ...handle the use case for the update entry change stream 
+
+        // TODO: ...handle the use case for the update entry change stream
 
         // let workload_request_bytes = serde_json::to_vec(&workload).map_err(|e| ServiceError::Internal(e.to_string()))?;
 
@@ -260,14 +287,17 @@ impl OrchestratorWorkloadApi {
         Ok(WorkloadApiResult {
             result: WorkloadResult {
                 status: success_status,
-                workload: Some(workload)
+                workload: Some(workload),
             },
-            maybe_response_tags: None
+            maybe_response_tags: None,
         })
     }
 
     // NB: Published by the Hosting Agent whenever the status of a workload changes
-    pub async fn handle_status_update(&self, msg: Arc<Message>) -> Result<WorkloadApiResult, ServiceError> {
+    pub async fn handle_status_update(
+        &self,
+        msg: Arc<Message>,
+    ) -> Result<WorkloadApiResult, ServiceError> {
         log::debug!("Incoming message for 'WORKLOAD.handle_status_update'");
 
         let workload_status = Self::convert_msg_to_type::<WorkloadResult>(msg)?.status;
@@ -278,9 +308,9 @@ impl OrchestratorWorkloadApi {
         Ok(WorkloadApiResult {
             result: WorkloadResult {
                 status: workload_status,
-                workload: None
+                workload: None,
             },
-            maybe_response_tags: None
+            maybe_response_tags: None,
         })
     }
 
@@ -294,5 +324,4 @@ impl OrchestratorWorkloadApi {
     {
         Ok(MongoCollection::<T>::new(client, schemas::DATABASE_NAME, collection_name).await?)
     }
-
 }

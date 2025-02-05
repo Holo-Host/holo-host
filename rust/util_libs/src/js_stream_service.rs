@@ -1,19 +1,20 @@
 use super::nats_js_client::EndpointType;
 
 use anyhow::{anyhow, Result};
-use std::any::Any;
 use async_nats::jetstream::consumer::{self, AckPolicy, PullConsumer};
 use async_nats::jetstream::stream::{self, Info, Stream};
 use async_nats::jetstream::Context;
 use async_trait::async_trait;
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
+use std::any::Any;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-pub type ResponseSubjectsGenerator = Arc<dyn Fn(HashMap<String, String>) -> Vec<String> + Send + Sync>;
+pub type ResponseSubjectsGenerator =
+    Arc<dyn Fn(HashMap<String, String>) -> Vec<String> + Send + Sync>;
 
 pub trait CreateTag: Send + Sync {
     fn get_tags(&self) -> HashMap<String, String>;
@@ -24,8 +25,17 @@ pub trait CreateResponse: Send + Sync {
 }
 
 pub trait EndpointTraits:
-    Serialize + for<'de> Deserialize<'de> + Send + Sync + Clone + Debug + CreateTag + CreateResponse + 'static
-{}
+    Serialize
+    + for<'de> Deserialize<'de>
+    + Send
+    + Sync
+    + Clone
+    + Debug
+    + CreateTag
+    + CreateResponse
+    + 'static
+{
+}
 
 #[async_trait]
 pub trait ConsumerExtTrait: Send + Sync + Debug + 'static {
@@ -343,8 +353,8 @@ impl JsStreamService {
                     let bytes = r.get_response();
                     let maybe_subject_tags = r.get_tags();
                     (bytes, maybe_subject_tags)
-                },
-                Err(err) => (err.to_string().into(), HashMap::new())
+                }
+                Err(err) => (err.to_string().into(), HashMap::new()),
             };
 
             // Returns a response if a reply address exists.

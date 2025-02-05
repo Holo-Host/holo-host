@@ -2,14 +2,14 @@ use super::js_stream_service::{CreateTag, JsServiceParamsPartial, JsStreamServic
 use crate::nats_server::LEAF_SERVER_DEFAULT_LISTEN_PORT;
 
 use anyhow::Result;
-use std::path::PathBuf;
-use core::marker::Sync;
 use async_nats::{jetstream, AuthError, HeaderMap, Message, ServerInfo};
+use core::marker::Sync;
 use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::fmt;
 use std::fmt::Debug;
 use std::future::Future;
+use std::path::PathBuf;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -66,7 +66,7 @@ pub struct PublishInfo {
     pub subject: String,
     pub msg_id: String,
     pub data: Vec<u8>,
-    pub headers: Option<HeaderMap> 
+    pub headers: Option<HeaderMap>,
 }
 
 #[derive(Debug)]
@@ -105,8 +105,8 @@ pub struct JsClient {
 #[derive(Clone)]
 pub enum Credentials {
     Path(std::path::PathBuf), // String = pathbuf as string
-    Password(String, String)
-}   
+    Password(String, String),
+}
 
 #[derive(Deserialize, Default)]
 pub struct NewJsClientParams {
@@ -138,7 +138,7 @@ impl JsClient {
                         .user_and_password(user, pw)
                         .connect(&p.nats_url)
                         .await?
-                },
+                }
                 Credentials::Path(cp) => {
                     let path = std::path::Path::new(&cp);
                     connect_options
@@ -147,7 +147,7 @@ impl JsClient {
                         .connect(&p.nats_url)
                         .await?
                 }
-            }
+            },
             None => connect_options.connect(&p.nats_url).await?,
         };
 
@@ -212,8 +212,10 @@ impl JsClient {
         Ok(())
     }
 
-    pub async fn check_connection(&self) -> Result<async_nats::connection::State, async_nats::Error> {
-        let conn_state =self.client.connection_state();
+    pub async fn check_connection(
+        &self,
+    ) -> Result<async_nats::connection::State, async_nats::Error> {
+        let conn_state = self.client.connection_state();
         if let async_nats::connection::State::Disconnected = conn_state {
             Err(Box::new(ErrClientDisconnected))
         } else {
@@ -224,14 +226,16 @@ impl JsClient {
     pub async fn publish(&self, payload: PublishInfo) -> Result<(), async_nats::Error> {
         let now = Instant::now();
         let result = match payload.headers {
-            Some(h) => self
-                .js
-                .publish_with_headers(payload.subject.clone(), h, payload.data.clone().into())
-                .await,
-            None => self
-                .js
-                .publish(payload.subject.clone(), payload.data.clone().into())
-                .await
+            Some(h) => {
+                self.js
+                    .publish_with_headers(payload.subject.clone(), h, payload.data.clone().into())
+                    .await
+            }
+            None => {
+                self.js
+                    .publish(payload.subject.clone(), payload.data.clone().into())
+                    .await
+            }
         };
 
         let duration = now.elapsed();
@@ -322,13 +326,14 @@ pub fn get_nsc_root_path() -> String {
 pub fn get_nats_creds_by_nsc(operator: &str, account: &str, user: &str) -> String {
     format!(
         "{}/keys/creds/{}/{}/{}.creds",
-        get_nsc_root_path(), operator, account, user
+        get_nsc_root_path(),
+        operator,
+        account,
+        user
     )
 }
 
-pub fn get_file_path_buf(
-    file_name: &str,
-) -> PathBuf {
+pub fn get_file_path_buf(file_name: &str) -> PathBuf {
     let current_dir_path = std::env::current_dir().expect("Failed to locate current directory.");
     current_dir_path.join(file_name)
 }

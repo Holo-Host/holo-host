@@ -1,9 +1,12 @@
 use std::path::PathBuf;
 
-use util_libs::{nats_js_client, nats_server::{
-    self, JetStreamConfig, LeafNodeRemote, LeafServer, LoggingOptions, LEAF_SERVER_CONFIG_PATH,
-    LEAF_SERVER_DEFAULT_LISTEN_PORT, LEAF_SERVE_NAME,
-}};
+use util_libs::{
+    nats_js_client,
+    nats_server::{
+        self, JetStreamConfig, LeafNodeRemote, LeafServer, LoggingOptions, LEAF_SERVER_CONFIG_PATH,
+        LEAF_SERVER_DEFAULT_LISTEN_PORT, LEAF_SERVE_NAME,
+    },
+};
 
 pub async fn run(user_creds_path: &Option<PathBuf>) {
     let leaf_server_remote_conn_url = nats_server::get_hub_server_url();

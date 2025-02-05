@@ -10,18 +10,18 @@ This client is responsible for subscribing the host agent to workload stream end
   - sending workload status upon request
 */
 
+pub mod agent_cli;
 mod auth;
+pub mod host_cmds;
 mod hostd;
 mod keys;
-pub mod agent_cli;
-pub mod host_cmds;
 pub mod support_cmds;
+use agent_cli::DaemonzeArgs;
 use anyhow::Result;
 use clap::Parser;
 use dotenv::dotenv;
-use thiserror::Error;
-use agent_cli::DaemonzeArgs;
 use hpos_hal::inventory::HoloInventory;
+use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum AgentCliError {
@@ -58,11 +58,14 @@ async fn main() -> Result<(), AgentCliError> {
 async fn daemonize(args: &DaemonzeArgs) -> Result<(), async_nats::Error> {
     let mut host_agent_keys = keys::Keys::try_from_storage(
         &args.nats_leafnode_client_creds_path,
-        &args.nats_leafnode_client_sys_creds_path
-    ).or_else(|_| keys::Keys::new().map_err(|e| {
-        eprintln!("Failed to create new keys: {:?}", e);
-        async_nats::Error::from(e)
-    }))?;
+        &args.nats_leafnode_client_sys_creds_path,
+    )
+    .or_else(|_| {
+        keys::Keys::new().map_err(|e| {
+            eprintln!("Failed to create new keys: {:?}", e);
+            async_nats::Error::from(e)
+        })
+    })?;
 
     // If user cred file is for the auth_guard user, run loop to authenticate host & hoster...
     if let keys::AuthCredType::Guard(_) = host_agent_keys.creds {
@@ -80,15 +83,13 @@ async fn daemonize(args: &DaemonzeArgs) -> Result<(), async_nats::Error> {
     Ok(())
 }
 
-async fn run_auth_loop(mut keys: keys::Keys) ->  Result<keys::Keys, async_nats::Error> {
+async fn run_auth_loop(mut keys: keys::Keys) -> Result<keys::Keys, async_nats::Error> {
     let mut start = chrono::Utc::now();
-    
-    // while let keys::AuthCredType::Guard(auth_creds) = keys.creds {
-        loop {
+    loop {
         log::debug!("About to run the Hosting Agent Authentication Service");
         let auth_guard_client: async_nats::Client;
         (keys, auth_guard_client) = auth::init::run(keys).await?;
-        
+
         // If authenicated creds exist, then auth call was successful.
         // Close buffer, exit loop, and return.
         if let keys::AuthCredType::Authenticated(_) = keys.creds {
@@ -101,11 +102,18 @@ async fn run_auth_loop(mut keys: keys::Keys) ->  Result<keys::Keys, async_nats::
         let now = chrono::Utc::now();
         let max_time_interval = chrono::TimeDelta::days(1);
 
-        while max_time_interval < start.signed_duration_since(now) {
-            let unauthenticated_user_diagnostics_subject = format!("DIAGNOSTICS.unauthenticated.{}", keys.host_pubkey);
+        while max_time_interval > now.signed_duration_since(start) {
+            let unauthenticated_user_diagnostics_subject =
+                format!("DIAGNOSTICS.unauthenticated.{}", keys.host_pubkey);
             let diganostics = HoloInventory::from_host();
             let payload_bytes = serde_json::to_vec(&diganostics)?;
-            if let Err(e) = auth_guard_client.publish(unauthenticated_user_diagnostics_subject, payload_bytes.into()).await {
+            if let Err(e) = auth_guard_client
+                .publish(
+                    unauthenticated_user_diagnostics_subject,
+                    payload_bytes.into(),
+                )
+                .await
+            {
                 log::error!("Encountered error when sending diganostics. Err={:#?}", e);
             };
             tokio::time::sleep(chrono::TimeDelta::hours(1).to_std()?).await;

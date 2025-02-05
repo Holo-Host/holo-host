@@ -1,3 +1,4 @@
+use crate::nats_js_client::ServiceError;
 use anyhow::Result;
 use async_trait::async_trait;
 use bson::{self, doc, Document};
@@ -7,7 +8,6 @@ use mongodb::results::{DeleteResult, UpdateResult};
 use mongodb::{options::IndexOptions, Client, Collection, IndexModel};
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
-use crate::nats_js_client::ServiceError;
 
 #[async_trait]
 pub trait MongoDbAPI<T>
@@ -23,7 +23,7 @@ where
     async fn update_one_within(
         &self,
         query: Document,
-        updated_doc: UpdateModifications
+        updated_doc: UpdateModifications,
     ) -> Result<UpdateResult, Self::Error>;
     async fn delete_one_from(&self, query: Document) -> Result<DeleteResult, Self::Error>;
     async fn delete_all_from(&self) -> Result<DeleteResult, Self::Error>;
@@ -138,7 +138,7 @@ where
     async fn update_one_within(
         &self,
         query: Document,
-        updated_doc: UpdateModifications
+        updated_doc: UpdateModifications,
     ) -> Result<UpdateResult, Self::Error> {
         self.collection
             .update_one(query, updated_doc)

@@ -18,8 +18,10 @@ use util_libs::{
     nats_js_client::{self, Credentials, EndpointType},
 };
 use workload::{
-    WorkloadServiceApi, host_api::HostWorkloadApi, WORKLOAD_SRV_DESC, WORKLOAD_SRV_NAME, WORKLOAD_SRV_SUBJ, WORKLOAD_SRV_VERSION,
-    types::{WorkloadServiceSubjects, WorkloadApiResult}
+    host_api::HostWorkloadApi,
+    types::{WorkloadApiResult, WorkloadServiceSubjects},
+    WorkloadServiceApi, WORKLOAD_SRV_DESC, WORKLOAD_SRV_NAME, WORKLOAD_SRV_SUBJ,
+    WORKLOAD_SRV_VERSION,
 };
 
 const HOST_AGENT_CLIENT_NAME: &str = "Host Agent";
@@ -87,13 +89,14 @@ pub async fn run(
     // ==================== Setup API & Register Endpoints ====================
     // Instantiate the Workload API
     let workload_api = HostWorkloadApi::default();
-    
+
     // Register Workload Streams for Host Agent to consume and process
     // NB: Subjects are published by orchestrator
     let workload_start_subject = serde_json::to_string(&WorkloadServiceSubjects::Start)?;
     let workload_send_status_subject = serde_json::to_string(&WorkloadServiceSubjects::SendStatus)?;
     let workload_uninstall_subject = serde_json::to_string(&WorkloadServiceSubjects::Uninstall)?;
-    let workload_update_installed_subject = serde_json::to_string(&WorkloadServiceSubjects::UpdateInstalled)?;
+    let workload_update_installed_subject =
+        serde_json::to_string(&WorkloadServiceSubjects::UpdateInstalled)?;
 
     let workload_service = host_workload_client
         .get_js_service(WORKLOAD_SRV_NAME.to_string())
@@ -104,12 +107,12 @@ pub async fn run(
 
     workload_service
         .add_consumer::<WorkloadApiResult>(
-            "start_workload", // consumer name
+            "start_workload",                                       // consumer name
             &format!("{}.{}", host_pubkey, workload_start_subject), // consumer stream subj
             EndpointType::Async(
                 workload_api.call(|api: HostWorkloadApi, msg: Arc<Message>| async move {
                     api.start_workload(msg).await
-                })
+                }),
             ),
             None,
         )
@@ -122,19 +125,6 @@ pub async fn run(
             EndpointType::Async(
                 workload_api.call(|api: HostWorkloadApi, msg: Arc<Message>| async move {
                     api.update_workload(msg).await
-                })
-            ),
-            None,
-        )
-        .await?;
-
-    workload_service
-        .add_consumer::<WorkloadApiResult>(
-            "uninstall_workload", // consumer name
-            &format!("{}.{}", host_pubkey, workload_uninstall_subject), // consumer stream subj
-            EndpointType::Async(
-                workload_api.call(|api: HostWorkloadApi, msg: Arc<Message>| async move {
-                    api.uninstall_workload(msg).await
                 }),
             ),
             None,
@@ -143,13 +133,26 @@ pub async fn run(
 
     workload_service
         .add_consumer::<WorkloadApiResult>(
-            "send_workload_status", // consumer name
+            "uninstall_workload",                                       // consumer name
+            &format!("{}.{}", host_pubkey, workload_uninstall_subject), // consumer stream subj
+            EndpointType::Async(workload_api.call(
+                |api: HostWorkloadApi, msg: Arc<Message>| async move {
+                    api.uninstall_workload(msg).await
+                },
+            )),
+            None,
+        )
+        .await?;
+
+    workload_service
+        .add_consumer::<WorkloadApiResult>(
+            "send_workload_status",                                       // consumer name
             &format!("{}.{}", host_pubkey, workload_send_status_subject), // consumer stream subj
-            EndpointType::Async(
-                workload_api.call(|api: HostWorkloadApi, msg: Arc<Message>| async move {
+            EndpointType::Async(workload_api.call(
+                |api: HostWorkloadApi, msg: Arc<Message>| async move {
                     api.send_workload_status(msg).await
-                })
-            ),
+                },
+            )),
             None,
         )
         .await?;

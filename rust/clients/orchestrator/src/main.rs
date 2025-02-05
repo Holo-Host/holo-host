@@ -1,5 +1,4 @@
 mod auth;
-mod utils;
 mod workloads;
 use anyhow::Result;
 use dotenv::dotenv;
@@ -9,7 +8,7 @@ use tokio::task::spawn;
 async fn main() -> Result<(), async_nats::Error> {
     dotenv().ok();
     env_logger::init();
-    spawn(async move { 
+    spawn(async move {
         if let Err(e) = auth::run().await {
             log::error!("{}", e)
         }
@@ -17,7 +16,7 @@ async fn main() -> Result<(), async_nats::Error> {
     spawn(async move {
         if let Err(e) = workloads::run().await {
             log::error!("{}", e)
-        } 
+        }
     });
     Ok(())
 }
