@@ -38,18 +38,12 @@ async fn main() -> Result<(), AgentCliError> {
 
     let cli = agent_cli::Root::parse();
     match &cli.scope {
-        Some(agent_cli::CommandScopes::Daemonize(daemonize_args)) => {
+        agent_cli::CommandScopes::Daemonize(daemonize_args) => {
             log::info!("Spawning host agent.");
             daemonize(daemonize_args).await?;
         }
-        Some(agent_cli::CommandScopes::Host { command }) => host_cmds::host_command(command)?,
-        Some(agent_cli::CommandScopes::Support { command }) => {
-            support_cmds::support_command(command)?
-        }
-        None => {
-            log::warn!("No arguments given. Spawning host agent.");
-            daemonize(&Default::default()).await?;
-        }
+        agent_cli::CommandScopes::Host { command } => host_cmds::host_command(command)?,
+        agent_cli::CommandScopes::Support { command } => support_cmds::support_command(command)?,
     }
 
     Ok(())
@@ -73,13 +67,26 @@ async fn daemonize(args: &DaemonzeArgs) -> Result<(), async_nats::Error> {
     }
 
     // Once authenticated, start leaf server and run workload api calls.
-    hostd::gen_leaf_server::run(&host_agent_keys.get_host_creds_path()).await;
-    hostd::workloads::run(
+    let _ = hostd::gen_leaf_server::run(
+        &host_agent_keys.get_host_creds_path(),
+        &args.store_dir,
+        args.hub_url.clone(),
+        args.hub_tls_insecure,
+    ).await;
+    
+    let host_workload_client = hostd::workloads::run(
         &host_agent_keys.host_pubkey,
         &host_agent_keys.get_host_creds_path(),
         args.nats_connect_timeout_secs,
     )
     .await?;
+
+    // Only exit program when explicitly requested
+    tokio::signal::ctrl_c().await?;
+
+    // Close client and drain internal buffer before exiting to make sure all messages are sent
+    host_workload_client.close().await?;
+
     Ok(())
 }
 

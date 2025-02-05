@@ -3,6 +3,8 @@
     NB: This setup expects the `nats-server` binary to be locally installed and accessible.
 -------- */
 use anyhow::Context;
+use serde::Serialize;
+use serde_with::skip_serializing_none;
 use std::fmt::Debug;
 use std::fs::File;
 use std::io::Write;
@@ -15,9 +17,9 @@ pub const LEAF_SERVE_NAME: &str = "test_leaf_server";
 pub const LEAF_SERVER_CONFIG_PATH: &str = "test_leaf_server.conf";
 pub const LEAF_SERVER_DEFAULT_LISTEN_PORT: u16 = 4111;
 
-#[derive(Debug, Clone)]
+#[derive(Serialize, Debug, Clone)]
 pub struct JetStreamConfig {
-    pub store_dir: String,
+    pub store_dir: PathBuf,
     pub max_memory_store: u64,
     pub max_file_store: u64,
 }
@@ -29,10 +31,27 @@ pub struct LoggingOptions {
     pub longtime: bool,
 }
 
-#[derive(Debug, Clone)]
+#[skip_serializing_none]
+#[derive(Debug, Clone, Serialize)]
 pub struct LeafNodeRemote {
     pub url: String,
-    pub credentials_path: Option<PathBuf>,
+    pub credentials: Option<PathBuf>,
+    pub tls: LeafNodeRemoteTlsConfig,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct LeafNodeRemoteTlsConfig {
+    pub insecure: bool,
+    pub handshake_first: bool,
+}
+
+impl Default for LeafNodeRemoteTlsConfig {
+    fn default() -> Self {
+        Self {
+            insecure: false,
+            handshake_first: true,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -45,6 +64,24 @@ pub struct LeafServer {
     pub logging: LoggingOptions,
     leaf_node_remotes: Vec<LeafNodeRemote>,
     server_handle: Arc<Mutex<Option<Child>>>,
+}
+
+// TODO: consider merging this with the `LeafServer` struct
+#[derive(Serialize)]
+struct NatsConfig {
+    server_name: String,
+    host: String,
+    port: u16,
+    jetstream: JetStreamConfig,
+    leafnodes: LeafNodes,
+    debug: bool,
+    trace: bool,
+    logtime: bool,
+}
+
+#[derive(Serialize)]
+struct LeafNodes {
+    remotes: Vec<LeafNodeRemote>,
 }
 
 impl LeafServer {
@@ -75,81 +112,35 @@ impl LeafServer {
     pub async fn run(&self) -> Result<(), Box<dyn std::error::Error>> {
         let mut config_file = File::create(&self.config_path)?;
 
-        // Generate logging options
-        let logging_config = format!(
-            "debug: {}\ntrace: {}\nlogtime: {}\n",
-            self.logging.debug, self.logging.trace, self.logging.longtime
-        );
+        let config = NatsConfig {
+            server_name: self.name.clone(),
+            host: self.host.clone(),
+            port: self.port,
+            jetstream: self.jetstream_config.clone(),
+            leafnodes: LeafNodes {
+                remotes: self.leaf_node_remotes.clone(),
+            },
 
-        // Generate the "leafnodes" block
-        // ..and only includes the credentials file whenever the username/password auth is *not* being used
-        // NB: Nats does not allow combining auths for same port.
-        let leafnodes_config = self
-            .leaf_node_remotes
-            .iter()
-            .map(|remote| {
-                if let Some(credentials_path) = &remote.credentials_path {
-                    format!(
-                        r#"
-        {{
-            url: "{}",
-            credentials: "{}",
-        }}
-                    "#,
-                        remote.url,
-                        credentials_path.as_path().as_os_str().to_string_lossy(), // Unwrap is safe here as the check for `Some()` wraps this condition
-                    )
-                } else {
-                    format!(
-                        r#"
-        {{
-            url: "{}",
-        }}
-                    "#,
-                        remote.url
-                    )
-                }
-            })
-            .collect::<Vec<String>>()
-            .join(",\n");
+            debug: self.logging.debug,
+            trace: self.logging.trace,
+            logtime: self.logging.longtime,
+        };
 
-        // Write the full config file
-        write!(
-            config_file,
-            r#"
-server_name: {}
-listen: "{}:{}"
+        let config_str = serde_json::to_string_pretty(&config)?;
 
-jetstream {{
-    domain: "leaf",
-    store_dir: "{}",
-    max_mem: {},
-    max_file: {}
-}}
+        log::trace!("NATS leaf config:\n{config_str}");
 
-leafnodes {{
-    remotes = [
-        {leafnodes_config}
-    ]
-}}
-
-{logging_config}
-"#,
-            self.name,
-            self.host,
-            self.port,
-            self.jetstream_config.store_dir,
-            self.jetstream_config.max_memory_store,
-            self.jetstream_config.max_file_store,
-        )?;
+        config_file
+            .write_all(config_str.as_bytes())
+            .context("writing config to config at {config_path}")?;
 
         // Run the server with the generated config
         let child = Command::new("nats-server")
             .arg("-c")
             .arg(&self.config_path)
-            // TODO: direct these to a file or make it conditional. this is silenced because it was very verbose
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
+            // TODO: make this configurable and give options to log it to a seperate log file
+            .stdout(Stdio::inherit())
+            .stderr(Stdio::inherit())
             .spawn()
             .context("Failed to start NATS server")?;
 
@@ -182,14 +173,6 @@ leafnodes {{
 
         Ok(())
     }
-}
-
-pub fn get_hub_server_url() -> String {
-    const VAR: &str = "NATS_HUB_SERVER_URL";
-    std::env::var(VAR)
-        .context(format!("reading env var {VAR}"))
-        .unwrap()
-        .to_string()
 }
 
 #[cfg(feature = "tests_integration_nats")]
