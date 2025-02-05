@@ -56,14 +56,14 @@ impl Keys {
     pub fn new() -> Result<Self> {
         // let host_key_path = format!("{}/user_host_{}.nk", &get_nats_creds_by_nsc("HOLO", "HPOS", "host"), host_pubkey);
         let host_key_path =
-            std::env::var("HOST_KEY_PATH").context("Cannot read HOST_KEY_PATH from env var")?;
+            std::env::var("HOST_NKEY_PATH").context("Cannot read HOST_NKEY_PATH from env var")?;
         let host_kp = KeyPair::new_user();
         write_keypair_to_file(get_file_path_buf(&host_key_path), host_kp.clone())?;
         let host_pk = host_kp.public_key();
 
         // let sys_key_path = format!("{}/user_sys_host_{}.nk", &get_nats_creds_by_nsc("HOLO", "HPOS", "host"), host_pubkey);
         let sys_key_path =
-            std::env::var("SYS_KEY_PATH").context("Cannot read SYS_KEY_PATH from env var")?;
+            std::env::var("SYS_NKEY_PATH").context("Cannot read SYS_NKEY_PATH from env var")?;
         let local_sys_kp = KeyPair::new_user();
         write_keypair_to_file(get_file_path_buf(&sys_key_path), local_sys_kp.clone())?;
         let local_sys_pk = local_sys_kp.public_key();
@@ -86,13 +86,13 @@ impl Keys {
         maybe_sys_creds_path: &Option<PathBuf>,
     ) -> Result<Self> {
         let host_key_path =
-            std::env::var("HOST_KEY_PATH").context("Cannot read HOST_KEY_PATH from env var")?;
+            std::env::var("HOST_NKEY_PATH").context("Cannot read HOST_NKEY_PATH from env var")?;
         let host_keypair =
             try_read_keypair_from_file(get_file_path_buf(&host_key_path.clone()))?
                 .ok_or_else(|| anyhow!("Host keypair not found at path {:?}", host_key_path))?;
         let host_pk = host_keypair.public_key();
         let sys_key_path =
-            std::env::var("SYS_KEY_PATH").context("Cannot read SYS_KEY_PATH from env var")?;
+            std::env::var("SYS_NKEY_PATH").context("Cannot read SYS_NKEY_PATH from env var")?;
         let host_creds_path = maybe_host_creds_path
             .to_owned()
             .unwrap_or_else(|| get_file_path_buf(&get_nats_creds_by_nsc("HOLO", "HPOS", "host")));

@@ -7,6 +7,7 @@ use serde::Deserialize;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::io::Write;
+use std::sync::Arc;
 use std::time::SystemTime;
 use util_libs::nats_js_client::ServiceError;
 
@@ -46,7 +47,7 @@ pub fn hash_claim(claims_str: &str) -> Vec<u8> {
 }
 
 // Convert claims to JWT/Token
-pub fn encode_jwt(claims_str: &str, signing_kp: &KeyPair) -> Result<String> {
+pub fn encode_jwt(claims_str: &str, signing_kp: &Arc<KeyPair>) -> Result<String> {
     const JWT_HEADER: &str = r#"{"typ":"JWT","alg":"ed25519-nkey"}"#;
     let b64_header: String = BASE64URL_NOPAD.encode(JWT_HEADER.as_bytes());
     println!("encoded b64 header: {:?}", b64_header);
@@ -138,7 +139,7 @@ where
 }
 
 pub fn generate_auth_response_claim(
-    auth_signing_account_keypair: KeyPair,
+    auth_signing_account_keypair: Arc<KeyPair>,
     auth_signing_account_pubkey: String,
     auth_root_account_pubkey: String,
     permissions: types::Permissions,

@@ -56,9 +56,9 @@ impl AuthServiceApi {
     pub async fn handle_auth_callout(
         &self,
         msg: Arc<Message>,
-        auth_signing_account_keypair: KeyPair,
+        auth_signing_account_keypair: Arc<KeyPair>,
         auth_signing_account_pubkey: String,
-        auth_root_account_keypair: KeyPair,
+        auth_root_account_keypair: Arc<KeyPair>,
         auth_root_account_pubkey: String,
     ) -> Result<AuthApiResult, ServiceError> {
         // 1. Verify expected data was received

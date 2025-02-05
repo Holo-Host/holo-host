@@ -22,4 +22,4 @@ rust/*/*/leaf_server.conf
 rust/*/*/resolver.conf
 leaf_server.conf
 .local
-
+rust/*/*/*/test_admin.creds

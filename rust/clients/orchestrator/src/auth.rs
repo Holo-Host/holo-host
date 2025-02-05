@@ -26,21 +26,40 @@ use authentication::{
     AuthServiceApi, AUTH_SRV_DESC, AUTH_SRV_NAME, AUTH_SRV_SUBJ, AUTH_SRV_VERSION,
 };
 use mongodb::{options::ClientOptions, Client as MongoDBClient};
+use nkeys::KeyPair;
 use std::{collections::HashMap, sync::Arc, time::Duration};
 use util_libs::{
     db::mongodb::get_mongodb_url,
     js_stream_service::{JsServiceParamsPartial, ResponseSubjectsGenerator},
-    nats_js_client::{self, EndpointType, JsClient, NewJsClientParams},
+    nats_js_client::{
+        get_event_listeners, get_file_path_buf, get_nats_url, with_event_listeners, Credentials,
+        EndpointType, JsClient, NewJsClientParams,
+    },
 };
 
 pub const ORCHESTRATOR_AUTH_CLIENT_NAME: &str = "Orchestrator Auth Agent";
 pub const ORCHESTRATOR_AUTH_CLIENT_INBOX_PREFIX: &str = "_auth_inbox_orchestrator";
 
 pub async fn run() -> Result<(), async_nats::Error> {
-    // ==================== Setup NATS ====================
-    let nats_url = nats_js_client::get_nats_url();
-    let event_listeners = nats_js_client::get_event_listeners();
+    let admin_account_creds_path = get_file_path_buf("test_admin.creds");
+    println!(
+        " >>>> admin_account_creds_path: {:#?} ",
+        admin_account_creds_path
+    );
 
+    // Root Keypair associated with AUTH account
+    let root_account_keypair = Arc::new(KeyPair::from_seed("<TEST_SK_SEED>")?);
+    let root_account_pubkey = root_account_keypair.public_key().clone();
+
+    // AUTH Account Signing Keypair associated with the `auth` user
+    let signing_account_keypair = Arc::new(KeyPair::from_seed("<TEST_SK_SEED>")?);
+    let signing_account_pubkey = signing_account_keypair.public_key().clone();
+    println!(
+        ">>>>>>>>> signing_account pubkey: {:?}",
+        signing_account_pubkey
+    );
+
+    // ==================== Setup NATS ====================
     // Setup JS Stream Service
     let auth_stream_service_params = JsServiceParamsPartial {
         name: AUTH_SRV_NAME.to_string(),
@@ -50,12 +69,12 @@ pub async fn run() -> Result<(), async_nats::Error> {
     };
 
     let orchestrator_auth_client = JsClient::new(NewJsClientParams {
-        nats_url,
+        nats_url: get_nats_url(),
         name: ORCHESTRATOR_AUTH_CLIENT_NAME.to_string(),
         inbox_prefix: ORCHESTRATOR_AUTH_CLIENT_INBOX_PREFIX.to_string(),
         service_params: vec![auth_stream_service_params],
-        credentials: None,
-        listeners: vec![nats_js_client::with_event_listeners(event_listeners)],
+        credentials: Some(Credentials::Path(admin_account_creds_path)),
+        listeners: vec![with_event_listeners(get_event_listeners())],
         ping_interval: Some(Duration::from_secs(10)),
         request_timeout: Some(Duration::from_secs(5)),
     })
@@ -71,7 +90,7 @@ pub async fn run() -> Result<(), async_nats::Error> {
     // Generate the Auth API with access to db
     let auth_api = AuthServiceApi::new(&client).await?;
 
-    // Register Auth Stream for Orchestrator to consume and proceess
+    // Register Auth Stream for Orchestrator to consume and process
     let auth_service = orchestrator_auth_client
         .get_js_service(AUTH_SRV_NAME.to_string())
         .await
@@ -81,8 +100,35 @@ pub async fn run() -> Result<(), async_nats::Error> {
 
     auth_service
         .add_consumer::<AuthApiResult>(
-            "validate",                  // consumer name
-            types::AUTH_SERVICE_SUBJECT, // consumer stream subj
+            "auth_callout",
+            types::AUTH_CALLOUT_SUBJECT, // consumer stream subj
+            EndpointType::Async(auth_api.call({
+                move |api: AuthServiceApi, msg: Arc<Message>| {
+                    let signing_account_kp = Arc::clone(&signing_account_keypair);
+                    let signing_account_pk = signing_account_pubkey.clone();
+                    let root_account_kp = Arc::clone(&root_account_keypair);
+                    let root_account_pk = root_account_pubkey.clone();
+
+                    async move {
+                        api.handle_auth_callout(
+                            msg,
+                            signing_account_kp,
+                            signing_account_pk,
+                            root_account_kp,
+                            root_account_pk,
+                        )
+                        .await
+                    }
+                }
+            })),
+            None,
+        )
+        .await?;
+
+    auth_service
+        .add_consumer::<AuthApiResult>(
+            "authorize_host_and_sys",
+            types::AUTHORIZE_SUBJECT, // consumer stream subj
             EndpointType::Async(auth_api.call(
                 |api: AuthServiceApi, msg: Arc<Message>| async move {
                     api.handle_handshake_request(msg).await
