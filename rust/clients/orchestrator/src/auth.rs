@@ -18,7 +18,7 @@ This client is responsible for:
     - keeping service running until explicitly cancelled out
 */
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use async_nats::Message;
 use authentication::{
     self,
@@ -27,6 +27,9 @@ use authentication::{
 };
 use mongodb::{options::ClientOptions, Client as MongoDBClient};
 use nkeys::KeyPair;
+use std::fs::File;
+use std::io::Read;
+use std::path::PathBuf;
 use std::{collections::HashMap, sync::Arc, time::Duration};
 use util_libs::{
     db::mongodb::get_mongodb_url,
@@ -48,11 +51,40 @@ pub async fn run() -> Result<(), async_nats::Error> {
     );
 
     // Root Keypair associated with AUTH account
-    let root_account_keypair = Arc::new(KeyPair::from_seed("<TEST_SK_SEED>")?);
+    let root_account_key_path = std::env::var("ROOT_AUTH_NKEY_PATH")
+        .context("Cannot read ROOT_AUTH_NKEY_PATH from env var")?;
+    let root_account_keypair = Arc::new(
+        try_read_keypair_from_file(get_file_path_buf(&root_account_key_path.clone()))?.ok_or_else(
+            || {
+                anyhow!(
+                    "Root AUTH Account keypair not found at path {:?}",
+                    root_account_key_path
+                )
+            },
+        )?,
+    );
+    // TODO: REMOVE
+    // let root_account_keypair = Arc::new(KeyPair::from_seed(
+    //     "<>",
+    // )?);
     let root_account_pubkey = root_account_keypair.public_key().clone();
 
     // AUTH Account Signing Keypair associated with the `auth` user
-    let signing_account_keypair = Arc::new(KeyPair::from_seed("<TEST_SK_SEED>")?);
+    let signing_account_key_path = std::env::var("SIGNING_AUTH_NKEY_PATH")
+        .context("Cannot read SIGNING_AUTH_NKEY_PATH from env var")?;
+    let signing_account_keypair = Arc::new(
+        try_read_keypair_from_file(get_file_path_buf(&signing_account_key_path.clone()))?
+            .ok_or_else(|| {
+                anyhow!(
+                    "Signing AUTH Account keypair not found at path {:?}",
+                    signing_account_key_path
+                )
+            })?,
+    );
+    // TODO: REMOVE
+    // let signing_account_keypair = Arc::new(KeyPair::from_seed(
+    //     "<>",
+    // )?);
     let signing_account_pubkey = signing_account_keypair.public_key().clone();
     println!(
         ">>>>>>>>> signing_account pubkey: {:?}",
@@ -158,4 +190,35 @@ pub fn create_callback_subject_to_host(tag_name: String) -> ResponseSubjectsGene
         log::error!("Auth Error: Failed to find {}. Unable to send orchestrator response to hosting agent for subject 'AUTH.validate'. Fwding response to `AUTH.ERROR.INBOX`.", tag_name);
         vec!["AUTH.ERROR.INBOX".to_string()]
     })
+}
+
+fn try_read_keypair_from_file(key_file_path: PathBuf) -> Result<Option<KeyPair>> {
+    match try_read_from_file(key_file_path)? {
+        Some(kps) => Ok(Some(KeyPair::from_seed(&kps)?)),
+        None => Ok(None),
+    }
+}
+
+fn try_read_from_file(file_path: PathBuf) -> Result<Option<String>> {
+    match file_path.try_exists() {
+        Ok(link_is_ok) => {
+            if !link_is_ok {
+                return Err(anyhow!(
+                    "Failed to read path {:?}. Found broken sym link.",
+                    file_path
+                ));
+            }
+
+            let mut file_content = File::open(&file_path)
+                .context(format!("Failed to open config file {:#?}", file_path))?;
+
+            let mut s = String::new();
+            file_content.read_to_string(&mut s)?;
+            Ok(Some(s.trim().to_string()))
+        }
+        Err(_) => {
+            log::debug!("No user file found at {:?}.", file_path);
+            Ok(None)
+        }
+    }
 }

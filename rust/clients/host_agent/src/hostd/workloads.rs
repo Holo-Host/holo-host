@@ -27,7 +27,6 @@ use workload::{
 const HOST_AGENT_CLIENT_NAME: &str = "Host Agent";
 const HOST_AGENT_INBOX_PREFIX: &str = "_workload_inbox";
 
-// TODO: Use _host_creds_path for auth once we add in the more resilient auth pattern.
 pub async fn run(
     host_pubkey: &str,
     host_creds_path: &Option<PathBuf>,

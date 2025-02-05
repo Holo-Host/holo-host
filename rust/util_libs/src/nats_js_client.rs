@@ -313,7 +313,7 @@ where
 // TODO: there's overlap with the NATS_LISTEN_PORT. refactor this to e.g. read NATS_LISTEN_HOST and NATS_LISTEN_PORT
 pub fn get_nats_url() -> String {
     std::env::var("NATS_URL").unwrap_or_else(|_| {
-        let default = format!("127.0.0.1:{}", LEAF_SERVER_DEFAULT_LISTEN_PORT);
+        let default = format!("127.0.0.1:{}", LEAF_SERVER_DEFAULT_LISTEN_PORT); // Shouldn't this be the 'NATS_LISTEN_PORT'?
         log::debug!("using default for NATS_URL: {default}");
         default
     })

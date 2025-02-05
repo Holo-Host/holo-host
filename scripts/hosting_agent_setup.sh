@@ -58,18 +58,6 @@ else
             # Add SYS Account
             nsc import account --file $SYS_ACCOUNT_JWT_PATH
             echo "SYS account added to local nsc successfully."
-
-            # TODO: For if/when add local sys user (that's) associated the Orchestrator SYS Account
-            # if [ ! -d "$SYS_USER_PATH" ]; then
-            #     echo "WARNING: SYS user JWT not found. Unable to add the SYS user as a locally trusted user."
-            # else
-            #     echo "Found the $SYS_USER_PATH usr to local chain reference."
-            #     # Add SYS user
-            #     nsc import user --file $SYS_USER_PATH
-            #     # Create SYS user cred file and add to shared creds dir
-            #     nsc generate creds --name $SYS_USER_NAME --account $SYS_ACCOUNT > $SHARED_CREDS_DIR/$SYS_USER_NAME.creds
-            #     echo "SYS user added to local nsc successfully."
-            # fi
         fi
 
         if [ ! -d "$AUTH_GUARD_USER_PATH" ]; then

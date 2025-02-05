@@ -54,14 +54,12 @@ pub struct Keys {
 
 impl Keys {
     pub fn new() -> Result<Self> {
-        // let host_key_path = format!("{}/user_host_{}.nk", &get_nats_creds_by_nsc("HOLO", "HPOS", "host"), host_pubkey);
         let host_key_path =
             std::env::var("HOST_NKEY_PATH").context("Cannot read HOST_NKEY_PATH from env var")?;
         let host_kp = KeyPair::new_user();
         write_keypair_to_file(get_file_path_buf(&host_key_path), host_kp.clone())?;
         let host_pk = host_kp.public_key();
 
-        // let sys_key_path = format!("{}/user_sys_host_{}.nk", &get_nats_creds_by_nsc("HOLO", "HPOS", "host"), host_pubkey);
         let sys_key_path =
             std::env::var("SYS_NKEY_PATH").context("Cannot read SYS_NKEY_PATH from env var")?;
         let local_sys_kp = KeyPair::new_user();
@@ -267,6 +265,7 @@ fn write_keypair_to_file(key_file_path: PathBuf, keypair: KeyPair) -> Result<()>
 }
 
 fn write_to_file(file_path: PathBuf, data: &[u8]) -> Result<()> {
+    // TODO: ensure dirs already exist and create them if not...
     let mut file = File::create(&file_path)?;
     file.write_all(data)?;
     Ok(())
