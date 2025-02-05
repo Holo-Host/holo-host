@@ -333,7 +333,7 @@ pub fn get_nats_creds_by_nsc(operator: &str, account: &str, user: &str) -> Strin
     )
 }
 
-pub fn get_file_path_buf(file_name: &str) -> PathBuf {
+pub fn get_path_buf_from_current_dir(file_name: &str) -> PathBuf {
     let current_dir_path = std::env::current_dir().expect("Failed to locate current directory.");
     current_dir_path.join(file_name)
 }

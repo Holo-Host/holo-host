@@ -17,12 +17,14 @@ This client is responsible for:
 use anyhow::{anyhow, Result};
 use async_nats::Message;
 use mongodb::{options::ClientOptions, Client as MongoDBClient};
+use std::path::PathBuf;
 use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::str::FromStr;
 use util_libs::{
     db::mongodb::get_mongodb_url,
     js_stream_service::{JsServiceParamsPartial, ResponseSubjectsGenerator},
     nats_js_client::{
-        self, get_event_listeners, get_file_path_buf, get_nats_creds_by_nsc, get_nats_url,
+        self, get_event_listeners, get_nats_creds_by_nsc, get_nats_url,
         Credentials, EndpointType, JsClient, NewJsClientParams,
     },
 };
@@ -33,7 +35,7 @@ use workload::{
     WORKLOAD_SRV_VERSION,
 };
 
-const ORCHESTRATOR_WORKLOAD_CLIENT_NAME: &str = "Orchestrator Workload Agent";
+const ORCHESTRATOR_WORKLOAD_CLIENT_NAME: &str = "Orchestrator Workload Manager";
 const ORCHESTRATOR_WORKLOAD_CLIENT_INBOX_PREFIX: &str = "_workload_inbox_orchestrator";
 
 pub fn create_callback_subject_to_host(
@@ -61,11 +63,11 @@ pub fn create_callback_subject_to_host(
 pub async fn run() -> Result<(), async_nats::Error> {
     // ==================== Setup NATS ====================
     let nats_url = get_nats_url();
-    let creds_path = Credentials::Path(get_file_path_buf(&get_nats_creds_by_nsc(
+    let creds_path = Credentials::Path(PathBuf::from_str(&get_nats_creds_by_nsc(
         "HOLO",
-        "WORKLOAD",
-        "orchestrator",
-    )));
+        "ADMIN",
+        "admin",
+    ))?);
     let event_listeners = get_event_listeners();
 
     // Setup JS Stream Service
