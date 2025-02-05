@@ -2,8 +2,7 @@ use std::path::PathBuf;
 
 use anyhow::Context;
 use tempfile::tempdir;
-use util_libs::
-    nats_server::{
+use util_libs::nats_server::{
     JetStreamConfig, LeafNodeRemote, LeafNodeRemoteTlsConfig, LeafServer, LoggingOptions,
     LEAF_SERVER_CONFIG_PATH, LEAF_SERVER_DEFAULT_LISTEN_PORT, LEAF_SERVE_NAME,
 };

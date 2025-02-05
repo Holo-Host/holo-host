@@ -72,8 +72,9 @@ async fn daemonize(args: &DaemonzeArgs) -> Result<(), async_nats::Error> {
         &args.store_dir,
         args.hub_url.clone(),
         args.hub_tls_insecure,
-    ).await;
-    
+    )
+    .await;
+
     let host_workload_client = hostd::workloads::run(
         &host_agent_keys.host_pubkey,
         &host_agent_keys.get_host_creds_path(),
