@@ -6,7 +6,7 @@ pub fn _get_resolver_path() -> String {
     std::env::var("RESOLVER_FILE_PATH").unwrap_or_else(|_| "./resolver.conf".to_string())
 }
 
-pub fn get_orchestrator_credentials_dir_path() -> String {
+pub fn _get_orchestrator_credentials_dir_path() -> String {
     std::env::var("ORCHESTRATOR_CREDENTIALS_DIR_PATH").unwrap_or_else(|e| panic!("Failed to locate 'ORCHESTRATOR_CREDENTIALS_DIR_PATH' env var.  Was it set?  Error={}", e))
 }
 

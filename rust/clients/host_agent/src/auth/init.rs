@@ -16,53 +16,59 @@ This client is responsible for:
     - returning the host pubkey and closing client cleanly
 */
 
-use crate::{auth::config::HosterConfig, keys::Keys};
+use super::utils::json_to_base64;
+use crate::{auth::config::HosterConfig, keys::{AuthCredType, Keys}};
 use anyhow::Result;
 use std::str::FromStr;
+use futures::StreamExt;
 use async_nats::{HeaderMap, HeaderName, HeaderValue};
-use authentication::{
-    types::{AuthApiResult, AuthRequestPayload, AuthGuardPayload}, utils::{handle_internal_err, write_file} // , AUTH_SRV_DESC, AUTH_SRV_NAME, AUTH_SRV_SUBJ, AUTH_SRV_VERSION
-};
-use std::time::Duration;
+use authentication::types::{AuthApiResult, AuthGuardPayload, AuthJWTPayload, AuthResult}; // , AUTH_SRV_DESC, AUTH_SRV_NAME, AUTH_SRV_SUBJ, AUTH_SRV_VERSION
 use textnonce::TextNonce;
-use util_libs:: nats_js_client::{self, get_nats_creds_by_nsc, get_file_path_buf, Credentials};
+use hpos_hal::inventory::HoloInventory;
+use util_libs:: nats_js_client;
 
-pub const HOST_AUTH_CLIENT_NAME: &str = "Host Auth";
+// pub const HOST_AUTH_CLIENT_NAME: &str = "Host Auth";
 pub const HOST_AUTH_CLIENT_INBOX_PREFIX: &str = "_AUTH_INBOX";
 
-pub async fn run(mut host_agent_keys: Keys) -> Result<Keys, async_nats::Error> {
+pub async fn run(mut host_agent_keys: Keys) -> Result<(Keys, async_nats::Client), async_nats::Error> {
     log::info!("Host Auth Client: Connecting to server...");
 
-    // ==================== Fetch Config File & Call NATS AuthCallout Service to Authenticate Host =============================================
-    // Fetch Hoster Pubkey and email (from config)
-    let config = HosterConfig::new().await?;
-
-    let secret_token = TextNonce::new().to_string();
-    let unique_inbox = format!("{}.{}", HOST_AUTH_CLIENT_INBOX_PREFIX, secret_token);
+    // ==================== Fetch Config File & Call NATS AuthCallout Service to Authenticate Host & Hoster =============================================
+    let nonce = TextNonce::new().to_string();
+    let unique_inbox = &format!("{}.{}", HOST_AUTH_CLIENT_INBOX_PREFIX, host_agent_keys.host_pubkey);
     println!(">>> unique_inbox : {}", unique_inbox);
-    let user_unique_auth_subject = format!("AUTH.{}.>", secret_token);
+    let user_unique_auth_subject = &format!("AUTH.{}.>", host_agent_keys.host_pubkey);
     println!(">>> user_unique_auth_subject : {}", user_unique_auth_subject);
 
-    let guard_payload = AuthGuardPayload {
-        host_pubkey: host_agent_keys.host_pubkey,
-        email: config.email,
-        hoster_pubkey: config.hc_pubkey,
-        nonce: secret_token
+    // Fetch Hoster Pubkey and email (from config)
+    let mut auth_guard_payload = AuthGuardPayload::default();
+    match HosterConfig::new().await {
+        Ok(config) => {
+            auth_guard_payload.host_pubkey = host_agent_keys.host_pubkey.to_string();
+            auth_guard_payload.hoster_hc_pubkey = Some(config.hc_pubkey);
+            auth_guard_payload.email = Some(config.email);
+            auth_guard_payload.nonce = nonce;
+        },
+        Err(e) => {
+            log::error!("Failed to locate Hoster config. Err={e}");
+            auth_guard_payload.host_pubkey = host_agent_keys.host_pubkey.to_string();
+            auth_guard_payload.nonce = nonce;
+        }
     };
+    auth_guard_payload = auth_guard_payload.try_add_signature( |p| host_agent_keys.host_sign(p))?;
 
-    let user_auth_json = serde_json::to_string(&guard_payload).expect("Failed to serialize `UserAuthData` into json string");
-    let user_auth_token = crate::utils::json_to_base64(&user_auth_json).expect("Failed to encode user token");
+    let user_auth_json = serde_json::to_string(&auth_guard_payload)?;
+    let user_auth_token = json_to_base64(&user_auth_json)?;
+    let user_creds = if let AuthCredType::Guard(creds) = host_agent_keys.creds.clone() { creds } else {
+        return Err(async_nats::Error::from("Failed to locate Auth Guard credentials"));
+    };
 
     // Connect to Nats server as auth guard and call NATS AuthCallout
     let nats_url = nats_js_client::get_nats_url();
-    let event_listeners = nats_js_client::get_event_listeners();
-    let auth_guard_creds = Credentials::Path(get_file_path_buf(&get_nats_creds_by_nsc("HOLO", "AUTH", "auth_guard")));
-
-    let auth_guard_client = async_nats::ConnectOptions::with_credentials(user_creds)
-        .expect("Failed to parse static creds")
+    let auth_guard_client = async_nats::ConnectOptions::with_credentials(&user_creds.to_string_lossy())?
         .token(user_auth_token)
-        .custom_inbox_prefix(user_unique_inbox)
-        .connect("nats://localhost:4222")
+        .custom_inbox_prefix(unique_inbox.to_string())
+        .connect(nats_url)
         .await?;
 
     println!("User connected to server on port {}.  Connection State: {:#?}", auth_guard_client.server_info().port, auth_guard_client.connection_state());
@@ -73,35 +79,67 @@ pub async fn run(mut host_agent_keys: Keys) -> Result<Keys, async_nats::Error> {
         server_node_id
     );
 
-    // ==================== Handle Authenication Results ============================================================
-    let mut auth_inbox_msgs = auth_guard_client.subscribe(user_unique_inbox).await.unwrap();
-
+    // ==================== Handle Host User and SYS Authoriation ============================================================
+    let auth_guard_client_clone = auth_guard_client.clone();
     tokio::spawn({
-        let auth_inbox_msgs_clone = auth_inbox_msgs.clone();
+        let mut auth_inbox_msgs = auth_guard_client_clone.subscribe(unique_inbox.to_string()).await?;
         async move {
-            while let Some(msg) = auth_inbox_msgs_clone.next().await {
-                println!("got an AUTH INBOX msg: {:?}", std::str::from_utf8(&msg.clone()).expect("failed to deserialize msg AUTH Inbox msg"));
-                if let AuthApiResult(auth_response) = serde_json::from_slice(msg) {
-                    host_agent_keys = crate::utils::save_host_creds(host_agent_keys, auth_response.host_jwt, auth_response.sys_jwt);
-                    if let Some(reply) = msg.reply {
-                        // Publish the Awk resp to the Orchestrator... (JS)
-                    }
-                    break;
-                };
+            while let Some(msg) = auth_inbox_msgs.next().await {
+                println!("got an AUTH INBOX msg: {:?}", &msg);
             }
         }
     });
 
-    let payload = AuthRequestPayload {
-        host_pubkey: host_agent_keys.host_pubkey,
-        sys_pubkey: host_agent_keys.local_sys_pubkey,
-        nonce: secret_token
+    let payload = AuthJWTPayload {
+        host_pubkey: host_agent_keys.host_pubkey.to_string(),
+        maybe_sys_pubkey: host_agent_keys.local_sys_pubkey.clone(),
+        nonce: TextNonce::new().to_string()
     };
 
     let payload_bytes = serde_json::to_vec(&payload)?;
-    let signature: Vec<u8> = host_user_keys.sign(&payload_bytes)?;
+    let signature = host_agent_keys.host_sign(&payload_bytes)?;
     let mut headers = HeaderMap::new();
-    headers.insert(HeaderName::from_static("X-Signature"), HeaderValue::from_str(&format!("{:?}",signature))?);
+    headers.insert(HeaderName::from_static("X-Signature"), HeaderValue::from_str(&format!("{:?}",signature.as_bytes()))?);
+
+    println!("About to send out the {} message", user_unique_auth_subject);
+    let response = auth_guard_client.request_with_headers(
+            user_unique_auth_subject.to_string(),
+            headers,
+            payload_bytes.into()
+        ).await?;
+
+    println!("got an AUTH response: {:?}", std::str::from_utf8(&response.payload).expect("failed to deserialize msg response"));
+    
+    match serde_json::from_slice::<AuthApiResult>(&response.payload) {
+        Ok(auth_response) => match auth_response.result {
+            AuthResult::Authorization(r)=>{
+                host_agent_keys = host_agent_keys.save_host_creds(r.host_jwt, r.sys_jwt).await?;
+                
+                if let Some(_reply) = response.reply {
+                    // Publish the Awk resp to the Orchestrator... (JS)
+                }
+            },
+            _ => {
+                log::error!("got unexpected AUTH RESPONSE : {:?}", auth_response);
+            }
+        },
+        Err(e) => {
+            // TODO: Check to see if error is due to auth error.. if so then try to publish to Diagnostics Subject to ensure has correct permissions
+            println!("got an AUTH RES ERROR: {:?}", e);
+
+            let unauthenticated_user_diagnostics_subject = format!("DIAGNOSTICS.unauthenticated.{}", host_agent_keys.host_pubkey);
+            let diganostics = HoloInventory::from_host();
+            let payload_bytes = serde_json::to_vec(&diganostics)?;
+            auth_guard_client.publish(unauthenticated_user_diagnostics_subject, payload_bytes.into()).await?;
+        }
+    };
+
+    log::trace!(
+        "host_agent_keys: {:#?}", host_agent_keys
+    );
+
+    Ok((host_agent_keys, auth_guard_client))
+}
 
     // let publish_info = nats_js_client::PublishInfo {
     //     subject: user_unique_auth_subject,
@@ -109,36 +147,4 @@ pub async fn run(mut host_agent_keys: Keys) -> Result<Keys, async_nats::Error> {
     //     data: payload_bytes,
     //     headers: Some(headers)
     // };
-    
-    println!(format!("About to send out the {user_unique_auth_subject} message"));
-    let response = auth_guard_client.request_with_headers(user_unique_auth_subject, headers, payload_bytes).await.expect(&format!("Failed to make {user_unique_auth_subject} request"));
-    println!("got an AUTH response: {:?}", std::str::from_utf8(&response.payload).expect("failed to deserialize msg response"));
-    
-    match serde_json::from_slice::<AuthApiResult>(&response.payload) {
-        Ok(r) => {
-            host_agent_keys = crate::utils::save_host_creds(host_agent_keys, auth_response.host_jwt, auth_response.sys_jwt);
-            
-            if let Some(reply) = msg.reply {
-                // Publish the Awk resp to the Orchestrator... (JS)
-            }
-        },
-        Err(e) => {
-            // TODO:
-            // Check to see if error is due to auth error.. if so then try to publish to Diagnostics Subject at regular intervals
-            // for a set period of time, then exit loop and initiate auth connection...
-            let payload = "hpos-hal.info()".as_bytes();
-            let mut auth_inbox_msgs = auth_guard_client.publish("DIAGNOSTICS.ERROR", payload).await.unwrap();
-        }
-    };
-
-    // Close and drain internal buffer before exiting to make sure all messages are sent
-    auth_guard_client.close().await?;
-
-    log::trace!(
-        "host_agent_keys: {}", host_agent_keys
-    );
-
-    Ok(host_agent_keys)
-}
-
 

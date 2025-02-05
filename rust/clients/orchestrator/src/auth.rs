@@ -18,8 +18,6 @@ This client is responsible for:
     - keeping service running until explicitly cancelled out
 */
 
-use crate::utils as local_utils;
-
 use std::{collections::HashMap, sync::Arc, time::Duration};
 use anyhow::{anyhow, Result};
 use async_nats::Message;
@@ -53,8 +51,8 @@ pub async fn run() -> Result<(), async_nats::Error> {
             name: ORCHESTRATOR_AUTH_CLIENT_NAME.to_string(),
             inbox_prefix: ORCHESTRATOR_AUTH_CLIENT_INBOX_PREFIX.to_string(),
             service_params: vec![auth_stream_service_params],
-            credentials_path: None,
-            opts: vec![nats_js_client::with_event_listeners(event_listeners)],
+            credentials: None,
+            listeners: vec![nats_js_client::with_event_listeners(event_listeners)],
             ping_interval: Some(Duration::from_secs(10)),
             request_timeout: Some(Duration::from_secs(5)),
         })
@@ -81,10 +79,10 @@ pub async fn run() -> Result<(), async_nats::Error> {
     auth_service
         .add_consumer::<AuthApiResult>(
             "validate", // consumer name
-            &types::AUTH_SERVICE_SUBJECT, // consumer stream subj
+            types::AUTH_SERVICE_SUBJECT, // consumer stream subj
             EndpointType::Async(auth_api.call(|api: AuthServiceApi, msg: Arc<Message>| {
                 async move {
-                    api.handle_handshake_request(msg, &local_utils::get_orchestrator_credentials_dir_path()).await
+                    api.handle_handshake_request(msg).await
                 }
             })),
             Some(create_callback_subject_to_host("host_pubkey".to_string())),

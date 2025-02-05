@@ -189,9 +189,10 @@ impl OrchestratorWorkloadApi {
                 };
 
                 // Note: The `_id` is an option because it is only generated upon the intial insertion of a record in
-                // a mongodb collection. This also means that whenever a record is fetched from mongodb, it must have the `_id` feild.
-                // Using `unwrap` is therefore safe.
-                let host_id = host._id.to_owned().unwrap();
+                // a mongodb collection. This also means that whenever a record is fetched from mongodb, it must have the `_id` field.
+                let host_id = host._id
+                    .to_owned()
+                    .ok_or_else(|| ServiceError::Internal("Failed to read ._id from record".to_string()))?;
                 
                 // 4. Update the Workload Collection with the assigned Host ID
                 let workload_query = doc! { "_id":  workload_id.clone() };

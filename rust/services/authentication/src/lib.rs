@@ -9,12 +9,12 @@ Endpoints & Managed Subjects:
 
 pub mod types;
 pub mod utils;
-use anyhow::Result;
-use async_nats::Message;
+use anyhow::{Result, Context};
+use async_nats::{AuthError, Message};
 use async_nats::jetstream::ErrorCode;
 use std::sync::Arc;
 use std::future::Future;
-use types::{WORKLOAD_SK_ROLE, AuthApiResult};
+use types::{AuthApiResult, WORKLOAD_SK_ROLE};
 use util_libs::nats_js_client::{ServiceError, AsyncEndpointHandler, JsServiceResponse};
 use async_nats::HeaderValue;
 use nkeys::KeyPair;
@@ -59,14 +59,188 @@ impl AuthServiceApi {
         })
     }
 
+    pub async fn handle_auth_callout(
+        &self,
+        msg: Arc<Message>,
+        auth_signing_account_keypair: KeyPair,
+        auth_signing_account_pubkey: String,
+        auth_root_account_keypair: KeyPair,
+        auth_root_account_pubkey: String,
+    ) -> Result<AuthApiResult, ServiceError> {
+        // 1. Verify expected data was received
+        let auth_request_token = String::from_utf8_lossy(&msg.payload).to_string();
+        println!("auth_request_token  : {:?}", auth_request_token);
+
+        let auth_request_claim = utils::decode_jwt::<types::NatsAuthorizationRequestClaim>(&auth_request_token).map_err(|e| ServiceError::Authentication(AuthError::new(e)))?;
+        println!("\nauth REQUEST - main claim : {}", serde_json::to_string_pretty(&auth_request_claim).unwrap());
+
+        let auth_request_user_claim = utils::decode_jwt::<types::UserClaim>(&auth_request_claim.auth_request.connect_opts.user_jwt).map_err(|e| ServiceError::Authentication(AuthError::new(e)))?;
+        println!("\nauth REQUEST - user claim : {}", serde_json::to_string_pretty(&auth_request_user_claim).unwrap());
+
+        let user_data: types::AuthGuardPayload = utils::base64_to_data::<types::AuthGuardPayload>(&auth_request_claim.auth_request.connect_opts.user_auth_token).map_err(|e| ServiceError::Authentication(AuthError::new(e)))?;
+        println!("user_data TO VALIDATE  : {:#?}", user_data); 
+        
+        // 2. Validate Host signature, returning validation error if not successful
+        let host_pubkey = user_data.host_pubkey.as_ref();
+        let host_signature = user_data.get_host_signature();
+        let user_verifying_keypair = KeyPair::from_public_key(host_pubkey).map_err(|e| ServiceError::Internal(e.to_string()))?;
+        let raw_payload = serde_json::to_vec(&user_data.clone().without_signature()).map_err(|e| ServiceError::Internal(e.to_string()))?;
+        if let Err(e) = user_verifying_keypair.verify(raw_payload.as_ref(), &host_signature) {
+            log::error!("Error: Failed to validate Signature. Subject='{}'. Err={}", msg.subject, e);
+            return Err(ServiceError::Authentication(AuthError::new(e)));
+        };
+
+        // 3. If provided, authenticate the Hoster pubkey and email and assign full permissions if successful
+        let is_hoster_valid = if user_data.email.is_some() && user_data.hoster_hc_pubkey.is_some() {
+            let hoster_hc_pubkey = user_data.hoster_hc_pubkey.unwrap(); // unwrap is safe here as checked above
+            let hoster_email = user_data.email.unwrap(); // unwrap is safe here as checked above
+
+            let is_valid: bool = match self.user_collection.get_one_from(doc! { "roles.role.Hoster": hoster_hc_pubkey.clone() }).await? {
+                Some(u) => {
+                    let mut is_valid = true;
+                    // If hoster exists with pubkey, verify email
+                    if u.email != hoster_email {
+                        log::error!("Error: Failed to validate hoster email. Email='{}'.", hoster_email);
+                        is_valid = false;
+                    }
+
+                    // ...then find the host collection that contains the provided host pubkey
+                    match self.host_collection.get_one_from(doc! { "pubkey": host_pubkey }).await? {
+                        Some(host) => {
+                            // ...and pair the host with hoster pubkey (if the hoster is not already assiged to host)
+                            if host.assigned_hoster != hoster_hc_pubkey {
+                                let host_query: bson::Document = doc! { "_id":  host._id.clone() };
+                                let updated_host_doc = to_document(& Host{
+                                    assigned_hoster: hoster_hc_pubkey,
+                                    ..host
+                                }).map_err(|e| ServiceError::Internal(e.to_string()))?;
+
+                                self.host_collection.update_one_within(host_query, UpdateModifications::Document(updated_host_doc)).await?;                
+                            }
+                        },
+                        None => {
+                            log::error!("Error: Failed to locate Host record. Subject='{}'.", msg.subject);
+                            is_valid = false;
+                        }
+                    }
+
+                    // Find the mongo_id ref for the hoster associated with this user
+                    let RoleInfo { ref_id, role: _ } = u.roles.into_iter().find(|r| matches!(r.role, Role::Hoster(_))).ok_or_else(|| {
+                        let err_msg = format!("Error: Failed to locate Hoster record id in User collection. Subject='{}'.", msg.subject);
+                        handle_internal_err(&err_msg)
+                    })?;
+                    
+                    // Finally, find the hoster collection
+                    match self.hoster_collection.get_one_from(doc! { "_id":  ref_id.clone() }).await? {
+                        Some(hoster) => {
+                            // ...and pair the hoster with host (if the host is not already assiged to the hoster)
+                            let mut updated_assigned_hosts = hoster.assigned_hosts;
+                            if !updated_assigned_hosts.contains(&host_pubkey.to_string()) {
+                                let hoster_query: bson::Document = doc! { "_id":  hoster._id.clone() };
+                                updated_assigned_hosts.push(host_pubkey.to_string());
+                                let updated_hoster_doc = to_document(& Hoster {
+                                    assigned_hosts: updated_assigned_hosts,
+                                    ..hoster
+                                }).map_err(|e| ServiceError::Internal(e.to_string()))?;
+
+                                self.host_collection.update_one_within(hoster_query, UpdateModifications::Document(updated_hoster_doc)).await?;                
+                            }
+                        },
+                        None => {
+                            log::error!("Error: Failed to locate Hoster record. Subject='{}'.", msg.subject);
+                            is_valid = false;
+                        }
+                    }
+                    is_valid
+                },
+                None => {
+                    log::error!("Error: Failed to find User Collection with Hoster pubkey. Subject='{}'.", msg.subject);
+                    false
+                }
+            };
+            is_valid
+        } else { false };
+
+
+        // 4. Assign permissions based on whether the hoster was successfully validated
+        let permissions = if is_hoster_valid {
+            // If successful, assign personalized inbox and auth permissions
+            let user_unique_auth_subject = &format!("AUTH.{}.>", host_pubkey);
+            println!(">>> user_unique_auth_subject : {user_unique_auth_subject}");    
+
+            let user_unique_inbox = &format!("_INBOX.{}.>", host_pubkey);
+            println!(">>> user_unique_inbox : {user_unique_inbox}");    
+                    
+            let authenticated_user_diagnostics_subject = &format!("DIAGNOSTICS.authenticated.{}.>", host_pubkey);
+            println!(">>> authenticated_user_diagnostics_subject : {authenticated_user_diagnostics_subject}");    
+
+            types::Permissions {
+                publish: types::PermissionLimits {
+                    allow: Some(vec![
+                        "AUTH.validate".to_string(),
+                        user_unique_auth_subject.to_string(),
+                        user_unique_inbox.to_string(),
+                        authenticated_user_diagnostics_subject.to_string()
+                ]),
+                    deny: None,
+                },
+                subscribe: types::PermissionLimits {
+                    allow: Some(vec![
+                        user_unique_auth_subject.to_string(),
+                        user_unique_inbox.to_string(),
+                        authenticated_user_diagnostics_subject.to_string()
+                    ]),
+                    deny: None,
+                },
+            }
+        } else {
+            // Otherwise, exclusively grant publication permissions for the unauthenticated diagnostics subj
+            // ...to allow the host device to still send diganostic reports
+            let unauthenticated_user_diagnostics_subject = format!("DIAGNOSTICS.unauthenticated.{}.>", host_pubkey);
+            types::Permissions {
+                publish: types::PermissionLimits {
+                    allow: Some(vec![unauthenticated_user_diagnostics_subject]),
+                    deny: None,
+                },
+                subscribe: types::PermissionLimits {
+                    allow: None,
+                    deny: Some(vec![">".to_string()]),
+                },
+            }
+        };
+
+        let auth_response_claim = utils::generate_auth_response_claim(
+            auth_signing_account_keypair,
+            auth_signing_account_pubkey,
+            auth_root_account_pubkey,
+            permissions,
+            auth_request_claim
+        ).map_err(|e| ServiceError::Internal(e.to_string()))?;
+
+
+        let claim_str = serde_json::to_string(&auth_response_claim).map_err(|e| ServiceError::Internal(e.to_string()))?;
+        let token = utils::encode_jwt(&claim_str, &auth_root_account_keypair)
+            .map_err(|e| ServiceError::Internal(e.to_string()))?;
+
+        println!("\n\n\n\nencoded_jwt: {:#?}", token);
+
+        // DONE BY JS HANDLER
+        // let res = token.into_bytes();
+        // if let Some(reply) = msg.reply {
+        //     client.publish(reply, res.into()).await?;
+        // }
+
+        Ok(types::AuthApiResult {
+            result: types::AuthResult::Callout(token),
+            maybe_response_tags: None
+        })
+    }
+
     pub async fn handle_handshake_request(
         &self,
         msg: Arc<Message>,
-        creds_dir_path: &str,
     ) -> Result<AuthApiResult, ServiceError> {
         log::warn!("INCOMING Message for 'AUTH.validate' : {:?}", msg);
-
-        let mut status = types::AuthState::Unauthenticated;
 
         // 1. Verify expected data was received
         let signature: &[u8] = match &msg.headers {
@@ -86,7 +260,7 @@ impl AuthServiceApi {
             }
         };
 
-        let types::AuthRequestPayload { host_pubkey, email, hoster_pubkey, sys_pubkey, nonce: _ } = Self::convert_msg_to_type::<types::AuthRequestPayload>(msg.clone())?;
+        let types::AuthJWTPayload { host_pubkey, maybe_sys_pubkey, nonce: _ } = Self::convert_msg_to_type::<types::AuthJWTPayload>(msg.clone())?;
 
         // 2. Validate signature
         let user_verifying_keypair = KeyPair::from_public_key(&host_pubkey).map_err(|e| ServiceError::Internal(e.to_string()))?;
@@ -95,106 +269,59 @@ impl AuthServiceApi {
             return Err(ServiceError::Request(format!("{:?}", ErrorCode::BAD_REQUEST)));
         };
 
-        // 3. Authenticate the Hosting Agent (via email and host id info?)
-        let hoster_pubkey_as_holo_hash = "convert_hoster_pubkey_to_raw_value_and_then_into_holo_hash";
-        match self.user_collection.get_one_from(doc! { "roles.role.Hoster": hoster_pubkey_as_holo_hash.clone() }).await? {
-            Some(u) => {
-                // If hoster exists with pubkey, verify email
-                if u.email != email {
-                    log::error!("Error: Failed to validate user email. Subject='{}'.", msg.subject);
-                    return Err(ServiceError::Request(format!("{:?}", ErrorCode::BAD_REQUEST)));
-                }
-
-                // ...then find the host collection that contains the provided host pubkey
-                match self.host_collection.get_one_from(doc! { "pubkey": host_pubkey.clone() }).await? {
-                    Some(h) => {
-                        // ...and pair the host with hoster pubkey (if the hoster is not already assiged to host)
-                        if h.assigned_hoster != hoster_pubkey {
-                            let host_query: bson::Document = doc! { "_id":  h._id.clone() };
-                            let updated_host_doc = to_document(& Host{
-                                assigned_hoster: hoster_pubkey,
-                                ..h
-                            }).map_err(|e| ServiceError::Internal(e.to_string()))?;
-                            self.host_collection.update_one_within(host_query, UpdateModifications::Document(updated_host_doc)).await?;                
-                        }
-                    },
-                    None => {
-                        let err_msg = format!("Error: Failed to locate Host record. Subject='{}'.", msg.subject);
-                        return Err(handle_internal_err(&err_msg));
-                    }
-                }
-
-                // Find the mongo_id ref for the hoster associated with this user
-                let RoleInfo { ref_id, role: _ } = u.roles.into_iter().find(|r| matches!(r.role, Role::Hoster(_))).ok_or_else(|| {
-                    let err_msg = format!("Error: Failed to locate Hoster record id in User collection. Subject='{}'.", msg.subject);
-                    handle_internal_err(&err_msg)
-                })?;
-                
-                // Finally, find the hoster collection
-                match self.hoster_collection.get_one_from(doc! { "_id":  ref_id.clone() }).await? {
-                    Some(hr) => {
-                        // ...and pair the hoster with host (if the host is not already assiged to the hoster)
-                        let mut updated_assigned_hosts = hr.assigned_hosts;
-                        if !updated_assigned_hosts.contains(&host_pubkey) {
-                        let hoster_query: bson::Document = doc! { "_id":  hr._id.clone() };
-                        updated_assigned_hosts.push(host_pubkey.clone());
-                        let updated_hoster_doc = to_document(& Hoster {
-                            assigned_hosts: updated_assigned_hosts,
-                            ..hr
-                        }).map_err(|e| ServiceError::Internal(e.to_string()))?;
-                        self.host_collection.update_one_within(hoster_query, UpdateModifications::Document(updated_hoster_doc)).await?;                
-                        }
-                    },
-                    None => {
-                        let err_msg = format!("Error: Failed to locate Hoster record. Subject='{}'.", msg.subject);
-                        return Err(handle_internal_err(&err_msg));
-                    }
-                }
-            },
-            None => {
-                let err_msg = format!("Error: Failed to find User Collection with Hoster pubkey. Subject='{}'.", msg.subject);
-                return Err(handle_internal_err(&err_msg));
-            }
-        };
-
         // 4. Add User keys to nsc resolver (and automatically create account-signed refernce to user key)
-        Command::new("nsc")
-            .arg(format!("add user -a SYS -n user_sys_host_{} -k {}", host_pubkey, sys_pubkey))
-            .output()
-            .expect("Failed to add host sys user with provided keys");
-
-        Command::new("nsc")
-            .arg(format!("add user -a WORKLOAD -n user_host_{} -k {} -K {} --tag pubkey:{}", host_pubkey, host_pubkey, WORKLOAD_SK_ROLE, host_pubkey))
-            .output()
-            .expect("Failed to add host user with provided keys");
+        if let Some(sys_pubkey) = maybe_sys_pubkey {
+            Command::new("nsc")
+                .arg(format!("add user -a SYS -n user_sys_host_{} -k {}", host_pubkey, sys_pubkey))
+                .output()
+                .context("Failed to add host sys user with provided keys")
+                .map_err(|e| ServiceError::Internal(e.to_string()))?;
+    
+            Command::new("nsc")
+                .arg(format!("add user -a WORKLOAD -n user_host_{} -k {} -K {} --tag pubkey:{}", host_pubkey, host_pubkey, WORKLOAD_SK_ROLE, host_pubkey))
+                .output()
+                .context("Failed to add host user with provided keys")
+                .map_err(|e| ServiceError::Internal(e.to_string()))?;
+        }
 
         // ..and push auth updates to hub server
         Command::new("nsc")
             .arg("push -A")
             .output()
-            .expect("Failed to update resolver config file");    
+            .context("Failed to update resolver config file")
+            .map_err(|e| ServiceError::Internal(e.to_string()))?;
 
         // 3. Create User JWT files (automatically signed with respective account key)
-        let host_sys_user_file_name = format!("{}/user_sys_host_{}.jwt", creds_dir_path, host_pubkey);
-        Command::new("nsc") 
-            .arg(format!("describe user -a SYS -n user_sys_host_{} --raw --output-file {}", host_pubkey, host_sys_user_file_name))
+        let sys_jwt_output = Command::new("nsc") 
+            .arg(format!("describe user -n user_sys_host_{} -a SYS --raw", host_pubkey))
             .output()
-            .expect("Failed to generate host sys user jwt file");
+            .context("Failed to generate host sys user jwt file")
+            .map_err(|e| ServiceError::Internal(e.to_string()))?;
+    
+        let sys_jwt = String::from_utf8(sys_jwt_output.stdout)
+            .context("Command returned invalid UTF-8 output")
+            .map_err(|e| ServiceError::Internal(e.to_string()))?;
+        
+        let host_jwt_output= Command::new("nsc") 
+            .arg(format!("describe user -n user_host_{} -a WORKLOAD --raw", host_pubkey))
+            .output()
+            .context("Failed to generate host user jwt file")
+            .map_err(|e| ServiceError::Internal(e.to_string()))?;
 
-        let host_user_file_name = format!("{}/user_host_{}.jwt", creds_dir_path, host_pubkey);
-        Command::new("nsc") 
-            .arg(format!("describe user -a WORKLOAD -n user_host_{} --raw --output-file {}", host_pubkey, host_user_file_name))
-            .output()
-            .expect("Failed to generate host user jwt file");        
+        let host_jwt = String::from_utf8(host_jwt_output.stdout)
+            .context("Command returned invalid UTF-8 output")
+            .map_err(|e| ServiceError::Internal(e.to_string()))?;
 
         let mut tag_map: HashMap<String, String> = HashMap::new();
         tag_map.insert("host_pubkey".to_string(), host_pubkey.clone());
-
-        status = types::AuthState::Authenticated;
         
         Ok(AuthApiResult {
-            host_pubkey: host_pubkey.clone(),
-            status,
+            result: types::AuthResult::Authorization(types::AuthJWTResult {
+                host_pubkey: host_pubkey.clone(),
+                status: types::AuthState::Authorized,
+                host_jwt,
+                sys_jwt
+            }),
             maybe_response_tags: Some(tag_map)
         })
     }

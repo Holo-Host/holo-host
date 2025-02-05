@@ -8,8 +8,10 @@ use std::fs::File;
 
 pub struct HosterConfig {
     pub email: String,
+    #[allow(dead_code)]
     keypair: SigningKey,
     pub hc_pubkey: String,
+    #[allow(dead_code)]
     pub holoport_id: String,
 }
 

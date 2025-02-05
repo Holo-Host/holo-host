@@ -151,7 +151,7 @@ leafnodes {{
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .spawn()
-            .expect("Failed to start NATS server");
+            .context("Failed to start NATS server")?;
 
         // TODO: wait for a readiness indicator
         std::thread::sleep(std::time::Duration::from_millis(100));

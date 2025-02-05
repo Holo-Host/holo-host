@@ -21,7 +21,7 @@ use clap::Parser;
 use dotenv::dotenv;
 use thiserror::Error;
 use agent_cli::DaemonzeArgs;
-use util_libs::nats_js_client;
+use hpos_hal::inventory::HoloInventory;
 
 #[derive(Error, Debug)]
 pub enum AgentCliError {
@@ -55,23 +55,66 @@ async fn main() -> Result<(), AgentCliError> {
     Ok(())
 }
 
-async fn daemonize(args: &DaemonzeArgs) -> Result<(), async_nats::Error> {    
-    let host_agent_keys = match keys::Keys::try_from_storage(&args.nats_leafnode_client_creds_path, &args.nats_leafnode_client_sys_creds_path)? {
-        Some(k) => k,
-        None => {
-            log::debug!("About to run the Hosting Agent Initialization Service");
-            let mut keys = keys::Keys::new()?;
-            keys = auth::init::run(keys).await?;
-            keys
-        }
-    };
+async fn daemonize(args: &DaemonzeArgs) -> Result<(), async_nats::Error> {
+    let mut host_agent_keys = keys::Keys::try_from_storage(
+        &args.nats_leafnode_client_creds_path,
+        &args.nats_leafnode_client_sys_creds_path
+    ).or_else(|_| keys::Keys::new().map_err(|e| {
+        eprintln!("Failed to create new keys: {:?}", e);
+        async_nats::Error::from(e)
+    }))?;
 
+    // If user cred file is for the auth_guard user, run loop to authenticate host & hoster...
+    if let keys::AuthCredType::Guard(_) = host_agent_keys.creds {
+        host_agent_keys = run_auth_loop(host_agent_keys).await?;
+    }
+
+    // Once authenticated, start leaf server and run workload api calls.
     hostd::gen_leaf_server::run(&host_agent_keys.get_host_creds_path()).await;
-    hostd::workload_manager::run(
+    hostd::workloads::run(
         &host_agent_keys.host_pubkey,
         &host_agent_keys.get_host_creds_path(),
         args.nats_connect_timeout_secs,
     )
     .await?;
     Ok(())
+}
+
+async fn run_auth_loop(mut keys: keys::Keys) ->  Result<keys::Keys, async_nats::Error> {
+    let mut start = chrono::Utc::now();
+    
+    // while let keys::AuthCredType::Guard(auth_creds) = keys.creds {
+        loop {
+        log::debug!("About to run the Hosting Agent Authentication Service");
+        let auth_guard_client: async_nats::Client;
+        (keys, auth_guard_client) = auth::init::run(keys).await?;
+        
+        // If authenicated creds exist, then auth call was successful.
+        // Close buffer, exit loop, and return.
+        if let keys::AuthCredType::Authenticated(_) = keys.creds {
+            auth_guard_client.drain().await?;
+            break;
+        }
+
+        // Otherwise, send diagonostics every 1hr for the next 24hrs, then exit while loop and retry auth.
+        // TODO: Discuss interval for sending diagnostic reports and wait duration before retrying auth with team.
+        let now = chrono::Utc::now();
+        let max_time_interval = chrono::TimeDelta::days(1);
+
+        while max_time_interval < start.signed_duration_since(now) {
+            let unauthenticated_user_diagnostics_subject = format!("DIAGNOSTICS.unauthenticated.{}", keys.host_pubkey);
+            let diganostics = HoloInventory::from_host();
+            let payload_bytes = serde_json::to_vec(&diganostics)?;
+            if let Err(e) = auth_guard_client.publish(unauthenticated_user_diagnostics_subject, payload_bytes.into()).await {
+                log::error!("Encountered error when sending diganostics. Err={:#?}", e);
+            };
+            tokio::time::sleep(chrono::TimeDelta::hours(1).to_std()?).await;
+        }
+
+        // Close and drain internal buffer before exiting to make sure all messages are sent.
+        auth_guard_client.drain().await?;
+        start = chrono::Utc::now();
+    }
+
+    Ok(keys)
 }
