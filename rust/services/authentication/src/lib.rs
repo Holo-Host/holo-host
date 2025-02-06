@@ -106,110 +106,111 @@ impl AuthServiceApi {
 
         // 3. If provided, authenticate the Hoster pubkey and email and assign full permissions if successful
         let is_hoster_valid = if user_data.email.is_some() && user_data.hoster_hc_pubkey.is_some() {
-            let hoster_hc_pubkey = user_data.hoster_hc_pubkey.unwrap(); // unwrap is safe here as checked above
-            let hoster_email = user_data.email.unwrap(); // unwrap is safe here as checked above
+            true 
+            // let hoster_hc_pubkey = user_data.hoster_hc_pubkey.unwrap(); // unwrap is safe here as checked above
+            // let hoster_email = user_data.email.unwrap(); // unwrap is safe here as checked above
 
-            let is_valid: bool = match self
-                .user_collection
-                .get_one_from(doc! { "roles.role.Hoster": hoster_hc_pubkey.clone() })
-                .await?
-            {
-                Some(u) => {
-                    let mut is_valid = true;
-                    // If hoster exists with pubkey, verify email
-                    if u.email != hoster_email {
-                        log::error!(
-                            "Error: Failed to validate hoster email. Email='{}'.",
-                            hoster_email
-                        );
-                        is_valid = false;
-                    }
+            // let is_valid: bool = match self
+            //     .user_collection
+            //     .get_one_from(doc! { "roles.role.Hoster": hoster_hc_pubkey.clone() })
+            //     .await?
+            // {
+            //     Some(u) => {
+            //         let mut is_valid = true;
+            //         // If hoster exists with pubkey, verify email
+            //         if u.email != hoster_email {
+            //             log::error!(
+            //                 "Error: Failed to validate hoster email. Email='{}'.",
+            //                 hoster_email
+            //             );
+            //             is_valid = false;
+            //         }
 
-                    // ...then find the host collection that contains the provided host pubkey
-                    match self
-                        .host_collection
-                        .get_one_from(doc! { "pubkey": host_pubkey })
-                        .await?
-                    {
-                        Some(host) => {
-                            // ...and pair the host with hoster pubkey (if the hoster is not already assiged to host)
-                            if host.assigned_hoster != hoster_hc_pubkey {
-                                let host_query: bson::Document = doc! { "_id":  host._id.clone() };
-                                let updated_host_doc = to_document(&Host {
-                                    assigned_hoster: hoster_hc_pubkey,
-                                    ..host
-                                })
-                                .map_err(|e| ServiceError::Internal(e.to_string()))?;
+            //         // ...then find the host collection that contains the provided host pubkey
+            //         match self
+            //             .host_collection
+            //             .get_one_from(doc! { "pubkey": host_pubkey })
+            //             .await?
+            //         {
+            //             Some(host) => {
+            //                 // ...and pair the host with hoster pubkey (if the hoster is not already assiged to host)
+            //                 if host.assigned_hoster != hoster_hc_pubkey {
+            //                     let host_query: bson::Document = doc! { "_id":  host._id.clone() };
+            //                     let updated_host_doc = to_document(&Host {
+            //                         assigned_hoster: hoster_hc_pubkey,
+            //                         ..host
+            //                     })
+            //                     .map_err(|e| ServiceError::Internal(e.to_string()))?;
 
-                                self.host_collection
-                                    .update_one_within(
-                                        host_query,
-                                        UpdateModifications::Document(updated_host_doc),
-                                    )
-                                    .await?;
-                            }
-                        }
-                        None => {
-                            log::error!(
-                                "Error: Failed to locate Host record. Subject='{}'.",
-                                msg.subject
-                            );
-                            is_valid = false;
-                        }
-                    }
+            //                     self.host_collection
+            //                         .update_one_within(
+            //                             host_query,
+            //                             UpdateModifications::Document(updated_host_doc),
+            //                         )
+            //                         .await?;
+            //                 }
+            //             }
+            //             None => {
+            //                 log::error!(
+            //                     "Error: Failed to locate Host record. Subject='{}'.",
+            //                     msg.subject
+            //                 );
+            //                 is_valid = false;
+            //             }
+            //         }
 
-                    // Find the mongo_id ref for the hoster associated with this user
-                    let RoleInfo { ref_id, role: _ } = u.roles.into_iter().find(|r| matches!(r.role, Role::Hoster(_))).ok_or_else(|| {
-                        let err_msg = format!("Error: Failed to locate Hoster record id in User collection. Subject='{}'.", msg.subject);
-                        handle_internal_err(&err_msg)
-                    })?;
+            //         // Find the mongo_id ref for the hoster associated with this user
+            //         let RoleInfo { ref_id, role: _ } = u.roles.into_iter().find(|r| matches!(r.role, Role::Hoster(_))).ok_or_else(|| {
+            //             let err_msg = format!("Error: Failed to locate Hoster record id in User collection. Subject='{}'.", msg.subject);
+            //             handle_internal_err(&err_msg)
+            //         })?;
 
-                    // Finally, find the hoster collection
-                    match self
-                        .hoster_collection
-                        .get_one_from(doc! { "_id":  ref_id.clone() })
-                        .await?
-                    {
-                        Some(hoster) => {
-                            // ...and pair the hoster with host (if the host is not already assiged to the hoster)
-                            let mut updated_assigned_hosts = hoster.assigned_hosts;
-                            if !updated_assigned_hosts.contains(&host_pubkey.to_string()) {
-                                let hoster_query: bson::Document =
-                                    doc! { "_id":  hoster._id.clone() };
-                                updated_assigned_hosts.push(host_pubkey.to_string());
-                                let updated_hoster_doc = to_document(&Hoster {
-                                    assigned_hosts: updated_assigned_hosts,
-                                    ..hoster
-                                })
-                                .map_err(|e| ServiceError::Internal(e.to_string()))?;
+            //         // Finally, find the hoster collection
+            //         match self
+            //             .hoster_collection
+            //             .get_one_from(doc! { "_id":  ref_id.clone() })
+            //             .await?
+            //         {
+            //             Some(hoster) => {
+            //                 // ...and pair the hoster with host (if the host is not already assiged to the hoster)
+            //                 let mut updated_assigned_hosts = hoster.assigned_hosts;
+            //                 if !updated_assigned_hosts.contains(&host_pubkey.to_string()) {
+            //                     let hoster_query: bson::Document =
+            //                         doc! { "_id":  hoster._id.clone() };
+            //                     updated_assigned_hosts.push(host_pubkey.to_string());
+            //                     let updated_hoster_doc = to_document(&Hoster {
+            //                         assigned_hosts: updated_assigned_hosts,
+            //                         ..hoster
+            //                     })
+            //                     .map_err(|e| ServiceError::Internal(e.to_string()))?;
 
-                                self.host_collection
-                                    .update_one_within(
-                                        hoster_query,
-                                        UpdateModifications::Document(updated_hoster_doc),
-                                    )
-                                    .await?;
-                            }
-                        }
-                        None => {
-                            log::error!(
-                                "Error: Failed to locate Hoster record. Subject='{}'.",
-                                msg.subject
-                            );
-                            is_valid = false;
-                        }
-                    }
-                    is_valid
-                }
-                None => {
-                    log::error!(
-                        "Error: Failed to find User Collection with Hoster pubkey. Subject='{}'.",
-                        msg.subject
-                    );
-                    false
-                }
-            };
-            is_valid
+            //                     self.host_collection
+            //                         .update_one_within(
+            //                             hoster_query,
+            //                             UpdateModifications::Document(updated_hoster_doc),
+            //                         )
+            //                         .await?;
+            //                 }
+            //             }
+            //             None => {
+            //                 log::error!(
+            //                     "Error: Failed to locate Hoster record. Subject='{}'.",
+            //                     msg.subject
+            //                 );
+            //                 is_valid = false;
+            //             }
+            //         }
+            //         is_valid
+            //     }
+            //     None => {
+            //         log::error!(
+            //             "Error: Failed to find User Collection with Hoster pubkey. Subject='{}'.",
+            //             msg.subject
+            //         );
+            //         false
+            //     }
+            // };
+            // is_valid
         } else {
             false
         };
@@ -224,7 +225,7 @@ impl AuthServiceApi {
             println!(">>> user_unique_inbox : {user_unique_inbox}");
 
             let authenticated_user_diagnostics_subject =
-                &format!("DIAGNOSTICS.authenticated.{}.>", host_pubkey);
+                &format!("DIAGNOSTICS.{}.>", host_pubkey);
             println!(">>> authenticated_user_diagnostics_subject : {authenticated_user_diagnostics_subject}");
 
             types::Permissions {
@@ -250,7 +251,7 @@ impl AuthServiceApi {
             // Otherwise, exclusively grant publication permissions for the unauthenticated diagnostics subj
             // ...to allow the host device to still send diganostic reports
             let unauthenticated_user_diagnostics_subject =
-                format!("DIAGNOSTICS.unauthenticated.{}.>", host_pubkey);
+                format!("DIAGNOSTICS.{}.unauthenticated.>", host_pubkey);
             types::Permissions {
                 publish: types::PermissionLimits {
                     allow: Some(vec![unauthenticated_user_diagnostics_subject]),
@@ -444,3 +445,12 @@ impl AuthServiceApi {
         })
     }
 }
+
+
+// example:
+// [1] Subject: AUTH.UDS2A7I4BCECURHE64C52ORK6IDSOSE4ILZ7RJM4IO4EAYF33B67EWEF.> Received: 2025-02-05T21:19:52-06:00
+//   X-Signature: [80, 71, 109, 80, 76, 99, 48, 122, 56, 113, 112, 48, 101, 95, 57, 107, 45, 105, 78, 75, 72, 67, 66, 97, 120, 117, 102, 110, 100, 72, 110, 53, 101, 74, 82, 77, 52, 121, 65, 66, 85, 53, 48, 109, 101, 51, 107, 54, 50, 65, 89, 81, 85, 51, 52, 50, 80, 81, 74, 49, 119, 90, 118, 104, 112, 100, 68, 109, 99, 105, 49, 69, 101, 85, 116, 67, 48, 118, 68, 89, 74, 86, 56, 86, 65, 103]
+// {"host_pubkey":"UDS2A7I4BCECURHE64C52ORK6IDSOSE4ILZ7RJM4IO4EAYF33B67EWEF","maybe_sys_pubkey":"UACJZQOQK2Y2JFQVNV4CJORAEZGV3GYTCK7UOSCLNEZJRKMOW4ATUZZG","nonce":"zq7bDlgqpGcAAAAA3ItWHoUsldKNZg7/"}
+
+// - subject: _INBOX.Uwce1Uabie65ojhlucmyhB.vy24bmby
+// - subject: _INBOX.5RgE68PiQieODvqbf4Yn1s.6f14XeRJ

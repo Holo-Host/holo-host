@@ -78,7 +78,7 @@ pub async fn run() -> Result<(), async_nats::Error> {
 
     // TODO: REMOVE
     // let root_account_keypair = Arc::new(KeyPair::from_seed(
-    //     "SAAINFLMRAAE6GYKTQ4SCXNPPCZQTSSSWB3BU3PDKK7CHZDEDYXHL5IP4E",
+    //     "<>",
     // )?);
     let root_account_pubkey = root_account_keypair.public_key().clone();
     println!("inside auth... 3");
@@ -101,7 +101,7 @@ pub async fn run() -> Result<(), async_nats::Error> {
 
     // TODO: REMOVE
     // let signing_account_keypair = Arc::new(KeyPair::from_seed(
-    //     "SAAL7ULQELTAX5VHVYDDZZ3636AY2AO2O25CRVOPPRFS2KOMVEZV6HTLXI",
+    //     "<>",
     // )?);
     let signing_account_pubkey = signing_account_keypair.public_key().clone();
     println!(

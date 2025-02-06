@@ -225,13 +225,18 @@ impl JsStreamService {
     where
         T: EndpointTraits,
     {
-        let full_subject = format!("{}.{}", self.service_subject, endpoint_subject);
+        // Avoid adding the Service Subject prefix if the Endpoint Subject name starts with global keywords $SYS or $JS
+        let consumer_subject = if endpoint_subject.starts_with("$SYS") || endpoint_subject.starts_with("$JS") {
+            endpoint_subject.to_string()
+        } else {
+            format!("{}.{}", self.service_subject, endpoint_subject)
+        };
 
         // Register JS Subject Consumer
         let consumer_config = consumer::pull::Config {
             durable_name: Some(consumer_name.to_string()),
             ack_policy: AckPolicy::Explicit,
-            filter_subject: full_subject,
+            filter_subject: consumer_subject,
             ..Default::default()
         };
 
@@ -288,6 +293,8 @@ impl JsStreamService {
             let messages = consumer
                 .stream()
                 .heartbeat(std::time::Duration::from_secs(10))
+                .max_messages_per_batch(100)
+                .expires(std::time::Duration::from_secs(30))
                 .messages()
                 .await?;
 
@@ -333,7 +340,10 @@ impl JsStreamService {
     ) where
         T: EndpointTraits,
     {
+        println!("WAITING TO PROCESS MESSAGE...");
         while let Some(Ok(js_msg)) = messages.next().await {
+            println!("MESSAGES : js_msg={:?}", js_msg);
+            
             log::trace!(
                 "{}Consumer received message: subj='{}.{}', endpoint={}, service={}",
                 log_info.prefix,
