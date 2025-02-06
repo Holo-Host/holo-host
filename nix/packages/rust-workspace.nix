@@ -86,6 +86,8 @@ craneLib.buildPackage (
               #   exec "$@"
               # '')
 
+              pkgs.curl
+
               ## NATS/mongodb integration tests
               pkgs.nats-server
               pkgs.nsc
