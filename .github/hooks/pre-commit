@@ -1,12 +1,16 @@
 #!/bin/bash
 
-while read oldrev newrev refname; do
-    branch=$(echo $refname | sed 's|refs/heads/||')
-    pattern='^(feature|bugfix|hotfix|release)\/HOLO-[0-9]+'
+# Get the current branch name
+branch_name=$(git rev-parse --abbrev-ref HEAD)
 
-    if [[ ! $branch =~ $pattern ]]; then
-        echo "❌ Error: Branch '$branch' does not follow naming conventions!"
-        echo "✅ Expected format: feature/HOLO-123-description"
-        exit 1
-    fi
-done
+# Define the allowed branch name pattern
+pattern='^(feature|bugfix|hotfix|release)\/HOLO-[0-9]+'
+
+if [[ ! $branch_name =~ $pattern ]]; then
+    echo "❌ Error: Invalid branch name '$branch_name'"
+    echo "✅ Expected format: feature/HOLO-123-description"
+    exit 1  # Block commit
+fi
+
+echo "✅ Branch name '$branch_name' is valid. Commit allowed."
+exit 0  # Allow commit
