@@ -2,7 +2,11 @@ name: Enforce Branch Naming
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened]
+    types:
+      - opened
+      - edited
+      - synchronize
+      - reopened
 
 jobs:
   validate-branch-name:
@@ -16,7 +20,6 @@ jobs:
             echo "✅ Expected: feature/123-description"
             exit 1
           fi
-            - name: Check if PR description contains an issue number
 
       - name: Check if PR description contains an issue number
         run: |
