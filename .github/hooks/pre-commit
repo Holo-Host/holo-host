@@ -3,14 +3,14 @@
 # Get the current branch name
 branch_name=$(git rev-parse --abbrev-ref HEAD)
 
-# Define the allowed branch name pattern
-pattern='^(feature|bugfix|hotfix|release)\/HOLO-[0-9]+'
+# Define the allowed branch name pattern (GitHub issues use numbers)
+pattern='^(feature|bugfix|hotfix|release)\/[0-9]+-[a-z0-9-]+$'
 
 if [[ ! $branch_name =~ $pattern ]]; then
     echo "❌ Error: Invalid branch name '$branch_name'"
-    echo "✅ Expected format: feature/HOLO-123-description"
-    exit 1  # Block commit
+    echo "✅ Expected format: feature/123-short-description"
+    exit 1  # Block the commit
 fi
 
 echo "✅ Branch name '$branch_name' is valid. Commit allowed."
-exit 0  # Allow commit
+exit 0  # Allow the commit
