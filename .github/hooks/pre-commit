@@ -1,0 +1,12 @@
+#!/bin/bash
+
+while read oldrev newrev refname; do
+    branch=$(echo $refname | sed 's|refs/heads/||')
+    pattern='^(feature|bugfix|hotfix|release)\/HOLO-[0-9]+'
+
+    if [[ ! $branch =~ $pattern ]]; then
+        echo "❌ Error: Branch '$branch' does not follow naming conventions!"
+        echo "✅ Expected format: feature/HOLO-123-description"
+        exit 1
+    fi
+done
