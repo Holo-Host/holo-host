@@ -1,0 +1,18 @@
+name: Enforce Branch Naming
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  validate-branch-name:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check Branch Name
+        run: |
+          BRANCH_NAME="${{ github.event.pull_request.head.ref }}"
+          if [[ ! "$BRANCH_NAME" =~ ^(feature|bugfix|hotfix|release)\/HOLO-[0-9]+ ]]; then
+            echo "❌ Invalid branch name: $BRANCH_NAME"
+            echo "✅ Expected: feature/HOLO-123-description"
+            exit 1
+          fi
