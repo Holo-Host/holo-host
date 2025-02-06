@@ -30,7 +30,7 @@ pub use bson::oid::ObjectId as MongoDbId;
 // ==================== User Schema ====================
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum UserPermission {
-    Admin
+    Admin,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
@@ -90,7 +90,7 @@ impl IntoIndexes for User {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
-pub struct UserInfo  {
+pub struct UserInfo {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub _id: Option<MongoDbId>,
     pub metadata: Metadata,
@@ -231,7 +231,7 @@ pub struct Workload {
     pub min_hosts: u16,
     pub system_specs: SystemSpecs,
     pub assigned_hosts: Vec<MongoDbId>, // Host Device IDs (eg: assigned nats server id)
-    // pub status: WorkloadStatus,
+                                        // pub status: WorkloadStatus,
 }
 
 impl Default for Workload {
@@ -252,7 +252,7 @@ impl Default for Workload {
                 is_deleted: false,
                 created_at: Some(DateTime::now()),
                 updated_at: Some(DateTime::now()),
-                deleted_at: None
+                deleted_at: None,
             },
             state: WorkloadState::Reported,
             version: semver,

@@ -66,7 +66,7 @@ async fn daemonize(args: &DaemonzeArgs) -> Result<(), async_nats::Error> {
 
     // Only exit program when explicitly requested
     tokio::signal::ctrl_c().await?;
-    
+
     host_client.close().await?;
     Ok(())
 }

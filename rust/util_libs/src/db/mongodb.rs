@@ -21,7 +21,10 @@ pub trait MongoDbAPI<T>
 where
     T: Serialize + for<'de> Deserialize<'de> + Unpin + Send + Sync,
 {
-    fn mongo_error_handler<ReturnType>(&self, result: Result<ReturnType, mongodb::error::Error>) -> Result<ReturnType>;
+    fn mongo_error_handler<ReturnType>(
+        &self,
+        result: Result<ReturnType, mongodb::error::Error>,
+    ) -> Result<ReturnType>;
     async fn mongo_cursor_to_list(&self, cursor: mongodb::Cursor<T>) -> Result<Vec<T>>;
     async fn aggregate(&self, pipeline: Vec<Document>) -> Result<Vec<T>>;
     async fn get_one_from(&self, filter: Document) -> Result<Option<T>>;
@@ -97,9 +100,10 @@ impl<T> MongoDbAPI<T> for MongoCollection<T>
 where
     T: Serialize + for<'de> Deserialize<'de> + Unpin + Send + Sync + Default + IntoIndexes + Debug,
 {
-    
-    fn mongo_error_handler<ReturnType>(&self, result: Result<ReturnType, mongodb::error::Error>) -> Result<ReturnType>
-    {
+    fn mongo_error_handler<ReturnType>(
+        &self,
+        result: Result<ReturnType, mongodb::error::Error>,
+    ) -> Result<ReturnType> {
         let rtn = result.map_err(ServiceError::Database)?;
         Ok(rtn)
     }
@@ -113,11 +117,15 @@ where
         log::info!("aggregate pipeline {:?}", pipeline);
         let cursor = self.collection.aggregate(pipeline).await?;
 
-        let results_doc: Vec<bson::Document> = cursor.try_collect().await.map_err(ServiceError::Database)?;
-        
-        let results: Vec<T> = results_doc.into_iter().map(
-            |doc| bson::from_document::<T>(doc).with_context(|| "failed to deserialize document")
-        ).collect::<Result<Vec<T>>>()?;
+        let results_doc: Vec<bson::Document> =
+            cursor.try_collect().await.map_err(ServiceError::Database)?;
+
+        let results: Vec<T> = results_doc
+            .into_iter()
+            .map(|doc| {
+                bson::from_document::<T>(doc).with_context(|| "failed to deserialize document")
+            })
+            .collect::<Result<Vec<T>>>()?;
 
         Ok(results)
     }
@@ -355,7 +363,10 @@ mod tests {
         let fetched_hosts = host_api.get_many_from(filter_many.clone()).await?;
 
         assert_eq!(fetched_hosts.len(), 3);
-        let ids: Vec<String> = fetched_hosts.into_iter().map(|h| h._id.unwrap_or(oid::ObjectId::new()).to_hex()).collect();
+        let ids: Vec<String> = fetched_hosts
+            .into_iter()
+            .map(|h| h._id.unwrap_or(oid::ObjectId::new()).to_hex())
+            .collect();
         assert!(ids.contains(&ids[0]));
         assert!(ids.contains(&ids[1]));
         assert!(ids.contains(&ids[2]));
