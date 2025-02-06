@@ -21,7 +21,6 @@ let
     buildInputs = pkgs.lib.optionals pkgs.stdenv.isDarwin [
       # Additional darwin specific inputs can be set here
       pkgs.libiconv
-      pkgs.curl
     ];
 
     # Additional environment variables can be set directly
@@ -86,8 +85,6 @@ craneLib.buildPackage (
               #   exec "$@"
               # '')
 
-              pkgs.curl
-
               ## NATS/mongodb integration tests
               pkgs.nats-server
               pkgs.nsc
@@ -95,6 +92,7 @@ craneLib.buildPackage (
             ++ (pkgs.lib.lists.optionals (!pkgs.stdenv.isAarch64) [
               # TODO: get mongodb built for aarch64
               pkgs.mongodb
+              pkgs.curl
             ]);
           partitions = 1;
           partitionType = "count";
