@@ -7,7 +7,6 @@ pkgs.mkShell {
   # Add build dependencies
   packages = [
     flake.formatter.${system}
-    pkgs.curl
     pkgs.jq
   ];
 

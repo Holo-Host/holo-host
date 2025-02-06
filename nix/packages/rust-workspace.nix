@@ -21,6 +21,7 @@ let
     buildInputs = pkgs.lib.optionals pkgs.stdenv.isDarwin [
       # Additional darwin specific inputs can be set here
       pkgs.libiconv
+      pkgs.curl
     ];
 
     # Additional environment variables can be set directly
