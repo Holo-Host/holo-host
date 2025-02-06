@@ -10,12 +10,12 @@ use crate::types::WorkloadResult;
 
 use super::{types::WorkloadApiResult, WorkloadServiceApi};
 use anyhow::Result;
+use async_nats::Message;
 use core::option::Option::None;
 use std::{fmt::Debug, sync::Arc};
-use async_nats::Message;
 use util_libs::{
+    db::schemas::{WorkloadState, WorkloadStatus},
     nats_js_client::ServiceError,
-    db::schemas::{WorkloadState, WorkloadStatus}
 };
 
 #[derive(Debug, Clone, Default)]
@@ -24,7 +24,10 @@ pub struct HostWorkloadApi {}
 impl WorkloadServiceApi for HostWorkloadApi {}
 
 impl HostWorkloadApi {
-    pub async fn start_workload(&self, msg: Arc<Message>) -> Result<WorkloadApiResult, ServiceError> {
+    pub async fn start_workload(
+        &self,
+        msg: Arc<Message>,
+    ) -> Result<WorkloadApiResult, ServiceError> {
         let msg_subject = msg.subject.clone().into_string();
         log::trace!("Incoming message for '{}'", msg_subject);
 
@@ -52,16 +55,19 @@ impl HostWorkloadApi {
             }
         };
 
-        Ok(WorkloadApiResult  {
+        Ok(WorkloadApiResult {
             result: WorkloadResult {
                 status,
-                workload: None
+                workload: None,
             },
-            maybe_response_tags: None
+            maybe_response_tags: None,
         })
     }
 
-    pub async fn update_workload(&self, msg: Arc<Message>) -> Result<WorkloadApiResult, ServiceError> {
+    pub async fn update_workload(
+        &self,
+        msg: Arc<Message>,
+    ) -> Result<WorkloadApiResult, ServiceError> {
         let msg_subject = msg.subject.clone().into_string();
         log::trace!("Incoming message for '{}'", msg_subject);
 
@@ -69,7 +75,6 @@ impl HostWorkloadApi {
         log::debug!("Message payload '{}' : {:?}", msg_subject, message_payload);
 
         let status = if let Some(workload) = message_payload.workload {
-
             // TODO: Talk through with Stefan
             // 1. Connect to interface for Nix and instruct systemd to install workload...
             // eg: nix_install_with(workload)
@@ -89,17 +94,20 @@ impl HostWorkloadApi {
                 actual: WorkloadState::Error(err_msg),
             }
         };
-            
-        Ok(WorkloadApiResult  {
+
+        Ok(WorkloadApiResult {
             result: WorkloadResult {
                 status,
-                workload: None
+                workload: None,
             },
-            maybe_response_tags: None
+            maybe_response_tags: None,
         })
     }
 
-    pub async fn uninstall_workload(&self, msg: Arc<Message>) -> Result<WorkloadApiResult, ServiceError> {
+    pub async fn uninstall_workload(
+        &self,
+        msg: Arc<Message>,
+    ) -> Result<WorkloadApiResult, ServiceError> {
         let msg_subject = msg.subject.clone().into_string();
         log::trace!("Incoming message for '{}'", msg_subject);
 
@@ -110,7 +118,7 @@ impl HostWorkloadApi {
             // TODO: Talk through with Stefan
             // 1. Connect to interface for Nix and instruct systemd to UNinstall workload...
             // nix_uninstall_with(workload_id)
-    
+
             // 2. Respond to endpoint request
             WorkloadStatus {
                 id: workload._id,
@@ -127,18 +135,21 @@ impl HostWorkloadApi {
             }
         };
 
-        Ok(WorkloadApiResult  {
+        Ok(WorkloadApiResult {
             result: WorkloadResult {
                 status,
-                workload: None
+                workload: None,
             },
-            maybe_response_tags: None
+            maybe_response_tags: None,
         })
     }
 
     // For host agent ? or elsewhere ?
     // TODO: Talk through with Stefan
-    pub async fn send_workload_status(&self, msg: Arc<Message>) -> Result<WorkloadApiResult, ServiceError> {
+    pub async fn send_workload_status(
+        &self,
+        msg: Arc<Message>,
+    ) -> Result<WorkloadApiResult, ServiceError> {
         let msg_subject = msg.subject.clone().into_string();
         log::trace!("Incoming message for '{}'", msg_subject);
 
@@ -150,9 +161,9 @@ impl HostWorkloadApi {
         Ok(WorkloadApiResult {
             result: WorkloadResult {
                 status: workload_status,
-                workload: None
+                workload: None,
             },
-            maybe_response_tags: None
+            maybe_response_tags: None,
         })
     }
 }
