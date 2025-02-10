@@ -8,6 +8,7 @@ use util_libs::nats_server::{
 };
 
 pub async fn run(
+    maybe_server_name: &Option<String>,
     user_creds_path: &Option<PathBuf>,
     maybe_store_dir: &Option<PathBuf>,
     hub_url: String,
@@ -56,9 +57,18 @@ pub async fn run(
         },
     }];
 
+    let server_name = if let Some(server_name) = maybe_server_name {
+        server_name.clone()
+    } else {
+        // the hub needs a unique name for each server to distinguish the leaf node connection
+        machineid_rs::IdBuilder::new(machineid_rs::Encryption::SHA256)
+            .add_component(machineid_rs::HWIDComponent::SystemID)
+            .build("host-agent")?
+    };
+
     // Create a new Leaf Server instance
     let leaf_server = LeafServer::new(
-        None,
+        Some(&server_name),
         LEAF_SERVER_CONFIG_PATH,
         leaf_client_conn_domain,
         leaf_client_conn_port,
