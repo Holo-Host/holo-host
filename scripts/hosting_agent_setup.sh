@@ -28,6 +28,7 @@ for cmd in nsc nats; do
 done
 
 # Variables
+NSC_PATH=$1
 OPERATOR_NAME="HOLO"
 SYS_ACCOUNT_NAME="SYS"
 AUTH_ACCOUNT_NAME="AUTH"
@@ -64,7 +65,10 @@ else
             echo "WARNING: AUTH_GUARD user credentials not found. Unable to add the complete Hosting Agent set-up."
         else
             echo "Found the $AUTH_GUARD_USER_NAME credentials file."
-            echo "Set-up complete. Credential files are in the $SHARED_CREDS_DIR/ directory."
+            $AUTH_GUARD_CRED_PATH="{$NSC_PATH}/keys/creds/{$OPERATOR_NAME}/{$AUTH_ACCOUNT_NAME}/"
+            echo "Moving $AUTH_GUARD_USER_NAME creds to the $AUTH_GUARD_CRED_PATH directory."
+            mv $AUTH_GUARD_USER_PATH $AUTH_GUARD_CRED_PATH
+            echo "Set-up complete. Credential files are in the $AUTH_GUARD_CRED_PATH/ directory."
         fi
     fi
 fi

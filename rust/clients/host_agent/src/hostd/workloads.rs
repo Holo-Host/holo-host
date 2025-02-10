@@ -25,7 +25,7 @@ use workload::{
 };
 
 const HOST_AGENT_CLIENT_NAME: &str = "Host Agent";
-const HOST_AGENT_INBOX_PREFIX: &str = "_workload_inbox";
+const HOST_AGENT_INBOX_PREFIX: &str = "_WORKLOAD_INBOX";
 
 pub async fn run(
     host_pubkey: &str,

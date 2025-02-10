@@ -22,5 +22,5 @@ rust/*/*/leaf_server.conf
 rust/*/*/resolver.conf
 leaf_server.conf
 .local
-rust/*/*/tmp/
 rust/*/*/*/tmp/
+rust/*/*/*/*/tmp/

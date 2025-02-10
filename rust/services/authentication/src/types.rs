@@ -10,14 +10,6 @@ pub const AUTHORIZE_SUBJECT: &str = "validate";
 // NB: This role name *must* match the `ROLE_NAME_WORKLOAD` in the `orchestrator_setup.sh` script file.
 pub const WORKLOAD_SK_ROLE: &str = "workload-role";
 
-#[derive(Serialize, Deserialize, Debug)]
-pub struct AuthErrorPayload {
-    pub service_info: async_nats::service::Info,
-    pub group: String,
-    pub endpoint: String,
-    pub error: String,
-}
-
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum AuthState {
     Unauthenticated, // step 0
@@ -25,6 +17,14 @@ pub enum AuthState {
     Authorized,      // step 2
     Forbidden,       // failure to auth
     Error(String),   // internal error
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct AuthErrorPayload {
+    pub service_info: async_nats::service::Info,
+    pub group: String,
+    pub endpoint: String,
+    pub error: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
