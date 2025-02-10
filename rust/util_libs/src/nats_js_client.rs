@@ -383,12 +383,12 @@ pub fn get_nats_url() -> String {
 }
 
 pub fn get_nsc_root_path() -> String {
-    std::env::var("NSC_PATH").unwrap_or_else(|_| ".local/share/nats/nsc".to_string())
+    std::env::var("NSC_PATH").unwrap_or_else(|_| "/.local/share/nats/nsc".to_string())
 }
 
 pub fn get_nats_creds_by_nsc(operator: &str, account: &str, user: &str) -> String {
     format!(
-        "/{}/keys/creds/{}/{}/{}.creds",
+        "{}/keys/creds/{}/{}/{}.creds",
         get_nsc_root_path(),
         operator,
         account,

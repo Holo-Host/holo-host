@@ -11,7 +11,6 @@ pub mod types;
 pub mod utils;
 use anyhow::{Context, Result};
 use async_nats::jetstream::ErrorCode;
-use async_nats::service::{NATS_SERVICE_ERROR, NATS_SERVICE_ERROR_CODE};
 use async_nats::HeaderValue;
 use async_nats::{AuthError, Message};
 use data_encoding::BASE64URL_NOPAD;

@@ -21,7 +21,6 @@ This client is responsible for:
 use async_nats::service::ServiceExt;
 use anyhow::{anyhow, Context, Result};
 use futures::StreamExt;
-// use async_nats::Message;
 use authentication::{
     self,
     types::{self, AuthErrorPayload},
@@ -44,71 +43,50 @@ pub const ORCHESTRATOR_AUTH_CLIENT_NAME: &str = "Orchestrator Auth Manager";
 pub const ORCHESTRATOR_AUTH_CLIENT_INBOX_PREFIX: &str = "_AUTH_INBOX_ORCHESTRATOR";
 
 pub async fn run() -> Result<(), async_nats::Error> {
-    println!("inside auth... 0");
+    let admin_account_creds_path = PathBuf::from_str(&get_nats_creds_by_nsc(
+        "HOLO",
+        "AUTH",
+        "auth",
+    ))?;
+    println!(
+        " >>>> admin_account_creds_path: {:#?} ",
+        admin_account_creds_path
+    );
 
-    // // let admin_account_creds_path = PathBuf::from_str("/home/za/Documents/holo-v2/holo-host/rust/clients/orchestrator/src/tmp/test_admin.creds")?;
-    // let admin_account_creds_path = PathBuf::from_str(&get_nats_creds_by_nsc(
-    //     "HOLO",
-    //     "AUTH",
-    //     "auth",
-    // ))?;
-    // println!(
-    //     " >>>> admin_account_creds_path: {:#?} ",
-    //     admin_account_creds_path
-    // );
+    // Root Keypair associated with AUTH account
+    let root_account_key_path = std::env::var("ORCHESTRATOR_ROOT_AUTH_NKEY_PATH")
+        .context("Cannot read ORCHESTRATOR_ROOT_AUTH_NKEY_PATH from env var")?;
+    println!(">>>>>>>>> root account key_path: {:?}", root_account_key_path);
 
-    // // Root Keypair associated with AUTH account
-    // let root_account_key_path = std::env::var("ROOT_AUTH_NKEY_PATH")
-    //     .context("Cannot read ROOT_AUTH_NKEY_PATH from env var")?;
-
-    // let root_account_keypair = Arc::new(
-    //     try_read_keypair_from_file(PathBuf::from_str(&root_account_key_path.clone())?)?.ok_or_else(
-    //         || {
-    //             anyhow!(
-    //                 "Root AUTH Account keypair not found at path {:?}",
-    //                 root_account_key_path
-    //             )
-    //         },
-    //     )?,
-    // );
-    // let root_account_pubkey = root_account_keypair.public_key().clone();
-    // println!(">>>>>>>>> root account pubkey: {:?}", root_account_pubkey);
-
-    // // AUTH Account Signing Keypair associated with the `auth` user
-    // let signing_account_key_path = std::env::var("SIGNING_AUTH_NKEY_PATH")
-    // .context("Cannot read SIGNING_AUTH_NKEY_PATH from env var")?;
-    // let signing_account_keypair = Arc::new(
-    //     try_read_keypair_from_file(PathBuf::from_str(&signing_account_key_path.clone())?)?
-    //         .ok_or_else(|| {
-    //             anyhow!(
-    //                 "Signing AUTH Account keypair not found at path {:?}",
-    //                 signing_account_key_path
-    //             )
-    //         })?,
-    // );
-    // let signing_account_pubkey = signing_account_keypair.public_key().clone();
-    // println!(">>>>>>>>> signing_account pubkey: {:?}", signing_account_pubkey);
-    let admin_account_creds = "-----BEGIN NATS USER JWT-----
-eyJ0eXAiOiJKV1QiLCJhbGciOiJlZDI1NTE5LW5rZXkifQ.eyJqdGkiOiJUTVJDVklaUDRJUlRLWktGSEVTV1BYSzZMM0hDQUdTTFhUREZBTk9IS1ZQSFNNQ0w3UEhBIiwiaWF0IjoxNzM4NTI0MDg5LCJpc3MiOiJBRFQ2TUhSQUgzU0JXWFU1RlRHN0I2WklCU0VXV0UzMkJVNDJKTzRKRE8yV0VSVDZYTVpLRTYzUyIsIm5hbWUiOiJhdXRoIiwic3ViIjoiVUNWQTVZT1haNTZMVzNSRVhEV1VBR1EzVktERE5RVlA0TVNSSFJKRVRTQjJZRlBVQ1FJQTdQT0siLCJuYXRzIjp7InB1YiI6eyJhbGxvdyI6WyJcdTAwM2UiXX0sInN1YiI6eyJhbGxvdyI6WyJcdTAwM2UiXX0sInN1YnMiOi0xLCJkYXRhIjotMSwicGF5bG9hZCI6LTEsImlzc3Vlcl9hY2NvdW50IjoiQUEzUTdIWVBHTVdSWFcyRkxLNUNCRFZQWVdEUjI3TU5QUE9TT1M3SUdVT0hBWTNMNEdOUkJMSjQiLCJ0eXBlIjoidXNlciIsInZlcnNpb24iOjJ9fQ.K-cSBzw_wai2BEA7Lzxg2kDThj72lZpTKJbvUff6gSxPjn2KuVJQy5k2mSC9fohBmjcJLSoQ-7JrXA7GN1VMDA
-------END NATS USER JWT------
-
-************************* IMPORTANT *************************
-NKEY Seed printed below can be used to sign and prove identity.
-NKEYs are sensitive and should be treated as secrets.
-
------BEGIN USER NKEY SEED-----
-SUALKRFOSR77N6VXQOQRF65RET2GU4D4IP2OEB4546EEX6WLHK2BW6FMZU
-------END USER NKEY SEED------
-
-*************************************************************";    
-    let root_account_keypair = KeyPair::from_seed("SAAINFLMRAAE6GYKTQ4SCXNPPCZQTSSSWB3BU3PDKK7CHZDEDYXHL5IP4E")?;
+    let root_account_keypair = Arc::new(
+        try_read_keypair_from_file(PathBuf::from_str(&root_account_key_path.clone())?)?.ok_or_else(
+            || {
+                anyhow!(
+                    "Root AUTH Account keypair not found at path {:?}",
+                    root_account_key_path
+                )
+            },
+        )?,
+    );
     let root_account_pubkey = root_account_keypair.public_key().clone();
     println!(">>>>>>>>> root account pubkey: {:?}", root_account_pubkey);
 
-    let signing_account_keypair = KeyPair::from_seed("SAAL7ULQELTAX5VHVYDDZZ3636AY2AO2O25CRVOPPRFS2KOMVEZV6HTLXI")?;
-    let signing_account_pubkey = signing_account_keypair.public_key();
-    println!(">>>>>>>>> auth_signing_account pubkey: {:?}", signing_account_pubkey);
+    // AUTH Account Signing Keypair associated with the `auth` user
+    let signing_account_key_path = std::env::var("ORCHESTRATOR_SIGNING_AUTH_NKEY_PATH")
+        .context("Cannot read ORCHESTRATOR_SIGNING_AUTH_NKEY_PATH from env var")?;
+    println!(">>>>>>>>> signing account key_path: {:?}", signing_account_key_path);
 
+    let signing_account_keypair = Arc::new(
+        try_read_keypair_from_file(PathBuf::from_str(&signing_account_key_path.clone())?)?
+            .ok_or_else(|| {
+                anyhow!(
+                    "Signing AUTH Account keypair not found at path {:?}",
+                    signing_account_key_path
+                )
+            })?,
+    );
+    let signing_account_pubkey = signing_account_keypair.public_key().clone();
+    println!(">>>>>>>>> signing_account pubkey: {:?}", signing_account_pubkey);
 
     // ==================== Setup NATS ====================
     let nats_url = get_nats_url();
@@ -121,8 +99,7 @@ SUALKRFOSR77N6VXQOQRF65RET2GU4D4IP2OEB4546EEX6WLHK2BW6FMZU
                 .custom_inbox_prefix(ORCHESTRATOR_AUTH_CLIENT_INBOX_PREFIX.to_string())
                 .ping_interval(Duration::from_secs(10))
                 .request_timeout(Some(Duration::from_secs(30)))
-                // .credentials_file(&admin_account_creds_path).await.map_err(|e| anyhow::anyhow!("Error loading credentials file: {e}"))?
-                .credentials(admin_account_creds)?
+                .credentials_file(&admin_account_creds_path).await.map_err(|e| anyhow::anyhow!("Error loading credentials file: {e}"))?
                 .connect(nats_url.clone())
                 .await
                 .map_err(|e| anyhow::anyhow!("Connecting Orchestrator Auth Client to NATS via {nats_url}: {e}"));
@@ -170,9 +147,9 @@ SUALKRFOSR77N6VXQOQRF65RET2GU4D4IP2OEB4546EEX6WLHK2BW6FMZU
 
     tokio::spawn(async move {
         while let Some(request) = auth_callout.next().await {
-                let signing_account_kp = Arc::clone(&Arc::new(signing_account_keypair.clone()));
+                let signing_account_kp = Arc::clone(&signing_account_keypair.clone());
                 let signing_account_pk = signing_account_pubkey.clone();
-                let root_account_kp = Arc::clone(&Arc::new(root_account_keypair.clone()));
+                let root_account_kp = Arc::clone(&root_account_keypair.clone());
                 let root_account_pk = root_account_pubkey.clone();
 
                 let maybe_reply = request.message.reply.clone();

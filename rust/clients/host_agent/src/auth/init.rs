@@ -132,19 +132,6 @@ SUABBYL4YAGRRJDOMXP72EUDM4UOFOGJWVPKT6AB7UMNWU2TV4M4PMFXDE
     log::trace!("Host Auth Client: Retrieved Node ID: {}", server_node_id);
 
     // ==================== Handle Host User and SYS Authoriation ============================================================
-    let auth_guard_client_clone = auth_guard_client.clone();
-
-    // tokio::spawn({
-    //     let mut auth_inbox_msgs = auth_guard_client_clone
-    //         .subscribe(unique_inbox.to_string())
-    //         .await?;
-    //     async move {
-    //         while let Some(msg) = auth_inbox_msgs.next().await {
-    //             println!("got an AUTH INBOX msg: {:?}", &msg);
-    //         }
-    //     }
-    // });
-
     let payload = AuthJWTPayload {
         host_pubkey: host_agent_keys.host_pubkey.to_string(),
         maybe_sys_pubkey: host_agent_keys.local_sys_pubkey.clone(),

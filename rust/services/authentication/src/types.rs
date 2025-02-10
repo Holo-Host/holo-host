@@ -33,31 +33,7 @@ pub struct AuthJWTPayload {
     pub host_pubkey: String,              // nkey
     pub maybe_sys_pubkey: Option<String>, // optional nkey
     pub nonce: String,
-    // #[serde(skip_serializing_if = "Vec::is_empty")]
-    // host_signature: Vec<u8>, // used to verify the host keypair
 }
-// // NB: Currently there is no way to pass headers in jetstream requests.
-// // Therefore the host_signature is passed within the b64 encoded `AuthGuardPayload` token
-// impl AuthJWTPayload {
-// pub fn try_add_signature<T>(mut self, sign_handler: T) -> Result<Self>
-//     where
-//         T: Fn(&[u8]) -> Result<String>,
-//     {
-//         let payload_bytes = serde_json::to_vec(&self)?;
-//         let signature = sign_handler(&payload_bytes)?;
-//         self.host_signature = signature.as_bytes().to_vec();
-//         Ok(self)
-//     }
-
-//     pub fn without_signature(mut self) -> Self {
-//         self.host_signature = vec![];
-//         self
-//     }
-
-//     pub fn get_host_signature(&self) -> Vec<u8> {
-//         self.host_signature.clone()
-//     }
-// }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct AuthJWTResult {

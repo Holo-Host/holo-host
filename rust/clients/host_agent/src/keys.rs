@@ -6,7 +6,7 @@ use std::io::{Read, Write};
 use std::path::PathBuf;
 use std::process::Command;
 use std::str::FromStr;
-use util_libs::nats_js_client::{get_nats_creds_by_nsc, get_nsc_root_path, get_path_buf_from_current_dir};
+use util_libs::nats_js_client::{get_nats_creds_by_nsc, get_nsc_root_path};
 
 impl std::fmt::Debug for Keys {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
