@@ -6,7 +6,12 @@ edition = "2021"
 [dependencies]
 actix-web = "4"
 utoipa = { version = "5", features = ["actix_extras"] }
-utoipa-swagger-ui = { version = "8.0.3", features = ["actix-web"] }
+utoipa-swagger-ui = { version = "9", features = [
+    "actix-web",
+
+    # Enables vendored Swagger UI via utoipa-swagger-ui-vendored crate.
+    "vendored"
+]}
 serde = "1.0.188"
 futures = "0.3.28"
 tokio = {version = "1.32.0", features = ["full"]}
