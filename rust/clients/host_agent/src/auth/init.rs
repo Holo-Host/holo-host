@@ -22,16 +22,10 @@ use crate::{
     keys::{AuthCredType, Keys},
 };
 use anyhow::Result;
-use async_nats::{jetstream::context::PublishErrorKind, HeaderMap, HeaderName, HeaderValue, RequestErrorKind};
-use authentication::types::{AuthGuardPayload, AuthJWTPayload, AuthJWTResult, AuthResult, AuthState};
-use nkeys::KeyPair;
+use async_nats::{HeaderMap, HeaderName, HeaderValue, RequestErrorKind};
+use authentication::types::{AuthGuardPayload, AuthJWTPayload, AuthJWTResult, AuthState};
 use std::time::Duration;
-// use futures::StreamExt;
-use util_libs::nats_js_client::{
-    self, get_event_listeners, get_nats_url, with_event_listeners,
-    Credentials, JsClient, NewJsClientParams,
-};
-use data_encoding::BASE64URL_NOPAD;
+use util_libs::nats_js_client;
 use textnonce::TextNonce;
 use hpos_hal::inventory::HoloInventory;
 use std::str::FromStr;
@@ -93,20 +87,6 @@ pub async fn run(
     };
     println!("user_creds_path={:#?}", user_creds_path);
 
-    let user_creds = "-----BEGIN NATS USER JWT-----
-eyJ0eXAiOiJKV1QiLCJhbGciOiJlZDI1NTE5LW5rZXkifQ.eyJqdGkiOiI2MkVCSEhFR0M1RDIyU0lXR1hSU0paNEpWWkdWUk9FVUo3N1BYQ1BPNUU3UDRBTkVHV1RBIiwiaWF0IjoxNzM4NTI3NjgwLCJpc3MiOiJBRFQ2TUhSQUgzU0JXWFU1RlRHN0I2WklCU0VXV0UzMkJVNDJKTzRKRE8yV0VSVDZYTVpLRTYzUyIsIm5hbWUiOiJhdXRoLWd1YXJkIiwic3ViIjoiVUM1N1pETUtOSVhVWE9NNlRISE8zQjVVRUlWQ0JPM0hNRlUzSU5ESVZNTzVCSFZKR1k3R1hIM1UiLCJuYXRzIjp7InB1YiI6eyJkZW55IjpbIlx1MDAzZSJdfSwic3ViIjp7ImRlbnkiOlsiXHUwMDNlIl19LCJzdWJzIjotMSwiZGF0YSI6LTEsInBheWxvYWQiOi0xLCJpc3N1ZXJfYWNjb3VudCI6IkFBM1E3SFlQR01XUlhXMkZMSzVDQkRWUFlXRFIyN01OUFBPU09TN0lHVU9IQVkzTDRHTlJCTEo0IiwidHlwZSI6InVzZXIiLCJ2ZXJzaW9uIjoyfX0.REQSfDwGzuG0vWDDfHyZdpN-Ens3hhRF1-I-k5akDK9oT8kueW2OWX3lFlgBreNw5JsTgE0fjKDq942QRTygDg
-------END NATS USER JWT------
-
-************************* IMPORTANT *************************
-NKEY Seed printed below can be used to sign and prove identity.
-NKEYs are sensitive and should be treated as secrets.
-
------BEGIN USER NKEY SEED-----
-SUABBYL4YAGRRJDOMXP72EUDM4UOFOGJWVPKT6AB7UMNWU2TV4M4PMFXDE
-------END USER NKEY SEED------
-
-*************************************************************";
-
     // Connect to Nats server as auth guard and call NATS AuthCallout
     let nats_url = nats_js_client::get_nats_url();
     let auth_guard_client =
@@ -116,8 +96,8 @@ SUABBYL4YAGRRJDOMXP72EUDM4UOFOGJWVPKT6AB7UMNWU2TV4M4PMFXDE
             .ping_interval(Duration::from_secs(10))
             .request_timeout(Some(Duration::from_secs(30)))
             .token(user_auth_token)
-            // .credentials_file(&user_creds_path).await?
-            .credentials(user_creds)?
+            .credentials_file(&user_creds_path).await?
+            // .credentials(user_creds)?
             .connect(nats_url)
             .await?;
 

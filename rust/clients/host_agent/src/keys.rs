@@ -41,7 +41,7 @@ pub struct CredPaths {
 #[derive(Clone)]
 pub enum AuthCredType {
     Guard(PathBuf),           // Default
-    Authenticated(CredPaths), // only assiged after successful hoster authentication
+    Authenticated(CredPaths), // Only assiged after successful hoster authentication
 }
 
 #[derive(Clone)]
@@ -55,42 +55,32 @@ pub struct Keys {
 
 impl Keys {
     pub fn new() -> Result<Self> {
-        println!("inside Keys new ... 0");
-
         let host_key_path =
             std::env::var("HOSTING_AGENT_HOST_NKEY_PATH").context("Cannot read HOSTING_AGENT_HOST_NKEY_PATH from env var")?;
-        println!("inside Keys new ... 1");
         println!("inside Keys new > host_key_path={}", host_key_path);
     
         let host_kp = KeyPair::new_user();
-        println!("inside Keys new ... 2");
         println!("inside Keys new > host_kp={:#?}", host_kp);
 
         write_keypair_to_file(PathBuf::from_str(&host_key_path)?, host_kp.clone())?;
-        println!("inside Keys new ... 3");
 
         let host_pk = host_kp.public_key();
         println!("inside Keys new > host_pk={}", host_pk);
 
         let sys_key_path =
             std::env::var("HOSTING_AGENT_SYS_NKEY_PATH").context("Cannot read SYS_NKEY_PATH from env var")?;
-        println!("inside Keys new ... 4");
         println!("inside Keys new > sys_key_path={}", sys_key_path);
             
         let local_sys_kp = KeyPair::new_user();
-        println!("inside Keys new ... 5");
         println!("inside Keys new > local_sys_kp={:#?}", local_sys_kp);
 
         write_keypair_to_file(PathBuf::from_str(&sys_key_path)?, local_sys_kp.clone())?;
-        println!("inside Keys new ... 6");
 
         let local_sys_pk = local_sys_kp.public_key();
-        println!("inside Keys new ... 7");
         println!("inside Keys new > local_sys_pk={}", local_sys_pk);
 
         let auth_guard_creds = PathBuf::from_str(&get_nats_creds_by_nsc("HOLO", "AUTH", "auth_guard"))?;
         println!("inside Keys new > auth_guard_creds={:#?}", auth_guard_creds);
-        println!("inside Keys new ... 8");
 
         Ok(Self {
             host_keypair: host_kp,
@@ -120,17 +110,18 @@ impl Keys {
 
         let sys_key_path =
             std::env::var("HOSTING_AGENT_SYS_NKEY_PATH").context("Cannot read HOSTING_AGENT_SYS_NKEY_PATH from env var")?;
-        println!("inside try_from_storage auth... 3");
         println!("sys_key_path={:#?}", sys_key_path); 
 
+        let host_user_name = format!("host_user_{}", host_pk);
         let host_creds_path = maybe_host_creds_path
             .to_owned()
-            .map_or_else(|| PathBuf::from_str(&get_nats_creds_by_nsc("HOLO", "HPOS", "host")), Ok)?;
+            .map_or_else(|| PathBuf::from_str(&get_nats_creds_by_nsc("HOLO", "WORKLOAD", &host_user_name)), Ok)?;
         println!("host_creds_path={:#?}", host_creds_path); 
 
+        let sys_user_name = format!("sys_user_{}", host_pk);
         let sys_creds_path = maybe_sys_creds_path
             .to_owned()
-            .map_or_else(|| PathBuf::from_str(&get_nats_creds_by_nsc("HOLO", "HPOS", "sys")), Ok)?;
+            .map_or_else(|| PathBuf::from_str(&get_nats_creds_by_nsc("HOLO", "SYS", &sys_user_name)), Ok)?;
         println!("sys_creds_path={:#?}", sys_creds_path); 
 
         // Set auth_guard_creds as default:
@@ -247,12 +238,12 @@ impl Keys {
         let host_path = PathBuf::from_str(&format!("/{}/{}/{}", get_nsc_root_path(), "local_creds", "host.jwt"))?;
         println!("host_path ={:?}", host_path);
         write_to_file(host_path.clone(), host_user_jwt.as_bytes())?;
-        println!("wrote JWT to host file");
+        println!("Wrote JWT to host file");
 
         let sys_path = PathBuf::from_str(&format!("/{}/{}/{}", get_nsc_root_path(), "local_creds", "sys.jwt"))?;
         println!("sys_path ={:?}", sys_path);
         write_to_file(sys_path.clone(), host_sys_user_jwt.as_bytes())?;
-        println!("wrote JWT to sys file");
+        println!("Wrote JWT to sys file");
 
         // Import host user jwt to local nsc resolver
         // TODO: Determine why the following works in cmd line, but doesn't seem to work when run in current program / run
@@ -288,7 +279,7 @@ impl Keys {
             ])
             .output()
             .context("Failed to add new operator signing key on hosting agent")?;
-        println!("generated host user creds");
+        println!("Generated host user creds. creds_path={:?}", host_creds_path);
 
         let mut sys_creds_file_name = None;
         if let Some(_) = self.local_sys_pubkey.as_ref() {
@@ -307,8 +298,8 @@ impl Keys {
             ])
             .output()
             .context("Failed to add new operator signing key on hosting agent")?;
+            println!("Generated sys user creds. creds_path={:?}", path);
             sys_creds_file_name = Some(path);
-            println!("generated sys user creds");
         }
 
         self.to_owned()
