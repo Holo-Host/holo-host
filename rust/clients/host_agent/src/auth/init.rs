@@ -41,7 +41,7 @@ pub async fn run(
     // ==================== Fetch Config File & Call NATS AuthCallout Service to Authenticate Host & Hoster =============================================
     let nonce = TextNonce::new().to_string();
     let unique_inbox = &format!(
-        "{}.{}",
+        "{}_{}",
         HOST_AUTH_CLIENT_INBOX_PREFIX, host_agent_keys.host_pubkey
     );
     println!(">>> unique_inbox : {}", unique_inbox);

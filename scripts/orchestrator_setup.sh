@@ -113,7 +113,7 @@ nsc edit account --name $ADMIN_ACCOUNT --js-streams -1 --js-consumer -1 --js-mem
 
 ADMIN_SK="$(echo "$(nsc edit account -n $ADMIN_ACCOUNT --sk generate 2>&1)" | grep -oP "signing key\s*\K\S+")"
 ADMIN_ROLE_NAME="admin_role"
-nsc edit signing-key --sk $ADMIN_SK --role $ADMIN_ROLE_NAME --allow-pub "ADMIN.>","AUTH.>","WORKLOAD.>","\$JS.API.>","\$SYS.>","_INBOX.>","_INBOX_*.>","_workload_inbox_*.>","_auth_inbox_*.>" --allow-sub "ADMIN.>","AUTH.>","WORKLOAD.>","\$JS.API.>","\$SYS.>","_INBOX.>","_INBOX_*.>","_workload_inbox_orchestrator.>","_auth_inbox_orchestrator.>" --allow-pub-response
+nsc edit signing-key --sk $ADMIN_SK --role $ADMIN_ROLE_NAME --allow-pub "ADMIN.>","AUTH.>","WORKLOAD.>","\$JS.API.>","\$SYS.>","_INBOX.>","_INBOX_*.>","_WORKLOAD_INBOX_*.>","_AUTH_INBOX_*.>" --allow-sub "ADMIN.>","AUTH.>","WORKLOAD.>","\$JS.API.>","\$SYS.>","_INBOX.>","_INBOX_*.>","_WORKLOAD_INBOX_ORCHESTRATOR.>","_AUTH_INBOX_ORCHESTRATOR.>" --allow-pub-response
 
 # Step 3: Create AUTH with JetStream with non-scoped signing key
 nsc add account --name $AUTH_ACCOUNT
@@ -121,23 +121,23 @@ nsc edit account --name $AUTH_ACCOUNT --sk generate --js-streams -1 --js-consume
 AUTH_ACCOUNT_PUBKEY=$(nsc describe account $AUTH_ACCOUNT --field sub | jq -r)
 AUTH_SK_ACCOUNT_PUBKEY=$(nsc describe account $AUTH_ACCOUNT --field 'nats.signing_keys[0]' | tr -d '"')
 
-# Step 4: Create "Sentinel" User in AUTH Account
-nsc add user --name $AUTH_GUARD_USER --account $AUTH_ACCOUNT --deny-pubsub ">"
-
-# Step 5: Create WORKLOAD Account with JetStream and scoped signing keys
+# Step 4: Create WORKLOAD Account with JetStream and scoped signing keys
 nsc add account --name $WORKLOAD_ACCOUNT
 nsc edit account --name $WORKLOAD_ACCOUNT --js-streams -1 --js-consumer -1 --js-mem-storage 1G --js-disk-storage 5G --conns -1 --leaf-conns -1
 WORKLOAD_SK="$(echo "$(nsc edit account -n $WORKLOAD_ACCOUNT --sk generate 2>&1)" | grep -oP "signing key\s*\K\S+")"
 WORKLOAD_ROLE_NAME="workload_role"
-nsc edit signing-key --sk $WORKLOAD_SK --role $WORKLOAD_ROLE_NAME --allow-pub "WORKLOAD.>","_INBOX_{{tag(pubkey)}}.>","_workload_inbox_{{tag(pubkey)}}.>" --allow-sub "WORKLOAD.{{tag(pubkey)}}.*","_INBOX_{{tag(pubkey)}}.>","_workload_inbox_{{tag(pubkey)}}.>" --allow-pub-response
+nsc edit signing-key --sk $WORKLOAD_SK --role $WORKLOAD_ROLE_NAME --allow-pub "WORKLOAD.>","_WORKLOAD_INBOX_{{tag(pubkey)}}.>" --allow-sub "WORKLOAD.{{tag(pubkey)}}.*","_WORKLOAD_INBOX_{{tag(pubkey)}}.>" --allow-pub-response
 
-# Step 6: Create Operator User in ADMIN Account (for use in Orchestrator)
+# Step 5: Create Orchestrator User in ADMIN Account
 nsc add user --name $ADMIN_USER --account $ADMIN_ACCOUNT -K $ADMIN_ROLE_NAME
 
-# Step 7: Create Operator User in AUTH Account (used in auth service)
+# Step 6: Create Orchestrator User in AUTH Account (used in auth-callout service)
 nsc add user --name $ORCHESTRATOR_AUTH_USER --account $AUTH_ACCOUNT --allow-pubsub ">"
 AUTH_USER_PUBKEY=$(nsc describe user --name $ORCHESTRATOR_AUTH_USER --account $AUTH_ACCOUNT --field sub | jq -r)
 echo "assigned auth user pubkey: $AUTH_USER_PUBKEY"
+
+# Step 7: Create "Sentinel" User in AUTH Account (used by host agents in auth-callout service)
+nsc add user --name $AUTH_GUARD_USER --account $AUTH_ACCOUNT --deny-pubsub ">"
 
 # Step 8: Configure Auth Callout
 echo $AUTH_ACCOUNT_PUBKEY

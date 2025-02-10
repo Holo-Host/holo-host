@@ -62,6 +62,15 @@ where
 }
 
 #[derive(Clone, Debug)]
+pub struct RequestInfo {
+    pub stream_subject: String,
+    pub consumer_name: String,
+    pub msg_id: String,
+    pub data: Vec<u8>,
+    pub headers: Option<HeaderMap>,
+}
+
+#[derive(Clone, Debug)]
 pub struct PublishInfo {
     pub subject: String,
     pub msg_id: String,
@@ -224,11 +233,19 @@ impl JsClient {
     }
 
     pub async fn publish(&self, payload: PublishInfo) -> Result<(), async_nats::Error> {
+        log::debug!(
+            "{}Published message: subj={}, msg_id={} data={:?}",
+            self.service_log_prefix,
+            payload.subject,
+            payload.msg_id,
+            payload.data
+        );
+        
         let now = Instant::now();
         let result = match payload.headers {
-            Some(h) => {
+            Some(headers) => {
                 self.js
-                    .publish_with_headers(payload.subject.clone(), h, payload.data.clone().into())
+                    .publish_with_headers(payload.subject.clone(), headers, payload.data.clone().into())
                     .await
             }
             None => {
@@ -246,13 +263,6 @@ impl JsClient {
             return Err(Box::new(err));
         }
 
-        log::debug!(
-            "{}Published message: subj={}, msg_id={} data={:?}",
-            self.service_log_prefix,
-            payload.subject,
-            payload.msg_id,
-            payload.data
-        );
         if let Some(ref on_published) = self.on_msg_published_event {
             on_published(&payload.subject, &self.name, duration);
         }

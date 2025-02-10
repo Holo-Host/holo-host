@@ -1,5 +1,3 @@
-use super::nats_js_client::EndpointType;
-
 use anyhow::{anyhow, Result};
 use async_nats::jetstream::consumer::{self, AckPolicy, PullConsumer};
 use async_nats::jetstream::stream::{self, Info, Stream};
@@ -12,6 +10,7 @@ use std::collections::HashMap;
 use std::fmt::Debug;
 use std::sync::Arc;
 use tokio::sync::RwLock;
+use super::nats_js_client::EndpointType;
 
 pub type ResponseSubjectsGenerator =
     Arc<dyn Fn(HashMap<String, String>) -> Vec<String> + Send + Sync>;

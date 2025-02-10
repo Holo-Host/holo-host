@@ -13,9 +13,9 @@ use anyhow::{Context, Result};
 use async_nats::jetstream::ErrorCode;
 use async_nats::HeaderValue;
 use async_nats::{AuthError, Message};
-use bson::{self, doc, to_document};
+use data_encoding::BASE64URL_NOPAD;
 use core::option::Option::None;
-use mongodb::{options::UpdateModifications, Client as MongoDBClient};
+use mongodb::Client as MongoDBClient;
 use nkeys::KeyPair;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -27,7 +27,7 @@ use util_libs::db::{
     mongodb::{IntoIndexes, MongoCollection, MongoDbAPI},
     schemas::{self, Host, Hoster, Role, RoleInfo, User},
 };
-use util_libs::nats_js_client::{AsyncEndpointHandler, JsServiceResponse, ServiceError};
+use util_libs::nats_js_client::{get_nsc_root_path, AsyncEndpointHandler, JsServiceResponse, ServiceError};
 use utils::handle_internal_err;
 
 pub const AUTH_SRV_NAME: &str = "AUTH";
@@ -88,6 +88,7 @@ impl AuthServiceApi {
         .map_err(|e| ServiceError::Authentication(AuthError::new(e)))?;
         println!("user_data TO VALIDATE  : {:#?}", user_data);
 
+        // TODO:
         // 2. Validate Host signature, returning validation error if not successful
         let host_pubkey = user_data.host_pubkey.as_ref();
         let host_signature = user_data.get_host_signature();
@@ -95,18 +96,19 @@ impl AuthServiceApi {
             .map_err(|e| ServiceError::Internal(e.to_string()))?;
         let raw_payload = serde_json::to_vec(&user_data.clone().without_signature())
             .map_err(|e| ServiceError::Internal(e.to_string()))?;
-        if let Err(e) = user_verifying_keypair.verify(raw_payload.as_ref(), &host_signature) {
-            log::error!(
-                "Error: Failed to validate Signature. Subject='{}'. Err={}",
-                msg.subject,
-                e
-            );
-            return Err(ServiceError::Authentication(AuthError::new(e)));
-        };
+        // if let Err(e) = user_verifying_keypair.verify(raw_payload.as_ref(), &host_signature) {
+        //     log::error!(
+        //         "Error: Failed to validate Signature. Subject='{}'. Err={}",
+        //         msg.subject,
+        //         e
+        //     );
+        //     return Err(ServiceError::Authentication(AuthError::new(e)));
+        // };
 
         // 3. If provided, authenticate the Hoster pubkey and email and assign full permissions if successful
         let is_hoster_valid = if user_data.email.is_some() && user_data.hoster_hc_pubkey.is_some() {
             true 
+            // TODO:
             // let hoster_hc_pubkey = user_data.hoster_hc_pubkey.unwrap(); // unwrap is safe here as checked above
             // let hoster_email = user_data.email.unwrap(); // unwrap is safe here as checked above
 
@@ -221,7 +223,7 @@ impl AuthServiceApi {
             let user_unique_auth_subject = &format!("AUTH.{}.>", host_pubkey);
             println!(">>> user_unique_auth_subject : {user_unique_auth_subject}");
 
-            let user_unique_inbox = &format!("_INBOX.{}.>", host_pubkey);
+            let user_unique_inbox = &format!("_AUTH_INBOX_{}.>", host_pubkey);
             println!(">>> user_unique_inbox : {user_unique_inbox}");
 
             let authenticated_user_diagnostics_subject =
@@ -280,12 +282,6 @@ impl AuthServiceApi {
 
         println!("\n\n\n\nencoded_jwt: {:#?}", token);
 
-        // DONE BY JS HANDLER
-        // let res = token.into_bytes();
-        // if let Some(reply) = msg.reply {
-        //     client.publish(reply, res.into()).await?;
-        // }
-
         Ok(types::AuthApiResult {
             result: types::AuthResult::Callout(token),
             maybe_response_tags: None,
@@ -297,13 +293,18 @@ impl AuthServiceApi {
         msg: Arc<Message>,
     ) -> Result<AuthApiResult, ServiceError> {
         log::warn!("INCOMING Message for 'AUTH.validate' : {:?}", msg);
+        println!("msg={:#?}", msg);
 
         // 1. Verify expected data was received
         let signature: &[u8] = match &msg.headers {
-            Some(h) => HeaderValue::as_ref(h.get("X-Signature").ok_or_else(|| {
-                log::error!("Error: Missing x-signature header. Subject='AUTH.authorize'");
-                ServiceError::Request(format!("{:?}", ErrorCode::BAD_REQUEST))
-            })?),
+            Some(h) => {
+                println!("header={:?}", h);
+                let r = HeaderValue::as_str(h.get("X-Signature").ok_or_else(|| {
+                    log::error!("Error: Missing x-signature header. Subject='AUTH.authorize'");
+                    ServiceError::Request(format!("{:?}", ErrorCode::BAD_REQUEST))
+                })?);
+                r.as_bytes()
+            },
             None => {
                 log::error!("Error: Missing message headers. Subject='AUTH.authorize'");
                 return Err(ServiceError::Request(format!(
@@ -316,13 +317,18 @@ impl AuthServiceApi {
         let types::AuthJWTPayload {
             host_pubkey,
             maybe_sys_pubkey,
-            nonce: _,
+            ..
         } = Self::convert_msg_to_type::<types::AuthJWTPayload>(msg.clone())?;
+
+        let decoded_signature = BASE64URL_NOPAD.decode(signature).map_err(|e| {
+            println!("err={}", e);
+            ServiceError::Internal(e.to_string())
+        })?;
 
         // 2. Validate signature
         let user_verifying_keypair = KeyPair::from_public_key(&host_pubkey)
             .map_err(|e| ServiceError::Internal(e.to_string()))?;
-        if let Err(e) = user_verifying_keypair.verify(msg.payload.as_ref(), signature) {
+        if let Err(e) = user_verifying_keypair.verify(msg.payload.as_ref(), &decoded_signature) {
             log::error!(
                 "Error: Failed to validate Signature. Subject='{}'. Err={}",
                 msg.subject,
@@ -331,68 +337,88 @@ impl AuthServiceApi {
             return Err(ServiceError::Request(format!(
                 "{:?}",
                 ErrorCode::BAD_REQUEST
-            )));
+            )));    
         };
 
-        // 4. Add User keys to nsc resolver (and automatically create account-signed refernce to user key)
-        if let Some(sys_pubkey) = maybe_sys_pubkey {
-            Command::new("nsc")
-                .arg(format!(
-                    "add user -a SYS -n user_sys_host_{} -k {}",
-                    host_pubkey, sys_pubkey
-                ))
+        println!("'AUTH.validate >>> user_verifying_keypair' : {:?}", user_verifying_keypair);
+        println!("'AUTH.validate >>> maybe_sys_pubkey' : {:?}", maybe_sys_pubkey);
+
+        // 3. Add User keys to nsc resolver (and automatically create account-signed refernce to user key)
+        match Command::new("nsc")
+            .args(&[
+                "add", "user",
+                "-a", "WORKLOAD",
+                "-n", &format!("host_user_{}", host_pubkey),
+                "-k", &host_pubkey,
+                "-K", WORKLOAD_SK_ROLE,
+                "--tag", &format!("pubkey:{}", host_pubkey),
+            ])
+            .output()
+            .context("Failed to add host user with provided keys")
+            .map_err(|e| ServiceError::Internal(e.to_string())) {
+                Ok(r) => {
+                    println!("'AUTH.validate >>> add user -a WORKLOAD -n host_user_<pubkey> ...' : {:?}", r);
+                },
+                Err(e) => {
+                    if !e.to_string().contains("already exists") {
+                        return Err(e);
+                    }
+                    println!("'AUTH.validate >>> ERROR: add user -a WORKLOAD -n host_user_<pubkey> ...' : {:?}", e);
+                }
+            };
+        println!("\nadded host user");
+
+        if let Some(sys_pubkey) = maybe_sys_pubkey.clone() {
+            println!("inside handle_handshake_request... 5 sys -- inside");
+
+            match Command::new("nsc")
+                .args(&[
+                    "add", "user",
+                    "-a", "SYS",
+                    "-n", &format!("sys_user_{}", host_pubkey),
+                    "-k", &sys_pubkey,
+                ])
                 .output()
                 .context("Failed to add host sys user with provided keys")
-                .map_err(|e| ServiceError::Internal(e.to_string()))?;
-
-            Command::new("nsc")
-                .arg(format!(
-                    "add user -a WORKLOAD -n user_host_{} -k {} -K {} --tag pubkey:{}",
-                    host_pubkey, host_pubkey, WORKLOAD_SK_ROLE, host_pubkey
-                ))
-                .output()
-                .context("Failed to add host user with provided keys")
-                .map_err(|e| ServiceError::Internal(e.to_string()))?;
+                .map_err(|e| ServiceError::Internal(e.to_string())) {
+                    Ok(r) => {
+                        println!("'AUTH.validate >>> add user -a SYS -n sys_user_<pubkey> ...' : {:?}", r);
+                    },
+                    Err(e) => {
+                        if !e.to_string().contains("already exists") {
+                            return Err(e);
+                        }
+                        println!("'AUTH.validate >>> ERROR: add user -a SYS -n sys_user_<pubkey> ...' : {:?}", e);
+                    }
+                };
         }
+        println!("\nadded sys user for provided host");
 
-        // ..and push auth updates to hub server
+        // 4. Create User JWT files (automatically signed with respective account key)
+        let host_jwt = std::fs::read_to_string(format!("{}/stores/HOLO/accounts/WORKLOAD/users/host_user_{}.jwt", get_nsc_root_path(), host_pubkey))
+            .map_err(|e| ServiceError::Internal(e.to_string()))?;
+        println!("'AUTH.validate >>> host_jwt' : {:?}", host_jwt);
+
+        let sys_jwt = if let Some(_) = maybe_sys_pubkey {
+            std::fs::read_to_string(format!("{}/stores/HOLO/accounts/SYS/users/sys_user_{}.jwt", get_nsc_root_path(), host_pubkey))
+            .map_err(|e| ServiceError::Internal(e.to_string()))?
+        } else { String::new() };
+        println!("'AUTH.validate >>> sys_jwt' : {:?}", sys_jwt);
+
+        // 5. PUSH the auth updates to resolver programmtically by sending jwts to `SYS.REQ.ACCOUNT.PUSH` subject
         Command::new("nsc")
             .arg("push -A")
             .output()
             .context("Failed to update resolver config file")
             .map_err(|e| ServiceError::Internal(e.to_string()))?;
-
-        // 3. Create User JWT files (automatically signed with respective account key)
-        let sys_jwt_output = Command::new("nsc")
-            .arg(format!(
-                "describe user -n user_sys_host_{} -a SYS --raw",
-                host_pubkey
-            ))
-            .output()
-            .context("Failed to generate host sys user jwt file")
-            .map_err(|e| ServiceError::Internal(e.to_string()))?;
-
-        let sys_jwt = String::from_utf8(sys_jwt_output.stdout)
-            .context("Command returned invalid UTF-8 output")
-            .map_err(|e| ServiceError::Internal(e.to_string()))?;
-
-        let host_jwt_output = Command::new("nsc")
-            .arg(format!(
-                "describe user -n user_host_{} -a WORKLOAD --raw",
-                host_pubkey
-            ))
-            .output()
-            .context("Failed to generate host user jwt file")
-            .map_err(|e| ServiceError::Internal(e.to_string()))?;
-
-        let host_jwt = String::from_utf8(host_jwt_output.stdout)
-            .context("Command returned invalid UTF-8 output")
-            .map_err(|e| ServiceError::Internal(e.to_string()))?;
+        println!("\npushed new jwts to resolver server");
 
         let mut tag_map: HashMap<String, String> = HashMap::new();
         tag_map.insert("host_pubkey".to_string(), host_pubkey.clone());
+        println!("inside handle_handshake_request... 13");
 
-        Ok(AuthApiResult {
+        // 6. Form the result and return
+        let r = AuthApiResult {
             result: types::AuthResult::Authorization(types::AuthJWTResult {
                 host_pubkey: host_pubkey.clone(),
                 status: types::AuthState::Authorized,
@@ -400,7 +426,10 @@ impl AuthServiceApi {
                 sys_jwt,
             }),
             maybe_response_tags: Some(tag_map),
-        })
+        };
+        println!("inside handle_handshake_request... RESULT={:?}", r);
+
+        Ok(r)
     }
 
     // Helper function to initialize mongodb collections

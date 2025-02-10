@@ -19,6 +19,14 @@ pub enum AuthState {
     Error(String),   // internal error
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+pub struct AuthErrorPayload {
+    pub service_info: async_nats::service::Info,
+    pub group: String,
+    pub endpoint: String,
+    pub error: String,
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct AuthJWTPayload {
     pub host_pubkey: String,              // nkey

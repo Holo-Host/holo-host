@@ -1,6 +1,8 @@
 use super::types;
 use anyhow::{anyhow, Result};
 use data_encoding::{BASE32HEX_NOPAD, BASE64URL_NOPAD};
+use base32::Alphabet;
+use base32::decode as base32Decode;
 use jsonwebtoken::{decode, Algorithm, DecodingKey, Validation};
 use nkeys::KeyPair;
 use serde::Deserialize;
@@ -118,8 +120,8 @@ where
     println!("Public Key (Base32): {}", public_key_b32);
 
     // Decode from Base32 to raw bytes using Rfc4648 (compatible with NATS keys)
-    let public_key_bytes = Some(BASE32HEX_NOPAD.decode(public_key_b32.as_bytes()))
-        .ok_or(anyhow!("Failed to convert public key to bytes"))??;
+    let public_key_bytes = base32Decode(Alphabet::Rfc4648 { padding: false }, &public_key_b32)
+        .expect("failed to convert public key to bytes");
     println!("Decoded Public Key Bytes: {:?}", public_key_bytes);
 
     // Use the decoded key to create a DecodingKey
