@@ -338,7 +338,7 @@ mod tests {
         host_api.insert_one_into(host_0.clone()).await?;
 
         // get one (the same) document
-        let filter_one = doc! { "_id":  host_0._id.clone().unwrap().to_string() };
+        let filter_one = doc! { "_id":  host_0._id.unwrap().to_string() };
         let fetched_host = host_api.get_one_from(filter_one.clone()).await?;
         let mongo_db_host = fetched_host.unwrap();
         assert_eq!(mongo_db_host._id, host_0._id);
@@ -365,7 +365,7 @@ mod tests {
         assert_eq!(fetched_hosts.len(), 3);
         let ids: Vec<String> = fetched_hosts
             .into_iter()
-            .map(|h| h._id.unwrap_or(oid::ObjectId::new()).to_hex())
+            .map(|h| h._id.unwrap_or_default().to_hex())
             .collect();
         assert!(ids.contains(&ids[0]));
         assert!(ids.contains(&ids[1]));
