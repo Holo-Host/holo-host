@@ -2,6 +2,7 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use util_libs::js_stream_service::{CreateResponse, CreateTag, EndpointTraits};
+use data_encoding::BASE64URL_NOPAD;
 
 pub const AUTH_CALLOUT_SUBJECT: &str = "$SYS.REQ.USER.AUTH";
 pub const AUTHORIZE_SUBJECT: &str = "validate";
@@ -120,6 +121,7 @@ impl AuthGuardPayload {
         T: Fn(&[u8]) -> Result<String>,
     {
         let payload_bytes = serde_json::to_vec(&self)?;
+        println!("Going to sign payload_bytes={:?}", payload_bytes);
         let signature = sign_handler(&payload_bytes)?;
         self.host_signature = signature.as_bytes().to_vec();
         Ok(self)

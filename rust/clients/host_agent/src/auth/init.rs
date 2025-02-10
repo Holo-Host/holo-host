@@ -24,15 +24,17 @@ use crate::{
 use anyhow::Result;
 use async_nats::{jetstream::context::PublishErrorKind, HeaderMap, HeaderName, HeaderValue, RequestErrorKind};
 use authentication::types::{AuthGuardPayload, AuthJWTPayload, AuthJWTResult, AuthResult, AuthState};
+use nkeys::KeyPair;
 use std::time::Duration;
 // use futures::StreamExt;
 use util_libs::nats_js_client::{
     self, get_event_listeners, get_nats_url, with_event_listeners,
     Credentials, JsClient, NewJsClientParams,
 };
+use data_encoding::BASE64URL_NOPAD;
+use textnonce::TextNonce;
 use hpos_hal::inventory::HoloInventory;
 use std::str::FromStr;
-use textnonce::TextNonce;
 
 pub const HOST_AUTH_CLIENT_NAME: &str = "Host Auth";
 pub const HOST_AUTH_CLIENT_INBOX_PREFIX: &str = "_AUTH_INBOX";
@@ -74,8 +76,11 @@ pub async fn run(
             auth_guard_payload.nonce = nonce;
         }
     };
+    println!("PRIOR TO SIG : auth_guard_payload={:#?}", auth_guard_payload);
+    println!(" SIG OF auth_guard_payload : {:?}", host_agent_keys.host_sign(&serde_json::to_vec(&auth_guard_payload)?));
+
     auth_guard_payload = auth_guard_payload.try_add_signature(|p| host_agent_keys.host_sign(p))?;
-    println!("auth_guard_payload={:#?}", auth_guard_payload);
+    println!("POST SIG : auth_guard_payload={:#?}", auth_guard_payload);
 
     let user_auth_json = serde_json::to_string(&auth_guard_payload)?;
     let user_auth_token = json_to_base64(&user_auth_json)?;

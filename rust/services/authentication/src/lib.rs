@@ -11,6 +11,7 @@ pub mod types;
 pub mod utils;
 use anyhow::{Context, Result};
 use async_nats::jetstream::ErrorCode;
+use async_nats::service::{NATS_SERVICE_ERROR, NATS_SERVICE_ERROR_CODE};
 use async_nats::HeaderValue;
 use async_nats::{AuthError, Message};
 use data_encoding::BASE64URL_NOPAD;
@@ -92,18 +93,27 @@ impl AuthServiceApi {
         // 2. Validate Host signature, returning validation error if not successful
         let host_pubkey = user_data.host_pubkey.as_ref();
         let host_signature = user_data.get_host_signature();
+        let decoded_sig = BASE64URL_NOPAD.decode(&host_signature)
+            .map_err(|e| ServiceError::Internal(e.to_string()))?;
+        println!("host_signature: {:?}", host_signature);
+        println!("decoded_sig: {:?}", decoded_sig);
+
         let user_verifying_keypair = KeyPair::from_public_key(host_pubkey)
             .map_err(|e| ServiceError::Internal(e.to_string()))?;
-        let raw_payload = serde_json::to_vec(&user_data.clone().without_signature())
+        let payload_no_sig = &user_data.clone().without_signature();
+        println!("PAYLOAD WITHOUT SIG: {:#?}", payload_no_sig);
+        let raw_payload = serde_json::to_vec(payload_no_sig)
             .map_err(|e| ServiceError::Internal(e.to_string()))?;
-        // if let Err(e) = user_verifying_keypair.verify(raw_payload.as_ref(), &host_signature) {
-        //     log::error!(
-        //         "Error: Failed to validate Signature. Subject='{}'. Err={}",
-        //         msg.subject,
-        //         e
-        //     );
-        //     return Err(ServiceError::Authentication(AuthError::new(e)));
-        // };
+        println!("PAYLOAD WITHOUT SIG AS BYTES: {:?}", raw_payload);
+
+        if let Err(e) = user_verifying_keypair.verify(raw_payload.as_ref(), &decoded_sig) {
+            log::error!(
+                "Error: Failed to validate Signature. Subject='{}'. Err={}",
+                msg.subject,
+                e
+            );
+            return Err(ServiceError::Authentication(AuthError::new(e)));
+        };
 
         // 3. If provided, authenticate the Hoster pubkey and email and assign full permissions if successful
         let is_hoster_valid = if user_data.email.is_some() && user_data.hoster_hc_pubkey.is_some() {
@@ -320,28 +330,20 @@ impl AuthServiceApi {
             ..
         } = Self::convert_msg_to_type::<types::AuthJWTPayload>(msg.clone())?;
 
-        let decoded_signature = BASE64URL_NOPAD.decode(signature).map_err(|e| {
-            println!("err={}", e);
-            ServiceError::Internal(e.to_string())
-        })?;
-
         // 2. Validate signature
+        let decoded_signature = BASE64URL_NOPAD.decode(signature)
+            .map_err(|e| ServiceError::Internal(e.to_string()))?;
         let user_verifying_keypair = KeyPair::from_public_key(&host_pubkey)
             .map_err(|e| ServiceError::Internal(e.to_string()))?;
+
         if let Err(e) = user_verifying_keypair.verify(msg.payload.as_ref(), &decoded_signature) {
             log::error!(
                 "Error: Failed to validate Signature. Subject='{}'. Err={}",
-                msg.subject,
+                msg.subject,  
                 e
             );
-            return Err(ServiceError::Request(format!(
-                "{:?}",
-                ErrorCode::BAD_REQUEST
-            )));    
+            return Err(ServiceError::Authentication(AuthError::new(format!("{:?}", e))));    
         };
-
-        println!("'AUTH.validate >>> user_verifying_keypair' : {:?}", user_verifying_keypair);
-        println!("'AUTH.validate >>> maybe_sys_pubkey' : {:?}", maybe_sys_pubkey);
 
         // 3. Add User keys to nsc resolver (and automatically create account-signed refernce to user key)
         match Command::new("nsc")
@@ -358,12 +360,14 @@ impl AuthServiceApi {
             .map_err(|e| ServiceError::Internal(e.to_string())) {
                 Ok(r) => {
                     println!("'AUTH.validate >>> add user -a WORKLOAD -n host_user_<pubkey> ...' : {:?}", r);
+                    let stderr = String::from_utf8_lossy(&r.stderr);
+                    if !r.stderr.is_empty() && !stderr.contains("already exists") {
+                        return Err(ServiceError::Internal(stderr.to_string()));
+                    }
                 },
                 Err(e) => {
-                    if !e.to_string().contains("already exists") {
-                        return Err(e);
-                    }
                     println!("'AUTH.validate >>> ERROR: add user -a WORKLOAD -n host_user_<pubkey> ...' : {:?}", e);
+                    return Err(e);
                 }
             };
         println!("\nadded host user");
@@ -383,12 +387,14 @@ impl AuthServiceApi {
                 .map_err(|e| ServiceError::Internal(e.to_string())) {
                     Ok(r) => {
                         println!("'AUTH.validate >>> add user -a SYS -n sys_user_<pubkey> ...' : {:?}", r);
-                    },
-                    Err(e) => {
-                        if !e.to_string().contains("already exists") {
-                            return Err(e);
+                        let stderr = String::from_utf8_lossy(&r.stderr);
+                        if !r.stderr.is_empty() && !stderr.contains("already exists") {
+                            return Err(ServiceError::Internal(stderr.to_string()));
                         }
+                    },
+                    Err(e) => {   
                         println!("'AUTH.validate >>> ERROR: add user -a SYS -n sys_user_<pubkey> ...' : {:?}", e);
+                        return Err(e);
                     }
                 };
         }
