@@ -22,6 +22,7 @@ use clap::Parser;
 use dotenv::dotenv;
 use hpos_hal::inventory::HoloInventory;
 use thiserror::Error;
+use util_libs::nats_js_client::{JsClient, PublishInfo};
 
 #[derive(Error, Debug)]
 pub enum AgentCliError {
@@ -50,6 +51,8 @@ async fn main() -> Result<(), AgentCliError> {
 }
 
 async fn daemonize(args: &DaemonzeArgs) -> Result<(), async_nats::Error> {
+    println!("inside host agent main auth... 0");
+
     let mut host_agent_keys = keys::Keys::try_from_storage(
         &args.nats_leafnode_client_creds_path,
         &args.nats_leafnode_client_sys_creds_path,
@@ -60,33 +63,38 @@ async fn daemonize(args: &DaemonzeArgs) -> Result<(), async_nats::Error> {
             async_nats::Error::from(e)
         })
     })?;
+    println!("inside host main auth... 1");
 
     // If user cred file is for the auth_guard user, run loop to authenticate host & hoster...
     if let keys::AuthCredType::Guard(_) = host_agent_keys.creds {
+        println!("inside host main auth... 2a");
         host_agent_keys = run_auth_loop(host_agent_keys).await?;
     }
 
-    // Once authenticated, start leaf server and run workload api calls.
-    let _ = hostd::gen_leaf_server::run(
-        &host_agent_keys.get_host_creds_path(),
-        &args.store_dir,
-        args.hub_url.clone(),
-        args.hub_tls_insecure,
-    )
-    .await;
+    println!("inside host main auth... 2b");
+    println!("Successfully AUTH'D and created new agent keys: {:#?}", host_agent_keys);
 
-    let host_workload_client = hostd::workloads::run(
-        &host_agent_keys.host_pubkey,
-        &host_agent_keys.get_host_creds_path(),
-        args.nats_connect_timeout_secs,
-    )
-    .await?;
+    // // Once authenticated, start leaf server and run workload api calls.
+    // let _ = hostd::gen_leaf_server::run(
+    //     &host_agent_keys.get_host_creds_path(),
+    //     &args.store_dir,
+    //     args.hub_url.clone(),
+    //     args.hub_tls_insecure,
+    // )
+    // .await;
+
+    // let host_workload_client = hostd::workloads::run(
+    //     &host_agent_keys.host_pubkey,
+    //     &host_agent_keys.get_host_creds_path(),
+    //     args.nats_connect_timeout_secs,
+    // )
+    // .await?;
 
     // Only exit program when explicitly requested
     tokio::signal::ctrl_c().await?;
 
-    // Close client and drain internal buffer before exiting to make sure all messages are sent
-    host_workload_client.close().await?;
+    // // Close client and drain internal buffer before exiting to make sure all messages are sent
+    // host_workload_client.close().await?;
 
     Ok(())
 }
@@ -115,11 +123,9 @@ async fn run_auth_loop(mut keys: keys::Keys) -> Result<keys::Keys, async_nats::E
                 format!("DIAGNOSTICS.unauthenticated.{}", keys.host_pubkey);
             let diganostics = HoloInventory::from_host();
             let payload_bytes = serde_json::to_vec(&diganostics)?;
+            
             if let Err(e) = auth_guard_client
-                .publish(
-                    unauthenticated_user_diagnostics_subject,
-                    payload_bytes.into(),
-                )
+            .publish(unauthenticated_user_diagnostics_subject, payload_bytes.into())
                 .await
             {
                 log::error!("Encountered error when sending diganostics. Err={:#?}", e);

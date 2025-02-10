@@ -6,7 +6,7 @@ use std::io::{Read, Write};
 use std::path::PathBuf;
 use std::process::Command;
 use std::str::FromStr;
-use util_libs::nats_js_client::{get_path_buf_from_current_dir, get_nats_creds_by_nsc};
+use util_libs::nats_js_client::{get_nats_creds_by_nsc, get_nsc_root_path, get_path_buf_from_current_dir};
 
 impl std::fmt::Debug for Keys {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -55,19 +55,42 @@ pub struct Keys {
 
 impl Keys {
     pub fn new() -> Result<Self> {
+        println!("inside Keys new ... 0");
+
         let host_key_path =
-            std::env::var("HOST_NKEY_PATH").context("Cannot read HOST_NKEY_PATH from env var")?;
+            std::env::var("HOSTING_AGENT_HOST_NKEY_PATH").context("Cannot read HOSTING_AGENT_HOST_NKEY_PATH from env var")?;
+        println!("inside Keys new ... 1");
+        println!("inside Keys new > host_key_path={}", host_key_path);
+    
         let host_kp = KeyPair::new_user();
+        println!("inside Keys new ... 2");
+        println!("inside Keys new > host_kp={:#?}", host_kp);
+
         write_keypair_to_file(PathBuf::from_str(&host_key_path)?, host_kp.clone())?;
+        println!("inside Keys new ... 3");
+
         let host_pk = host_kp.public_key();
+        println!("inside Keys new > host_pk={}", host_pk);
 
         let sys_key_path =
-            std::env::var("SYS_NKEY_PATH").context("Cannot read SYS_NKEY_PATH from env var")?;
+            std::env::var("HOSTING_AGENT_SYS_NKEY_PATH").context("Cannot read SYS_NKEY_PATH from env var")?;
+        println!("inside Keys new ... 4");
+        println!("inside Keys new > sys_key_path={}", sys_key_path);
+            
         let local_sys_kp = KeyPair::new_user();
+        println!("inside Keys new ... 5");
+        println!("inside Keys new > local_sys_kp={:#?}", local_sys_kp);
+
         write_keypair_to_file(PathBuf::from_str(&sys_key_path)?, local_sys_kp.clone())?;
+        println!("inside Keys new ... 6");
+
         let local_sys_pk = local_sys_kp.public_key();
+        println!("inside Keys new ... 7");
+        println!("inside Keys new > local_sys_pk={}", local_sys_pk);
 
         let auth_guard_creds = PathBuf::from_str(&get_nats_creds_by_nsc("HOLO", "AUTH", "auth_guard"))?;
+        println!("inside Keys new > auth_guard_creds={:#?}", auth_guard_creds);
+        println!("inside Keys new ... 8");
 
         Ok(Self {
             host_keypair: host_kp,
@@ -83,24 +106,37 @@ impl Keys {
         maybe_host_creds_path: &Option<PathBuf>,
         maybe_sys_creds_path: &Option<PathBuf>,
     ) -> Result<Self> {
-        let host_key_path =
-            std::env::var("HOST_NKEY_PATH").context("Cannot read HOST_NKEY_PATH from env var")?;
+        println!("maybe_host_creds_path={:#?}, maybe_sys_creds_path={:#?}", maybe_host_creds_path, maybe_sys_creds_path);
+
+        let host_key_path: String =
+            std::env::var("HOSTING_AGENT_HOST_NKEY_PATH").context("Cannot read HOSTING_AGENT_HOST_NKEY_PATH from env var")?;
+        println!("host_key_path={:#?}", host_key_path); 
+
         let host_keypair =
             try_read_keypair_from_file(PathBuf::from_str(&host_key_path.clone())?)?
                 .ok_or_else(|| anyhow!("Host keypair not found at path {:?}", host_key_path))?;
+        println!("host_keypair={:#?}", host_keypair); 
         let host_pk = host_keypair.public_key();
+
         let sys_key_path =
-            std::env::var("SYS_NKEY_PATH").context("Cannot read SYS_NKEY_PATH from env var")?;
+            std::env::var("HOSTING_AGENT_SYS_NKEY_PATH").context("Cannot read HOSTING_AGENT_SYS_NKEY_PATH from env var")?;
+        println!("inside try_from_storage auth... 3");
+        println!("sys_key_path={:#?}", sys_key_path); 
+
         let host_creds_path = maybe_host_creds_path
             .to_owned()
             .map_or_else(|| PathBuf::from_str(&get_nats_creds_by_nsc("HOLO", "HPOS", "host")), Ok)?;
+        println!("host_creds_path={:#?}", host_creds_path); 
+
         let sys_creds_path = maybe_sys_creds_path
             .to_owned()
             .map_or_else(|| PathBuf::from_str(&get_nats_creds_by_nsc("HOLO", "HPOS", "sys")), Ok)?;
+        println!("sys_creds_path={:#?}", sys_creds_path); 
 
         // Set auth_guard_creds as default:
         let auth_guard_creds =
         PathBuf::from_str(&get_nats_creds_by_nsc("HOLO", "AUTH", "auth_guard"))?;
+        println!("auth_guard_creds={:#?}", auth_guard_creds); 
 
         let keys = match try_read_keypair_from_file(PathBuf::from_str(&sys_key_path)?)? {
             Some(kp) => {
@@ -121,6 +157,8 @@ impl Keys {
                 creds: AuthCredType::Guard(auth_guard_creds),
             },
         };
+
+        println!("keys={:#?}", keys); 
 
         Ok(keys.clone().add_creds_paths(host_creds_path, Some(sys_creds_path)).unwrap_or_else(move |e| {
             log::error!("Error: Cannot locate authenticated cred files. Defaulting to auth_guard_creds. Err={}",e);
@@ -206,39 +244,78 @@ impl Keys {
         host_sys_user_jwt: String,
     ) -> Result<Self> {
         //  Save user jwt and sys jwt local to hosting agent
-        let host_path = PathBuf::from_str(&format!("{}.{}", "output_dir", "host.jwt"))?;
-        write_to_file(host_path, host_user_jwt.as_bytes())?;
-        let sys_path = PathBuf::from_str(&format!("{}.{}", "output_dir", "host_sys.jwt"))?;
-        write_to_file(sys_path, host_sys_user_jwt.as_bytes())?;
+        let host_path = PathBuf::from_str(&format!("/{}/{}/{}", get_nsc_root_path(), "local_creds", "host.jwt"))?;
+        println!("host_path ={:?}", host_path);
+        write_to_file(host_path.clone(), host_user_jwt.as_bytes())?;
+        println!("wrote JWT to host file");
+
+        let sys_path = PathBuf::from_str(&format!("/{}/{}/{}", get_nsc_root_path(), "local_creds", "sys.jwt"))?;
+        println!("sys_path ={:?}", sys_path);
+        write_to_file(sys_path.clone(), host_sys_user_jwt.as_bytes())?;
+        println!("wrote JWT to sys file");
+
+        // Import host user jwt to local nsc resolver
+        // TODO: Determine why the following works in cmd line, but doesn't seem to work when run in current program / run
+        Command::new("nsc")
+            .args(&[
+                "import", "user",
+                "--file", &format!("{:?}", host_path)
+            ])
+            .output()
+            .context("Failed to add import new host user on hosting agent.")?;
+        println!("imported host user");
+
+        // Import sys user jwt to local nsc resolver
+        Command::new("nsc")
+            .args(&[
+                "import", "user",
+                "--file", &format!("{:?}", sys_path)
+            ])
+            .output()
+            .context("Failed to add import new sys user on hosting agent.")?;
+        println!("imported sys user");
 
         // Save user creds and sys creds local to hosting agent
-        let host_creds_file_name = "host.creds";
+        let host_user_name = format!("host_user_{}", self.host_pubkey);
+        let host_creds_path =
+            PathBuf::from_str(&get_nats_creds_by_nsc("HOLO", "WORKLOAD",  &host_user_name))?;
         Command::new("nsc")
-            .arg(format!(
-                "generate creds --name user_host_{} --account {} > {}",
-                self.host_pubkey, "WORKLOAD", host_creds_file_name
-            ))
+            .args(&[
+                "generate", "creds",
+                "--name", &host_user_name,
+                "--account", "WORKLOAD",
+                "--output-file", &host_creds_path.to_string_lossy(),
+            ])
             .output()
             .context("Failed to add new operator signing key on hosting agent")?;
+        println!("generated host user creds");
 
         let mut sys_creds_file_name = None;
-        if let Some(sys_pubkey) = self.local_sys_pubkey.as_ref() {
-            let file_name = "host_sys.creds";
-            sys_creds_file_name = Some(get_path_buf_from_current_dir(file_name));
+        if let Some(_) = self.local_sys_pubkey.as_ref() {
+            let sys_user_name = format!("sys_user_{}", self.host_pubkey);
+            let path = PathBuf::from_str(&get_nats_creds_by_nsc("HOLO", "SYS", &sys_user_name))?;
             Command::new("nsc")
-                .arg(format!(
-                    "generate creds --name user_host_{} --account {} > {}",
-                    sys_pubkey, "SYS", file_name
-                ))
-                .output()
-                .context("Failed to add new operator signing key on hosting agent")?;
+            .arg(format!(
+                "generate creds --name {} --account {}",
+                sys_user_name, "SYS"
+            ))
+            .args(&[
+                "generate", "creds",
+                "--name", &sys_user_name,
+                "--account", "SYS",
+                "--output-file", &path.to_string_lossy(),
+            ])
+            .output()
+            .context("Failed to add new operator signing key on hosting agent")?;
+            sys_creds_file_name = Some(path);
+            println!("generated sys user creds");
         }
 
         self.to_owned()
-            .add_creds_paths(get_path_buf_from_current_dir(host_creds_file_name), sys_creds_file_name)
+            .add_creds_paths(host_creds_path, sys_creds_file_name)
     }
 
-    pub fn get_host_creds_path(&self) -> Option<PathBuf> {
+    pub fn _get_host_creds_path(&self) -> Option<PathBuf> {
         if let AuthCredType::Authenticated(creds) = self.to_owned().creds {
             return Some(creds.host_creds_path);
         };

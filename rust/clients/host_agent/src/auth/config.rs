@@ -17,9 +17,16 @@ pub struct HosterConfig {
 
 impl HosterConfig {
     pub async fn new() -> Result<Self> {
+        println!(">>> inside Hoster Config new fn..");
+
         let (keypair, email) = get_from_config().await?;
+        println!(">>> inside Hoster Config new fn : keypair={:#?}", keypair);
+
         let hc_pubkey = public_key::to_holochain_encoded_agent_key(&keypair.verifying_key());
+        println!(">>> inside Hoster Config new fn : hc_pubkey={}", hc_pubkey);
+
         let holoport_id = public_key::to_base36_id(&keypair.verifying_key());
+        println!(">>> inside Hoster Config new fn : holoport_id={}", holoport_id);
 
         Ok(Self {
             email,
@@ -31,9 +38,11 @@ impl HosterConfig {
 }
 
 async fn get_from_config() -> Result<(SigningKey, String)> {
+    println!("inside config_path...");
+
     let config_path =
         env::var("HPOS_CONFIG_PATH").context("Cannot read HPOS_CONFIG_PATH from env var")?;
-
+    
     let password = env::var("DEVICE_SEED_DEFAULT_PASSWORD")
         .context("Cannot read bundle password from env var")?;
 
@@ -53,6 +62,7 @@ async fn get_from_config() -> Result<(SigningKey, String)> {
                     "unable to unlock the device bundle from {}",
                     &config_path
                 ))?;
+                println!(">>> inside config-path new fn : signing_key={:#?}", signing_key);
             Ok((signing_key, settings.admin.email))
         }
         _ => Err(anyhow!("Unsupported version of hpos config")),

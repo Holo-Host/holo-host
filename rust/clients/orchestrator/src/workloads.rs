@@ -36,7 +36,7 @@ use workload::{
 };
 
 const ORCHESTRATOR_WORKLOAD_CLIENT_NAME: &str = "Orchestrator Workload Manager";
-const ORCHESTRATOR_WORKLOAD_CLIENT_INBOX_PREFIX: &str = "_workload_inbox_orchestrator";
+const ORCHESTRATOR_WORKLOAD_CLIENT_INBOX_PREFIX: &str = "_WORKLOAD_INBOX_ORCHESTRATOR";
 
 pub fn create_callback_subject_to_host(
     is_prefix: bool,

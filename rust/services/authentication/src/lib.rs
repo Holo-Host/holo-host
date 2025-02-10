@@ -315,7 +315,7 @@ impl AuthServiceApi {
         let types::AuthJWTPayload {
             host_pubkey,
             maybe_sys_pubkey,
-            nonce: _,
+            ..
         } = Self::convert_msg_to_type::<types::AuthJWTPayload>(msg.clone())?;
 
         // 2. Validate signature

@@ -29,7 +29,7 @@ pub enum ServiceError {
 }
 
 pub type EventListener = Arc<Box<dyn Fn(&mut JsClient) + Send + Sync>>;
-pub type EventHandler = Pin<Box<dyn Fn(&str, &str, Duration) + Send + Sync>>;
+pub type EventHandler = Arc<Pin<Box<dyn Fn(&str, &str, Duration) + Send + Sync>>>;
 pub type JsServiceResponse<T> = Pin<Box<dyn Future<Output = Result<T, ServiceError>> + Send>>;
 pub type EndpointHandler<T> = Arc<dyn Fn(&Message) -> Result<T, ServiceError> + Send + Sync>;
 pub type AsyncEndpointHandler<T> = Arc<
@@ -61,6 +61,15 @@ where
     }
 }
 
+// #[derive(Clone, Debug)]
+// pub struct RequestInfo {
+//     pub stream_subject: String,
+//     pub consumer_name: String,
+//     pub msg_id: String,
+//     pub data: Vec<u8>,
+//     pub headers: Option<HeaderMap>,
+// }
+
 #[derive(Clone, Debug)]
 pub struct PublishInfo {
     pub subject: String,
@@ -91,6 +100,7 @@ impl std::fmt::Debug for JsClient {
     }
 }
 
+#[derive(Clone)]
 pub struct JsClient {
     url: String,
     name: String,
@@ -106,6 +116,7 @@ pub struct JsClient {
 pub enum Credentials {
     Path(std::path::PathBuf), // String = pathbuf as string
     Password(String, String),
+    Token(String),
 }
 
 #[derive(Deserialize, Default)]
@@ -115,7 +126,7 @@ pub struct NewJsClientParams {
     pub inbox_prefix: String,
     pub service_params: Vec<JsServiceParamsPartial>,
     #[serde(skip_deserializing)]
-    pub credentials: Option<Credentials>,
+    pub credentials: Option<Vec<Credentials>>,
     pub ping_interval: Option<Duration>,
     pub request_timeout: Option<Duration>, // Defaults to 5s
     #[serde(skip_deserializing)]
@@ -124,32 +135,31 @@ pub struct NewJsClientParams {
 
 impl JsClient {
     pub async fn new(p: NewJsClientParams) -> Result<Self, async_nats::Error> {
-        let connect_options = async_nats::ConnectOptions::new()
+        let mut connect_options: async_nats::ConnectOptions = async_nats::ConnectOptions::new()
             // .require_tls(true)
             .name(&p.name)
             .ping_interval(p.ping_interval.unwrap_or(Duration::from_secs(120)))
             .request_timeout(Some(p.request_timeout.unwrap_or(Duration::from_secs(10))))
             .custom_inbox_prefix(&p.inbox_prefix);
 
-        let client = match p.credentials {
-            Some(c) => match c {
-                Credentials::Password(user, pw) => {
-                    connect_options
-                        .user_and_password(user, pw)
-                        .connect(&p.nats_url)
-                        .await?
+        if let Some(credentials_list) = p.credentials {
+            for credentials in credentials_list {
+                match credentials {
+                    Credentials::Password(user, pw) => {
+                        connect_options = connect_options.user_and_password(user, pw);
+                    }
+                    Credentials::Path(cp) => {
+                        let path = std::path::Path::new(&cp);
+                        connect_options = connect_options.credentials_file(path).await?;
+                    }
+                    Credentials::Token(t) => {
+                        connect_options = connect_options.token(t);
+                    }
                 }
-                Credentials::Path(cp) => {
-                    let path = std::path::Path::new(&cp);
-                    connect_options
-                        .credentials_file(path)
-                        .await?
-                        .connect(&p.nats_url)
-                        .await?
-                }
-            },
-            None => connect_options.connect(&p.nats_url).await?,
-        };
+            }
+        }; 
+
+        let client = connect_options.connect(&p.nats_url).await?;
 
         let jetstream = jetstream::new(client.clone());
         let mut services = vec![];
@@ -223,7 +233,15 @@ impl JsClient {
         }
     }
 
-    pub async fn publish(&self, payload: PublishInfo) -> Result<(), async_nats::Error> {
+    pub async fn publish(&self, payload: PublishInfo) -> Result<(), async_nats::error::Error<async_nats::jetstream::context::PublishErrorKind>> {
+        log::debug!(
+            "{}Called Publish message: subj={}, msg_id={} data={:?}",
+            self.service_log_prefix,
+            payload.subject,
+            payload.msg_id,
+            payload.data
+        );
+        
         let now = Instant::now();
         let result = match payload.headers {
             Some(h) => {
@@ -243,21 +261,57 @@ impl JsClient {
             if let Some(ref on_failed) = self.on_msg_failed_event {
                 on_failed(&payload.subject, &self.name, duration); // todo: add msg_id
             }
-            return Err(Box::new(err));
+            return Err(async_nats::error::Error::from(err));
         }
 
-        log::debug!(
-            "{}Published message: subj={}, msg_id={} data={:?}",
-            self.service_log_prefix,
-            payload.subject,
-            payload.msg_id,
-            payload.data
-        );
         if let Some(ref on_published) = self.on_msg_published_event {
             on_published(&payload.subject, &self.name, duration);
         }
         Ok(())
     }
+
+    // pub async fn request(&self, payload: RequestInfo) -> Result<Message, async_nats::error::Error<async_nats::RequestErrorKind>> {
+    //     /// ie: $JS.API.CONSUMER.INFO.AUTH.authorize_host_and_sys, JS.API.CONSUMER.INFO.AUTH.auth_callout
+    //     let js_subject = format!("$JS.API.CONSUMER.INFO.{}.{}", payload.stream_subject, payload.consumer_name);
+    //     log::debug!(
+    //         "{}Published message: subj={}, msg_id={} data={:?}",
+    //         self.service_log_prefix,
+    //         js_subject,
+    //         payload.msg_id,
+    //         payload.data
+    //     );
+
+    //     let now = Instant::now();
+    //     let result = match payload.headers {
+    //         Some(headers) => {
+    //             self.client
+    //                 .request_with_headers(format!("$JS.API.CONSUMER.INFO.{}.{}", payload.stream_subject, payload.consumer_name), headers, payload.data.clone().into())
+    //                 .await
+    //         }
+    //         None => {
+    //             self.client
+    //                 .request(format!("$JS.API.CONSUMER.INFO.{}.{}", payload.stream_subject, payload.consumer_name), payload.data.clone().into())
+    //                 .await
+    //         }
+    //     };
+
+    //     let duration = now.elapsed();
+
+    //     match result {
+    //         Ok(m) => {
+    //             if let Some(ref on_published) = self.on_msg_published_event {
+    //                 on_published(&js_subject, &self.name, duration);
+    //             }
+    //             Ok(m)
+    //         },
+    //         Err(e) => {
+    //             if let Some(ref on_failed) = self.on_msg_failed_event {
+    //                 on_failed(&js_subject, &self.name, duration); // todo: add msg_id
+    //             }
+    //             Err(e)
+    //         }
+    //     }
+    // }
 
     pub async fn add_js_services(mut self, js_services: Vec<JsStreamService>) -> Self {
         let mut current_services = self.js_services.unwrap_or_default();
@@ -296,7 +350,7 @@ where
     F: Fn(&str, &str, Duration) + Send + Sync + Clone + 'static,
 {
     Arc::new(Box::new(move |c: &mut JsClient| {
-        c.on_msg_published_event = Some(Box::pin(f.clone()));
+        c.on_msg_published_event = Some(Arc::new(Box::pin(f.clone())));
     }))
 }
 
@@ -305,7 +359,7 @@ where
     F: Fn(&str, &str, Duration) + Send + Sync + Clone + 'static,
 {
     Arc::new(Box::new(move |c: &mut JsClient| {
-        c.on_msg_failed_event = Some(Box::pin(f.clone()));
+        c.on_msg_failed_event = Some(Arc::new(Box::pin(f.clone())));
     }))
 }
 
@@ -320,12 +374,12 @@ pub fn get_nats_url() -> String {
 }
 
 pub fn get_nsc_root_path() -> String {
-    std::env::var("NSC_PATH").unwrap_or_else(|_| "/.local/share/nats/nsc".to_string())
+    std::env::var("NSC_PATH").unwrap_or_else(|_| ".local/share/nats/nsc".to_string())
 }
 
 pub fn get_nats_creds_by_nsc(operator: &str, account: &str, user: &str) -> String {
     format!(
-        "{}/keys/creds/{}/{}/{}.creds",
+        "/{}/keys/creds/{}/{}/{}.creds",
         get_nsc_root_path(),
         operator,
         account,
