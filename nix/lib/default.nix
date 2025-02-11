@@ -14,4 +14,4 @@
       );
     in
     craneLib.overrideToolchain toolchain;
-}
+} // inputs.nixpkgs.lib

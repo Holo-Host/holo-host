@@ -28,12 +28,18 @@ in
     };
 
     autoStart = lib.mkOption {
+      type = lib.types.bool;
       default = true;
     };
 
     package = lib.mkOption {
       type = lib.types.package;
       default = inputs.self.packages.${pkgs.stdenv.system}.rust-workspace;
+    };
+
+    hostAuthScriptPath =  lib.mkOption {
+      type = lib.types.path;
+      default = "${cfg.package}/../../../scripts/hosting_agent_setup ";
     };
 
     rust = {
@@ -62,6 +68,41 @@ in
       url = lib.mkOption {
         type = lib.types.str;
         default = "${cfg.nats.listenHost}:${builtins.toString cfg.nats.listenPort}";
+      };
+
+      nscPath = lib.mkOption {
+        type = lib.types.path;
+        default = "var/lib/.local/share/nats/nsc";
+      };
+
+      sharedCredsPath = lib.mkOption {
+        type = lib.types.path;
+        default = "${cfg.nats.nscPath}/shared_creds";
+      };
+
+      localCredsPath = lib.mkOption {
+        type = lib.types.path;
+        default = "${cfg.nats.nscPath}/local_creds";
+      };
+
+      hostNkeyPath = lib.mkOption {
+        type = lib.types.path;
+        default = "${cfg.nats.localCredsPath}/host.nk";
+      };
+
+      sysNkeyPath = lib.mkOption {
+        type = lib.types.path;
+        default = "${cfg.nats.localCredsPath}/sys.nk";
+      };
+
+      hposCredsPath = lib.mkOption {
+        type = lib.types.path;
+        default = "/var/lib/server-key-config.json";
+      };
+
+      hposCredsPw = lib.mkOption {
+        type = lib.types.str;
+        default = "pass";
       };
 
       hub = {
@@ -96,6 +137,12 @@ in
         {
           RUST_LOG = cfg.rust.log;
           RUST_BACKTRACE = cfg.rust.backtrace;
+          NSC_PATH = cfg.nats.nscPath;
+          LOCAL_CREDS_PATH = cfg.nats.localCredsPath;
+          HOSTING_AGENT_HOST_NKEY_PATH = cfg.nats.hostNkeyPath;
+          HOSTING_AGENT_SYS_NKEY_PATH = cfg.nats.sysNkeyPath;
+          HPOS_CONFIG_PATH = cfg.nats.hposCredsPath;
+          DEVICE_SEED_DEFAULT_PASSWORD = builtins.toString cfg.nats.hposCredsPw;
           NATS_LISTEN_PORT = builtins.toString cfg.nats.listenPort;
         }
         // lib.attrsets.optionalAttrs (cfg.nats.url != null) {
@@ -105,6 +152,15 @@ in
       path = [
         pkgs.nats-server
       ];
+
+      preStart = ''
+        init_host_auth_guard() {
+          ${cfg.hostAuthScriptPath} ${cfg.nats.nscPath} ${cfg.nats.sharedCredsPath}
+        }
+        init_host_auth_guard
+        echo "Finished Host Auth Guard Setup"
+        sleep 1 # wait
+      '';
 
       script =
         let

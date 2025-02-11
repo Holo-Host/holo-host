@@ -27,7 +27,7 @@
 # Input Vars:
 #   - OPERATOR
 #   - SYS_ACCOUNT
-#   - NATS_PORT
+#   - NATS_LISTENING_PORT
 #   - ACCOUNT_JWT_SERVER
 #   - OPERATOR_SERVICE_URL
 #   - ADMIN_ACCOUNT
@@ -36,8 +36,8 @@
 #   - ORCHESTRATOR_AUTH_USER
 #   - AUTH_GUARD_USER
 #   - WORKLOAD_ACCOUNT 
-#   - SHARED_CREDS_DIR
-#   - LOCAL_CREDS_DIR 
+#   - SHARED_CREDS_PATH
+#   - LOCAL_CREDS_PATH 
 #   - RESOLVER_FILE
 
 # Output:
@@ -62,33 +62,33 @@ done
 
 # Variables
 NATS_SERVER_HOST=$1
-OPERATOR_SERVICE_URL="nats://{$NATS_SERVER_HOST}:$NATS_PORT"
-ACCOUNT_JWT_SERVER="nats://{$NATS_SERVER_HOST}:$NATS_PORT"
+NATS_LISTENING_PORT=$2 # "4222"
+SHARED_CREDS_PATH=$3 # "/shared_creds"
+LOCAL_CREDS_PATH=$4 # "/local_creds"
+OPERATOR_SERVICE_URL="nats://{$NATS_SERVER_HOST}:$NATS_LISTENING_PORT"
+ACCOUNT_JWT_SERVER="nats://{$NATS_SERVER_HOST}:$NATS_LISTENING_PORT"
+RESOLVER_FILE="main-resolver.conf"
 OPERATOR="HOLO"
 SYS_ACCOUNT="SYS"
-NATS_PORT="4222"
 ADMIN_ACCOUNT="ADMIN"
 ADMIN_USER="admin"
 AUTH_ACCOUNT="AUTH"
 ORCHESTRATOR_AUTH_USER="orchestrator_auth"
 AUTH_GUARD_USER="auth_guard"
 WORKLOAD_ACCOUNT="WORKLOAD"
-SHARED_CREDS_DIR="shared_creds"
-LOCAL_CREDS_DIR="local_creds"
-RESOLVER_FILE="main-resolver.conf"
 
 # Create output directory when it doesn't already exist
-if [ ! -d "$SHARED_CREDS_DIR" ]; then
-    echo "The shared output dir does not exist. Creating $SHARED_CREDS_DIR."
-    mkdir -p $SHARED_CREDS_DIR
+if [ ! -d "$SHARED_CREDS_PATH" ]; then
+    echo "The shared output dir does not exist. Creating $SHARED_CREDS_PATH."
+    mkdir -p $SHARED_CREDS_PATH
     echo "Shared output dir created successfully."
 else
     echo "Shared output dir exists."
 fi
 
-if [ ! -d "$LOCAL_CREDS_DIR" ]; then
-    echo "The local output dir does not exist. Creating $LOCAL_CREDS_DIR."
-    mkdir -p $LOCAL_CREDS_DIR
+if [ ! -d "$LOCAL_CREDS_PATH" ]; then
+    echo "The local output dir does not exist. Creating $LOCAL_CREDS_PATH."
+    mkdir -p $LOCAL_CREDS_PATH
     echo "Local output dir created successfully."
 else
     echo "Local output dir exists."
@@ -98,8 +98,8 @@ function extract_signing_key() {
   sk=$2
   name=$1
   seed_file_path="$HOME/.local/share/nats/nsc/keys/keys/${sk:0:1}/${sk:1:2}/${sk}.nk"
-  echo "coping file over to '$LOCAL_CREDS_DIR/${name}_SK.nk'"
-  cp "$seed_file_path" "$LOCAL_CREDS_DIR/${name}_SK.nk"
+  echo "coping file over to '$LOCAL_CREDS_PATH/${name}_SK.nk'"
+  cp "$seed_file_path" "$LOCAL_CREDS_PATH/${name}_SK.nk"
 }
 
 # Step 1: Create Operator with SYS account and two signing keys
@@ -145,10 +145,10 @@ echo $AUTH_SK_ACCOUNT_PUBKEY
 nsc edit authcallout --account $AUTH_ACCOUNT --allowed-account "\"$AUTH_ACCOUNT_PUBKEY\",\"$AUTH_SK_ACCOUNT_PUBKEY\"" --auth-user $AUTH_USER_PUBKEY
 
 # Step 9: Generate JWT files
-nsc generate creds --name $ORCHESTRATOR_AUTH_USER --account $AUTH_ACCOUNT > $LOCAL_CREDS_DIR/$ORCHESTRATOR_AUTH_USER.creds # --> local to hub exclusively
-nsc describe operator --raw --output-file $SHARED_CREDS_DIR/$OPERATOR.jwt
-nsc describe account --name SYS --raw --output-file $SHARED_CREDS_DIR/$SYS_ACCOUNT.jwt
-nsc generate creds --name $AUTH_GUARD_USER --account $AUTH_ACCOUNT --output-file $SHARED_CREDS_DIR/$AUTH_GUARD_USER.creds
+nsc generate creds --name $ORCHESTRATOR_AUTH_USER --account $AUTH_ACCOUNT > $LOCAL_CREDS_PATH/$ORCHESTRATOR_AUTH_USER.creds # --> local to hub exclusively
+nsc describe operator --raw --output-file $SHARED_CREDS_PATH/$OPERATOR.jwt
+nsc describe account --name SYS --raw --output-file $SHARED_CREDS_PATH/$SYS_ACCOUNT.jwt
+nsc generate creds --name $AUTH_GUARD_USER --account $AUTH_ACCOUNT --output-file $SHARED_CREDS_PATH/$AUTH_GUARD_USER.creds
 
 extract_signing_key ADMIN $ADMIN_SK
 echo "extracted ADMIN signing key"
@@ -162,5 +162,5 @@ echo "extracted AUTH root key"
 # Step 10: Generate Resolver Config
 nsc generate config --nats-resolver --sys-account $SYS_ACCOUNT --force --config-file $RESOLVER_FILE
 
-echo "Setup complete. Shared JWTs and resolver file are in the $SHARED_CREDS_DIR/ directory. Private creds are in the $LOCAL_CREDS_DIR/ directory."
+echo "Setup complete. Shared JWTs and resolver file are in the $SHARED_CREDS_PATH/ directory. Private creds are in the $LOCAL_CREDS_PATH/ directory."
 echo "!! Don't forget to start the NATS server and push the credentials to the server with 'nsc push -A' !!"

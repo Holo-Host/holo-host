@@ -8,7 +8,7 @@
 # This script is responsible for setting up the "Operator Chain of Trust" (eg: O/A/U) authentication pattern that is associated with the Orchestrator Hub on the Hosting Agent.
 
 # Input Vars:
-#   - SHARED_CREDS_DIR
+#   - SHARED_CREDS_PATH
 #   - OPERATOR_JWT_PATH
 #   - SYS_ACCOUNT_JWT_PATH
 #   - AUTH_ACCOUNT_JWT_PATH
@@ -29,16 +29,16 @@ done
 
 # Variables
 NSC_PATH=$1
+SHARED_CREDS_PATH=$2 # "shared_creds"
 OPERATOR_NAME="HOLO"
 SYS_ACCOUNT_NAME="SYS"
 AUTH_ACCOUNT_NAME="AUTH"
-SHARED_CREDS_DIR="shared_creds_output"
-OPERATOR_JWT_PATH="$SHARED_CREDS_DIR/$OPERATOR_NAME.jwt"
-SYS_ACCOUNT_JWT_PATH="$SHARED_CREDS_DIR/$SYS_ACCOUNT_NAME.jwt"
+OPERATOR_JWT_PATH="$SHARED_CREDS_PATH/$OPERATOR_NAME.jwt"
+SYS_ACCOUNT_JWT_PATH="$SHARED_CREDS_PATH/$SYS_ACCOUNT_NAME.jwt"
 AUTH_GUARD_USER_NAME="auth-guard"
-AUTH_GUARD_USER_PATH="$SHARED_CREDS_DIR/$AUTH_GUARD_USER_NAME.creds"
+AUTH_GUARD_USER_PATH="$SHARED_CREDS_PATH/$AUTH_GUARD_USER_NAME.creds"
 
-if [ ! -d "$SHARED_CREDS_DIR" ]; then
+if [ ! -d "$SHARED_CREDS_PATH" ]; then
     echo "Shared output dir not found. Unable to set up local chain of trust."
     exit 1
 else
