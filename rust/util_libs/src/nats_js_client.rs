@@ -347,8 +347,12 @@ pub fn get_nats_url() -> String {
     })
 }
 
-pub fn get_nsc_root_path() -> String {
+fn get_nsc_root_path() -> String {
     std::env::var("NSC_PATH").unwrap_or_else(|_| "/.local/share/nats/nsc".to_string())
+}
+
+pub fn get_local_creds_path() -> String {
+    std::env::var("LOCAL_CREDS_PATH").unwrap_or_else(|_| format!("{}/local_creds", get_nsc_root_path()))
 }
 
 pub fn get_nats_creds_by_nsc(operator: &str, account: &str, user: &str) -> String {
@@ -361,9 +365,14 @@ pub fn get_nats_creds_by_nsc(operator: &str, account: &str, user: &str) -> Strin
     )
 }
 
-pub fn get_path_buf_from_current_dir(file_name: &str) -> PathBuf {
-    let current_dir_path = std::env::current_dir().expect("Failed to locate current directory.");
-    current_dir_path.join(file_name)
+pub fn get_nats_jwt_by_nsc(operator: &str, account: &str, user: &str) -> String {
+    format!(
+        "{}/stores/{}/accounts/{}/users/{}.jwt",
+        get_nsc_root_path(),
+        operator,
+        account,
+        user
+    )
 }
 
 pub fn get_event_listeners() -> Vec<EventListener> {

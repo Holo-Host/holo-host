@@ -29,7 +29,7 @@ use util_libs::{
         mongodb::{IntoIndexes, MongoCollection, MongoDbAPI},
         schemas::{self, Host, Hoster, Role, RoleInfo, User},
     },
-    nats_js_client::{get_nsc_root_path, AsyncEndpointHandler, JsServiceResponse, ServiceError},
+    nats_js_client::{get_nats_jwt_by_nsc, AsyncEndpointHandler, JsServiceResponse, ServiceError},
 };
 use utils::handle_internal_err;
 
@@ -401,19 +401,11 @@ impl AuthServiceApi {
         }
 
         // 4. Create User JWT files (automatically signed with respective account key)
-        let host_jwt = std::fs::read_to_string(format!(
-            "{}/stores/HOLO/accounts/WORKLOAD/users/host_user_{}.jwt",
-            get_nsc_root_path(),
-            host_pubkey
-        ))
+        let host_jwt = std::fs::read_to_string(get_nats_jwt_by_nsc("HOLO","WORKLOAD", &format!("host_user_{}.jwt", host_pubkey)))
         .map_err(|e| ServiceError::Internal(e.to_string()))?;
 
         let sys_jwt = if maybe_sys_pubkey.is_some() {
-            std::fs::read_to_string(format!(
-                "{}/stores/HOLO/accounts/SYS/users/sys_user_{}.jwt",
-                get_nsc_root_path(),
-                host_pubkey
-            ))
+            std::fs::read_to_string(get_nats_jwt_by_nsc("HOLO","SYS", &format!("sys_user_{}.jwt", host_pubkey)))
             .map_err(|e| ServiceError::Internal(e.to_string()))?
         } else {
             String::new()
