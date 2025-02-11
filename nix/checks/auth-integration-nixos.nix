@@ -34,7 +34,7 @@ pkgs.testers.runNixOSTest (
         holo.orchestrator.enable = true;
         services.nats.settings = {
           system_account = "SYS";
-          # include main-resolver.conf
+          include = "main-resolver.conf";
 
           jetstream = {
             domain = "${hubJsDomain}";
