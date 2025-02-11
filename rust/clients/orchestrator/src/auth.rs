@@ -18,36 +18,33 @@ This client is responsible for:
     - keeping service running until explicitly cancelled out
 */
 
-use async_nats::service::ServiceExt;
 use anyhow::{anyhow, Context, Result};
-use futures::StreamExt;
+use async_nats::service::ServiceExt;
 use authentication::{
     self,
     types::{self, AuthErrorPayload},
     AuthServiceApi, AUTH_SRV_DESC, AUTH_SRV_NAME, AUTH_SRV_SUBJ, AUTH_SRV_VERSION,
 };
+use futures::StreamExt;
 use mongodb::{options::ClientOptions, Client as MongoDBClient};
 use nkeys::KeyPair;
 use std::fs::File;
 use std::io::Read;
 use std::path::PathBuf;
-use std::{sync::Arc, time::Duration};
 use std::str::FromStr;
+use std::{sync::Arc, time::Duration};
 use util_libs::{
     db::mongodb::get_mongodb_url,
-    nats_js_client::{get_nats_url, get_nats_creds_by_nsc},
-    js_stream_service::CreateResponse
+    js_stream_service::CreateResponse,
+    nats_js_client::{get_nats_creds_by_nsc, get_nats_url},
 };
 
 pub const ORCHESTRATOR_AUTH_CLIENT_NAME: &str = "Orchestrator Auth Manager";
 pub const ORCHESTRATOR_AUTH_CLIENT_INBOX_PREFIX: &str = "_AUTH_INBOX_ORCHESTRATOR";
 
 pub async fn run() -> Result<(), async_nats::Error> {
-    let admin_account_creds_path = PathBuf::from_str(&get_nats_creds_by_nsc(
-        "HOLO",
-        "AUTH",
-        "auth",
-    ))?;
+    let admin_account_creds_path =
+        PathBuf::from_str(&get_nats_creds_by_nsc("HOLO", "AUTH", "auth"))?;
     println!(
         " >>>> admin_account_creds_path: {:#?} ",
         admin_account_creds_path
@@ -56,26 +53,20 @@ pub async fn run() -> Result<(), async_nats::Error> {
     // Root Keypair associated with AUTH account
     let root_account_key_path = std::env::var("ORCHESTRATOR_ROOT_AUTH_NKEY_PATH")
         .context("Cannot read ORCHESTRATOR_ROOT_AUTH_NKEY_PATH from env var")?;
-    println!(">>>>>>>>> root account key_path: {:?}", root_account_key_path);
-
     let root_account_keypair = Arc::new(
-        try_read_keypair_from_file(PathBuf::from_str(&root_account_key_path.clone())?)?.ok_or_else(
-            || {
+        try_read_keypair_from_file(PathBuf::from_str(&root_account_key_path.clone())?)?
+            .ok_or_else(|| {
                 anyhow!(
                     "Root AUTH Account keypair not found at path {:?}",
                     root_account_key_path
                 )
-            },
-        )?,
+            })?,
     );
     let root_account_pubkey = root_account_keypair.public_key().clone();
-    println!(">>>>>>>>> root account pubkey: {:?}", root_account_pubkey);
 
     // AUTH Account Signing Keypair associated with the `auth` user
     let signing_account_key_path = std::env::var("ORCHESTRATOR_SIGNING_AUTH_NKEY_PATH")
         .context("Cannot read ORCHESTRATOR_SIGNING_AUTH_NKEY_PATH from env var")?;
-    println!(">>>>>>>>> signing account key_path: {:?}", signing_account_key_path);
-
     let signing_account_keypair = Arc::new(
         try_read_keypair_from_file(PathBuf::from_str(&signing_account_key_path.clone())?)?
             .ok_or_else(|| {
@@ -86,7 +77,6 @@ pub async fn run() -> Result<(), async_nats::Error> {
             })?,
     );
     let signing_account_pubkey = signing_account_keypair.public_key().clone();
-    println!(">>>>>>>>> signing_account pubkey: {:?}", signing_account_pubkey);
 
     // ==================== Setup NATS ====================
     let nats_url = get_nats_url();
@@ -114,10 +104,10 @@ pub async fn run() -> Result<(), async_nats::Error> {
                 }
             }} => client?,
         _ = {
-            log::debug!("will time out waiting for NATS after {nats_connect_timeout_secs:?}");
+            log::debug!("Will time out waiting for NATS after {nats_connect_timeout_secs:?}...");
             tokio::time::sleep(tokio::time::Duration::from_secs(nats_connect_timeout_secs))
          } => {
-            return Err(format!("timed out waiting for NATS on {nats_url}").into());
+            return Err(format!("Timed out waiting for NATS on {nats_url}").into());
         }
     };
 
@@ -126,11 +116,11 @@ pub async fn run() -> Result<(), async_nats::Error> {
     let mongo_uri = get_mongodb_url();
     let client_options = ClientOptions::parse(mongo_uri).await?;
     let db_client = MongoDBClient::with_options(client_options)?;
-    
+
     // ==================== Setup API & Register Endpoints ====================
     // Generate the Auth API with access to db
     let auth_api = AuthServiceApi::new(&db_client).await?;
-    let auth_api_clone  = auth_api.clone();
+    let auth_api_clone = auth_api.clone();
 
     // Register Auth Service for Orchestrator and spawn listener for processing
     let auth_service = orchestrator_auth_client
@@ -138,7 +128,7 @@ pub async fn run() -> Result<(), async_nats::Error> {
         .description(AUTH_SRV_DESC)
         .start(AUTH_SRV_NAME, AUTH_SRV_VERSION)
         .await?;
-    
+
     // Auth Callout Service
     let sys_user_group = auth_service.group("$SYS").group("REQ").group("USER");
     let mut auth_callout = sys_user_group.endpoint("AUTH").await?;
@@ -147,117 +137,69 @@ pub async fn run() -> Result<(), async_nats::Error> {
 
     tokio::spawn(async move {
         while let Some(request) = auth_callout.next().await {
-                let signing_account_kp = Arc::clone(&signing_account_keypair.clone());
-                let signing_account_pk = signing_account_pubkey.clone();
-                let root_account_kp = Arc::clone(&root_account_keypair.clone());
-                let root_account_pk = root_account_pubkey.clone();
+            let signing_account_kp = Arc::clone(&signing_account_keypair.clone());
+            let signing_account_pk = signing_account_pubkey.clone();
+            let root_account_kp = Arc::clone(&root_account_keypair.clone());
+            let root_account_pk = root_account_pubkey.clone();
 
-                let maybe_reply = request.message.reply.clone();
-                match auth_api_clone.handle_auth_callout(
+            let maybe_reply = request.message.reply.clone();
+            match auth_api_clone
+                .handle_auth_callout(
                     Arc::new(request.message),
                     signing_account_kp,
                     signing_account_pk,
                     root_account_kp,
                     root_account_pk,
                 )
-                .await {
-                    Ok(r) => {
-                        let res_bytes = r.get_response();
-                        if let Some(reply_subject) = maybe_reply {
-                            let _ = orchestrator_auth_client_clone.publish(reply_subject, res_bytes.into()).await.map_err(|e| {
-                            log::error!(
-                                "{}Failed to send success response. Res={:?} Err={:?}",
-                                "NATS-SERVICE-LOG::AUTH::",
-                                r,
-                                e
-                            );
-                        });
-                        }
-                    },
-                    Err(e) => {
-                        let mut err_payload = AuthErrorPayload {
-                            service_info: auth_service_info.clone(),
-                            group: "$SYS.REQ.USER".to_string(),
-                            endpoint: "AUTH".to_string(),
-                            error: format!("{}",e),
-                        };
-    
-                        log::error!(
-                            "{}Failed to handle the endpoint handler. Err={:?}",
-                            "NATS-SERVICE-LOG::AUTH::",
-                            err_payload
-                        );
-    
-                        let err_response = serde_json::to_vec(&err_payload).unwrap_or_else(|e| {
-                            err_payload.error = e.to_string();
-                            log::error!(
-                                "{}Failed to deserialize error response. Err={:?}",
-                                "NATS-SERVICE-LOG::AUTH::",
-                                err_payload
-                            );
-                            vec![]
-                        });
-    
-                        let _ = orchestrator_auth_client_clone.publish(format!("{}.ERROR", ORCHESTRATOR_AUTH_CLIENT_INBOX_PREFIX), err_response.into()).await.map_err(|e| {
-                            log::error!(
-                                "{}Failed to send error response. Err={:?}",
-                                "NATS-SERVICE-LOG::AUTH::",
-                                err_payload
-                            );
-                        });
+                .await
+            {
+                Ok(r) => {
+                    let res_bytes = r.get_response();
+                    if let Some(reply_subject) = maybe_reply {
+                        let _ = orchestrator_auth_client_clone
+                            .publish(reply_subject, res_bytes)
+                            .await
+                            .map_err(|e| {
+                                log::error!(
+                                    "{}Failed to send success response. Res={:?} Err={:?}",
+                                    "NATS-SERVICE-LOG::AUTH::",
+                                    r,
+                                    e
+                                );
+                            });
                     }
                 }
-            }
-        });
+                Err(e) => {
+                    let mut err_payload = AuthErrorPayload {
+                        service_info: auth_service_info.clone(),
+                        group: "$SYS.REQ.USER".to_string(),
+                        endpoint: "AUTH".to_string(),
+                        error: format!("{}", e),
+                    };
 
-        // Auth Validation Service
-        let v1_auth_group = auth_service.group(AUTH_SRV_SUBJ); // .group("V1")
-        let mut auth_validation = v1_auth_group.endpoint(types::AUTHORIZE_SUBJECT).await?;
-        let orchestrator_auth_client_clone = orchestrator_auth_client.clone();
+                    log::error!(
+                        "{}Failed to handle the endpoint handler. Err={:?}",
+                        "NATS-SERVICE-LOG::AUTH::",
+                        err_payload
+                    );
 
-        tokio::spawn(async move {
-            while let Some(request) = auth_validation.next().await {
-                let maybe_reply = request.message.reply.clone();
-                match auth_api.handle_handshake_request(
-                    Arc::new(request.message)
-                )
-                .await {
-                    Ok(r) => {
-                        let res_bytes = r.get_response();
-                        if let Some(reply_subject) = maybe_reply {
-                            let _ = orchestrator_auth_client_clone.publish(reply_subject, res_bytes.into()).await.map_err(|e| {
-                            log::error!(
-                                "{}Failed to send success response. Res={:?} Err={:?}",
-                                "NATS-SERVICE-LOG::AUTH::",
-                                r,
-                                e
-                            );
-                        });
-                        }
-                    },
-                    Err(e) => {
-                        let auth_service_info = auth_service.info().await;
-                        let mut err_payload = AuthErrorPayload {
-                            service_info: auth_service_info,
-                            group: "AUTH".to_string(),
-                            endpoint: types::AUTHORIZE_SUBJECT.to_string(),
-                            error: format!("{}",e),
-                        };
+                    let err_response = serde_json::to_vec(&err_payload).unwrap_or_else(|e| {
+                        err_payload.error = e.to_string();
                         log::error!(
-                            "{}Failed to handle the endpoint handler. Err={:?}",
+                            "{}Failed to deserialize error response. Err={:?}",
                             "NATS-SERVICE-LOG::AUTH::",
                             err_payload
                         );
-                        let err_response = serde_json::to_vec(&err_payload).unwrap_or_else(|e| {
-                            err_payload.error = e.to_string();
-                            log::error!(
-                                "{}Failed to deserialize error response. Err={:?}",
-                                "NATS-SERVICE-LOG::AUTH::",
-                                err_payload
-                            );
-                            vec![]
-                        });
-                        let _ = orchestrator_auth_client_clone.publish("AUTH.ERROR", err_response.into()).await.map_err(|e| {
+                        vec![]
+                    });
+
+                    let _ = orchestrator_auth_client_clone
+                        .publish(
+                            format!("{}.ERROR", ORCHESTRATOR_AUTH_CLIENT_INBOX_PREFIX),
+                            err_response.into(),
+                        )
+                        .await
+                        .map_err(|e| {
                             err_payload.error = e.to_string();
                             log::error!(
                                 "{}Failed to send error response. Err={:?}",
@@ -265,10 +207,76 @@ pub async fn run() -> Result<(), async_nats::Error> {
                                 err_payload
                             );
                         });
-                    }
                 }
             }
-        });
+        }
+    });
+
+    // Auth Validation Service
+    let v1_auth_group = auth_service.group(AUTH_SRV_SUBJ); // .group("V1")
+    let mut auth_validation = v1_auth_group.endpoint(types::AUTHORIZE_SUBJECT).await?;
+    let orchestrator_auth_client_clone = orchestrator_auth_client.clone();
+
+    tokio::spawn(async move {
+        while let Some(request) = auth_validation.next().await {
+            let maybe_reply = request.message.reply.clone();
+            match auth_api
+                .handle_handshake_request(Arc::new(request.message))
+                .await
+            {
+                Ok(r) => {
+                    let res_bytes = r.get_response();
+                    if let Some(reply_subject) = maybe_reply {
+                        let _ = orchestrator_auth_client_clone
+                            .publish(reply_subject, res_bytes)
+                            .await
+                            .map_err(|e| {
+                                log::error!(
+                                    "{}Failed to send success response. Res={:?} Err={:?}",
+                                    "NATS-SERVICE-LOG::AUTH::",
+                                    r,
+                                    e
+                                );
+                            });
+                    }
+                }
+                Err(e) => {
+                    let auth_service_info = auth_service.info().await;
+                    let mut err_payload = AuthErrorPayload {
+                        service_info: auth_service_info,
+                        group: "AUTH".to_string(),
+                        endpoint: types::AUTHORIZE_SUBJECT.to_string(),
+                        error: format!("{}", e),
+                    };
+                    log::error!(
+                        "{}Failed to handle the endpoint handler. Err={:?}",
+                        "NATS-SERVICE-LOG::AUTH::",
+                        err_payload
+                    );
+                    let err_response = serde_json::to_vec(&err_payload).unwrap_or_else(|e| {
+                        err_payload.error = e.to_string();
+                        log::error!(
+                            "{}Failed to deserialize error response. Err={:?}",
+                            "NATS-SERVICE-LOG::AUTH::",
+                            err_payload
+                        );
+                        vec![]
+                    });
+                    let _ = orchestrator_auth_client_clone
+                        .publish("AUTH.ERROR", err_response.into())
+                        .await
+                        .map_err(|e| {
+                            err_payload.error = e.to_string();
+                            log::error!(
+                                "{}Failed to send error response. Err={:?}",
+                                "NATS-SERVICE-LOG::AUTH::",
+                                err_payload
+                            );
+                        });
+                }
+            }
+        }
+    });
 
     println!("Orchestrator Auth Service is running. Waiting for requests...");
 
@@ -276,11 +284,11 @@ pub async fn run() -> Result<(), async_nats::Error> {
     // Only exit program when explicitly requested
     tokio::signal::ctrl_c().await?;
 
-    println!("closing orchestrator auth service...");
+    println!("Closing orchestrator auth service...");
 
     // Close client and drain internal buffer before exiting to make sure all messages are sent
     orchestrator_auth_client.drain().await?;
-    println!("closed orchestrator auth service");
+    println!("Closed orchestrator auth service");
 
     Ok(())
 }

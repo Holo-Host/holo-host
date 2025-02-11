@@ -2,7 +2,6 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use util_libs::js_stream_service::{CreateResponse, CreateTag, EndpointTraits};
-use data_encoding::BASE64URL_NOPAD;
 
 pub const AUTH_CALLOUT_SUBJECT: &str = "$SYS.REQ.USER.AUTH";
 pub const AUTHORIZE_SUBJECT: &str = "validate";
@@ -45,7 +44,7 @@ pub struct AuthJWTResult {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum AuthResult {
-    Callout(String), // stringifiedAuthResponseClaim
+    Callout(String), // stringified `AuthResponseClaim`
     Authorization(AuthJWTResult),
 }
 

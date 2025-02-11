@@ -150,7 +150,6 @@ nsc describe operator --raw --output-file $SHARED_CREDS_DIR/$OPERATOR.jwt
 nsc describe account --name SYS --raw --output-file $SHARED_CREDS_DIR/$SYS_ACCOUNT.jwt
 nsc generate creds --name $AUTH_GUARD_USER --account $AUTH_ACCOUNT --output-file $SHARED_CREDS_DIR/$AUTH_GUARD_USER.creds
 
-# ADMIN_SK=$(nsc describe account ADMIN --field 'nats.signing_keys[0].key' | tr -d '"')
 extract_signing_key ADMIN $ADMIN_SK
 echo "extracted ADMIN signing key"
 

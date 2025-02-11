@@ -1,3 +1,4 @@
+use super::nats_js_client::EndpointType;
 use anyhow::{anyhow, Result};
 use async_nats::jetstream::consumer::{self, AckPolicy, PullConsumer};
 use async_nats::jetstream::stream::{self, Info, Stream};
@@ -10,7 +11,6 @@ use std::collections::HashMap;
 use std::fmt::Debug;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use super::nats_js_client::EndpointType;
 
 pub type ResponseSubjectsGenerator =
     Arc<dyn Fn(HashMap<String, String>) -> Vec<String> + Send + Sync>;
@@ -225,11 +225,12 @@ impl JsStreamService {
         T: EndpointTraits,
     {
         // Avoid adding the Service Subject prefix if the Endpoint Subject name starts with global keywords $SYS or $JS
-        let consumer_subject = if endpoint_subject.starts_with("$SYS") || endpoint_subject.starts_with("$JS") {
-            endpoint_subject.to_string()
-        } else {
-            format!("{}.{}", self.service_subject, endpoint_subject)
-        };
+        let consumer_subject =
+            if endpoint_subject.starts_with("$SYS") || endpoint_subject.starts_with("$JS") {
+                endpoint_subject.to_string()
+            } else {
+                format!("{}.{}", self.service_subject, endpoint_subject)
+            };
 
         // Register JS Subject Consumer
         let consumer_config = consumer::pull::Config {
@@ -342,7 +343,7 @@ impl JsStreamService {
         println!("WAITING TO PROCESS MESSAGE...");
         while let Some(Ok(js_msg)) = messages.next().await {
             println!("MESSAGES : js_msg={:?}", js_msg);
-            
+
             log::trace!(
                 "{}Consumer received message: subj='{}.{}', endpoint={}, service={}",
                 log_info.prefix,

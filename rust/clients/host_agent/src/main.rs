@@ -63,16 +63,17 @@ async fn daemonize(args: &DaemonzeArgs) -> Result<(), async_nats::Error> {
             async_nats::Error::from(e)
         })
     })?;
-    println!("inside host main auth... 1");
+    println!("Host Agent Keys={:#?}", host_agent_keys);
 
     // If user cred file is for the auth_guard user, run loop to authenticate host & hoster...
     if let keys::AuthCredType::Guard(_) = host_agent_keys.creds {
-        println!("inside host main auth... 2a");
         host_agent_keys = run_auth_loop(host_agent_keys).await?;
     }
 
-    println!("inside host main auth... 2b");
-    println!("Successfully AUTH'D and created new agent keys: {:#?}", host_agent_keys);
+    println!(
+        "Successfully AUTH'D and created new agent keys: {:#?}",
+        host_agent_keys
+    );
 
     // // Once authenticated, start leaf server and run workload api calls.
     // let _ = hostd::gen_leaf_server::run(
@@ -120,12 +121,15 @@ async fn run_auth_loop(mut keys: keys::Keys) -> Result<keys::Keys, async_nats::E
 
         while max_time_interval > now.signed_duration_since(start) {
             let unauthenticated_user_diagnostics_subject =
-                format!("DIAGNOSTICS.unauthenticated.{}", keys.host_pubkey);
+                format!("DIAGNOSTICS.{}.unauthenticated", keys.host_pubkey);
             let diganostics = HoloInventory::from_host();
             let payload_bytes = serde_json::to_vec(&diganostics)?;
-            
+
             if let Err(e) = auth_guard_client
-            .publish(unauthenticated_user_diagnostics_subject, payload_bytes.into())
+                .publish(
+                    unauthenticated_user_diagnostics_subject,
+                    payload_bytes.into(),
+                )
                 .await
             {
                 log::error!("Encountered error when sending diganostics. Err={:#?}", e);

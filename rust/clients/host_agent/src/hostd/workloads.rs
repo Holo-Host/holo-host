@@ -54,7 +54,10 @@ pub async fn run(
     // Spin up Nats Client and loaded in the Js Stream Service
     // Nats takes a moment to become responsive, so we try to connect in a loop for a few seconds.
     // TODO: how do we recover from a connection loss to Nats in case it crashes or something else?
-    let creds = host_creds_path.to_owned().map(Credentials::Path).ok_or_else(|| async_nats::Error::from("error"))?;
+    let creds = host_creds_path
+        .to_owned()
+        .map(Credentials::Path)
+        .ok_or_else(|| async_nats::Error::from("error"))?;
 
     let host_workload_client = tokio::select! {
         client = async {loop {

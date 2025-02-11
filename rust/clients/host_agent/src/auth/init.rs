@@ -24,11 +24,11 @@ use crate::{
 use anyhow::Result;
 use async_nats::{HeaderMap, HeaderName, HeaderValue, RequestErrorKind};
 use authentication::types::{AuthGuardPayload, AuthJWTPayload, AuthJWTResult, AuthState};
-use std::time::Duration;
-use util_libs::nats_js_client;
-use textnonce::TextNonce;
 use hpos_hal::inventory::HoloInventory;
 use std::str::FromStr;
+use std::time::Duration;
+use textnonce::TextNonce;
+use util_libs::nats_js_client;
 
 pub const HOST_AUTH_CLIENT_NAME: &str = "Host Auth";
 pub const HOST_AUTH_CLIENT_INBOX_PREFIX: &str = "_AUTH_INBOX";
@@ -37,23 +37,13 @@ pub async fn run(
     mut host_agent_keys: Keys,
 ) -> Result<(Keys, async_nats::Client), async_nats::Error> {
     log::info!("Host Auth Client: Connecting to server...");
-    println!("Keys={:#?}", host_agent_keys);
-    
-    println!("inside init auth... 0");
-    
+    log::trace!(
+        "Host Agent Keys before authentication request: {:#?}",
+        host_agent_keys
+    );
+
     // ==================== Fetch Config File & Call NATS AuthCallout Service to Authenticate Host & Hoster =============================================
     let nonce = TextNonce::new().to_string();
-    let unique_inbox = &format!(
-        "{}_{}",
-        HOST_AUTH_CLIENT_INBOX_PREFIX, host_agent_keys.host_pubkey
-    );
-    println!(">>> unique_inbox : {}", unique_inbox);
-    let user_unique_auth_subject = &format!("AUTH.{}.>", host_agent_keys.host_pubkey);
-    println!(
-        ">>> user_unique_auth_subject : {}",
-        user_unique_auth_subject
-    );
-    println!("inside init auth... 1");
 
     // Fetch Hoster Pubkey and email (from config)
     let mut auth_guard_payload = AuthGuardPayload::default();
@@ -70,11 +60,7 @@ pub async fn run(
             auth_guard_payload.nonce = nonce;
         }
     };
-    println!("PRIOR TO SIG : auth_guard_payload={:#?}", auth_guard_payload);
-    println!(" SIG OF auth_guard_payload : {:?}", host_agent_keys.host_sign(&serde_json::to_vec(&auth_guard_payload)?));
-
     auth_guard_payload = auth_guard_payload.try_add_signature(|p| host_agent_keys.host_sign(p))?;
-    println!("POST SIG : auth_guard_payload={:#?}", auth_guard_payload);
 
     let user_auth_json = serde_json::to_string(&auth_guard_payload)?;
     let user_auth_token = json_to_base64(&user_auth_json)?;
@@ -85,21 +71,23 @@ pub async fn run(
             "Failed to locate Auth Guard credentials",
         ));
     };
-    println!("user_creds_path={:#?}", user_creds_path);
+    let user_unique_inbox = &format!(
+        "{}_{}",
+        HOST_AUTH_CLIENT_INBOX_PREFIX, host_agent_keys.host_pubkey
+    );
 
     // Connect to Nats server as auth guard and call NATS AuthCallout
     let nats_url = nats_js_client::get_nats_url();
-    let auth_guard_client =
-        async_nats::ConnectOptions::new()
-            .name(HOST_AUTH_CLIENT_NAME.to_string())
-            .custom_inbox_prefix(unique_inbox.to_string())
-            .ping_interval(Duration::from_secs(10))
-            .request_timeout(Some(Duration::from_secs(30)))
-            .token(user_auth_token)
-            .credentials_file(&user_creds_path).await?
-            // .credentials(user_creds)?
-            .connect(nats_url)
-            .await?;
+    let auth_guard_client = async_nats::ConnectOptions::new()
+        .name(HOST_AUTH_CLIENT_NAME.to_string())
+        .custom_inbox_prefix(user_unique_inbox.to_string())
+        .ping_interval(Duration::from_secs(10))
+        .request_timeout(Some(Duration::from_secs(30)))
+        .token(user_auth_token)
+        .credentials_file(&user_creds_path)
+        .await?
+        .connect(nats_url)
+        .await?;
 
     let server_info = auth_guard_client.server_info();
     println!(
@@ -117,87 +105,66 @@ pub async fn run(
         maybe_sys_pubkey: host_agent_keys.local_sys_pubkey.clone(),
         nonce: TextNonce::new().to_string(),
     };
-    println!("inside init auth... 9");
-
     let payload_bytes = serde_json::to_vec(&payload)?;
-    println!("inside init auth... 10");
-
     let signature = host_agent_keys.host_sign(&payload_bytes)?;
-    println!("inside init auth... 11");
-    println!(" >>> signature >>> {}", signature);
-    println!(" >>> signature.as_bytes() >>> {:?}", signature.as_bytes());
-
     let mut headers = HeaderMap::new();
     headers.insert(
         HeaderName::from_static("X-Signature"),
         HeaderValue::from_str(&signature)?,
     );
-    
+
     println!("About to send out the {} message", "AUTH.validate");
     let response_msg = match auth_guard_client
-        .request_with_headers(
-            "AUTH.validate".to_string(),
-            headers,
-            payload_bytes.into()
-        )
-        .await {
-            Ok(msg) => msg,
-            Err(e) => {
-                log::error!("{:#?}", e);
-                if let RequestErrorKind::TimedOut = e.kind() {
-                    println!("inside init auth... 13");
-
-                    // TODO: Check to see if error is due to auth error.. if so then try to publish to Diagnostics Subject to ensure has correct permissions
-                    println!("got an AUTH RES ERROR: {:?}", e);
-        
-                    let unauthenticated_user_diagnostics_subject = format!(
-                        "DIAGNOSTICS.unauthenticated.{}",
-                        host_agent_keys.host_pubkey
-                    );
-                    let diganostics = HoloInventory::from_host();
-                    let payload_bytes = serde_json::to_vec(&diganostics)?;                  
-            
-                    if let Ok(_) = auth_guard_client
-                        .publish( unauthenticated_user_diagnostics_subject.to_string(), payload_bytes.into())
-                        .await {
-                            return Ok((host_agent_keys, auth_guard_client));
-                        }
+        .request_with_headers("AUTH.validate".to_string(), headers, payload_bytes.into())
+        .await
+    {
+        Ok(msg) => msg,
+        Err(e) => {
+            log::error!("{:#?}", e);
+            if let RequestErrorKind::TimedOut = e.kind() {
+                let unauthenticated_user_diagnostics_subject = format!(
+                    "DIAGNOSTICS.{}.unauthenticated",
+                    host_agent_keys.host_pubkey
+                );
+                let diganostics = HoloInventory::from_host();
+                let payload_bytes = serde_json::to_vec(&diganostics)?;
+                if (auth_guard_client
+                    .publish(
+                        unauthenticated_user_diagnostics_subject.to_string(),
+                        payload_bytes.into(),
+                    )
+                    .await)
+                    .is_ok()
+                {
+                    return Ok((host_agent_keys, auth_guard_client));
                 }
-                return Err(async_nats::Error::from(e));
             }
-        };
-
-    println!(
-        "got an AUTH response: {:?}",
-        std::str::from_utf8(&response_msg.payload).expect("failed to deserialize msg response")
-    );
+            return Err(async_nats::Error::from(e));
+        }
+    };
 
     println!(
         "got an AUTH response: {:#?}",
-        serde_json::from_slice::<AuthJWTResult>(&response_msg.payload).expect("failed to serde_json deserialize msg response")
+        serde_json::from_slice::<AuthJWTResult>(&response_msg.payload)
+            .expect("failed to serde_json deserialize msg response")
     );
 
     if let Ok(auth_response) = serde_json::from_slice::<AuthJWTResult>(&response_msg.payload) {
         match auth_response.status {
             AuthState::Authorized => {
-                println!("inside init auth... 13");
-
                 host_agent_keys = host_agent_keys
                     .save_host_creds(auth_response.host_jwt, auth_response.sys_jwt)
                     .await?;
-
-                if let Some(_reply) = response_msg.reply {
-                    // Publish the Awk resp to the Orchestrator... (JS)
-                }
             }
             _ => {
-                println!("inside init auth... 13");
                 log::error!("got unexpected AUTH State : {:?}", auth_response);
             }
         }
     };
 
-    println!("inside init auth... 14");
-    println!("host_agent_keys: {:#?}", host_agent_keys);
+    log::trace!(
+        "Host Agent Keys after authentication request: {:#?}",
+        host_agent_keys
+    );
     Ok((host_agent_keys, auth_guard_client))
 }

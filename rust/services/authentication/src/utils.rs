@@ -1,8 +1,8 @@
 use super::types;
 use anyhow::{anyhow, Result};
-use data_encoding::{BASE32HEX_NOPAD, BASE64URL_NOPAD};
-use base32::Alphabet;
 use base32::decode as base32Decode;
+use base32::Alphabet;
+use data_encoding::{BASE32HEX_NOPAD, BASE64URL_NOPAD};
 use jsonwebtoken::{decode, Algorithm, DecodingKey, Validation};
 use nkeys::KeyPair;
 use serde::Deserialize;
@@ -52,28 +52,20 @@ pub fn hash_claim(claims_str: &str) -> Vec<u8> {
 pub fn encode_jwt(claims_str: &str, signing_kp: &Arc<KeyPair>) -> Result<String> {
     const JWT_HEADER: &str = r#"{"typ":"JWT","alg":"ed25519-nkey"}"#;
     let b64_header: String = BASE64URL_NOPAD.encode(JWT_HEADER.as_bytes());
-    println!("encoded b64 header: {:?}", b64_header);
     let b64_body = BASE64URL_NOPAD.encode(claims_str.as_bytes());
-    println!("encoded header: {:?}", b64_body);
-
     let jwt_half = format!("{b64_header}.{b64_body}");
     let sig = signing_kp.sign(jwt_half.as_bytes())?;
     let b64_sig = BASE64URL_NOPAD.encode(&sig);
-
-    let token = format!("{jwt_half}.{b64_sig}");
-    Ok(token)
+    Ok(format!("{jwt_half}.{b64_sig}"))
 }
 
 /// Convert token into the
-pub fn decode_jwt<T>(token: &str) -> Result<T>
+pub fn decode_jwt<T>(token: &str, auth_signing_account_pubkey: &str) -> Result<T>
 where
     T: for<'de> Deserialize<'de> + std::fmt::Debug,
 {
     // Decode and replace custom `ed25519-nkey` to `EdDSA`
     let parts: Vec<&str> = token.split('.').collect();
-    println!("parts: {:?}", parts);
-    println!("parts.len() : {:?}", parts.len());
-
     if parts.len() != 3 {
         return Err(anyhow!("Invalid JWT format"));
     }
@@ -81,7 +73,6 @@ where
     // Decode base64 JWT header and fix the algorithm field
     let header_json = BASE64URL_NOPAD.decode(parts[0].as_bytes())?;
     let mut header: Value = serde_json::from_slice(&header_json).expect("failed to create header");
-    println!("header: {:?}", header);
 
     // Manually fix the algorithm name
     if let Some(alg) = header.get_mut("alg") {
@@ -89,11 +80,7 @@ where
             *alg = serde_json::Value::String("EdDSA".to_string());
         }
     }
-    println!("after header: {:?}", header);
-
     let modified_header = BASE64URL_NOPAD.encode(&serde_json::to_vec(&header)?);
-    println!("modified_header: {:?}", modified_header);
-
     let part_1_json = BASE64URL_NOPAD.decode(parts[1].as_bytes())?;
     let mut part_1: Value = serde_json::from_slice(&part_1_json)?;
     if part_1.get("exp").is_none() {
@@ -109,34 +96,24 @@ where
         part_1 = serde_json::to_value(b)?;
     }
     let modified_part_1 = BASE64URL_NOPAD.encode(&serde_json::to_vec(&part_1)?);
-
     let modified_token = format!("{}.{}.{}", modified_header, modified_part_1, parts[2]);
-    println!("modified_token: {:?}", modified_token);
-
-    let account_kp =
-        KeyPair::from_public_key("ABYGJO6B2OJTXL7DLL7EGR45RQ4I2CKM4D5XYYUSUBZJ7HJJF67E54VC")?;
-
-    let public_key_b32 = account_kp.public_key();
-    println!("Public Key (Base32): {}", public_key_b32);
 
     // Decode from Base32 to raw bytes using Rfc4648 (compatible with NATS keys)
-    let public_key_bytes = base32Decode(Alphabet::Rfc4648 { padding: false }, &public_key_b32)
-        .expect("failed to convert public key to bytes");
-    println!("Decoded Public Key Bytes: {:?}", public_key_bytes);
+    let public_key_bytes = base32Decode(
+        Alphabet::Rfc4648 { padding: false },
+        auth_signing_account_pubkey,
+    )
+    .expect("Failed to convert public key to bytes");
 
     // Use the decoded key to create a DecodingKey
     let decoding_key = DecodingKey::from_ed_der(&public_key_bytes);
-    println!(">>>>>>> decoded key");
 
     // Validate the token with the correct algorithm
     let mut validation = Validation::new(Algorithm::EdDSA);
     validation.insecure_disable_signature_validation();
     validation.validate_aud = false; // Disable audience validation
-    println!("passed validation");
 
     let token_data = decode::<T>(&modified_token, &decoding_key, &validation)?;
-    // println!("token_data: {:#?}", token_data);
-
     Ok(token_data.claims)
 }
 
@@ -187,9 +164,8 @@ pub fn generate_auth_response_claim(
     let hashed_user_claim_bytes = hash_claim(&user_claim_str);
     user_claim.generic_claim_data.jwt_id = Some(BASE32HEX_NOPAD.encode(&hashed_user_claim_bytes));
     user_claim_str = serde_json::to_string(&user_claim)?;
-    let user_token = encode_jwt(&user_claim_str, &auth_signing_account_keypair)?;
-    println!("user_token: {:#?}", user_token);
 
+    let user_token = encode_jwt(&user_claim_str, &auth_signing_account_keypair)?;
     let outer_nats_claim = types::ClaimData {
         issuer: auth_root_account_pubkey.clone(), // Must be the pubkey of the keypair that signs the claim
         subcriber: auth_request_claim.auth_request.user_nkey.clone(),

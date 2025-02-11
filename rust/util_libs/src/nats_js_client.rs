@@ -166,7 +166,7 @@ impl JsClient {
                     }
                 }
             }
-        }; 
+        };
 
         let client = connect_options.connect(&p.nats_url).await?;
 
@@ -242,7 +242,11 @@ impl JsClient {
         }
     }
 
-    pub async fn publish(&self, payload: PublishInfo) -> Result<(), async_nats::error::Error<async_nats::jetstream::context::PublishErrorKind>> {
+    pub async fn publish(
+        &self,
+        payload: PublishInfo,
+    ) -> Result<(), async_nats::error::Error<async_nats::jetstream::context::PublishErrorKind>>
+    {
         log::debug!(
             "{}Called Publish message: subj={}, msg_id={} data={:?}",
             self.service_log_prefix,
@@ -250,12 +254,16 @@ impl JsClient {
             payload.msg_id,
             payload.data
         );
-        
+
         let now = Instant::now();
         let result = match payload.headers {
             Some(headers) => {
                 self.js
-                    .publish_with_headers(payload.subject.clone(), headers, payload.data.clone().into())
+                    .publish_with_headers(
+                        payload.subject.clone(),
+                        headers,
+                        payload.data.clone().into(),
+                    )
                     .await
             }
             None => {
@@ -270,7 +278,7 @@ impl JsClient {
             if let Some(ref on_failed) = self.on_msg_failed_event {
                 on_failed(&payload.subject, &self.name, duration); // todo: add msg_id
             }
-            return Err(async_nats::error::Error::from(err));
+            return Err(err);
         }
 
         if let Some(ref on_published) = self.on_msg_published_event {
