@@ -294,7 +294,6 @@ impl AuthServiceApi {
         // 1. Verify expected data was received
         let signature: &[u8] = match &msg.headers {
             Some(h) => {
-                println!("header={:?}", h);
                 let r = HeaderValue::as_str(h.get("X-Signature").ok_or_else(|| {
                     log::error!("Error: Missing X-Signature header. Subject='AUTH.authorize'");
                     ServiceError::Request(format!("{:?}", ErrorCode::BAD_REQUEST))
@@ -367,8 +366,6 @@ impl AuthServiceApi {
         };
 
         if let Some(sys_pubkey) = maybe_sys_pubkey.clone() {
-            println!("inside handle_handshake_request... 5 sys -- inside");
-
             match Command::new("nsc")
                 .args([
                     "add",
@@ -421,7 +418,7 @@ impl AuthServiceApi {
             .output()
             .context("Failed to update resolver config file")
             .map_err(|e| ServiceError::Internal(e.to_string()))?;
-        println!("\npushed new jwts to resolver server");
+        log::trace!("\nPushed new jwts to resolver server");
 
         let mut tag_map: HashMap<String, String> = HashMap::new();
         tag_map.insert("host_pubkey".to_string(), host_pubkey.clone());

@@ -340,10 +340,7 @@ impl JsStreamService {
     ) where
         T: EndpointTraits,
     {
-        println!("WAITING TO PROCESS MESSAGE...");
         while let Some(Ok(js_msg)) = messages.next().await {
-            println!("MESSAGES : js_msg={:?}", js_msg);
-
             log::trace!(
                 "{}Consumer received message: subj='{}.{}', endpoint={}, service={}",
                 log_info.prefix,

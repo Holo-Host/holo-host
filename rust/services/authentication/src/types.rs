@@ -96,7 +96,6 @@ impl AuthGuardPayload {
         T: Fn(&[u8]) -> Result<String>,
     {
         let payload_bytes = serde_json::to_vec(&self)?;
-        println!("Going to sign payload_bytes={:?}", payload_bytes);
         let signature = sign_handler(&payload_bytes)?;
         self.host_signature = signature.as_bytes().to_vec();
         Ok(self)

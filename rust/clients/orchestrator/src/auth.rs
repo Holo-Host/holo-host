@@ -45,10 +45,6 @@ pub const ORCHESTRATOR_AUTH_CLIENT_INBOX_PREFIX: &str = "_AUTH_INBOX_ORCHESTRATO
 pub async fn run() -> Result<(), async_nats::Error> {
     let admin_account_creds_path =
         PathBuf::from_str(&get_nats_creds_by_nsc("HOLO", "AUTH", "auth"))?;
-    println!(
-        " >>>> admin_account_creds_path: {:#?} ",
-        admin_account_creds_path
-    );
 
     // Root Keypair associated with AUTH account
     let root_account_key_path = std::env::var("ORCHESTRATOR_ROOT_AUTH_NKEY_PATH")
@@ -278,17 +274,17 @@ pub async fn run() -> Result<(), async_nats::Error> {
         }
     });
 
-    println!("Orchestrator Auth Service is running. Waiting for requests...");
+    log::debug!("Orchestrator Auth Service is running. Waiting for requests...");
 
     // ==================== Close and Clean Client ====================
     // Only exit program when explicitly requested
     tokio::signal::ctrl_c().await?;
 
-    println!("Closing orchestrator auth service...");
+    log::debug!("Closing orchestrator auth service...");
 
     // Close client and drain internal buffer before exiting to make sure all messages are sent
     orchestrator_auth_client.drain().await?;
-    println!("Closed orchestrator auth service");
+    log::debug!("Closed orchestrator auth service");
 
     Ok(())
 }
