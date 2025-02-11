@@ -1,10 +1,11 @@
 /*
 Service Name: AUTH
 Subject: "AUTH.>"
-Provisioning Account: ADMIN Account (ie: This service is exclusively permissioned to the ADMIN account.)
+Provisioning Account: AUTH Account (ie: This service is exclusively permissioned to the AUTH account.)
 Users: orchestrator & noauth
 Endpoints & Managed Subjects:
-    - handle_handshake_request: AUTH.validate
+    - handle_auth_callout: $SYS.REQ.USER.AUTH
+    - handle_auth_validation: AUTH.validate
 */
 
 pub mod types;
@@ -23,12 +24,12 @@ use std::future::Future;
 use std::process::Command;
 use std::sync::Arc;
 use types::{AuthApiResult, WORKLOAD_SK_ROLE};
-use util_libs::db::{
-    mongodb::{IntoIndexes, MongoCollection, MongoDbAPI},
-    schemas::{self, Host, Hoster, Role, RoleInfo, User},
-};
-use util_libs::nats_js_client::{
-    get_nsc_root_path, AsyncEndpointHandler, JsServiceResponse, ServiceError,
+use util_libs::{
+    db::{
+        mongodb::{IntoIndexes, MongoCollection, MongoDbAPI},
+        schemas::{self, Host, Hoster, Role, RoleInfo, User},
+    },
+    nats_js_client::{get_nsc_root_path, AsyncEndpointHandler, JsServiceResponse, ServiceError},
 };
 use utils::handle_internal_err;
 
@@ -37,6 +38,12 @@ pub const AUTH_SRV_SUBJ: &str = "AUTH";
 pub const AUTH_SRV_VERSION: &str = "0.0.1";
 pub const AUTH_SRV_DESC: &str =
     "This service handles the Authentication flow the Host and the Orchestrator.";
+
+// Service Endpoint Names:
+pub const VALIDATE_AUTH_SUBJECT: &str = "validate";
+// NB: Do not change this subject name unless NATS.io has changed the naming of their auth permissions subject.
+// NB: `AUTH_CALLOUT_SUBJECT` attached to the global subject `$SYS.REQ.USER`
+pub const AUTH_CALLOUT_SUBJECT: &str = "AUTH";
 
 #[derive(Clone, Debug)]
 pub struct AuthServiceApi {
@@ -285,7 +292,7 @@ impl AuthServiceApi {
         })
     }
 
-    pub async fn handle_handshake_request(
+    pub async fn handle_auth_validation(
         &self,
         msg: Arc<Message>,
     ) -> Result<AuthApiResult, ServiceError> {

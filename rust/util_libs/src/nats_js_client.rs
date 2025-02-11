@@ -287,49 +287,6 @@ impl JsClient {
         Ok(())
     }
 
-    // pub async fn request(&self, payload: RequestInfo) -> Result<Message, async_nats::error::Error<async_nats::RequestErrorKind>> {
-    //     /// ie: $JS.API.CONSUMER.INFO.AUTH.authorize_host_and_sys, JS.API.CONSUMER.INFO.AUTH.auth_callout
-    //     let js_subject = format!("$JS.API.CONSUMER.INFO.{}.{}", payload.stream_subject, payload.consumer_name);
-    //     log::debug!(
-    //         "{}Published message: subj={}, msg_id={} data={:?}",
-    //         self.service_log_prefix,
-    //         js_subject,
-    //         payload.msg_id,
-    //         payload.data
-    //     );
-
-    //     let now = Instant::now();
-    //     let result = match payload.headers {
-    //         Some(headers) => {
-    //             self.client
-    //                 .request_with_headers(format!("$JS.API.CONSUMER.INFO.{}.{}", payload.stream_subject, payload.consumer_name), headers, payload.data.clone().into())
-    //                 .await
-    //         }
-    //         None => {
-    //             self.client
-    //                 .request(format!("$JS.API.CONSUMER.INFO.{}.{}", payload.stream_subject, payload.consumer_name), payload.data.clone().into())
-    //                 .await
-    //         }
-    //     };
-
-    //     let duration = now.elapsed();
-
-    //     match result {
-    //         Ok(m) => {
-    //             if let Some(ref on_published) = self.on_msg_published_event {
-    //                 on_published(&js_subject, &self.name, duration);
-    //             }
-    //             Ok(m)
-    //         },
-    //         Err(e) => {
-    //             if let Some(ref on_failed) = self.on_msg_failed_event {
-    //                 on_failed(&js_subject, &self.name, duration); // todo: add msg_id
-    //             }
-    //             Err(e)
-    //         }
-    //     }
-    // }
-
     pub async fn add_js_services(mut self, js_services: Vec<JsStreamService>) -> Self {
         let mut current_services = self.js_services.unwrap_or_default();
         current_services.extend(js_services);
