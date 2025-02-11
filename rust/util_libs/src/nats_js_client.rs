@@ -2,8 +2,8 @@ use super::js_stream_service::{CreateTag, JsServiceParamsPartial, JsStreamServic
 use crate::nats_server::LEAF_SERVER_DEFAULT_LISTEN_PORT;
 
 use anyhow::Result;
-use core::option::Option::None;
-use async_nats::{jetstream, HeaderMap, Message, ServerInfo};
+use async_nats::{jetstream, AuthError, HeaderMap, Message, ServerInfo};
+use core::marker::Sync;
 use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::fmt;
@@ -19,6 +19,8 @@ pub enum ServiceError {
     Request(String),
     #[error(transparent)]
     Database(#[from] mongodb::error::Error),
+    #[error(transparent)]
+    Authentication(#[from] AuthError),
     #[error("Nats Error: {0}")]
     NATS(String),
     #[error("Internal Error: {0}")]
@@ -26,7 +28,7 @@ pub enum ServiceError {
 }
 
 pub type EventListener = Arc<Box<dyn Fn(&mut JsClient) + Send + Sync>>;
-pub type EventHandler = Pin<Box<dyn Fn(&str, &str, Duration) + Send + Sync>>;
+pub type EventHandler = Arc<Pin<Box<dyn Fn(&str, &str, Duration) + Send + Sync>>>;
 pub type JsServiceResponse<T> = Pin<Box<dyn Future<Output = Result<T, ServiceError>> + Send>>;
 pub type EndpointHandler<T> = Arc<dyn Fn(&Message) -> Result<T, ServiceError> + Send + Sync>;
 pub type AsyncEndpointHandler<T> = Arc<
@@ -59,11 +61,20 @@ where
 }
 
 #[derive(Clone, Debug)]
+pub struct RequestInfo {
+    pub stream_subject: String,
+    pub consumer_name: String,
+    pub msg_id: String,
+    pub data: Vec<u8>,
+    pub headers: Option<HeaderMap>,
+}
+
+#[derive(Clone, Debug)]
 pub struct PublishInfo {
     pub subject: String,
     pub msg_id: String,
     pub data: Vec<u8>,
-    pub headers: Option<HeaderMap> 
+    pub headers: Option<HeaderMap>,
 }
 
 #[derive(Debug)]
@@ -88,6 +99,7 @@ impl std::fmt::Debug for JsClient {
     }
 }
 
+#[derive(Clone)]
 pub struct JsClient {
     url: String,
     name: String,
@@ -99,43 +111,54 @@ pub struct JsClient {
     service_log_prefix: String,
 }
 
+#[derive(Clone)]
+pub enum Credentials {
+    Path(std::path::PathBuf), // String = pathbuf as string
+    Password(String, String),
+    Token(String),
+}
+
 #[derive(Deserialize, Default)]
 pub struct NewJsClientParams {
     pub nats_url: String,
     pub name: String,
     pub inbox_prefix: String,
-    #[serde(default)]
     pub service_params: Vec<JsServiceParamsPartial>,
     #[serde(skip_deserializing)]
-    pub opts: Vec<EventListener>, // NB: These opts should not be required for client instantiation
-    #[serde(default)]
-    pub credentials_path: Option<String>,
-    #[serde(default)]
+    pub credentials: Option<Vec<Credentials>>,
     pub ping_interval: Option<Duration>,
-    #[serde(default)]
     pub request_timeout: Option<Duration>, // Defaults to 5s
+    #[serde(skip_deserializing)]
+    pub listeners: Vec<EventListener>,
 }
 
 impl JsClient {
     pub async fn new(p: NewJsClientParams) -> Result<Self, async_nats::Error> {
-        let connect_options = async_nats::ConnectOptions::new()
+        let mut connect_options: async_nats::ConnectOptions = async_nats::ConnectOptions::new()
             // .require_tls(true)
             .name(&p.name)
             .ping_interval(p.ping_interval.unwrap_or(Duration::from_secs(120)))
             .request_timeout(Some(p.request_timeout.unwrap_or(Duration::from_secs(10))))
             .custom_inbox_prefix(&p.inbox_prefix);
 
-        let client = match p.credentials_path {
-            Some(cp) => {
-                let path = std::path::Path::new(&cp);
-                connect_options
-                    .credentials_file(path)
-                    .await?
-                    .connect(&p.nats_url)
-                    .await?
+        if let Some(credentials_list) = p.credentials {
+            for credentials in credentials_list {
+                match credentials {
+                    Credentials::Password(user, pw) => {
+                        connect_options = connect_options.user_and_password(user, pw);
+                    }
+                    Credentials::Path(cp) => {
+                        let path = std::path::Path::new(&cp);
+                        connect_options = connect_options.credentials_file(path).await?;
+                    }
+                    Credentials::Token(t) => {
+                        connect_options = connect_options.token(t);
+                    }
+                }
             }
-            None => connect_options.connect(&p.nats_url).await?,
         };
+
+        let client = connect_options.connect(&p.nats_url).await?;
 
         let jetstream = jetstream::new(client.clone());
         let mut services = vec![];
@@ -159,7 +182,7 @@ impl JsClient {
 
         let service_log_prefix = format!("NATS-CLIENT-LOG::{}::", p.name);
 
-        let mut default_client = JsClient {
+        let mut js_client = JsClient {
             url: p.nats_url,
             name: p.name,
             on_msg_published_event: None,
@@ -170,43 +193,23 @@ impl JsClient {
             service_log_prefix: service_log_prefix.clone(),
         };
 
-        for opt in p.opts {
-            opt(&mut default_client);
+        for listener in p.listeners {
+            listener(&mut js_client);
         }
 
         log::info!(
             "{}Connected to NATS server at {}",
             service_log_prefix,
-            default_client.url
+            js_client.url
         );
-        Ok(default_client)
-    }
-
-    pub fn name(&self) -> &str {
-        &self.name
+        Ok(js_client)
     }
 
     pub fn get_server_info(&self) -> ServerInfo {
         self.client.server_info()
     }
 
-    pub async fn monitor(&self) -> Result<(), async_nats::Error> {
-        if let async_nats::connection::State::Disconnected = self.client.connection_state() {
-            Err(Box::new(ErrClientDisconnected))
-        } else {
-            Ok(())
-        }
-    }
-
-    pub async fn close(&self) -> Result<(), async_nats::Error> {
-        self.client.drain().await?;
-        Ok(())
-    }
-
-    pub async fn health_check_stream(&self, stream_name: &str) -> Result<(), async_nats::Error> {
-        if let async_nats::connection::State::Disconnected = self.client.connection_state() {
-            return Err(Box::new(ErrClientDisconnected));
-        }
+    pub async fn get_stream_info(&self, stream_name: &str) -> Result<(), async_nats::Error> {
         let stream = &self.js.get_stream(stream_name).await?;
         let info = stream.get_info().await?;
         log::debug!(
@@ -218,17 +221,46 @@ impl JsClient {
         Ok(())
     }
 
-    pub async fn publish(&self, payload: PublishInfo) -> Result<(), async_nats::Error> {
+    pub async fn check_connection(
+        &self,
+    ) -> Result<async_nats::connection::State, async_nats::Error> {
+        let conn_state = self.client.connection_state();
+        if let async_nats::connection::State::Disconnected = conn_state {
+            Err(Box::new(ErrClientDisconnected))
+        } else {
+            Ok(conn_state)
+        }
+    }
+
+    pub async fn publish(
+        &self,
+        payload: PublishInfo,
+    ) -> Result<(), async_nats::error::Error<async_nats::jetstream::context::PublishErrorKind>>
+    {
+        log::debug!(
+            "{}Called Publish message: subj={}, msg_id={} data={:?}",
+            self.service_log_prefix,
+            payload.subject,
+            payload.msg_id,
+            payload.data
+        );
+
         let now = Instant::now();
         let result = match payload.headers {
-            Some(h) => self
-                .js
-                .publish_with_headers(payload.subject.clone(), h, payload.data.clone().into())
-                .await,
-            None => self
-                .js
-                .publish(payload.subject.clone(), payload.data.clone().into())
-                .await
+            Some(headers) => {
+                self.js
+                    .publish_with_headers(
+                        payload.subject.clone(),
+                        headers,
+                        payload.data.clone().into(),
+                    )
+                    .await
+            }
+            None => {
+                self.js
+                    .publish(payload.subject.clone(), payload.data.clone().into())
+                    .await
+            }
         };
 
         let duration = now.elapsed();
@@ -236,16 +268,9 @@ impl JsClient {
             if let Some(ref on_failed) = self.on_msg_failed_event {
                 on_failed(&payload.subject, &self.name, duration); // todo: add msg_id
             }
-            return Err(Box::new(err));
+            return Err(err);
         }
 
-        log::debug!(
-            "{}Published message: subj={}, msg_id={} data={:?}",
-            self.service_log_prefix,
-            payload.subject,
-            payload.msg_id,
-            payload.data
-        );
         if let Some(ref on_published) = self.on_msg_published_event {
             on_published(&payload.subject, &self.name, duration);
         }
@@ -267,6 +292,11 @@ impl JsClient {
         }
         None
     }
+
+    pub async fn close(&self) -> Result<(), async_nats::Error> {
+        self.client.drain().await?;
+        Ok(())
+    }
 }
 
 // Client Options:
@@ -284,7 +314,7 @@ where
     F: Fn(&str, &str, Duration) + Send + Sync + Clone + 'static,
 {
     Arc::new(Box::new(move |c: &mut JsClient| {
-        c.on_msg_published_event = Some(Box::pin(f.clone()));
+        c.on_msg_published_event = Some(Arc::new(Box::pin(f.clone())));
     }))
 }
 
@@ -293,7 +323,7 @@ where
     F: Fn(&str, &str, Duration) + Send + Sync + Clone + 'static,
 {
     Arc::new(Box::new(move |c: &mut JsClient| {
-        c.on_msg_failed_event = Some(Box::pin(f.clone()));
+        c.on_msg_failed_event = Some(Arc::new(Box::pin(f.clone())));
     }))
 }
 
@@ -301,19 +331,39 @@ where
 // TODO: there's overlap with the NATS_LISTEN_PORT. refactor this to e.g. read NATS_LISTEN_HOST and NATS_LISTEN_PORT
 pub fn get_nats_url() -> String {
     std::env::var("NATS_URL").unwrap_or_else(|_| {
-        let default = format!("127.0.0.1:{}", LEAF_SERVER_DEFAULT_LISTEN_PORT);
+        let default = format!("127.0.0.1:{}", LEAF_SERVER_DEFAULT_LISTEN_PORT); // Shouldn't this be the 'NATS_LISTEN_PORT'?
         log::debug!("using default for NATS_URL: {default}");
         default
     })
 }
 
-pub fn get_nats_client_creds(operator: &str, account: &str, user: &str) -> String {
-    std::env::var("HOST_CREDS_FILE_PATH").unwrap_or_else(|_| {
-        format!(
-            "/.local/share/nats/nsc/keys/creds/{}/{}/{}.creds",
-            operator, account, user
-        )
-    })
+fn get_nsc_root_path() -> String {
+    std::env::var("NSC_PATH").unwrap_or_else(|_| "/.local/share/nats/nsc".to_string())
+}
+
+pub fn get_local_creds_path() -> String {
+    std::env::var("LOCAL_CREDS_PATH")
+        .unwrap_or_else(|_| format!("{}/local_creds", get_nsc_root_path()))
+}
+
+pub fn get_nats_creds_by_nsc(operator: &str, account: &str, user: &str) -> String {
+    format!(
+        "{}/keys/creds/{}/{}/{}.creds",
+        get_nsc_root_path(),
+        operator,
+        account,
+        user
+    )
+}
+
+pub fn get_nats_jwt_by_nsc(operator: &str, account: &str, user: &str) -> String {
+    format!(
+        "{}/stores/{}/accounts/{}/users/{}.jwt",
+        get_nsc_root_path(),
+        operator,
+        account,
+        user
+    )
 }
 
 pub fn get_event_listeners() -> Vec<EventListener> {

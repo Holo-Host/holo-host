@@ -1,19 +1,19 @@
 use super::nats_js_client::EndpointType;
-
 use anyhow::{anyhow, Result};
-use std::any::Any;
 use async_nats::jetstream::consumer::{self, AckPolicy, PullConsumer};
 use async_nats::jetstream::stream::{self, Info, Stream};
 use async_nats::jetstream::Context;
 use async_trait::async_trait;
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
+use std::any::Any;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-pub type ResponseSubjectsGenerator = Arc<dyn Fn(HashMap<String, String>) -> Vec<String> + Send + Sync>;
+pub type ResponseSubjectsGenerator =
+    Arc<dyn Fn(HashMap<String, String>) -> Vec<String> + Send + Sync>;
 
 pub trait CreateTag: Send + Sync {
     fn get_tags(&self) -> HashMap<String, String>;
@@ -24,8 +24,17 @@ pub trait CreateResponse: Send + Sync {
 }
 
 pub trait EndpointTraits:
-    Serialize + for<'de> Deserialize<'de> + Send + Sync + Clone + Debug + CreateTag + CreateResponse + 'static
-{}
+    Serialize
+    + for<'de> Deserialize<'de>
+    + Send
+    + Sync
+    + Clone
+    + Debug
+    + CreateTag
+    + CreateResponse
+    + 'static
+{
+}
 
 #[async_trait]
 pub trait ConsumerExtTrait: Send + Sync + Debug + 'static {
@@ -215,13 +224,19 @@ impl JsStreamService {
     where
         T: EndpointTraits,
     {
-        let full_subject = format!("{}.{}", self.service_subject, endpoint_subject);
+        // Avoid adding the Service Subject prefix if the Endpoint Subject name starts with global keywords $SYS or $JS
+        let consumer_subject =
+            if endpoint_subject.starts_with("$SYS") || endpoint_subject.starts_with("$JS") {
+                endpoint_subject.to_string()
+            } else {
+                format!("{}.{}", self.service_subject, endpoint_subject)
+            };
 
         // Register JS Subject Consumer
         let consumer_config = consumer::pull::Config {
             durable_name: Some(consumer_name.to_string()),
             ack_policy: AckPolicy::Explicit,
-            filter_subject: full_subject,
+            filter_subject: consumer_subject,
             ..Default::default()
         };
 
@@ -278,6 +293,8 @@ impl JsStreamService {
             let messages = consumer
                 .stream()
                 .heartbeat(std::time::Duration::from_secs(10))
+                .max_messages_per_batch(100)
+                .expires(std::time::Duration::from_secs(30))
                 .messages()
                 .await?;
 
@@ -343,8 +360,8 @@ impl JsStreamService {
                     let bytes = r.get_response();
                     let maybe_subject_tags = r.get_tags();
                     (bytes, maybe_subject_tags)
-                },
-                Err(err) => (err.to_string().into(), HashMap::new())
+                }
+                Err(err) => (err.to_string().into(), HashMap::new()),
             };
 
             // Returns a response if a reply address exists.

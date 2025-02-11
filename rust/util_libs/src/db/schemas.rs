@@ -31,7 +31,7 @@ pub use String as MongoDbId;
 #[derive(Serialize, Deserialize, PartialEq, Clone, Debug)]
 pub enum Role {
     Developer(DeveloperJWT), // jwt string
-    Hoster(HosterPubKey),      // host pubkey
+    Hoster(HosterPubKey),    // host pubkey
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
