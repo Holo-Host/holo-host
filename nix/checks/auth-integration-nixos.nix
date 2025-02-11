@@ -34,7 +34,7 @@ pkgs.testers.runNixOSTest (
         holo.orchestrator.enable = true;
         services.nats.settings = {
           system_account = "SYS";
-          include main-resolver.conf
+          # include main-resolver.conf
 
           jetstream = {
             domain = "${hubJsDomain}";
@@ -94,7 +94,9 @@ pkgs.testers.runNixOSTest (
       let
         natsCli = lib.getExe pkgs.natscli;
         nsc = lib.getExe pkgs.nsc;
-        hub
+        workloadStreamName = "WORKLOAD";
+        authServiceName = "AUTH";
+
         hubAuthTestScript =
           let
             natsServer = "nats://127.0.0.1:${builtins.toString nodes.hub.holo.nats-server.port}";
@@ -108,12 +110,12 @@ pkgs.testers.runNixOSTest (
             ${natsCli} context save SYS_USER --nsc "nsc://HOLO/SYS/sys.creds"
             ${natsCli} -s "${natsServer}" stream ls --context SYS_USER
             # test that 1 stream exists
-            ${natsCli} -s "${natsServer}" stream info --json ${WorkloadStreamName} --context SYS_USER
+            ${natsCli} -s "${natsServer}" stream info --json ${workloadStreamName} --context SYS_USER
             # test that WORKLOAD stream *is* the single stream
 
             ${natsCli} -s "${natsServer}" micro ls --context SYS_USER
             # test that 1 service exists
-            ${natsCli} -s "${natsServer}" micro info --json ${AuthStreamName} --context SYS_USER
+            ${natsCli} -s "${natsServer}" micro info --json ${authServiceName} --context SYS_USER
             # test that AUTH service *is* the single service registered
           '';
 
@@ -128,10 +130,10 @@ pkgs.testers.runNixOSTest (
             ${natsCli} context save SYS_USER --nsc "nsc://HOLO/SYS/sys.creds"
 
             ${natsCli} -s "${natsServer}" stream ls --context SYS_USER
-            ${natsCli} -s "${natsServer}" stream info --json ${WorkloadStreamName} --context SYS_USER
+            ${natsCli} -s "${natsServer}" stream info --json ${workloadStreamName} --context SYS_USER
 
-            ${natsCli} -s '${natsServer}' sub --stream "${WorkloadStreamName}" '${WorkloadStreamName}.>' --count=10 --context SYS_USER
-            ${natsCli} -s '${natsServer}' pub "${WorkloadStreamName}.hello" '{"message":"hello"}' --js-domain ${hubJsDomain} --count=10 --context HOST_USER
+            ${natsCli} -s '${natsServer}' sub --stream "${workloadStreamName}" '${workloadStreamName}.>' --count=10 --context SYS_USER
+            ${natsCli} -s '${natsServer}' pub "${workloadStreamName}.hello" '{"message":"hello"}' --js-domain ${hubJsDomain} --count=10 --context HOST_USER
           '';
       in
       ''

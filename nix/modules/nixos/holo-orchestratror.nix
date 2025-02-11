@@ -106,7 +106,7 @@ in
 
       nscPath = lib.mkOption {
         type = lib.types.path;
-        default = "var/lib/.local/share/nats/nsc";
+        default = "/var/lib/.local/share/nats/nsc";
       };
 
       sharedCredsPath = lib.mkOption {
@@ -162,7 +162,7 @@ in
 
       preStart = ''
         init_hub_auth() {
-          ${pkgs.bash}/bin/bash ${cfg.hubAuthScriptPath} ${cfg.nats.listenHost} ${cfg.nats.listenPort} ${cfg.nats.sharedCredsPath} ${cfg.nats.localCredsPath}
+          ${pkgs.bash}/bin/bash ${builtins.toString cfg.hubAuthScriptPath} ${cfg.nats.listenHost} ${builtins.toString cfg.nats.listenPort} ${builtins.toString cfg.nats.sharedCredsPath} ${builtins.toString cfg.nats.localCredsPath}
         }
         init_hub_auth
         echo "Finshed Hub Auth Setup"

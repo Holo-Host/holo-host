@@ -72,7 +72,7 @@ in
 
       nscPath = lib.mkOption {
         type = lib.types.path;
-        default = "var/lib/.local/share/nats/nsc";
+        default = "/var/lib/.local/share/nats/nsc";
       };
 
       sharedCredsPath = lib.mkOption {
@@ -155,7 +155,7 @@ in
 
       preStart = ''
         init_host_auth_guard() {
-          ${cfg.hostAuthScriptPath} ${cfg.nats.nscPath} ${cfg.nats.sharedCredsPath}
+          ${cfg.hostAuthScriptPath} ${builtins.toString cfg.nats.nscPath} ${builtins.toString cfg.nats.sharedCredsPath}
         }
         init_host_auth_guard
         echo "Finished Host Auth Guard Setup"
