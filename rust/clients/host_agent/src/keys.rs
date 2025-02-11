@@ -6,7 +6,7 @@ use std::io::{Read, Write};
 use std::path::PathBuf;
 use std::process::Command;
 use std::str::FromStr;
-use util_libs::nats_js_client::{get_nats_creds_by_nsc, get_nsc_root_path};
+use util_libs::nats_js_client::{get_nats_creds_by_nsc, get_local_creds_path};
 
 impl std::fmt::Debug for Keys {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -215,9 +215,8 @@ impl Keys {
     ) -> Result<Self> {
         //  Save user jwt and sys jwt local to hosting agent
         let host_path = PathBuf::from_str(&format!(
-            "{}/{}/{}",
-            get_nsc_root_path(),
-            "local_creds",
+            "{}/{}",
+            get_local_creds_path(),
             "host.jwt"
         ))?;
         log::trace!("host_path={:?}", host_path);
@@ -225,9 +224,8 @@ impl Keys {
         log::trace!("Wrote JWT to host file");
 
         let sys_path = PathBuf::from_str(&format!(
-            "{}/{}/{}",
-            get_nsc_root_path(),
-            "local_creds",
+            "{}/{}",
+            get_local_creds_path(),
             "sys.jwt"
         ))?;
         log::trace!("sys_path={:?}", sys_path);

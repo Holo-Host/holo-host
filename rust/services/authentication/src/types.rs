@@ -4,8 +4,8 @@ use std::collections::HashMap;
 use util_libs::js_stream_service::{CreateResponse, CreateTag, EndpointTraits};
 
 // The workload_sk_role is assigned when the host agent is created during the auth flow.
-// NB: This role name *must* match the `ROLE_NAME_WORKLOAD` in the `orchestrator_setup.sh` script file.
-pub const WORKLOAD_SK_ROLE: &str = "workload-role";
+// NB: This role name *must* match the `ROLE_NAME_WORKLOAD` in the `hub_auth_setup.sh` script file.
+pub const WORKLOAD_SK_ROLE: &str = "workload_role";
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum AuthState {
