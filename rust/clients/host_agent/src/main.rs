@@ -51,19 +51,16 @@ async fn main() -> Result<(), AgentCliError> {
 }
 
 async fn daemonize(args: &DaemonzeArgs) -> Result<(), async_nats::Error> {
-    println!("inside host agent main auth... 0");
-
     let mut host_agent_keys = keys::Keys::try_from_storage(
         &args.nats_leafnode_client_creds_path,
         &args.nats_leafnode_client_sys_creds_path,
     )
     .or_else(|_| {
         keys::Keys::new().map_err(|e| {
-            eprintln!("Failed to create new keys: {:?}", e);
+            log::error!("Failed to create new keys: {:?}", e);
             async_nats::Error::from(e)
         })
     })?;
-    println!("Host Agent Keys={:#?}", host_agent_keys);
 
     // If user cred file is for the auth_guard user, run loop to authenticate host & hoster...
     if let keys::AuthCredType::Guard(_) = host_agent_keys.creds {

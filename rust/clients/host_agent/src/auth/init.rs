@@ -144,7 +144,7 @@ pub async fn run(
     };
 
     println!(
-        "got an AUTH response: {:#?}",
+        "Received AUTH response: {:#?}",
         serde_json::from_slice::<AuthJWTResult>(&response_msg.payload)
             .expect("failed to serde_json deserialize msg response")
     );
