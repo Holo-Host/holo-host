@@ -22,7 +22,6 @@ use clap::Parser;
 use dotenv::dotenv;
 use hpos_hal::inventory::HoloInventory;
 use thiserror::Error;
-use util_libs::nats_js_client::{JsClient, PublishInfo};
 
 #[derive(Error, Debug)]
 pub enum AgentCliError {
@@ -67,32 +66,32 @@ async fn daemonize(args: &DaemonzeArgs) -> Result<(), async_nats::Error> {
         host_agent_keys = run_auth_loop(host_agent_keys).await?;
     }
 
-    println!(
-        "Successfully AUTH'D and created new agent keys: {:#?}",
+    log::trace!(
+        "Host Agent Keys after successful authentication: {:#?}",
         host_agent_keys
     );
 
-    // // Once authenticated, start leaf server and run workload api calls.
-    // let _ = hostd::gen_leaf_server::run(
-    //     &host_agent_keys.get_host_creds_path(),
-    //     &args.store_dir,
-    //     args.hub_url.clone(),
-    //     args.hub_tls_insecure,
-    // )
-    // .await;
+    // Once authenticated, start leaf server and run workload api calls.
+    let _ = hostd::gen_leaf_server::run(
+        &host_agent_keys.get_host_creds_path(),
+        &args.store_dir,
+        args.hub_url.clone(),
+        args.hub_tls_insecure,
+    )
+    .await;
 
-    // let host_workload_client = hostd::workloads::run(
-    //     &host_agent_keys.host_pubkey,
-    //     &host_agent_keys.get_host_creds_path(),
-    //     args.nats_connect_timeout_secs,
-    // )
-    // .await?;
+    let host_workload_client = hostd::workloads::run(
+        &host_agent_keys.host_pubkey,
+        &host_agent_keys.get_host_creds_path(),
+        args.nats_connect_timeout_secs,
+    )
+    .await?;
 
     // Only exit program when explicitly requested
     tokio::signal::ctrl_c().await?;
 
-    // // Close client and drain internal buffer before exiting to make sure all messages are sent
-    // host_workload_client.close().await?;
+    // Close client and drain internal buffer before exiting to make sure all messages are sent
+    host_workload_client.close().await?;
 
     Ok(())
 }

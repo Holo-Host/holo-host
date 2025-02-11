@@ -3,9 +3,6 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use util_libs::js_stream_service::{CreateResponse, CreateTag, EndpointTraits};
 
-pub const AUTH_CALLOUT_SUBJECT: &str = "$SYS.REQ.USER.AUTH";
-pub const AUTHORIZE_SUBJECT: &str = "validate";
-
 // The workload_sk_role is assigned when the host agent is created during the auth flow.
 // NB: This role name *must* match the `ROLE_NAME_WORKLOAD` in the `orchestrator_setup.sh` script file.
 pub const WORKLOAD_SK_ROLE: &str = "workload-role";

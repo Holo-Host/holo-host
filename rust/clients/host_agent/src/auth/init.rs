@@ -1,18 +1,17 @@
 /*
 This client is associated with the:
-    - ADMIN account
+    - AUTH account
     - auth guard user
 
 Nb: Once the host and hoster are validated, and the host creds file is created,
-...this client should close and the hostd workload manager should spin up.
+...this client should safely close and then the `hostd.workload` manager should spin up.
 
 This client is responsible for:
-    - generating new key for host / and accessing hoster key from provided config file
-    - registering with the host auth service to:
-        - get hub operator jwt and hub sys account jwt
-        - send "nkey" version of host pubkey as file to hub
-        - get user jwt from hub and create user creds file with provided file path
-    - publishing to `auth.start` to initilize the auth handshake and validate the host/hoster
+    - generating new key for host and accessing hoster key from provided config file
+    - calling the host auth service to:
+        - validate hoster hc pubkey and email
+        - send the host pubkey to the orchestrator to register with the orchestrator key resovler
+        - get user jwt from orchestrator and create user creds file with provided file path
     - returning the host pubkey and closing client cleanly
 */
 
@@ -23,7 +22,10 @@ use crate::{
 };
 use anyhow::Result;
 use async_nats::{HeaderMap, HeaderName, HeaderValue, RequestErrorKind};
-use authentication::types::{AuthGuardPayload, AuthJWTPayload, AuthJWTResult, AuthState};
+use authentication::{
+    types::{AuthGuardPayload, AuthJWTPayload, AuthJWTResult, AuthState},
+    AUTH_SRV_SUBJ, VALIDATE_AUTH_SUBJECT,
+};
 use hpos_hal::inventory::HoloInventory;
 use std::str::FromStr;
 use std::time::Duration;
@@ -113,9 +115,16 @@ pub async fn run(
         HeaderValue::from_str(&signature)?,
     );
 
-    println!("About to send out the {} message", "AUTH.validate");
+    println!(
+        "About to send out the {}.{} message",
+        AUTH_SRV_SUBJ, VALIDATE_AUTH_SUBJECT
+    );
     let response_msg = match auth_guard_client
-        .request_with_headers("AUTH.validate".to_string(), headers, payload_bytes.into())
+        .request_with_headers(
+            format!("{}.{}", AUTH_SRV_SUBJ, VALIDATE_AUTH_SUBJECT),
+            headers,
+            payload_bytes.into(),
+        )
         .await
     {
         Ok(msg) => msg,
@@ -162,9 +171,5 @@ pub async fn run(
         }
     };
 
-    log::trace!(
-        "Host Agent Keys after authentication request: {:#?}",
-        host_agent_keys
-    );
     Ok((host_agent_keys, auth_guard_client))
 }

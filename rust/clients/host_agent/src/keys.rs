@@ -79,7 +79,7 @@ impl Keys {
         })
     }
 
-    // NB: Only call when trying to load an already authenticated Host and Sys User
+    // NB: Only call when trying to load an already authenticated host user (with or without a sys user)
     pub fn try_from_storage(
         maybe_host_creds_path: &Option<PathBuf>,
         maybe_sys_creds_path: &Option<PathBuf>,
@@ -110,7 +110,7 @@ impl Keys {
             host_pubkey: host_pk,
             local_sys_keypair: None,
             local_sys_pubkey: None,
-            creds: AuthCredType::Guard(auth_guard_creds),  // Set auth_guard_creds as default user cred
+            creds: AuthCredType::Guard(auth_guard_creds), // Set auth_guard_creds as default user cred
         };
 
         let sys_key_path = std::env::var("HOSTING_AGENT_SYS_NKEY_PATH")
@@ -125,7 +125,10 @@ impl Keys {
             None => default_keys,
         };
 
-        Ok(keys.clone().add_creds_paths(host_creds_path, Some(sys_creds_path)).unwrap_or_else(move |e| {
+        Ok(keys.clone().add_creds_paths(
+            host_creds_path,
+            Some(sys_creds_path)
+        ).unwrap_or_else(move |e| {
             log::error!("Error: Cannot locate authenticated cred files. Defaulting to auth_guard_creds. Err={}",e);
             keys
         }))
@@ -159,7 +162,7 @@ impl Keys {
     pub fn add_creds_paths(
         mut self,
         host_creds_file_path: PathBuf,
-        sys_creds_file_path: Option<PathBuf>,
+        maybe_sys_creds_file_path: Option<PathBuf>,
     ) -> Result<Self> {
         match host_creds_file_path.try_exists() {
             Ok(is_ok) => {
@@ -170,7 +173,7 @@ impl Keys {
                     ));
                 }
 
-                let creds = match sys_creds_file_path {
+                let creds = match maybe_sys_creds_file_path {
                     Some(sys_path) => match sys_path.try_exists() {
                         Ok(is_ok) => {
                             if !is_ok {
@@ -237,7 +240,7 @@ impl Keys {
             .arg("import")
             .arg("user")
             .arg("--file")
-            .arg(&format!("{:?}", host_path))
+            .arg(format!("{:?}", host_path))
             .output()
             .context("Failed to add import new host user on hosting agent.")?;
         log::trace!("Imported host user successfully");
@@ -247,7 +250,7 @@ impl Keys {
             .arg("import")
             .arg("user")
             .arg("--file")
-            .arg(&format!("{:?}", sys_path))
+            .arg(format!("{:?}", sys_path))
             .output()
             .context("Failed to add import new sys user on hosting agent.")?;
         log::trace!("Imported sys user successfully");
@@ -299,7 +302,7 @@ impl Keys {
             .add_creds_paths(host_creds_path, sys_creds_file_name)
     }
 
-    pub fn _get_host_creds_path(&self) -> Option<PathBuf> {
+    pub fn get_host_creds_path(&self) -> Option<PathBuf> {
         if let AuthCredType::Authenticated(creds) = self.to_owned().creds {
             return Some(creds.host_creds_path);
         };

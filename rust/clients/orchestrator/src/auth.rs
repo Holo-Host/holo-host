@@ -1,29 +1,27 @@
 /*
 This client is associated with the:
-    - ADMIN account
-    - orchestrator user
+    - AUTH account
+    - (the orchestrator's) auth user
 
 This client is responsible for:
     - initalizing connection and handling interface with db
-    - registering with the host auth service to:
-        - handling auth requests by:
-            - validating user signature
-            - validating hoster pubkey
-            - validating hoster email
-            - bidirectionally pairing hoster and host
-            - interfacing with hub nsc resolver and hub credential files
-            - adding user to hub
-            - creating signed jwt for user
-            - adding user jwt file to user collection (with ttl)
+    - registering the `handle_auth_callout` and  `handle_auth_validation` fns as core nats service group endpoints:
+        - NB: These endpoints will consider authentiction successful if:
+            - user signature is valid
+            - hoster pubkey is valid
+            - hoster email is valid
+            - succesfully paired hoster and host in mongodb
+            - succesfully added user to resolver on hub (orchestrator side)
+            - succesfully created signed jwt for user
+            - succesfully added user jwt file to user collection in mongodb (with ttl)
     - keeping service running until explicitly cancelled out
 */
 
 use anyhow::{anyhow, Context, Result};
 use async_nats::service::ServiceExt;
 use authentication::{
-    self,
-    types::{self, AuthErrorPayload},
-    AuthServiceApi, AUTH_SRV_DESC, AUTH_SRV_NAME, AUTH_SRV_SUBJ, AUTH_SRV_VERSION,
+    types::AuthErrorPayload, AuthServiceApi, AUTH_CALLOUT_SUBJECT, AUTH_SRV_DESC, AUTH_SRV_NAME,
+    AUTH_SRV_SUBJ, AUTH_SRV_VERSION, VALIDATE_AUTH_SUBJECT,
 };
 use futures::StreamExt;
 use mongodb::{options::ClientOptions, Client as MongoDBClient};
@@ -131,7 +129,7 @@ pub async fn run() -> Result<(), async_nats::Error> {
 
     // Auth Callout Service
     let sys_user_group = auth_service.group("$SYS").group("REQ").group("USER");
-    let mut auth_callout = sys_user_group.endpoint("AUTH").await?;
+    let mut auth_callout = sys_user_group.endpoint(AUTH_CALLOUT_SUBJECT).await?;
     let auth_service_info = auth_service.info().await;
     let orchestrator_auth_client_clone = orchestrator_auth_client.clone();
 
@@ -173,7 +171,7 @@ pub async fn run() -> Result<(), async_nats::Error> {
                     let mut err_payload = AuthErrorPayload {
                         service_info: auth_service_info.clone(),
                         group: "$SYS.REQ.USER".to_string(),
-                        endpoint: "AUTH".to_string(),
+                        endpoint: AUTH_CALLOUT_SUBJECT.to_string(),
                         error: format!("{}", e),
                     };
 
@@ -214,14 +212,14 @@ pub async fn run() -> Result<(), async_nats::Error> {
 
     // Auth Validation Service
     let v1_auth_group = auth_service.group(AUTH_SRV_SUBJ); // .group("V1")
-    let mut auth_validation = v1_auth_group.endpoint(types::AUTHORIZE_SUBJECT).await?;
+    let mut auth_validation = v1_auth_group.endpoint(VALIDATE_AUTH_SUBJECT).await?;
     let orchestrator_auth_client_clone = orchestrator_auth_client.clone();
 
     tokio::spawn(async move {
         while let Some(request) = auth_validation.next().await {
             let maybe_reply = request.message.reply.clone();
             match auth_api
-                .handle_handshake_request(Arc::new(request.message))
+                .handle_auth_validation(Arc::new(request.message))
                 .await
             {
                 Ok(r) => {
@@ -244,8 +242,8 @@ pub async fn run() -> Result<(), async_nats::Error> {
                     let auth_service_info = auth_service.info().await;
                     let mut err_payload = AuthErrorPayload {
                         service_info: auth_service_info,
-                        group: "AUTH".to_string(),
-                        endpoint: types::AUTHORIZE_SUBJECT.to_string(),
+                        group: AUTH_SRV_SUBJ.to_string(),
+                        endpoint: VALIDATE_AUTH_SUBJECT.to_string(),
                         error: format!("{}", e),
                     };
                     log::error!(
