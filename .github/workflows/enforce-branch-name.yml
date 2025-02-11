@@ -15,9 +15,9 @@ jobs:
       - name: Check Branch Name
         run: |
           BRANCH_NAME="${{ github.event.pull_request.head.ref }}"
-          if [[ ! "$BRANCH_NAME" =~ ^(feature|bugfix|hotfix|release)\/[0-9]+ ]]; then
+          if [[ ! "$BRANCH_NAME" =~ ^[0-9]+ ]]; then
             echo "❌ Invalid branch name: $BRANCH_NAME"
-            echo "✅ Expected: feature/123-description"
+            echo "✅ Expected: 123-description"
             exit 1
           fi
 
