@@ -6,7 +6,7 @@ use std::io::{Read, Write};
 use std::path::PathBuf;
 use std::process::Command;
 use std::str::FromStr;
-use util_libs::nats_js_client::{get_nats_creds_by_nsc, get_local_creds_path};
+use util_libs::nats_js_client::{get_local_creds_path, get_nats_creds_by_nsc};
 
 impl std::fmt::Debug for Keys {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -214,20 +214,12 @@ impl Keys {
         host_sys_user_jwt: String,
     ) -> Result<Self> {
         //  Save user jwt and sys jwt local to hosting agent
-        let host_path = PathBuf::from_str(&format!(
-            "{}/{}",
-            get_local_creds_path(),
-            "host.jwt"
-        ))?;
+        let host_path = PathBuf::from_str(&format!("{}/{}", get_local_creds_path(), "host.jwt"))?;
         log::trace!("host_path={:?}", host_path);
         write_to_file(host_path.clone(), host_user_jwt.as_bytes())?;
         log::trace!("Wrote JWT to host file");
 
-        let sys_path = PathBuf::from_str(&format!(
-            "{}/{}",
-            get_local_creds_path(),
-            "sys.jwt"
-        ))?;
+        let sys_path = PathBuf::from_str(&format!("{}/{}", get_local_creds_path(), "sys.jwt"))?;
         log::trace!("sys_path={:?}", sys_path);
         write_to_file(sys_path.clone(), host_sys_user_jwt.as_bytes())?;
         log::trace!("Wrote JWT to sys file");

@@ -9,7 +9,6 @@ use std::error::Error;
 use std::fmt;
 use std::fmt::Debug;
 use std::future::Future;
-use std::path::PathBuf;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -60,15 +59,6 @@ where
         write!(f, "{}", t)
     }
 }
-
-// #[derive(Clone, Debug)]
-// pub struct RequestInfo {
-//     pub stream_subject: String,
-//     pub consumer_name: String,
-//     pub msg_id: String,
-//     pub data: Vec<u8>,
-//     pub headers: Option<HeaderMap>,
-// }
 
 #[derive(Clone, Debug)]
 pub struct RequestInfo {
@@ -352,7 +342,8 @@ fn get_nsc_root_path() -> String {
 }
 
 pub fn get_local_creds_path() -> String {
-    std::env::var("LOCAL_CREDS_PATH").unwrap_or_else(|_| format!("{}/local_creds", get_nsc_root_path()))
+    std::env::var("LOCAL_CREDS_PATH")
+        .unwrap_or_else(|_| format!("{}/local_creds", get_nsc_root_path()))
 }
 
 pub fn get_nats_creds_by_nsc(operator: &str, account: &str, user: &str) -> String {
