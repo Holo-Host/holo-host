@@ -352,7 +352,8 @@ fn get_nsc_root_path() -> String {
 }
 
 pub fn get_local_creds_path() -> String {
-    std::env::var("LOCAL_CREDS_PATH").unwrap_or_else(|_| format!("{}/local_creds", get_nsc_root_path()))
+    std::env::var("LOCAL_CREDS_PATH")
+        .unwrap_or_else(|_| format!("{}/local_creds", get_nsc_root_path()))
 }
 
 pub fn get_nats_creds_by_nsc(operator: &str, account: &str, user: &str) -> String {
