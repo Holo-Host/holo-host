@@ -1,5 +1,3 @@
-use crate::mongodb::MutMetadata;
-
 /// Database schemas and types for the Holo Hosting system.
 ///
 /// This module defines the schema structures and their MongoDB index configurations
@@ -24,15 +22,21 @@ use crate::mongodb::MutMetadata;
 ///     Ok(())
 /// }
 /// ```
+///
 use super::mongodb::IntoIndexes;
+use crate::mongodb::MutMetadata;
 use anyhow::Result;
 use bson::oid::ObjectId;
-use bson::{self, doc, DateTime, Document};
+use bson::{self, doc, Bson, DateTime, Document};
 use hpos_hal::inventory::HoloInventory;
 use mongodb::options::IndexOptions;
 use semver::{BuildMetadata, Prerelease};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::path::PathBuf;
+use strum::{EnumDiscriminants, EnumString, FromRepr};
 use strum_macros::AsRefStr;
+use url::Url;
 
 /// Name of the main database for the Holo Hosting system
 pub const DATABASE_NAME: &str = "holo-hosting";
@@ -262,6 +266,8 @@ pub struct Host {
     pub avg_network_speed: i64,
     /// Average latency in milliseconds
     pub avg_latency: i64,
+    /// IP address of the host
+    pub ip_address: Option<String>,
     /// Reference to the assigned hoster
     pub assigned_hoster: Option<ObjectId>,
     /// List of workloads running on this host
@@ -280,6 +286,7 @@ impl Default for Host {
             avg_latency: 100,       // Start at decent latency time
             assigned_workloads: vec![],
             assigned_hoster: None,
+            ip_address: None,
         }
     }
 }
@@ -310,7 +317,10 @@ impl MutMetadata for Host {
 }
 
 /// Enumeration of possible workload states
-#[derive(Debug, Clone, Serialize, Deserialize, AsRefStr, PartialEq)]
+#[derive(
+    Debug, Clone, Serialize, Deserialize, PartialEq, AsRefStr, EnumDiscriminants, FromRepr,
+)]
+#[strum_discriminants(derive(EnumString), repr(usize), strum(serialize_all = "snake_case"))]
 pub enum WorkloadState {
     /// Workload reported by developer
     Reported,
@@ -348,6 +358,8 @@ pub struct WorkloadStatus {
     pub desired: WorkloadState,
     /// Actual current state of the workload
     pub actual: WorkloadState,
+
+    pub payload: WorkloadStatePayload,
 }
 
 /// Resource capacity requirements for a workload
@@ -382,16 +394,67 @@ pub struct Workload {
     pub assigned_developer: ObjectId,
     /// Semantic version of the workload
     pub version: SemVer,
-    /// Nix package name containing the workload
-    pub nix_pkg: String,
     /// Minimum number of hosts required
     pub min_hosts: i32,
     /// System requirements for the workload
     pub system_specs: SystemSpecs,
-    /// List of hosts running this workload
+    /// List of hosts this workload is assigned to
     pub assigned_hosts: Vec<ObjectId>,
     /// Current status of the workload
     pub status: WorkloadStatus,
+    pub manifest: WorkloadManifest, // (Includes information about everthing needed to deploy workload - ie: binary & env pkg & deps, etc)
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub enum WorkloadManifest {
+    None,
+    ExtraContainerPath { extra_container_path: String },
+    ExtraContainerStorePath { store_path: PathBuf },
+    ExtraContainerBuildCmd { nix_args: Box<[String]> },
+    HolochainDhtV1(Box<WorkloadManifestHolochainDhtV1>),
+}
+
+#[derive(Default, Clone, Debug, Deserialize, Serialize)]
+pub enum WorkloadStatePayload {
+    #[default]
+    None,
+    HolochainDhtV1(Bson),
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, clap::Args)]
+pub struct WorkloadManifestHolochainDhtV1 {
+    #[arg(long, value_delimiter = ',')]
+    pub happ_binary_url: Url,
+    #[arg(long, value_delimiter = ',')]
+    pub network_seed: String,
+    #[arg(long, value_delimiter = ',', value_parser = parse_key_val::<String, String>)]
+    pub memproof: Option<HashMap<String, String>>,
+    #[arg(long, value_delimiter = ',')]
+    pub bootstrap_server_url: Option<Url>,
+    #[arg(long, value_delimiter = ',')]
+    pub signal_server_url: Option<Url>,
+    #[arg(long, value_delimiter = ',')]
+    pub stun_server_urls: Option<Vec<Url>>,
+    #[arg(long, value_delimiter = ',')]
+    pub holochain_feature_flags: Option<Vec<String>>,
+    #[arg(long, value_delimiter = ',')]
+    pub holochain_version: Option<String>,
+}
+
+/// Parse a single key-value pair
+fn parse_key_val<T, U>(
+    s: &str,
+) -> Result<(T, U), Box<dyn std::error::Error + Send + Sync + 'static>>
+where
+    T: std::str::FromStr,
+    T::Err: std::error::Error + Send + Sync + 'static,
+    U: std::str::FromStr,
+    U::Err: std::error::Error + Send + Sync + 'static,
+{
+    let pos = s
+        .find('=')
+        .ok_or_else(|| format!("invalid KEY=value: no `=` found in `{s}`"))?;
+    Ok((s[..pos].parse()?, s[pos + 1..].parse()?))
 }
 
 impl Default for Workload {
@@ -422,7 +485,6 @@ impl Default for Workload {
                 deleted_at: None,
             },
             version: semver,
-            nix_pkg: String::new(),
             assigned_developer: ObjectId::new(),
             min_hosts: 1,
             system_specs: SystemSpecs {
@@ -435,7 +497,9 @@ impl Default for Workload {
                 id: None,
                 desired: WorkloadState::Unknown("default state".to_string()),
                 actual: WorkloadState::Unknown("default state".to_string()),
+                payload: WorkloadStatePayload::None,
             },
+            manifest: WorkloadManifest::None,
         }
     }
 }
