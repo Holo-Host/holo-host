@@ -100,9 +100,9 @@ in
         default = "/var/lib/server-key-config.json";
       };
 
-      hposCredsPw = lib.mkOption {
-        type = lib.types.str;
-        default = "pass";
+      hposCredsPwFile = lib.mkOption {
+        type = lib.types.path;
+        default = "/var/lib/holo-host-agent/hpos_creds_pw";
       };
 
       hub = {
