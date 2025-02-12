@@ -158,6 +158,7 @@ in
 
       path = [
         pkgs.nats-server
+        pkgs.bash
       ];
 
       preStart = ''
