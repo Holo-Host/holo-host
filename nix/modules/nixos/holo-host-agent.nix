@@ -159,7 +159,6 @@ in
         }
         init_host_auth_guard
         echo "Finished Host Auth Guard Setup"
-        sleep 1 # wait
       '';
 
       script =

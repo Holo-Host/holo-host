@@ -166,7 +166,6 @@ in
         }
         init_hub_auth
         echo "Finshed Hub Auth Setup"
-        sleep 1 # wait
       '';
 
       script = ''
