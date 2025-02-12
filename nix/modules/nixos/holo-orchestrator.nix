@@ -137,7 +137,6 @@ in
 
       after = [
         "network.target"
-        "network-online.target"
       ];
       wantedBy = lib.lists.optional cfg.autoStart "multi-user.target";
 
