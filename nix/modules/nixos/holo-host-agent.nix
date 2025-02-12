@@ -39,7 +39,7 @@ in
 
     hostAuthScriptPath =  lib.mkOption {
       type = lib.types.path;
-      default = "${cfg.package}/../../../scripts/hosting_agent_setup ";
+      default = "${flake}/scripts/hosting_agent_setup.sh"";
     };
 
     rust = {
