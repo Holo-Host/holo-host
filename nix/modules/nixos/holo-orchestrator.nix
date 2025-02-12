@@ -163,7 +163,7 @@ in
 
       preStart = ''
         init_hub_auth() {
-          ${pkgs.bash}/bin/bash ${builtins.toString cfg.hubAuthScriptPath} ${cfg.nats.listenHost} ${builtins.toString cfg.nats.listenPort} ${builtins.toString cfg.nats.sharedCredsPath} ${builtins.toString cfg.nats.localCredsPath}
+          ${cfg.hubAuthScriptPath} ${cfg.nats.listenHost} ${builtins.toString cfg.nats.listenPort} ${builtins.toString cfg.nats.sharedCredsPath} ${builtins.toString cfg.nats.localCredsPath}
         }
         init_hub_auth
         echo "Finshed Hub Auth Setup"
