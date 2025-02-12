@@ -3,6 +3,7 @@
 # blueprint specific first level argument that's referred to as "publisherArgs"
 {
   inputs,
+  flake,
   ...
 }:
 
@@ -39,7 +40,7 @@ in
 
     hostAuthScriptPath =  lib.mkOption {
       type = lib.types.path;
-      default = "${flake}/scripts/hosting_agent_setup.sh"";
+      default = "${flake}/scripts/host_auth_setup.sh";
     };
 
     rust = {
@@ -97,12 +98,12 @@ in
 
       hposCredsPath = lib.mkOption {
         type = lib.types.path;
-        default = "/var/lib/server-key-config.json";
+        default = "/var/lib/holo-host-agent/server-key-config.json";
       };
 
       hposCredsPwFile = lib.mkOption {
         type = lib.types.path;
-        default = "/var/lib/holo-host-agent/hpos_creds_pw";
+        default = "/var/lib/holo-host-agent/hpos_creds_pw.txt";
       };
 
       hub = {

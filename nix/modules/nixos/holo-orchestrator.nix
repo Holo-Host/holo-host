@@ -3,6 +3,7 @@
 # blueprint specific first level argument that's referred to as "publisherArgs"
 {
   inputs,
+  flake,
   ...
 }:
 
@@ -17,10 +18,6 @@ let
   cfg = config.holo.orchestrator;
 in
 {
-  imports = [
-    inputs.extra-container.nixosModules.default
-  ];
-
   options.holo.orchestrator = {
     enable = lib.mkOption {
       description = "enable holo-orchestrator";
@@ -39,7 +36,7 @@ in
 
     hubAuthScriptPath =  lib.mkOption {
       type = lib.types.path;
-      default = "${cfg.package}/../../../scripts/hub_auth_setup";
+      default = "${flake}/scripts/hub_auth_setup.sh";
     };
 
     rust = {
@@ -55,8 +52,6 @@ in
     };
 
     mongo = {
-      documentation.enable = false;
-
       listenHost = lib.mkOption {
         type = lib.types.str;
         default = "127.0.0.1";
@@ -71,16 +66,6 @@ in
         type = lib.types.str;
         default = "${cfg.mongo.listenHost}:${builtins.toString cfg.mongo.listenPort}";
       };
-
-      services.mongodb = {
-        enable = true;
-        bind_ip = cfg.mongo.listenHost;
-      };
-
-      systemd.services.mongodb.serviceConfig = {
-        LimitNOFILE = 500000;
-      };
-
     };
 
     nats = {
@@ -131,11 +116,21 @@ in
   };
 
   config = lib.mkIf cfg.enable {
+    systemd.services.mongodb = {
+      enable = true;
+      bind_ip = cfg.mongo.url;
+      documentation.enable = false;
+      serviceConfig = {
+        LimitNOFILE = 500000;
+      }
+    };
+
     systemd.services.holo-orchestrator = {
       enable = true;
 
       after = [
         "network.target"
+        "holo-nats-server"
       ];
       wantedBy = lib.lists.optional cfg.autoStart "multi-user.target";
 
@@ -162,6 +157,9 @@ in
       preStart = ''
         init_hub_auth() {
           ${cfg.hubAuthScriptPath} ${cfg.nats.listenHost} ${builtins.toString cfg.nats.listenPort} ${builtins.toString cfg.nats.sharedCredsPath} ${builtins.toString cfg.nats.localCredsPath}
+          # NB: In order to succeed, the following `nsc push` command
+          # must be run whenever the nats-server (hub) is up and running
+          nsc push -A
         }
         init_hub_auth
         echo "Finshed Hub Auth Setup"

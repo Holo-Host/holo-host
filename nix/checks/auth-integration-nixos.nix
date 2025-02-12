@@ -104,8 +104,18 @@ pkgs.testers.runNixOSTest (
           pkgs.writeShellScript "cmd" ''
             set -xe
 
-            ${nsc} describe account AUTH --field authcallout | jq -r
-            # test that AUTH account has `auth_callout` in its jwt json
+            AUTH_ACCOUNT_AUTH_SETTINGS="$(${nsc} describe account AUTH --field nats.authorization | jq -r)"
+            # test that AUTH account has `authorization.allowed_accounts` is a list of 2 accounts
+            if [[ $(echo "$AUTH_ACCOUNT_AUTH_SETTINGS" | jq '.allowed_accounts | length') -ne 2 ]]; then
+                echo "allowed_accounts does NOT contain exactly 2 entries."
+                exit 1
+            fi
+            # test that AUTH account has `authorization.auth_users` is a list of 1 user
+            HUB_AUTH_USER="$(${nsc} describe user -n auth -a AUTH --field sub | jq -r)"
+            if [[ $(echo "$AUTH_ACCOUNT_AUTH_SETTINGS" | jq '.auth_users') == $HUB_AUTH_USER ]]; then
+                echo "auth_user is NOT the expected user auth."
+                exit 1
+            fi
 
             ${natsCli} context save SYS_USER --nsc "nsc://HOLO/SYS/sys.creds"
             ${natsCli} -s "${natsServer}" stream ls --context SYS_USER
@@ -126,8 +136,12 @@ pkgs.testers.runNixOSTest (
           pkgs.writeShellScript "cmd" ''
             set -xe
 
-            ${natsCli} context save HOST_USER --nsc "nsc://HOLO/WORKLOAD/host.creds"
-            ${natsCli} context save SYS_USER --nsc "nsc://HOLO/SYS/sys.creds"
+            WORKOAD_PKS=$(nsc list keys --users --account WORKLOAD 2>&1 | grep -E '^\|\s+auth' | awk '{print $4}')
+            WORKLOD_PK_ARRAY=($WORKOAD_PKS)
+            HOST_PUBKEY=$(echo "${WORKLOD_PK_ARRAY[0]}")
+
+            ${natsCli} context save HOST_USER --nsc "nsc://HOLO/WORKLOAD/host_user_${HOST_PUBKEY}.creds"
+            ${natsCli} context save SYS_USER --nsc "nsc://HOLO/SYS/sys_user_${HOST_PUBKEY}.creds"
 
             ${natsCli} -s "${natsServer}" stream ls --context SYS_USER
             ${natsCli} -s "${natsServer}" stream info --json ${workloadStreamName} --context SYS_USER
@@ -144,12 +158,14 @@ pkgs.testers.runNixOSTest (
 
           hub.wait_for_unit("caddy.service")
           hub.wait_for_open_port(port = ${builtins.toString nodes.hub.holo.nats-server.websocket.externalPort}, timeout = 1)
-
+          
+          host.wait_for_unit('holo-orchestrator')
           hub.succeed("${hubAuthTestScript}")
 
         with subtest("start the host and run the host auth test"):
           host.start()
           host.wait_for_unit('holo-host-agent')
+          sleep 30 # wait for the auth service to run and complete
           host.succeed("${hostAuthTestScript}", timeout = 10)
 
         with subtest("verify that holo-host-agent spins up leaf server and wait for it to be ready"):

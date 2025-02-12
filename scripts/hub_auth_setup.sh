@@ -78,77 +78,120 @@ AUTH_GUARD_USER="auth_guard"
 WORKLOAD_ACCOUNT="WORKLOAD"
 
 # Create output directory when it doesn't already exist
-if [ ! -d "$SHARED_CREDS_PATH" ]; then
+if [ -d "$SHARED_CREDS_PATH" ]; then
+    echo "Shared output dir exists."
+else
     echo "The shared output dir does not exist. Creating $SHARED_CREDS_PATH."
     mkdir -p $SHARED_CREDS_PATH
     echo "Shared output dir created successfully."
-else
-    echo "Shared output dir exists."
 fi
 
-if [ ! -d "$LOCAL_CREDS_PATH" ]; then
+if [ -d "$LOCAL_CREDS_PATH" ]; then
+    echo "Local output dir exists."
+else
     echo "The local output dir does not exist. Creating $LOCAL_CREDS_PATH."
     mkdir -p $LOCAL_CREDS_PATH
     echo "Local output dir created successfully."
-else
-    echo "Local output dir exists."
 fi
 
 function extract_signing_key() {
   sk=$2
   name=$1
   seed_file_path="$HOME/.local/share/nats/nsc/keys/keys/${sk:0:1}/${sk:1:2}/${sk}.nk"
-  echo "coping file over to '$LOCAL_CREDS_PATH/${name}_SK.nk'"
-  cp "$seed_file_path" "$LOCAL_CREDS_PATH/${name}_SK.nk"
+  if [[ -f "$LOCAL_CREDS_PATH/${name}_SK.nk" ]]; then
+    echo "$LOCAL_CREDS_PATH/${name}_SK.nk file already exists."
+  else 
+    echo "coping file over to '$LOCAL_CREDS_PATH/${name}_SK.nk'"
+    cp "$seed_file_path" "$LOCAL_CREDS_PATH/${name}_SK.nk"
+  fi
 }
 
 # Step 1: Create Operator with SYS account and two signing keys
-nsc add operator --name $OPERATOR --sys --generate-signing-key
-nsc edit operator --require-signing-keys --account-jwt-server-url $ACCOUNT_JWT_SERVER --service-url $OPERATOR_SERVICE_URL
-nsc edit operator --sk generate
+ [[ "$(nsc describe operator --field name | jq -r)" == $OPERATOR ]]; then
+  echo "$OPERATOR operator exists."
+else
+  nsc add operator --name $OPERATOR --sys --generate-signing-key
+  nsc edit operator --require-signing-keys --account-jwt-server-url $ACCOUNT_JWT_SERVER --service-url $OPERATOR_SERVICE_URL
+  nsc edit operator --sk generate
+  echo "Added $OPERATOR operator."
+fi
 
 # Step 2: Create ADMIN_Account with JetStream and scoped signing key
-nsc add account --name $ADMIN_ACCOUNT
-nsc edit account --name $ADMIN_ACCOUNT --js-streams -1 --js-consumer -1 --js-mem-storage 1G --js-disk-storage 5G --conns -1 --leaf-conns -1
+if nsc describe account $ADMIN_ACCOUNT > /dev/null 2>&1; then
+  echo "$ADMIN_ACCOUNT account exists."
+else
+  nsc add account --name $ADMIN_ACCOUNT
+  nsc edit account --name $ADMIN_ACCOUNT --js-streams -1 --js-consumer -1 --js-mem-storage 1G --js-disk-storage 5G --conns -1 --leaf-conns -1
 
-ADMIN_SK="$(echo "$(nsc edit account -n $ADMIN_ACCOUNT --sk generate 2>&1)" | grep -oP "signing key\s*\K\S+")"
-ADMIN_ROLE_NAME="admin_role"
-nsc edit signing-key --sk $ADMIN_SK --role $ADMIN_ROLE_NAME --allow-pub "ADMIN.>","AUTH.>","WORKLOAD.>","\$JS.API.>","\$SYS.>","_INBOX.>","_INBOX_*.>","*._WORKLOAD_INBOX.>","_AUTH_INBOX_*.>" --allow-sub "ADMIN.>","AUTH.>","WORKLOAD.>","\$JS.API.>","\$SYS.>","_INBOX.>","_INBOX_*.>","ORCHESTRATOR._WORKLOAD_INBOX.>","_AUTH_INBOX_ORCHESTRATOR.>" --allow-pub-response
+  ADMIN_SK="$(echo "$(nsc edit account -n $ADMIN_ACCOUNT --sk generate 2>&1)" | grep -oP "signing key\s*\K\S+")"
+  ADMIN_ROLE_NAME="admin_role"
+  nsc edit signing-key --sk $ADMIN_SK --role $ADMIN_ROLE_NAME --allow-pub "ADMIN.>","AUTH.>","WORKLOAD.>","\$JS.API.>","\$SYS.>","_INBOX.>","_INBOX_*.>","*._WORKLOAD_INBOX.>","_AUTH_INBOX_*.>" --allow-sub "ADMIN.>","AUTH.>","WORKLOAD.>","\$JS.API.>","\$SYS.>","_INBOX.>","_INBOX_*.>","ORCHESTRATOR._WORKLOAD_INBOX.>","_AUTH_INBOX_ORCHESTRATOR.>" --allow-pub-response
+  echo "Added $ADMIN_ACCOUNT account."
+fi
 
 # Step 3: Create AUTH with JetStream with non-scoped signing key
-nsc add account --name $AUTH_ACCOUNT
-nsc edit account --name $AUTH_ACCOUNT --sk generate --js-streams -1 --js-consumer -1 --js-mem-storage 1G --js-disk-storage 5G --conns -1 --leaf-conns -1
-AUTH_ACCOUNT_PUBKEY=$(nsc describe account $AUTH_ACCOUNT --field sub | jq -r)
-AUTH_SK_ACCOUNT_PUBKEY=$(nsc describe account $AUTH_ACCOUNT --field 'nats.signing_keys[0]' | tr -d '"')
+if nsc describe account $AUTH_ACCOUNT > /dev/null 2>&1; then
+  echo "$AUTH_ACCOUNT account exists."
+else
+  nsc add account --name $AUTH_ACCOUNT
+  nsc edit account --name $AUTH_ACCOUNT --sk generate --js-streams -1 --js-consumer -1 --js-mem-storage 1G --js-disk-storage 5G --conns -1 --leaf-conns -1
+  AUTH_ACCOUNT_PUBKEY=$(nsc describe account $AUTH_ACCOUNT --field sub | jq -r)
+  AUTH_SK_ACCOUNT_PUBKEY=$(nsc describe account $AUTH_ACCOUNT --field 'nats.signing_keys[0]' | tr -d '"')
+  echo "Added $AUTH_ACCOUNT account."
+fi
 
 # Step 4: Create WORKLOAD Account with JetStream and scoped signing keys
-nsc add account --name $WORKLOAD_ACCOUNT
-nsc edit account --name $WORKLOAD_ACCOUNT --js-streams -1 --js-consumer -1 --js-mem-storage 1G --js-disk-storage 5G --conns -1 --leaf-conns -1
-WORKLOAD_SK="$(echo "$(nsc edit account -n $WORKLOAD_ACCOUNT --sk generate 2>&1)" | grep -oP "signing key\s*\K\S+")"
-WORKLOAD_ROLE_NAME="workload_role"
-nsc edit signing-key --sk $WORKLOAD_SK --role $WORKLOAD_ROLE_NAME --allow-pub "WORKLOAD.>","{{tag(pubkey)}}._WORKLOAD_INBOX.>" --allow-sub "WORKLOAD.{{tag(pubkey)}}.*","{{tag(pubkey)}}._WORKLOAD_INBOX.>" --allow-pub-response
+if nsc describe account $WORKLOAD_ACCOUNT > /dev/null 2>&1; then
+  echo "$WORKLOAD_ACCOUNT account exists."
+else
+  nsc add account --name $WORKLOAD_ACCOUNT
+  nsc edit account --name $WORKLOAD_ACCOUNT --js-streams -1 --js-consumer -1 --js-mem-storage 1G --js-disk-storage 5G --conns -1 --leaf-conns -1
+  WORKLOAD_SK="$(echo "$(nsc edit account -n $WORKLOAD_ACCOUNT --sk generate 2>&1)" | grep -oP "signing key\s*\K\S+")"
+  WORKLOAD_ROLE_NAME="workload_role"
+  nsc edit signing-key --sk $WORKLOAD_SK --role $WORKLOAD_ROLE_NAME --allow-pub "WORKLOAD.>","{{tag(pubkey)}}._WORKLOAD_INBOX.>" --allow-sub "WORKLOAD.{{tag(pubkey)}}.*","{{tag(pubkey)}}._WORKLOAD_INBOX.>" --allow-pub-response
+  echo "Added $WORKLOAD_ACCOUNT account."
+fi
 
 # Step 5: Create Orchestrator User in ADMIN Account
-nsc add user --name $ADMIN_USER --account $ADMIN_ACCOUNT -K $ADMIN_ROLE_NAME
+if nsc describe user -n $ADMIN_USER -a $ADMIN_ACCOUNT > /dev/null 2>&1; then
+  echo "$ADMIN_USER user exists."
+else
+  nsc add user --name $ADMIN_USER --account $ADMIN_ACCOUNT -K $ADMIN_ROLE_NAME
+  echo "Added $ADMIN_USER user."
+if
 
 # Step 6: Create Orchestrator User in AUTH Account (used in auth-callout service)
-nsc add user --name $ORCHESTRATOR_AUTH_USER --account $AUTH_ACCOUNT --allow-pubsub ">"
-AUTH_USER_PUBKEY=$(nsc describe user --name $ORCHESTRATOR_AUTH_USER --account $AUTH_ACCOUNT --field sub | jq -r)
-echo "assigned auth user pubkey: $AUTH_USER_PUBKEY"
+if nsc describe user -n $ORCHESTRATOR_AUTH_USER -a $AUTH_ACCOUNT > /dev/null 2>&1; then
+  echo "$ORCHESTRATOR_AUTH_USER user exists."
+else
+  nsc add user --name $ORCHESTRATOR_AUTH_USER --account $AUTH_ACCOUNT --allow-pubsub ">"
+  echo "Added $ORCHESTRATOR_AUTH_USER user."
+  AUTH_USER_PUBKEY=$(nsc describe user --name $ORCHESTRATOR_AUTH_USER --account $AUTH_ACCOUNT --field sub | jq -r)
+  echo "Assigned auth user pubkey: $AUTH_USER_PUBKEY"
+if
 
 # Step 7: Create "Sentinel" User in AUTH Account (used by host agents in auth-callout service)
-nsc add user --name $AUTH_GUARD_USER --account $AUTH_ACCOUNT --deny-pubsub ">"
+if nsc describe user -n $AUTH_GUARD_USER -a $AUTH_ACCOUNT > /dev/null 2>&1; then
+  echo "$AUTH_GUARD_USER user exists."
+else
+  nsc add user --name $AUTH_GUARD_USER --account $AUTH_ACCOUNT --deny-pubsub ">"
+  echo "Added $AUTH_GUARD_USER user."
+if
 
 # Step 8: Configure Auth Callout
 echo $AUTH_ACCOUNT_PUBKEY
 echo $AUTH_SK_ACCOUNT_PUBKEY
-nsc edit authcallout --account $AUTH_ACCOUNT --allowed-account "\"$AUTH_ACCOUNT_PUBKEY\",\"$AUTH_SK_ACCOUNT_PUBKEY\"" --auth-user $AUTH_USER_PUBKEY
+if nsc describe account AUTH --field nats.authorization 2>/dev/null; then
+  echo "$AUTH_ACCOUNT account already has the auth callout set."
+else
+  nsc edit authcallout --account $AUTH_ACCOUNT --allowed-account "\"$AUTH_ACCOUNT_PUBKEY\",\"$AUTH_SK_ACCOUNT_PUBKEY\"" --auth-user $AUTH_USER_PUBKEY
+fi
 
 # Step 9: Generate JWT files
-nsc generate creds --name $ORCHESTRATOR_AUTH_USER --account $AUTH_ACCOUNT > $LOCAL_CREDS_PATH/$ORCHESTRATOR_AUTH_USER.creds # --> local to hub exclusively
-nsc describe operator --raw --output-file $SHARED_CREDS_PATH/$OPERATOR.jwt
-nsc describe account --name SYS --raw --output-file $SHARED_CREDS_PATH/$SYS_ACCOUNT.jwt
-nsc generate creds --name $AUTH_GUARD_USER --account $AUTH_ACCOUNT --output-file $SHARED_CREDS_PATH/$AUTH_GUARD_USER.creds
+[[ -f "$LOCAL_CREDS_PATH/$ORCHESTRATOR_AUTH_USER.creds" ]] || nsc generate creds --name "$ORCHESTRATOR_AUTH_USER" --account "$AUTH_ACCOUNT" --output-file "$LOCAL_CREDS_PATH/$ORCHESTRATOR_AUTH_USER.creds" # --> local to hub exclusively
+[[ -f "$SHARED_CREDS_PATH/$OPERATOR.jwt" ]] || nsc describe operator --raw --output-file $SHARED_CREDS_PATH/$OPERATOR.jwt
+[[ -f "$SHARED_CREDS_PATH/$SYS_ACCOUNT.jwt" ]] || nsc describe account --name SYS --raw --output-file $SHARED_CREDS_PATH/$SYS_ACCOUNT.jwt
+[[ -f "$SHARED_CREDS_PATH/$AUTH_GUARD_USER.creds" ]] || nsc generate creds --name $AUTH_GUARD_USER --account $AUTH_ACCOUNT --output-file $SHARED_CREDS_PATH/$AUTH_GUARD_USER.creds
 
 extract_signing_key ADMIN $ADMIN_SK
 echo "extracted ADMIN signing key"
