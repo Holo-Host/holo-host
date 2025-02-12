@@ -39,7 +39,7 @@ in
 
     hostAuthScriptPath =  lib.mkOption {
       type = lib.types.path;
-      default = "${cfg.package}/../../../scripts/hosting_agent_setup ";
+      default = "${flake}/scripts/hosting_agent_setup.sh"";
     };
 
     rust = {
@@ -100,9 +100,9 @@ in
         default = "/var/lib/server-key-config.json";
       };
 
-      hposCredsPw = lib.mkOption {
-        type = lib.types.str;
-        default = "pass";
+      hposCredsPwFile = lib.mkOption {
+        type = lib.types.path;
+        default = "/var/lib/holo-host-agent/hpos_creds_pw";
       };
 
       hub = {
@@ -142,7 +142,7 @@ in
           HOSTING_AGENT_HOST_NKEY_PATH = cfg.nats.hostNkeyPath;
           HOSTING_AGENT_SYS_NKEY_PATH = cfg.nats.sysNkeyPath;
           HPOS_CONFIG_PATH = cfg.nats.hposCredsPath;
-          DEVICE_SEED_DEFAULT_PASSWORD = builtins.toString cfg.nats.hposCredsPw;
+          DEVICE_SEED_DEFAULT_PASSWORD_FILE = builtins.toString cfg.nats.hposCredsPwFile;
           NATS_LISTEN_PORT = builtins.toString cfg.nats.listenPort;
         }
         // lib.attrsets.optionalAttrs (cfg.nats.url != null) {

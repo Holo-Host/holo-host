@@ -81,7 +81,6 @@ in
         LimitNOFILE = 500000;
       };
 
-      networking.firewall.allowedTCPPorts = [ cfg.mongo.listenPort ];
     };
 
     nats = {
@@ -137,7 +136,6 @@ in
 
       after = [
         "network.target"
-        "network-online.target"
       ];
       wantedBy = lib.lists.optional cfg.autoStart "multi-user.target";
 
@@ -158,11 +156,12 @@ in
 
       path = [
         pkgs.nats-server
+        pkgs.bash
       ];
 
       preStart = ''
         init_hub_auth() {
-          ${pkgs.bash}/bin/bash ${builtins.toString cfg.hubAuthScriptPath} ${cfg.nats.listenHost} ${builtins.toString cfg.nats.listenPort} ${builtins.toString cfg.nats.sharedCredsPath} ${builtins.toString cfg.nats.localCredsPath}
+          ${cfg.hubAuthScriptPath} ${cfg.nats.listenHost} ${builtins.toString cfg.nats.listenPort} ${builtins.toString cfg.nats.sharedCredsPath} ${builtins.toString cfg.nats.localCredsPath}
         }
         init_hub_auth
         echo "Finshed Hub Auth Setup"
