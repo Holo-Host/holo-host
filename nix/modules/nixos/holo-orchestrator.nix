@@ -81,7 +81,6 @@ in
         LimitNOFILE = 500000;
       };
 
-      networking.firewall.allowedTCPPorts = [ cfg.mongo.listenPort ];
     };
 
     nats = {
