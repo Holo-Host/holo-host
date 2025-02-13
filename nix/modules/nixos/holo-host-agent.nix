@@ -73,6 +73,11 @@ in
         };
       };
 
+      store_dir = lib.mkOption {
+        type = lib.types.nullOr lib.types.path;
+        default = null;
+      };
+
       extraDaemonizeArgs = lib.mkOption {
         # forcing everything to be a string because the bool -> str conversion is strange (true -> "1" and false -> "")
         type = lib.types.attrs;
@@ -87,7 +92,9 @@ in
       enable = true;
 
       after = [
-        "network.target"
+        "network-online.target"
+      ];
+      wants = [
         "network-online.target"
       ];
       wantedBy = lib.lists.optional cfg.autoStart "multi-user.target";
@@ -128,6 +135,7 @@ in
             ${lib.getExe' cfg.package "host_agent"} daemonize \
               --hub-url=${cfg.nats.hub.url} \
               ${lib.optionalString cfg.nats.hub.tlsInsecure "--hub-tls-insecure"} \
+              ${lib.optionalString (cfg.nats.store_dir != null) "--store-dir=${cfg.nats.store_dir}"} \
               ${builtins.concatStringsSep " " extraDaemonizeArgsList}
           ''
         );
