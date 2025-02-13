@@ -1,18 +1,23 @@
-use std::path::PathBuf;
+use std::{path::PathBuf, time::Duration};
 
 use anyhow::Context;
 use tempfile::tempdir;
-use util_libs::nats_server::{
-    JetStreamConfig, LeafNodeRemote, LeafNodeRemoteTlsConfig, LeafServer, LoggingOptions,
-    LEAF_SERVER_CONFIG_PATH, LEAF_SERVER_DEFAULT_LISTEN_PORT,
+use util_libs::{
+    nats_js_client,
+    nats_server::{
+        JetStreamConfig, LeafNodeRemote, LeafNodeRemoteTlsConfig, LeafServer, LoggingOptions,
+        LEAF_SERVER_CONFIG_PATH, LEAF_SERVER_DEFAULT_LISTEN_PORT,
+    },
 };
 
 pub async fn run(
+    maybe_server_name: &Option<String>,
     user_creds_path: &Option<PathBuf>,
     maybe_store_dir: &Option<PathBuf>,
     hub_url: String,
     hub_tls_insecure: bool,
-) -> anyhow::Result<()> {
+    nats_connect_timeout_secs: u64,
+) -> anyhow::Result<nats_js_client::JsClient> {
     let leaf_client_conn_domain = "127.0.0.1";
     let leaf_client_conn_port = std::env::var("NATS_LISTEN_PORT")
         .map(|var| var.parse().expect("can't parse into number"))
@@ -56,9 +61,18 @@ pub async fn run(
         },
     }];
 
+    let server_name = if let Some(server_name) = maybe_server_name {
+        server_name.clone()
+    } else {
+        // the hub needs a unique name for each server to distinguish the leaf node connection
+        machineid_rs::IdBuilder::new(machineid_rs::Encryption::SHA256)
+            .add_component(machineid_rs::HWIDComponent::SystemID)
+            .build("host-agent")?
+    };
+
     // Create a new Leaf Server instance
     let leaf_server = LeafServer::new(
-        None,
+        Some(&server_name),
         LEAF_SERVER_CONFIG_PATH,
         leaf_client_conn_domain,
         leaf_client_conn_port,

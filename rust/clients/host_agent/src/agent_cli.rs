@@ -44,6 +44,12 @@ pub struct DaemonzeArgs {
     )]
     pub(crate) nats_leafnode_client_creds_path: Option<PathBuf>,
 
+    #[arg(
+        long,
+        help = "server_name used in the LeafNode NATS server. must be unique on the hub."
+    )]
+    pub(crate) nats_leafnode_server_name: Option<String>,
+
     #[arg(long, help = "connection URL to the hub")]
     pub(crate) hub_url: String,
 

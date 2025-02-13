@@ -50,6 +50,7 @@ async fn main() -> Result<(), AgentCliError> {
 async fn daemonize(args: &DaemonzeArgs) -> Result<(), async_nats::Error> {
     // let (host_pubkey, host_creds_path) = auth::initializer::run().await?;
     let _ = gen_leaf_server::run(
+        &args.nats_leafnode_server_name,
         &args.nats_leafnode_client_creds_path,
         &args.store_dir,
         args.hub_url.clone(),
