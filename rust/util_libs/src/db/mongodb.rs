@@ -335,12 +335,14 @@ mod tests {
 
         // insert a document
         let host_0 = get_mock_host();
-        host_api.insert_one_into(host_0.clone()).await?;
+        let r = host_api.insert_one_into(host_0.clone()).await?;
+        println!("result : {:?}", r);
 
         // get one (the same) document
-        let filter_one = doc! { "_id":  host_0._id.unwrap().to_string() };
+        println!("host_0._id.unwrap() : {:?}", host_0._id.unwrap());
+        let filter_one = doc! { "_id":  host_0._id.unwrap() };
         let fetched_host = host_api.get_one_from(filter_one.clone()).await?;
-        let mongo_db_host = fetched_host.unwrap();
+        let mongo_db_host = fetched_host.expect("Failed to fetch host");
         assert_eq!(mongo_db_host._id, host_0._id);
 
         // insert many documents
@@ -353,23 +355,23 @@ mod tests {
 
         // get many docs
         let ids = vec![
-            host_1._id.unwrap().to_string(),
-            host_2._id.unwrap().to_string(),
-            host_3._id.unwrap().to_string(),
+            host_1._id.unwrap(),
+            host_2._id.unwrap(),
+            host_3._id.unwrap(),
         ];
         let filter_many = doc! {
-            "_id": { "$in": ids }
+            "_id": { "$in": ids.clone() }
         };
         let fetched_hosts = host_api.get_many_from(filter_many.clone()).await?;
 
         assert_eq!(fetched_hosts.len(), 3);
-        let ids: Vec<String> = fetched_hosts
+        let updated_ids: Vec<oid::ObjectId> = fetched_hosts
             .into_iter()
-            .map(|h| h._id.unwrap_or_default().to_hex())
+            .map(|h| h._id.unwrap_or_default())
             .collect();
-        assert!(ids.contains(&ids[0]));
-        assert!(ids.contains(&ids[1]));
-        assert!(ids.contains(&ids[2]));
+        assert!(updated_ids.contains(&ids[0]));
+        assert!(updated_ids.contains(&ids[1]));
+        assert!(updated_ids.contains(&ids[2]));
 
         // delete all documents
         let DeleteResult { deleted_count, .. } = host_api.delete_all_from().await?;
