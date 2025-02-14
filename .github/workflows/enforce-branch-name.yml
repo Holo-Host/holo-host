@@ -1,0 +1,35 @@
+name: Enforce Branch Naming
+
+on:
+  pull_request:
+    types:
+      - opened
+      - edited
+      - synchronize
+      - reopened
+
+jobs:
+  validate-branch-name:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check Branch Name
+        run: |
+          BRANCH_NAME="${{ github.event.pull_request.head.ref }}"
+          if [[ ! "$BRANCH_NAME" =~ ^[0-9]+-[a-z0-9-]+$ ]]; then
+            echo "❌ Invalid branch name: $BRANCH_NAME"
+            echo "✅ Expected: 123-description"
+            #exit 1
+          fi
+
+      - name: Check if PR description contains an issue number
+        run: |
+          PR_BODY=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }} | jq -r .body)
+
+          # Regex to check if the PR description contains "Closes #<number>" or "Fixes #<number>"
+          if [[ ! "$PR_BODY" =~ (Closes\ #[0-9]+|Fixes\ #[0-9]+|Resolves\ #[0-9]+) ]]; then
+            echo "❌ Error: PR description must mention the issue number (e.g., 'Closes #123')"
+            exit 1
+          else
+            echo "✅ PR description contains an issue number."
+          fi

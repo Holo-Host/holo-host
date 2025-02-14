@@ -2,6 +2,8 @@
 
 This is an experiment to contain the code for all components in a single repository, also known as a monorepository.
 
+Please run `sh setup-hooks.sh` to enforce correct naming convention for branches.
+
 ## Repository Layout
 
 The code is grouped by language or framework name.
