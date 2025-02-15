@@ -24,14 +24,14 @@ use std::future::Future;
 use std::process::Command;
 use std::sync::Arc;
 use types::{AuthApiResult, WORKLOAD_SK_ROLE};
+// use utils::handle_internal_err;
 use util_libs::{
     db::{
-        mongodb::{IntoIndexes, MongoCollection, MongoDbAPI},
-        schemas::{self, Host, Hoster, Role, RoleInfo, User},
+        mongodb::{IntoIndexes, MongoCollection}, // MongoDbAPI
+        schemas::{self, Host, Hoster, User},     // , RoleInfo
     },
     nats_js_client::{get_nats_jwt_by_nsc, AsyncEndpointHandler, JsServiceResponse, ServiceError},
 };
-use utils::handle_internal_err;
 
 pub const AUTH_SRV_NAME: &str = "AUTH";
 pub const AUTH_SRV_SUBJ: &str = "AUTH";

@@ -1,5 +1,6 @@
 mod auth;
 // mod workloads;
+mod api;
 use anyhow::Result;
 use dotenv::dotenv;
 use tokio::task::spawn;

@@ -1,5 +1,5 @@
 use crate::nats_js_client::ServiceError;
-use anyhow::Result;
+use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use bson::{self, doc, Document};
 use futures::stream::TryStreamExt;
@@ -7,7 +7,9 @@ use mongodb::options::UpdateModifications;
 use mongodb::results::{DeleteResult, UpdateResult};
 use mongodb::{options::IndexOptions, Client, Collection, IndexModel};
 use serde::{Deserialize, Serialize};
-use std::fmt::Debug;
+use std::{fmt::Debug, str::FromStr};
+
+use super::schemas;
 
 #[async_trait]
 pub trait MongoDbAPI<T>
@@ -15,11 +17,14 @@ where
     T: Serialize + for<'de> Deserialize<'de> + Unpin + Send + Sync,
 {
     type Error;
-
+    async fn mongo_cursor_to_list(&self, cursor: mongodb::Cursor<T>)
+        -> Result<Vec<T>, Self::Error>;
+    async fn aggregate(&self, pipeline: Vec<Document>) -> Result<Vec<T>, Self::Error>;
     async fn get_one_from(&self, filter: Document) -> Result<Option<T>, Self::Error>;
     async fn get_many_from(&self, filter: Document) -> Result<Vec<T>, Self::Error>;
-    async fn insert_one_into(&self, item: T) -> Result<String, Self::Error>;
-    async fn insert_many_into(&self, items: Vec<T>) -> Result<Vec<String>, Self::Error>;
+    async fn insert_one_into(&self, item: T) -> Result<schemas::MongoDbId, Self::Error>;
+    async fn insert_many_into(&self, items: Vec<T>)
+        -> Result<Vec<schemas::MongoDbId>, Self::Error>;
     async fn update_one_within(
         &self,
         query: Document,
@@ -38,7 +43,7 @@ pub struct MongoCollection<T>
 where
     T: Serialize + for<'de> Deserialize<'de> + Unpin + Send + Sync + Default + IntoIndexes,
 {
-    collection: Collection<T>,
+    pub collection: Collection<T>,
     indices: Vec<IndexModel>,
 }
 
@@ -91,8 +96,34 @@ where
 {
     type Error = ServiceError;
 
+    async fn mongo_cursor_to_list(
+        &self,
+        cursor: mongodb::Cursor<T>,
+    ) -> Result<Vec<T>, Self::Error> {
+        let results: Vec<T> = cursor.try_collect().await.map_err(ServiceError::Database)?;
+        return Ok(results);
+    }
+
+    async fn aggregate(&self, pipeline: Vec<Document>) -> Result<Vec<T>, Self::Error> {
+        log::trace!("Aggregate pipeline {:?}", pipeline);
+        let cursor = self.collection.aggregate(pipeline).await?;
+
+        let results_doc: Vec<bson::Document> =
+            cursor.try_collect().await.map_err(ServiceError::Database)?;
+
+        let results: Vec<T> = results_doc
+            .into_iter()
+            .map(|doc| {
+                bson::from_document::<T>(doc).with_context(|| "Failed to deserialize document")
+            })
+            .collect::<Result<Vec<T>>>()
+            .map_err(|e| ServiceError::Internal(e.to_string()))?;
+
+        Ok(results)
+    }
+
     async fn get_one_from(&self, filter: Document) -> Result<Option<T>, Self::Error> {
-        log::info!("get_one_from filter {:?}", filter);
+        log::trace!("Get_one_from filter {:?}", filter);
 
         let item = self
             .collection
@@ -100,7 +131,7 @@ where
             .await
             .map_err(ServiceError::Database)?;
 
-        log::info!("item {:?}", item);
+        log::debug!("get_one_from item {:?}", item);
         Ok(item)
     }
 
@@ -110,28 +141,36 @@ where
         Ok(results)
     }
 
-    async fn insert_one_into(&self, item: T) -> Result<String, Self::Error> {
+    async fn insert_one_into(&self, item: T) -> Result<schemas::MongoDbId, Self::Error> {
         let result = self
             .collection
             .insert_one(item)
             .await
             .map_err(ServiceError::Database)?;
 
-        Ok(result.inserted_id.to_string())
+        let mongo_id = schemas::MongoDbId::from_str(&result.inserted_id.to_string())
+            .map_err(|e| ServiceError::Internal(e.to_string()))?;
+
+        Ok(mongo_id)
     }
 
-    async fn insert_many_into(&self, items: Vec<T>) -> Result<Vec<String>, Self::Error> {
+    async fn insert_many_into(
+        &self,
+        items: Vec<T>,
+    ) -> Result<Vec<schemas::MongoDbId>, Self::Error> {
         let result = self
             .collection
             .insert_many(items)
             .await
             .map_err(ServiceError::Database)?;
 
-        let ids = result
+        let ids: Vec<bson::oid::ObjectId> = result
             .inserted_ids
             .values()
-            .map(|id| id.to_string())
-            .collect();
+            .map(|id| schemas::MongoDbId::from_str(&id.to_string()))
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| ServiceError::Internal(e.to_string()))?;
+
         Ok(ids)
     }
 
@@ -250,8 +289,8 @@ mod tests {
     }
 
     use super::*;
-    use crate::db::schemas::{self, Capacity};
-    use bson::{self, doc, oid};
+    use crate::db::schemas::{self, Capacity, Metadata};
+    use bson::{self, doc, oid, DateTime};
     use dotenv::dotenv;
 
     #[tokio::test]
@@ -272,8 +311,15 @@ mod tests {
 
         fn get_mock_host() -> schemas::Host {
             schemas::Host {
-                _id: Some(oid::ObjectId::new().to_string()),
-                pubkey: "placeholder_pubkey".to_string(),
+                _id: Some(oid::ObjectId::new()),
+                // pubkey: "placeholder_pubkey".to_string(),
+                metadata: Metadata {
+                    is_deleted: false,
+                    created_at: Some(DateTime::now()),
+                    updated_at: Some(DateTime::now()),
+                    deleted_at: None,
+                },
+                device_id: "Vf3IceiD".to_string(),
                 ip_address: "127.0.0.1".to_string(),
                 remaining_capacity: Capacity {
                     memory: 16,
@@ -283,19 +329,22 @@ mod tests {
                 avg_uptime: 95,
                 avg_network_speed: 500,
                 avg_latency: 10,
-                assigned_workloads: vec!["workload_id".to_string()],
-                assigned_hoster: "hoster".to_string(),
+                assigned_workloads: vec![schemas::MongoDbId::from_str(&"workload_id")
+                    .expect("Failed to convert str to MongoDbId")],
+                assigned_hoster: oid::ObjectId::new(),
             }
         }
 
         // insert a document
         let host_0 = get_mock_host();
-        host_api.insert_one_into(host_0.clone()).await?;
+        let r = host_api.insert_one_into(host_0.clone()).await?;
+        println!("result : {:?}", r);
 
         // get one (the same) document
-        let filter_one = doc! { "_id":  host_0._id.clone().unwrap().to_string() };
+        println!("host_0._id.unwrap() : {:?}", host_0._id.unwrap());
+        let filter_one = doc! { "_id":  host_0._id.unwrap() };
         let fetched_host = host_api.get_one_from(filter_one.clone()).await?;
-        let mongo_db_host = fetched_host.unwrap();
+        let mongo_db_host = fetched_host.expect("Failed to fetch host");
         assert_eq!(mongo_db_host._id, host_0._id);
 
         // insert many documents
@@ -308,20 +357,23 @@ mod tests {
 
         // get many docs
         let ids = vec![
-            host_1._id.unwrap().to_string(),
-            host_2._id.unwrap().to_string(),
-            host_3._id.unwrap().to_string(),
+            host_1._id.unwrap(),
+            host_2._id.unwrap(),
+            host_3._id.unwrap(),
         ];
         let filter_many = doc! {
-            "_id": { "$in": ids }
+            "_id": { "$in": ids.clone() }
         };
         let fetched_hosts = host_api.get_many_from(filter_many.clone()).await?;
 
         assert_eq!(fetched_hosts.len(), 3);
-        let ids: Vec<String> = fetched_hosts.into_iter().map(|h| h._id.unwrap()).collect();
-        assert!(ids.contains(&ids[0]));
-        assert!(ids.contains(&ids[1]));
-        assert!(ids.contains(&ids[2]));
+        let updated_ids: Vec<oid::ObjectId> = fetched_hosts
+            .into_iter()
+            .map(|h| h._id.unwrap_or_default())
+            .collect();
+        assert!(updated_ids.contains(&ids[0]));
+        assert!(updated_ids.contains(&ids[1]));
+        assert!(updated_ids.contains(&ids[2]));
 
         // delete all documents
         let DeleteResult { deleted_count, .. } = host_api.delete_all_from().await?;

@@ -1,0 +1,15 @@
+global:
+  ip_version: IPV4
+queries:
+  - nameserver: 1.1.1.1:53
+    hostname: home.incomplete.io
+    use_tls: true
+    port: 443
+    method: !HTTP
+      path: /test.txt
+  - nameserver: 1.1.1.1:53
+    hostname: gumby.incomplete.io
+    use_tls: true
+    port: 443
+    method: !HTTP
+      path: /test.txt
