@@ -1,7 +1,7 @@
 /*
 This client is associated with the:
-    - WORKLOAD account
-    - orchestrator user
+    - ADMIN account
+    - admin user
 
 This client is responsible for:
     - initalizing connection and handling interface with db
@@ -10,7 +10,7 @@ This client is responsible for:
         - handling requests to update workloads
         - handling requests to remove workloads
         - handling workload status updates
-        - interfacing with mongodb DB
+    - interfacing with mongodb DB
     - keeping service running until explicitly cancelled out
 */
 
@@ -18,14 +18,15 @@ use anyhow::{anyhow, Result};
 use async_nats::Message;
 use mongodb::{options::ClientOptions, Client as MongoDBClient};
 use std::path::PathBuf;
-use std::{collections::HashMap, sync::Arc, time::Duration};
 use std::str::FromStr;
+use std::vec;
+use std::{collections::HashMap, sync::Arc, time::Duration};
 use util_libs::{
     db::mongodb::get_mongodb_url,
     js_stream_service::{JsServiceParamsPartial, ResponseSubjectsGenerator},
     nats_js_client::{
-        self, get_event_listeners, get_nats_creds_by_nsc, get_nats_url,
-        Credentials, EndpointType, JsClient, NewJsClientParams,
+        self, get_event_listeners, get_nats_creds_by_nsc, get_nats_url, Credentials, EndpointType,
+        JsClient, NewJsClientParams,
     },
 };
 use workload::{
@@ -34,9 +35,6 @@ use workload::{
     WorkloadServiceApi, WORKLOAD_SRV_DESC, WORKLOAD_SRV_NAME, WORKLOAD_SRV_SUBJ,
     WORKLOAD_SRV_VERSION,
 };
-
-const ORCHESTRATOR_WORKLOAD_CLIENT_NAME: &str = "Orchestrator Workload Manager";
-const ORCHESTRATOR_WORKLOAD_CLIENT_INBOX_PREFIX: &str = "ORCHESTRATOR._WORKLOAD_INBOX";
 
 pub fn create_callback_subject_to_host(
     is_prefix: bool,
@@ -60,41 +58,23 @@ pub fn create_callback_subject_to_host(
     })
 }
 
-pub async fn run() -> Result<(), async_nats::Error> {
+pub async fn run(
+    nats_client: JsClient,
+    db_client: MongoDBClient,
+) -> Result<JsClient, async_nats::Error> {
     // ==================== Setup NATS ====================
-    let nats_url = get_nats_url();
-    let creds_path = Credentials::Path(PathBuf::from_str(&get_nats_creds_by_nsc(
-        "HOLO",
-        "ADMIN",
-        "admin",
-    ))?);
-    let event_listeners = get_event_listeners();
-
     // Setup JS Stream Service
-    let workload_stream_service_params = JsServiceParamsPartial {
-        name: WORKLOAD_SRV_NAME.to_string(),
-        description: WORKLOAD_SRV_DESC.to_string(),
-        version: WORKLOAD_SRV_VERSION.to_string(),
-        service_subject: WORKLOAD_SRV_SUBJ.to_string(),
-    };
-
-    let orchestrator_workload_client = JsClient::new(NewJsClientParams {
-        nats_url,
-        name: ORCHESTRATOR_WORKLOAD_CLIENT_NAME.to_string(),
-        inbox_prefix: ORCHESTRATOR_WORKLOAD_CLIENT_INBOX_PREFIX.to_string(),
-        service_params: vec![workload_stream_service_params],
-        credentials: Some(creds_path),
-        request_timeout: Some(Duration::from_secs(5)),
-        ping_interval: Some(Duration::from_secs(10)),
-        listeners: vec![nats_js_client::with_event_listeners(event_listeners)],
-    })
-    .await?;
-
-    // ==================== Setup DB ====================
-    // Create a new MongoDB Client and connect it to the cluster
-    let mongo_uri = get_mongodb_url();
-    let client_options = ClientOptions::parse(mongo_uri).await?;
-    let client = MongoDBClient::with_options(client_options)?;
+    let service = JsStreamService::new(
+        jetstream::new(nats_client.clone()),
+        &WORKLOAD_SRV_NAME.to_string(),
+        &WORKLOAD_SRV_DESC.to_string(),
+        &WORKLOAD_SRV_VERSION.to_string(),
+        &WORKLOAD_SRV_SUBJ.to_string(),
+    );
+    let workload_stream_service = JsService::new(service);
+    let orchestrator_workload_client = nats_client
+        .add_js_services(vec![workload_stream_service])
+        .await;
 
     // ==================== Setup API & Register Endpoints ====================
     // Instantiate the Workload API (requires access to db client)
@@ -209,11 +189,5 @@ pub async fn run() -> Result<(), async_nats::Error> {
         )
         .await?;
 
-    // ==================== Close and Clean Client ====================
-    // Only exit program when explicitly requested
-    tokio::signal::ctrl_c().await?;
-
-    // Close client and drain internal buffer before exiting to make sure all messages are sent
-    orchestrator_workload_client.close().await?;
-    Ok(())
+    Ok(orchestrator_workload_client)
 }

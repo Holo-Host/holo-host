@@ -113,7 +113,7 @@ nsc edit account --name $ADMIN_ACCOUNT --js-streams -1 --js-consumer -1 --js-mem
 
 ADMIN_SK="$(echo "$(nsc edit account -n $ADMIN_ACCOUNT --sk generate 2>&1)" | grep -oP "signing key\s*\K\S+")"
 ADMIN_ROLE_NAME="admin_role"
-nsc edit signing-key --sk $ADMIN_SK --role $ADMIN_ROLE_NAME --allow-pub "ADMIN.>","AUTH.>","WORKLOAD.>","\$JS.API.>","\$SYS.>","_INBOX.>","_INBOX_*.>","*._WORKLOAD_INBOX.>","_AUTH_INBOX_*.>" --allow-sub "ADMIN.>","AUTH.>","WORKLOAD.>","\$JS.API.>","\$SYS.>","_INBOX.>","_INBOX_*.>","ORCHESTRATOR._WORKLOAD_INBOX.>","_AUTH_INBOX_ORCHESTRATOR.>" --allow-pub-response
+nsc edit signing-key --sk $ADMIN_SK --role $ADMIN_ROLE_NAME --allow-pub "ADMIN.>","AUTH.>","WORKLOAD.>","INVENTORY.>","\$JS.API.>","\$SYS.>","_INBOX.>","_INBOX_*.>","*._WORKLOAD_INBOX.>","_AUTH_INBOX_*.>" --allow-sub "ADMIN.>","AUTH.>","WORKLOAD.>","INVENTORY.>","\$JS.API.>","\$SYS.>","_INBOX.>","_INBOX_*.>","ORCHESTRATOR._WORKLOAD_INBOX.>","_AUTH_INBOX_ORCHESTRATOR.>" --allow-pub-response
 
 # Step 3: Create AUTH with JetStream with non-scoped signing key
 nsc add account --name $AUTH_ACCOUNT

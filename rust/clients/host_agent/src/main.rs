@@ -116,16 +116,13 @@ async fn run_auth_loop(mut keys: keys::Keys) -> Result<keys::Keys, async_nats::E
         let max_time_interval = chrono::TimeDelta::days(1);
 
         while max_time_interval > now.signed_duration_since(start) {
-            let unauthenticated_user_diagnostics_subject =
-                format!("DIAGNOSTICS.{}.unauthenticated", keys.host_pubkey);
+            let unauthenticated_user_inventory_subject =
+                format!("INVENTORY.{}.unauthenticated", keys.host_pubkey);
             let diganostics = HoloInventory::from_host();
             let payload_bytes = serde_json::to_vec(&diganostics)?;
 
             if let Err(e) = auth_guard_client
-                .publish(
-                    unauthenticated_user_diagnostics_subject,
-                    payload_bytes.into(),
-                )
+                .publish(unauthenticated_user_inventory_subject, payload_bytes.into())
                 .await
             {
                 log::error!("Encountered error when sending diganostics. Err={:#?}", e);

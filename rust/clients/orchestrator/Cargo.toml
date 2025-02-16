@@ -30,4 +30,5 @@ utoipa-swagger-ui = { version = "9", features = [
 utoipa = { version = "5", features = ["actix_extras"] }
 util_libs = { path = "../../util_libs" }
 workload = { path = "../../services/workload" }
+inventory = { path = "../../services/inventory" }
 authentication = { path = "../../services/authentication" }

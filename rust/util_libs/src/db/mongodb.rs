@@ -1,10 +1,10 @@
 use crate::nats_js_client::ServiceError;
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result};
 use async_trait::async_trait;
-use bson::{self, doc, Document};
+use bson::{self, Document};
 use futures::stream::TryStreamExt;
 use mongodb::options::UpdateModifications;
-use mongodb::results::{DeleteResult, UpdateResult};
+use mongodb::results::UpdateResult;
 use mongodb::{options::IndexOptions, Client, Collection, IndexModel};
 use serde::{Deserialize, Serialize};
 use std::{fmt::Debug, str::FromStr};
@@ -17,21 +17,23 @@ where
     T: Serialize + for<'de> Deserialize<'de> + Unpin + Send + Sync,
 {
     type Error;
-    async fn mongo_cursor_to_list(&self, cursor: mongodb::Cursor<T>)
-        -> Result<Vec<T>, Self::Error>;
-    async fn aggregate(&self, pipeline: Vec<Document>) -> Result<Vec<T>, Self::Error>;
+    async fn aggregate<R: for<'de> Deserialize<'de>>(
+        &self,
+        pipeline: Vec<Document>,
+    ) -> Result<Vec<R>, Self::Error>;
     async fn get_one_from(&self, filter: Document) -> Result<Option<T>, Self::Error>;
     async fn get_many_from(&self, filter: Document) -> Result<Vec<T>, Self::Error>;
     async fn insert_one_into(&self, item: T) -> Result<schemas::MongoDbId, Self::Error>;
-    async fn insert_many_into(&self, items: Vec<T>)
-        -> Result<Vec<schemas::MongoDbId>, Self::Error>;
+    async fn update_many_within(
+        &self,
+        query: Document,
+        updated_doc: UpdateModifications,
+    ) -> Result<UpdateResult, Self::Error>;
     async fn update_one_within(
         &self,
         query: Document,
         updated_doc: UpdateModifications,
     ) -> Result<UpdateResult, Self::Error>;
-    async fn delete_one_from(&self, query: Document) -> Result<DeleteResult, Self::Error>;
-    async fn delete_all_from(&self) -> Result<DeleteResult, Self::Error>;
 }
 
 pub trait IntoIndexes {
@@ -43,7 +45,7 @@ pub struct MongoCollection<T>
 where
     T: Serialize + for<'de> Deserialize<'de> + Unpin + Send + Sync + Default + IntoIndexes,
 {
-    pub collection: Collection<T>,
+    pub inner: Collection<T>,
     indices: Vec<IndexModel>,
 }
 
@@ -62,7 +64,7 @@ where
         let indices = vec![];
 
         Ok(MongoCollection {
-            collection,
+            inner: collection,
             indices,
         })
     }
@@ -84,7 +86,7 @@ where
         self.indices = indices.clone();
 
         // Apply the indices to the mongodb collection schema
-        self.collection.create_indexes(indices).await?;
+        self.inner.create_indexes(indices).await?;
         Ok(self)
     }
 }
@@ -96,27 +98,22 @@ where
 {
     type Error = ServiceError;
 
-    async fn mongo_cursor_to_list(
-        &self,
-        cursor: mongodb::Cursor<T>,
-    ) -> Result<Vec<T>, Self::Error> {
-        let results: Vec<T> = cursor.try_collect().await.map_err(ServiceError::Database)?;
-        return Ok(results);
-    }
-
-    async fn aggregate(&self, pipeline: Vec<Document>) -> Result<Vec<T>, Self::Error> {
+    async fn aggregate<R>(&self, pipeline: Vec<Document>) -> Result<Vec<R>, Self::Error>
+    where
+        R: for<'de> Deserialize<'de>,
+    {
         log::trace!("Aggregate pipeline {:?}", pipeline);
-        let cursor = self.collection.aggregate(pipeline).await?;
+        let cursor = self.inner.aggregate(pipeline).await?;
 
         let results_doc: Vec<bson::Document> =
             cursor.try_collect().await.map_err(ServiceError::Database)?;
 
-        let results: Vec<T> = results_doc
+        let results: Vec<R> = results_doc
             .into_iter()
             .map(|doc| {
-                bson::from_document::<T>(doc).with_context(|| "Failed to deserialize document")
+                bson::from_document::<R>(doc).with_context(|| "Failed to deserialize document")
             })
-            .collect::<Result<Vec<T>>>()
+            .collect::<Result<Vec<R>>>()
             .map_err(|e| ServiceError::Internal(e.to_string()))?;
 
         Ok(results)
@@ -126,7 +123,7 @@ where
         log::trace!("Get_one_from filter {:?}", filter);
 
         let item = self
-            .collection
+            .inner
             .find_one(filter)
             .await
             .map_err(ServiceError::Database)?;
@@ -136,14 +133,14 @@ where
     }
 
     async fn get_many_from(&self, filter: Document) -> Result<Vec<T>, Self::Error> {
-        let cursor = self.collection.find(filter).await?;
+        let cursor = self.inner.find(filter).await?;
         let results: Vec<T> = cursor.try_collect().await.map_err(ServiceError::Database)?;
         Ok(results)
     }
 
     async fn insert_one_into(&self, item: T) -> Result<schemas::MongoDbId, Self::Error> {
         let result = self
-            .collection
+            .inner
             .insert_one(item)
             .await
             .map_err(ServiceError::Database)?;
@@ -154,24 +151,15 @@ where
         Ok(mongo_id)
     }
 
-    async fn insert_many_into(
+    async fn update_many_within(
         &self,
-        items: Vec<T>,
-    ) -> Result<Vec<schemas::MongoDbId>, Self::Error> {
-        let result = self
-            .collection
-            .insert_many(items)
+        query: Document,
+        updated_doc: UpdateModifications,
+    ) -> Result<UpdateResult, Self::Error> {
+        self.inner
+            .update_many(query, updated_doc)
             .await
-            .map_err(ServiceError::Database)?;
-
-        let ids: Vec<bson::oid::ObjectId> = result
-            .inserted_ids
-            .values()
-            .map(|id| schemas::MongoDbId::from_str(&id.to_string()))
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|e| ServiceError::Internal(e.to_string()))?;
-
-        Ok(ids)
+            .map_err(ServiceError::Database)
     }
 
     async fn update_one_within(
@@ -179,22 +167,8 @@ where
         query: Document,
         updated_doc: UpdateModifications,
     ) -> Result<UpdateResult, Self::Error> {
-        self.collection
+        self.inner
             .update_one(query, updated_doc)
-            .await
-            .map_err(ServiceError::Database)
-    }
-
-    async fn delete_one_from(&self, query: Document) -> Result<DeleteResult, Self::Error> {
-        self.collection
-            .delete_one(query)
-            .await
-            .map_err(ServiceError::Database)
-    }
-
-    async fn delete_all_from(&self) -> Result<DeleteResult, Self::Error> {
-        self.collection
-            .delete_many(doc! {})
             .await
             .map_err(ServiceError::Database)
     }
@@ -351,9 +325,9 @@ mod tests {
         let host_1 = get_mock_host();
         let host_2 = get_mock_host();
         let host_3 = get_mock_host();
-        host_api
-            .insert_many_into(vec![host_1.clone(), host_2.clone(), host_3.clone()])
-            .await?;
+        host_api.insert_one_into(host_1.clone()).await?;
+        host_api.insert_one_into(host_2.clone()).await?;
+        host_api.insert_one_into(host_3.clone()).await?;
 
         // get many docs
         let ids = vec![
@@ -375,13 +349,8 @@ mod tests {
         assert!(updated_ids.contains(&ids[1]));
         assert!(updated_ids.contains(&ids[2]));
 
-        // delete all documents
-        let DeleteResult { deleted_count, .. } = host_api.delete_all_from().await?;
-        assert_eq!(deleted_count, 4);
-        let fetched_host = host_api.get_one_from(filter_one).await?;
-        let fetched_hosts = host_api.get_many_from(filter_many).await?;
-        assert!(fetched_host.is_none());
-        assert!(fetched_hosts.is_empty());
+        // Delete collection and all documents therein.
+        let _ = host_api.inner.drop();
 
         Ok(())
     }

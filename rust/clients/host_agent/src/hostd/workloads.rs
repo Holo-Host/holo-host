@@ -99,7 +99,7 @@ pub async fn run(
 
     // Register Workload Streams for Host Agent to consume and process
     // NB: Subjects are published by orchestrator
-    let workload_start_subject = serde_json::to_string(&WorkloadServiceSubjects::Start)?;
+    let workload_install_subject = serde_json::to_string(&WorkloadServiceSubjects::Install)?;
     let workload_send_status_subject = serde_json::to_string(&WorkloadServiceSubjects::SendStatus)?;
     let workload_uninstall_subject = serde_json::to_string(&WorkloadServiceSubjects::Uninstall)?;
     let workload_update_installed_subject =
@@ -114,11 +114,11 @@ pub async fn run(
 
     workload_service
         .add_consumer::<WorkloadApiResult>(
-            "start_workload",                                       // consumer name
-            &format!("{}.{}", host_pubkey, workload_start_subject), // consumer stream subj
+            "install_workload",                                       // consumer name
+            &format!("{}.{}", host_pubkey, workload_install_subject), // consumer stream subj
             EndpointType::Async(
                 workload_api.call(|api: HostWorkloadApi, msg: Arc<Message>| async move {
-                    api.start_workload(msg).await
+                    api.install_workload(msg).await
                 }),
             ),
             None,

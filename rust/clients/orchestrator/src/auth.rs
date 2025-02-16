@@ -19,12 +19,13 @@ This client is responsible for:
 
 use anyhow::{anyhow, Context, Result};
 use async_nats::service::ServiceExt;
+use async_nats::Client;
 use authentication::{
     types::AuthErrorPayload, AuthServiceApi, AUTH_CALLOUT_SUBJECT, AUTH_SRV_DESC, AUTH_SRV_NAME,
     AUTH_SRV_SUBJ, AUTH_SRV_VERSION, VALIDATE_AUTH_SUBJECT,
 };
 use futures::StreamExt;
-use mongodb::{options::ClientOptions, Client as MongoDBClient};
+use mongodb::Client as MongoDBClient;
 use nkeys::KeyPair;
 use std::fs::File;
 use std::io::Read;
@@ -32,7 +33,6 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use std::{sync::Arc, time::Duration};
 use util_libs::{
-    db::mongodb::get_mongodb_url,
     js_stream_service::CreateResponse,
     nats_js_client::{get_nats_creds_by_nsc, get_nats_url},
 };
@@ -40,7 +40,7 @@ use util_libs::{
 pub const ORCHESTRATOR_AUTH_CLIENT_NAME: &str = "Orchestrator Auth Manager";
 pub const ORCHESTRATOR_AUTH_CLIENT_INBOX_PREFIX: &str = "_AUTH_INBOX_ORCHESTRATOR";
 
-pub async fn run() -> Result<(), async_nats::Error> {
+pub async fn run(db_client: MongoDBClient) -> Result<Client, async_nats::Error> {
     let admin_account_creds_path =
         PathBuf::from_str(&get_nats_creds_by_nsc("HOLO", "AUTH", "auth"))?;
 
@@ -104,12 +104,6 @@ pub async fn run() -> Result<(), async_nats::Error> {
             return Err(format!("Timed out waiting for NATS on {nats_url}").into());
         }
     };
-
-    // ==================== Setup DB ====================
-    // Create a new MongoDB Client and connect it to the cluster
-    let mongo_uri = get_mongodb_url();
-    let client_options = ClientOptions::parse(mongo_uri).await?;
-    let db_client = MongoDBClient::with_options(client_options)?;
 
     // ==================== Setup API & Register Endpoints ====================
     // Generate the Auth API with access to db
@@ -274,17 +268,7 @@ pub async fn run() -> Result<(), async_nats::Error> {
 
     log::debug!("Orchestrator Auth Service is running. Waiting for requests...");
 
-    // ==================== Close and Clean Client ====================
-    // Only exit program when explicitly requested
-    tokio::signal::ctrl_c().await?;
-
-    log::debug!("Closing orchestrator auth service...");
-
-    // Close client and drain internal buffer before exiting to make sure all messages are sent
-    orchestrator_auth_client.drain().await?;
-    log::debug!("Closed orchestrator auth service");
-
-    Ok(())
+    Ok(orchestrator_auth_client)
 }
 
 fn try_read_keypair_from_file(key_file_path: PathBuf) -> Result<Option<KeyPair>> {

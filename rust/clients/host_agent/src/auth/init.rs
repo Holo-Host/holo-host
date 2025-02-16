@@ -131,15 +131,13 @@ pub async fn run(
         Err(e) => {
             log::error!("{:#?}", e);
             if let RequestErrorKind::TimedOut = e.kind() {
-                let unauthenticated_user_diagnostics_subject = format!(
-                    "DIAGNOSTICS.{}.unauthenticated",
-                    host_agent_keys.host_pubkey
-                );
+                let unauthenticated_user_inventory_subject =
+                    format!("INVENTORY.{}.unauthenticated", host_agent_keys.host_pubkey);
                 let diganostics = HoloInventory::from_host();
                 let payload_bytes = serde_json::to_vec(&diganostics)?;
                 if (auth_guard_client
                     .publish(
-                        unauthenticated_user_diagnostics_subject.to_string(),
+                        unauthenticated_user_inventory_subject.to_string(),
                         payload_bytes.into(),
                     )
                     .await)

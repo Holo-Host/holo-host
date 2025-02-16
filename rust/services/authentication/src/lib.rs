@@ -2,7 +2,7 @@
 Service Name: AUTH
 Subject: "AUTH.>"
 Provisioning Account: AUTH Account (ie: This service is exclusively permissioned to the AUTH account.)
-Users: orchestrator & noauth
+Users: orchestrator auth user & auth guard user
 Endpoints & Managed Subjects:
     - handle_auth_callout: $SYS.REQ.USER.AUTH
     - handle_auth_validation: AUTH.validate
@@ -234,7 +234,7 @@ impl AuthServiceApi {
             // If successful, assign personalized inbox and auth permissions
             let user_unique_auth_subject = &format!("AUTH.{}.>", host_pubkey);
             let user_unique_inbox = &format!("_AUTH_INBOX_{}.>", host_pubkey);
-            let authenticated_user_diagnostics_subject = &format!("DIAGNOSTICS.{}.>", host_pubkey);
+            let authenticated_user_inventory_subject = &format!("INVENTORY.{}.>", host_pubkey);
 
             types::Permissions {
                 publish: types::PermissionLimits {
@@ -242,7 +242,7 @@ impl AuthServiceApi {
                         "AUTH.validate".to_string(),
                         user_unique_auth_subject.to_string(),
                         user_unique_inbox.to_string(),
-                        authenticated_user_diagnostics_subject.to_string(),
+                        authenticated_user_inventory_subject.to_string(),
                     ]),
                     deny: None,
                 },
@@ -250,19 +250,19 @@ impl AuthServiceApi {
                     allow: Some(vec![
                         user_unique_auth_subject.to_string(),
                         user_unique_inbox.to_string(),
-                        authenticated_user_diagnostics_subject.to_string(),
+                        authenticated_user_inventory_subject.to_string(),
                     ]),
                     deny: None,
                 },
             }
         } else {
-            // Otherwise, exclusively grant publication permissions for the unauthenticated diagnostics subj
+            // Otherwise, exclusively grant publication permissions for the unauthenticated inventory subj
             // ...to allow the host device to still send diganostic reports
-            let unauthenticated_user_diagnostics_subject =
-                format!("DIAGNOSTICS.{}.unauthenticated.>", host_pubkey);
+            let unauthenticated_user_inventory_subject =
+                format!("INVENTORY.{}.unauthenticated.>", host_pubkey);
             types::Permissions {
                 publish: types::PermissionLimits {
-                    allow: Some(vec![unauthenticated_user_diagnostics_subject]),
+                    allow: Some(vec![unauthenticated_user_inventory_subject]),
                     deny: None,
                 },
                 subscribe: types::PermissionLimits {
