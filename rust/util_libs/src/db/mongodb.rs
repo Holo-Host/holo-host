@@ -7,7 +7,7 @@ use mongodb::options::UpdateModifications;
 use mongodb::results::UpdateResult;
 use mongodb::{options::IndexOptions, Client, Collection, IndexModel};
 use serde::{Deserialize, Serialize};
-use std::{fmt::Debug, str::FromStr};
+use std::fmt::Debug;
 
 use super::schemas;
 
@@ -145,8 +145,13 @@ where
             .await
             .map_err(ServiceError::Database)?;
 
-        let mongo_id = schemas::MongoDbId::from_str(&result.inserted_id.to_string())
-            .map_err(|e| ServiceError::Internal(e.to_string()))?;
+        let mongo_id = result
+            .inserted_id
+            .as_object_id()
+            .ok_or(ServiceError::Internal(format!(
+                "Failed to read the insert id after inserting item. insert_result={:?}.",
+                result
+            )))?;
 
         Ok(mongo_id)
     }
@@ -299,8 +304,7 @@ mod tests {
                 avg_uptime: 95,
                 avg_network_speed: 500,
                 avg_latency: 10,
-                assigned_workloads: vec![schemas::MongoDbId::from_str(&"workload_id")
-                    .expect("Failed to convert str to MongoDbId")],
+                assigned_workloads: vec![oid::ObjectId::new()],
                 assigned_hoster: oid::ObjectId::new(),
             }
         }
