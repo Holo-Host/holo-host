@@ -1,13 +1,9 @@
-use std::{path::PathBuf, time::Duration};
-
 use anyhow::Context;
+use std::path::PathBuf;
 use tempfile::tempdir;
-use util_libs::{
-    nats_js_client,
-    nats_server::{
-        JetStreamConfig, LeafNodeRemote, LeafNodeRemoteTlsConfig, LeafServer, LoggingOptions,
-        LEAF_SERVER_CONFIG_PATH, LEAF_SERVER_DEFAULT_LISTEN_PORT,
-    },
+use util_libs::nats_server::{
+    JetStreamConfig, LeafNodeRemote, LeafNodeRemoteTlsConfig, LeafServer, LoggingOptions,
+    LEAF_SERVER_CONFIG_PATH, LEAF_SERVER_DEFAULT_LISTEN_PORT,
 };
 
 pub async fn run(
@@ -91,5 +87,5 @@ pub async fn run(
     .await
     .context("failed to spawn the Leaf Server in a separate thread")??;
 
-    Ok(leaf_server)
+    Ok(())
 }

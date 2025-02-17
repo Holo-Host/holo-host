@@ -1,13 +1,6 @@
 use std::{path::PathBuf, time::Duration};
-
-use anyhow::Context;
-use tempfile::tempdir;
-use util_libs::{
-    nats_js_client,
-    nats_server::{
-        JetStreamConfig, LeafNodeRemote, LeafNodeRemoteTlsConfig, LeafServer, LoggingOptions,
-        LEAF_SERVER_CONFIG_PATH, LEAF_SERVER_DEFAULT_LISTEN_PORT,
-    },
+use util_libs::nats_js_client::{
+    self, get_event_listeners, get_nats_url, JsClient, NewJsClientParams,
 };
 
 const HOST_AGENT_CLIENT_NAME: &str = "Host Agent";
@@ -17,32 +10,30 @@ pub async fn run(
     host_pubkey: &str,
     host_creds_path: &Option<PathBuf>,
     nats_connect_timeout_secs: u64,
-) -> anyhow::Result<nats_js_client::JsClient> {
-    let event_listeners = get_event_listeners();    
-    let nats_url = nats_js_client::get_nats_url();
+) -> anyhow::Result<JsClient> {
+    let nats_url = get_nats_url();
     log::info!("nats_url : {}", nats_url);
-
     log::info!("host_creds_path : {:?}", host_creds_path);
     log::info!("host_pubkey : {}", host_pubkey);
 
-    let orchestrator_admin_client = tokio::select! {
+    let host_client = tokio::select! {
         client = async {loop {
-            let admin_client = JsClient::new(NewJsClientParams {
-                nats_url,
+            let c = JsClient::new(NewJsClientParams {
+                nats_url: nats_url.clone(),
                 name: HOST_AGENT_CLIENT_NAME.to_string(),
                 inbox_prefix: format!("{}_{}", HOST_AGENT_INBOX_PREFIX, host_pubkey),
                 service_params: Default::default(),
                 credentials_path: host_creds_path
                     .as_ref()
                     .map(|path| path.to_string_lossy().to_string()),
-                opts: vec![nats_js_client::with_event_listeners(event_listeners)],
+                opts: vec![nats_js_client::with_event_listeners(get_event_listeners())],
                 request_timeout:Some(Duration::from_secs(29)),
                 ping_interval: Some(Duration::from_secs(10)),
             })
-            .await?
+            .await
                 .map_err(|e| anyhow::anyhow!("connecting to NATS via {nats_url}: {e}"));
 
-                match admin_client {
+                match c {
                     Ok(client) => break client,
                     Err(e) => {
                         let duration = tokio::time::Duration::from_millis(100);
@@ -59,5 +50,5 @@ pub async fn run(
         }
     };
 
-    Ok(nats_client)
+    Ok(host_client)
 }

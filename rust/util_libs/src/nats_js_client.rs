@@ -13,7 +13,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 pub type EventListener = Arc<Box<dyn Fn(&mut JsClient) + Send + Sync>>;
-pub type EventHandler = Pin<Box<dyn Fn(&str, &str, Duration) + Send + Sync>>;
+pub type EventHandler = Arc<Pin<Box<dyn Fn(&str, &str, Duration) + Send + Sync>>>;
 pub type JsServiceResponse<T> = Pin<Box<dyn Future<Output = Result<T, anyhow::Error>> + Send>>;
 pub type EndpointHandler<T> = Arc<dyn Fn(&Message) -> Result<T, anyhow::Error> + Send + Sync>;
 pub type AsyncEndpointHandler<T> = Arc<
@@ -74,6 +74,7 @@ impl std::fmt::Debug for JsClient {
     }
 }
 
+#[derive(Clone)]
 pub struct JsClient {
     url: String,
     name: String,
@@ -238,8 +239,8 @@ impl JsClient {
 
     pub async fn add_js_service(
         mut self,
-        js_services: JsServiceParamsPartial,
-    ) -> Result<JsStreamService> {
+        params: JsServiceParamsPartial,
+    ) -> Result<JsStreamService, async_nats::Error> {
         let new_service = JsStreamService::new(
             self.js,
             &params.name,
@@ -250,7 +251,8 @@ impl JsClient {
         .await?;
 
         let mut current_services = self.js_services.unwrap_or_default();
-        current_services.extend(js_services);
+        current_services.push(new_service.clone());
+        self.js_services = Some(current_services);
 
         Ok(new_service)
     }
@@ -280,7 +282,7 @@ where
     F: Fn(&str, &str, Duration) + Send + Sync + Clone + 'static,
 {
     Arc::new(Box::new(move |c: &mut JsClient| {
-        c.on_msg_published_event = Some(Box::pin(f.clone()));
+        c.on_msg_published_event = Some(Arc::new(Box::pin(f.clone())));
     }))
 }
 
@@ -289,7 +291,7 @@ where
     F: Fn(&str, &str, Duration) + Send + Sync + Clone + 'static,
 {
     Arc::new(Box::new(move |c: &mut JsClient| {
-        c.on_msg_failed_event = Some(Box::pin(f.clone()));
+        c.on_msg_failed_event = Some(Arc::new(Box::pin(f.clone())));
     }))
 }
 
