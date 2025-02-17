@@ -227,7 +227,7 @@ impl WorkloadApi {
         ];
         let results = self.host_collection.aggregate(pipeline).await?;
         if results.is_empty() {
-            return Err(anyhow!(
+            anyhow::bail!(
                 "Could not find a compatible host for this workload={:#?}",
                 workload._id
             ));
