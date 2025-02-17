@@ -94,9 +94,9 @@ in
         default = "/var/lib/holo-host-agent/server-key-config.json";
       };
 
-      hposCredsPwFile = lib.mkOption {
+      hposCredsPw = lib.mkOption {
         type = lib.types.path;
-        default = "/var/lib/holo-host-agent/hpos_creds_pw.txt";
+        default = "pass";
       };
 
       hub = {
@@ -136,7 +136,7 @@ in
           HOSTING_AGENT_HOST_NKEY_PATH = cfg.nats.hostNkeyPath;
           HOSTING_AGENT_SYS_NKEY_PATH = cfg.nats.sysNkeyPath;
           HPOS_CONFIG_PATH = cfg.nats.hposCredsPath;
-          DEVICE_SEED_DEFAULT_PASSWORD_FILE = builtins.toString cfg.nats.hposCredsPwFile;
+          DEVICE_SEED_DEFAULT_PASSWORD = builtins.toString cfg.nats.hposCredsPw;
           NATS_LISTEN_PORT = builtins.toString cfg.nats.listenPort;
         }
         // lib.attrsets.optionalAttrs (cfg.nats.url != null) {
@@ -146,6 +146,14 @@ in
       path = [
         pkgs.nats-server
       ];
+
+      preStart = ''
+              echo "Start Host Auth Setup"
+        mkdir -p ${cfg.nats.hostNkeyPath}
+        mkdir -p ${cfg.nats.sysNkeyPath}
+        mkdir -p ${cfg.nats.hposCredsPath}
+        echo "Finshed Host Auth Setup"
+      '';
 
       script =
         let
