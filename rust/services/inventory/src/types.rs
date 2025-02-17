@@ -1,6 +1,13 @@
+use hpos_hal::inventory::HoloInventory;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use util_libs::js_stream_service::{CreateResponse, CreateTag, EndpointTraits};
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum InventoryPayloadType {
+    Authenticated(HoloInventory),
+    Unauthenticated(HoloInventory),
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum InventoryUpdateStatus {
@@ -20,7 +27,7 @@ impl CreateTag for InventoryApiResult {
 }
 impl CreateResponse for InventoryApiResult {
     fn get_response(&self) -> bytes::Bytes {
-        let s = self.status;
+        let s = self.status.clone();
         match serde_json::to_vec(&s) {
             Ok(r) => r.into(),
             Err(e) => e.to_string().into(),

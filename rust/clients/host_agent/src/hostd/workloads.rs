@@ -10,12 +10,12 @@ This client is responsible for subscribing to workload streams that handle:
     - sending out active periodic workload reports
 */
 
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use async_nats::Message;
-use std::{path::PathBuf, sync::Arc, time::Duration};
+use std::sync::Arc;
 use util_libs::{
     js_stream_service::JsServiceParamsPartial,
-    nats_js_client::{self, Credentials, EndpointType},
+    nats_js_client::{self, EndpointType},
 };
 use workload::{
     host_api::HostWorkloadApi,
@@ -24,74 +24,23 @@ use workload::{
     WORKLOAD_SRV_VERSION,
 };
 
-const HOST_AGENT_CLIENT_NAME: &str = "Host Agent";
-const HOST_AGENT_INBOX_PREFIX: &str = "_WORKLOAD_INBOX";
-
 pub async fn run(
+    host_client: nats_js_client::JsClient,
     host_pubkey: &str,
-    host_creds_path: &Option<PathBuf>,
-    nats_connect_timeout_secs: u64,
-) -> Result<nats_js_client::JsClient, async_nats::Error> {
-    log::info!("Host Agent Client: Connecting to server...");
-    log::info!("host_creds_path : {:?}", host_creds_path);
+) -> Result<(), async_nats::Error> {
+    log::info!("Host Agent Client: starting workload service...");
     log::info!("host_pubkey : {}", host_pubkey);
 
-    // ==================== Setup NATS ====================
-    // Connect to Nats server
-    let nats_url = nats_js_client::get_nats_url();
-    log::info!("nats_url : {}", nats_url);
-
-    let event_listeners = nats_js_client::get_event_listeners();
-
+    // ==================== Setup NATS Service ====================
     // Setup JS Stream Service
-    let workload_stream_service_params = JsServiceParamsPartial {
+    let workload_service_config = JsServiceParamsPartial {
         name: WORKLOAD_SRV_NAME.to_string(),
         description: WORKLOAD_SRV_DESC.to_string(),
         version: WORKLOAD_SRV_VERSION.to_string(),
         service_subject: WORKLOAD_SRV_SUBJ.to_string(),
     };
 
-    // Spin up Nats Client and loaded in the Js Stream Service
-    // Nats takes a moment to become responsive, so we try to connect in a loop for a few seconds.
-    // TODO: how do we recover from a connection loss to Nats in case it crashes or something else?
-    let creds = host_creds_path
-        .to_owned()
-        .map(Credentials::Path)
-        .ok_or_else(|| async_nats::Error::from("error"))?;
-
-    let pubkey_lowercase = host_pubkey.to_string().to_lowercase();
-
-    let host_workload_client = tokio::select! {
-        client = async {loop {
-                let host_workload_client = nats_js_client::JsClient::new(nats_js_client::NewJsClientParams {
-                    nats_url: nats_url.clone(),
-                    name: HOST_AGENT_CLIENT_NAME.to_string(),
-                    inbox_prefix: format!("{}.{}", pubkey_lowercase, HOST_AGENT_INBOX_PREFIX),
-                    service_params: vec![workload_stream_service_params.clone()],
-                    credentials: Some(vec![creds.clone()]),
-                    ping_interval: Some(Duration::from_secs(10)),
-                    request_timeout: Some(Duration::from_secs(29)),
-                    listeners: vec![nats_js_client::with_event_listeners(event_listeners.clone())],
-                })
-                .await
-                .map_err(|e| anyhow::anyhow!("connecting to NATS via {nats_url}: {e}"));
-
-                match host_workload_client {
-                    Ok(client) => break client,
-                    Err(e) => {
-                        let duration = tokio::time::Duration::from_millis(100);
-                        log::warn!("{}, retrying in {duration:?}", e);
-                        tokio::time::sleep(duration).await;
-                    }
-                }
-            }} => client,
-        _ = {
-            log::debug!("will time out waiting for NATS after {nats_connect_timeout_secs:?}");
-            tokio::time::sleep(tokio::time::Duration::from_secs(nats_connect_timeout_secs))
-         } => {
-            return Err(format!("timed out waiting for NATS on {nats_url}").into());
-        }
-    };
+    let workload_service = host_client.add_js_service(workload_service_config).await?;
 
     // ==================== Setup API & Register Endpoints ====================
     // Instantiate the Workload API
@@ -104,13 +53,6 @@ pub async fn run(
     let workload_uninstall_subject = serde_json::to_string(&WorkloadServiceSubjects::Uninstall)?;
     let workload_update_installed_subject =
         serde_json::to_string(&WorkloadServiceSubjects::UpdateInstalled)?;
-
-    let workload_service = host_workload_client
-        .get_js_service(WORKLOAD_SRV_NAME.to_string())
-        .await
-        .ok_or(anyhow!(
-            "Failed to locate workload service. Unable to spin up Host Agent."
-        ))?;
 
     workload_service
         .add_consumer::<WorkloadApiResult>(
@@ -164,5 +106,5 @@ pub async fn run(
         )
         .await?;
 
-    Ok(host_workload_client)
+    Ok(())
 }

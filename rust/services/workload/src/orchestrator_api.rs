@@ -13,15 +13,19 @@ use crate::types::WorkloadResult;
 use super::{types::WorkloadApiResult, WorkloadServiceApi};
 use anyhow::Result;
 use async_nats::Message;
-use bson::{self, doc, to_document, DateTime};
+use bson::{self, doc, to_document, Bson, DateTime};
 use core::option::Option::None;
 use mongodb::{options::UpdateModifications, Client as MongoDBClient};
 use serde::{Deserialize, Serialize};
-use std::{collections::{HashMap, HashSet}, fmt::Debug, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    fmt::Debug,
+    sync::Arc,
+};
 use util_libs::{
     db::{
         mongodb::{IntoIndexes, MongoCollection, MongoDbAPI},
-        schemas::{self, Host, Workload, WorkloadState, WorkloadStatus},
+        schemas::{self, Workload, WorkloadState, WorkloadStatus},
     },
     nats_js_client::ServiceError,
 };
@@ -247,7 +251,7 @@ impl OrchestratorWorkloadApi {
                         );
                         break;
                     }
-                    
+
                     log::warn!("Failed to update all selected host records with workload_id.");
                     log::debug!("Fetching paired host records to see which one(s) still remain unassigned to workload...");
                     let unassigned_hosts= self.host_collection.get_many_from(doc! {
@@ -275,7 +279,7 @@ impl OrchestratorWorkloadApi {
                         }),
                     )
                     .await?;
-                
+
                 log::trace!(
                     "Successfully added new workload into the Workload Collection. MongodDB Workload ID={:?}",
                     updated_workload_result
@@ -411,9 +415,8 @@ impl OrchestratorWorkloadApi {
             doc! {
                 "$match": {
                     // verify there are enough system resources
-                    "remaining_capacity.disk": { "$gte": workload.system_specs.capacity.disk },
-                    "remaining_capacity.memory": { "$gte": workload.system_specs.capacity.memory },
-                    "remaining_capacity.cores": { "$gte": workload.system_specs.capacity.cores },
+                    "$expr": { "$gte": [{ "$sum": "$inventory.drive" }, Bson::Int64(workload.system_specs.capacity.drive as i64)]},
+                    "$expr": { "$gte": [{ "$size": "$inventory.cpus" }, Bson::Int64(workload.system_specs.capacity.cores)]},
 
                     // limit how many workloads a single host can have
                     "assigned_workloads": { "$lt": 1 }
@@ -428,7 +431,10 @@ impl OrchestratorWorkloadApi {
                 "$project": { "_id": 1 }
             },
         ];
-        let host_ids = self.host_collection.aggregate::<schemas::MongoDbId>(pipeline).await?;
+        let host_ids = self
+            .host_collection
+            .aggregate::<schemas::MongoDbId>(pipeline)
+            .await?;
         if host_ids.is_empty() {
             let err_msg = format!(
                 "Failed to locate a compatible host for workload. Workload_Id={:?}",

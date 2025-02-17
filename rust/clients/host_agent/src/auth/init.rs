@@ -131,8 +131,10 @@ pub async fn run(
         Err(e) => {
             log::error!("{:#?}", e);
             if let RequestErrorKind::TimedOut = e.kind() {
-                let unauthenticated_user_inventory_subject =
-                    format!("INVENTORY.{}.unauthenticated", host_agent_keys.host_pubkey);
+                let unauthenticated_user_inventory_subject = format!(
+                    "INVENTORY.update.{}.unauthenticated",
+                    host_agent_keys.host_pubkey
+                );
                 let diganostics = HoloInventory::from_host();
                 let payload_bytes = serde_json::to_vec(&diganostics)?;
                 if (auth_guard_client
@@ -153,18 +155,37 @@ pub async fn run(
     println!(
         "Received AUTH response: {:#?}",
         serde_json::from_slice::<AuthJWTResult>(&response_msg.payload)
-            .expect("failed to serde_json deserialize msg response")
+            .expect("Failed to serde_json deserialize msg response")
     );
 
     if let Ok(auth_response) = serde_json::from_slice::<AuthJWTResult>(&response_msg.payload) {
         match auth_response.status {
             AuthState::Authorized => {
+                // Update host keys with authenticated host and sys user keys
                 host_agent_keys = host_agent_keys
                     .save_host_creds(auth_response.host_jwt, auth_response.sys_jwt)
                     .await?;
+
+                // Send host inventory to orchestrator to add to mongodb (allows for host matching to start)
+                let pubkey_lowercase = host_agent_keys.host_pubkey.to_string().to_lowercase();
+                let authenticated_user_inventory_subject =
+                    format!("INVENTORY.update.{}.authenticated", pubkey_lowercase);
+                let inventory = HoloInventory::from_host();
+                let payload_bytes = serde_json::to_vec(&inventory)?;
+
+                if let Err(e) = auth_guard_client
+                    .publish(authenticated_user_inventory_subject, payload_bytes.into())
+                    .await
+                {
+                    log::error!(
+                        "Encountered error when sending inventory as authenticated user. Err={:#?}",
+                        e
+                    );
+                };
             }
             _ => {
-                log::error!("got unexpected AUTH State : {:?}", auth_response);
+                // Log out error and return to outer loop, which will re-attempt authentication at next interval (currently set to a day)
+                log::error!("Got unexpected AUTH State : {:?}", auth_response);
             }
         }
     };

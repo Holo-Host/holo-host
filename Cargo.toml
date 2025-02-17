@@ -9,6 +9,7 @@ members = [
     "rust/clients/orchestrator",
     "rust/services/authentication",
     "rust/services/workload",
+    "rust/services/inventory",
     "rust/util_libs",
     "rust/netdiag",
 ]

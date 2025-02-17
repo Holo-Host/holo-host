@@ -126,7 +126,7 @@ nsc add account --name $WORKLOAD_ACCOUNT
 nsc edit account --name $WORKLOAD_ACCOUNT --js-streams -1 --js-consumer -1 --js-mem-storage 1G --js-disk-storage 5G --conns -1 --leaf-conns -1
 WORKLOAD_SK="$(echo "$(nsc edit account -n $WORKLOAD_ACCOUNT --sk generate 2>&1)" | grep -oP "signing key\s*\K\S+")"
 WORKLOAD_ROLE_NAME="workload_role"
-nsc edit signing-key --sk $WORKLOAD_SK --role $WORKLOAD_ROLE_NAME --allow-pub "WORKLOAD.>","{{tag(pubkey)}}._WORKLOAD_INBOX.>" --allow-sub "WORKLOAD.{{tag(pubkey)}}.*","{{tag(pubkey)}}._WORKLOAD_INBOX.>" --allow-pub-response
+nsc edit signing-key --sk $WORKLOAD_SK --role $WORKLOAD_ROLE_NAME --allow-pub "WORKLOAD.>","{{tag(pubkey)}}._WORKLOAD_INBOX.>","INVENTORY.update.{{tag(pubkey)}}.>" --allow-sub "WORKLOAD.{{tag(pubkey)}}.*","{{tag(pubkey)}}._WORKLOAD_INBOX.>","INVENTORY.update.{{tag(pubkey)}}.>" --allow-pub-response
 
 # Step 5: Create Orchestrator User in ADMIN Account
 nsc add user --name $ADMIN_USER --account $ADMIN_ACCOUNT -K $ADMIN_ROLE_NAME

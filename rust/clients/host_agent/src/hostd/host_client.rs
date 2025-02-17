@@ -1,43 +1,42 @@
 use anyhow::anyhow;
-use std::path::PathBuf;
-use std::str::FromStr;
-use std::time::Duration;
-use std::vec;
+use std::{path::PathBuf, time::Duration};
 use util_libs::nats_js_client::{
-    self, get_event_listeners, get_nats_creds_by_nsc, get_nats_url, Credentials, JsClient,
-    NewJsClientParams,
+    self, get_event_listeners, get_nats_url, Credentials, JsClient, NewJsClientParams,
 };
 
-const ORCHESTRATOR_ADMIN_CLIENT_NAME: &str = "Orchestrator Admin Client";
-const ORCHESTRATOR_ADMIN_CLIENT_INBOX_PREFIX: &str = "ORCHESTRATOR._ADMIN_INBOX";
+const HOST_AGENT_CLIENT_NAME: &str = "Host Agent";
+const HOST_AGENT_INBOX_PREFIX: &str = "_WORKLOAD_INBOX";
 
 pub async fn run(
-    admin_creds_path: &Option<PathBuf>,
+    host_pubkey: &str,
+    host_creds_path: &Option<PathBuf>,
     nats_connect_timeout_secs: u64,
 ) -> anyhow::Result<JsClient> {
     let nats_url = get_nats_url();
     log::info!("nats_url : {}", nats_url);
+    log::info!("host_creds_path : {:?}", host_creds_path);
+    log::info!("host_pubkey : {}", host_pubkey);
 
-    let creds_path = admin_creds_path
+    let creds = host_creds_path
         .to_owned()
-        .ok_or(PathBuf::from_str(&get_nats_creds_by_nsc(
-            "HOLO", "ADMIN", "admin",
-        )))
         .map(Credentials::Path)
-        .map_err(|e| anyhow!("Failed to locate admin credential path. Err={:?}", e))?;
+        .ok_or_else(|| anyhow!("Failed to locate admin credential path."))?;
 
-    log::info!("final admin creds path : {:?}", creds_path);
+    let pubkey_lowercase = host_pubkey.to_string().to_lowercase();
 
-    let admin_client = tokio::select! {
+    // Spin up Nats Client and loaded in the Js Stream Service
+    // Nats takes a moment to become responsive, so we try to connect in a loop for a few seconds.
+    // TODO: how do we recover from a connection loss to Nats in case it crashes or something else?
+    let host_client = tokio::select! {
         client = async {loop {
             let c = JsClient::new(NewJsClientParams {
                 nats_url: nats_url.clone(),
-                name: ORCHESTRATOR_ADMIN_CLIENT_NAME.to_string(),
-                inbox_prefix: ORCHESTRATOR_ADMIN_CLIENT_INBOX_PREFIX.to_string(),
-                service_params: vec![],
-                credentials: Some(vec![creds_path.clone()]),
-                request_timeout:Some(Duration::from_secs(29)),
+                name: HOST_AGENT_CLIENT_NAME.to_string(),
+                inbox_prefix: format!("{}.{}", pubkey_lowercase, HOST_AGENT_INBOX_PREFIX),
+                service_params: Default::default(),
+                credentials: Some(vec![creds.clone()]),
                 ping_interval: Some(Duration::from_secs(10)),
+                request_timeout:Some(Duration::from_secs(29)),
                 listeners: vec![nats_js_client::with_event_listeners(get_event_listeners())],
             })
             .await
@@ -60,5 +59,5 @@ pub async fn run(
         }
     };
 
-    Ok(admin_client)
+    Ok(host_client)
 }

@@ -20,6 +20,7 @@ async fn docs() -> impl Responder {
         .body(docs.to_pretty_json().unwrap())
 }
 
+#[allow(dead_code)]
 async fn db() -> mongodb::error::Result<()> {
     let connection_uri = env::var("DB_CONNECTION_STRING").unwrap();
     let client = Client::with_uri_str(connection_uri).await?;

@@ -80,18 +80,22 @@ async fn daemonize(args: &DaemonzeArgs) -> Result<(), async_nats::Error> {
     )
     .await;
 
-    let host_workload_client = hostd::workloads::run(
+    let host_client = hostd::host_client::run(
         &host_agent_keys.host_pubkey,
         &host_agent_keys.get_host_creds_path(),
         args.nats_connect_timeout_secs,
     )
     .await?;
 
+    hostd::inventory::run(host_client.clone(), &host_agent_keys.host_pubkey).await?;
+
+    hostd::workloads::run(host_client.clone(), &host_agent_keys.host_pubkey).await?;
+
     // Only exit program when explicitly requested
     tokio::signal::ctrl_c().await?;
 
     // Close client and drain internal buffer before exiting to make sure all messages are sent
-    host_workload_client.close().await?;
+    host_client.close().await?;
 
     Ok(())
 }
@@ -110,24 +114,28 @@ async fn run_auth_loop(mut keys: keys::Keys) -> Result<keys::Keys, async_nats::E
             break;
         }
 
-        // Otherwise, send diagonostics every 1hr for the next 24hrs, then exit while loop and retry auth.
+        // Otherwise, send diagonostics and wait 24hrs, then exit while loop and retry auth.
         // TODO: Discuss interval for sending diagnostic reports and wait duration before retrying auth with team.
         let now = chrono::Utc::now();
-        let max_time_interval = chrono::TimeDelta::days(1);
+        let max_time_interval = chrono::TimeDelta::hours(24);
 
         while max_time_interval > now.signed_duration_since(start) {
+            let pubkey_lowercase = keys.host_pubkey.to_string().to_lowercase();
             let unauthenticated_user_inventory_subject =
-                format!("INVENTORY.{}.unauthenticated", keys.host_pubkey);
-            let diganostics = HoloInventory::from_host();
-            let payload_bytes = serde_json::to_vec(&diganostics)?;
+                format!("INVENTORY.update.{}.unauthenticated", pubkey_lowercase);
+            let inventory = HoloInventory::from_host();
+            let payload_bytes = serde_json::to_vec(&inventory)?;
 
             if let Err(e) = auth_guard_client
                 .publish(unauthenticated_user_inventory_subject, payload_bytes.into())
                 .await
             {
-                log::error!("Encountered error when sending diganostics. Err={:#?}", e);
+                log::error!(
+                    "Encountered error when sending inventory as unauthenticated user. Err={:#?}",
+                    e
+                );
             };
-            tokio::time::sleep(chrono::TimeDelta::hours(1).to_std()?).await;
+            tokio::time::sleep(chrono::TimeDelta::hours(24).to_std()?).await;
         }
 
         // Close and drain internal buffer before exiting to make sure all messages are sent.

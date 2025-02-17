@@ -19,6 +19,7 @@ async fn main() -> Result<(), async_nats::Error> {
     let mongo_uri: String = get_mongodb_url();
     let db_client_options = ClientOptions::parse(mongo_uri).await?;
     let db_client = MongoDBClient::with_options(db_client_options)?;
+    let thread_db_client = db_client.clone();
 
     // ==================== Start Nats Auth Service ====================
     println!("starting auth...");
@@ -26,28 +27,34 @@ async fn main() -> Result<(), async_nats::Error> {
     println!("finished setting up auth...");
 
     // ==================== Start Nats Admin Services ====================
-    let db_client_clone = db_client.clone();
     spawn(async move {
         println!("spawning admin client...");
-        if let Ok(admin_client) = admin_client::run().await {
+        let default_nats_connect_timeout_secs = 30;
+        if let Ok(admin_client) = admin_client::run(&None, default_nats_connect_timeout_secs).await
+        {
             println!("starting workload service...");
-            if let Err(e) = workloads::run(nats_client, db_client).await {
+            if let Err(e) = workloads::run(admin_client.clone(), thread_db_client.clone()).await {
                 log::error!("Error running workload service. Err={:?}", e)
             };
 
             println!("starting inventory service...");
-            if let Err(e) = inventory::run(admin_client, db_client_clone).await {
+            if let Err(e) = inventory::run(admin_client.clone(), thread_db_client).await {
                 log::error!("Error running inventory service. Err={:?}", e)
             };
 
             // ==================== Close and Clean Admin Client ====================
             // Only exit program when explicitly requested
-            tokio::signal::ctrl_c().await?;
+            tokio::signal::ctrl_c()
+                .await
+                .expect("Failed to close service gracefully");
 
             println!("closing admin client...");
 
             // Close client and drain internal buffer before exiting to make sure all messages are sent
-            admin_client.close().await?;
+            admin_client
+                .close()
+                .await
+                .expect("Failed to close admin client gracefully");
         } else {
             log::error!(
                 "Failed to spawn admin client and its dependant services (workload and inventory)."

@@ -295,11 +295,7 @@ mod tests {
                 },
                 device_id: "Vf3IceiD".to_string(),
                 ip_address: "127.0.0.1".to_string(),
-                remaining_capacity: Capacity {
-                    memory: 16,
-                    disk: 200,
-                    cores: 16,
-                },
+                inventory: HoloInventory::default(),
                 avg_uptime: 95,
                 avg_network_speed: 500,
                 avg_latency: 10,

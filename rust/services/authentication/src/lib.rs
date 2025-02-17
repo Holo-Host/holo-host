@@ -234,7 +234,8 @@ impl AuthServiceApi {
             // If successful, assign personalized inbox and auth permissions
             let user_unique_auth_subject = &format!("AUTH.{}.>", host_pubkey);
             let user_unique_inbox = &format!("_AUTH_INBOX_{}.>", host_pubkey);
-            let authenticated_user_inventory_subject = &format!("INVENTORY.{}.>", host_pubkey);
+            let authenticated_user_inventory_subject =
+                &format!("INVENTORY.update.{}.>", host_pubkey);
 
             types::Permissions {
                 publish: types::PermissionLimits {
@@ -259,7 +260,7 @@ impl AuthServiceApi {
             // Otherwise, exclusively grant publication permissions for the unauthenticated inventory subj
             // ...to allow the host device to still send diganostic reports
             let unauthenticated_user_inventory_subject =
-                format!("INVENTORY.{}.unauthenticated.>", host_pubkey);
+                format!("INVENTORY.update.{}.unauthenticated.>", host_pubkey);
             types::Permissions {
                 publish: types::PermissionLimits {
                     allow: Some(vec![unauthenticated_user_inventory_subject]),

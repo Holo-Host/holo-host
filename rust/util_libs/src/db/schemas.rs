@@ -1,6 +1,7 @@
 use super::mongodb::IntoIndexes;
 use anyhow::Result;
 use bson::{self, doc, DateTime, Document};
+use hpos_hal::inventory::HoloInventory;
 use mongodb::options::IndexOptions;
 use semver::{BuildMetadata, Prerelease};
 use serde::{Deserialize, Serialize};
@@ -153,20 +154,13 @@ impl IntoIndexes for Hoster {
 
 // ==================== Host Schema ====================
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
-pub struct Capacity {
-    pub memory: i64, // GiB
-    pub disk: i64,   // ssd; GiB
-    pub cores: i64,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct Host {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub _id: Option<MongoDbId>,
     pub metadata: Metadata,
     pub device_id: PubKey, // = the host pubkey // *INDEXED* // nb: Unlike the hoster and developer pubkeys, this pubkey is not considered peronal info as it is not directly connected to a "natural person".
     pub ip_address: String,
-    pub remaining_capacity: Capacity,
+    pub inventory: HoloInventory,
     pub avg_uptime: i64,
     pub avg_network_speed: i64,
     pub avg_latency: i64,
@@ -213,10 +207,18 @@ pub struct WorkloadStatus {
     pub actual: WorkloadState,
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+pub struct Capacity {
+    pub drive: u64, // ssd; GiB
+    pub cores: i64,
+    // pub memory: i64, // GiB
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct SystemSpecs {
-    pub capacity: Capacity, // network_speed: i64
-                            // uptime: i64
+    pub capacity: Capacity,
+    pub avg_network_speed: i64, // Mbps
+    pub avg_uptime: f64, //  decimal value between 0-1 representing avg uptime over past month
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -260,10 +262,11 @@ impl Default for Workload {
             min_hosts: 1,
             system_specs: SystemSpecs {
                 capacity: Capacity {
-                    memory: 64,
-                    disk: 400,
+                    drive: 512,
                     cores: 20,
                 },
+                avg_network_speed: 200, // Mbps
+                avg_uptime: 0.8,        // decimal value between 0-1
             },
             assigned_hosts: Vec::new(),
         }

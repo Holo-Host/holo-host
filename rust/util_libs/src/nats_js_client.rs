@@ -111,7 +111,7 @@ pub struct JsClient {
     service_log_prefix: String,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum Credentials {
     Path(std::path::PathBuf), // String = pathbuf as string
     Password(String, String),
@@ -277,11 +277,24 @@ impl JsClient {
         Ok(())
     }
 
-    pub async fn add_js_services(mut self, js_services: Vec<JsStreamService>) -> Self {
+    pub async fn add_js_service(
+        mut self,
+        params: JsServiceParamsPartial,
+    ) -> Result<JsStreamService, async_nats::Error> {
+        let new_service = JsStreamService::new(
+            self.js,
+            &params.name,
+            &params.description,
+            &params.version,
+            &params.service_subject,
+        )
+        .await?;
+
         let mut current_services = self.js_services.unwrap_or_default();
-        current_services.extend(js_services);
+        current_services.push(new_service.clone());
         self.js_services = Some(current_services);
-        self
+
+        Ok(new_service)
     }
 
     pub async fn get_js_service(&self, js_service_name: String) -> Option<&JsStreamService> {

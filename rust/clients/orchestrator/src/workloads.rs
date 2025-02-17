@@ -14,20 +14,14 @@ This client is responsible for:
     - keeping service running until explicitly cancelled out
 */
 
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use async_nats::Message;
-use mongodb::{options::ClientOptions, Client as MongoDBClient};
-use std::path::PathBuf;
-use std::str::FromStr;
+use mongodb::Client as MongoDBClient;
 use std::vec;
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::{collections::HashMap, sync::Arc};
 use util_libs::{
-    db::mongodb::get_mongodb_url,
     js_stream_service::{JsServiceParamsPartial, ResponseSubjectsGenerator},
-    nats_js_client::{
-        self, get_event_listeners, get_nats_creds_by_nsc, get_nats_url, Credentials, EndpointType,
-        JsClient, NewJsClientParams,
-    },
+    nats_js_client::{EndpointType, JsClient},
 };
 use workload::{
     orchestrator_api::OrchestratorWorkloadApi,
@@ -58,30 +52,23 @@ pub fn create_callback_subject_to_host(
     })
 }
 
-pub async fn run(
-    nats_client: JsClient,
-    db_client: MongoDBClient,
-) -> Result<JsClient, async_nats::Error> {
+pub async fn run(nats_client: JsClient, db_client: MongoDBClient) -> Result<(), async_nats::Error> {
     // ==================== Setup NATS ====================
     // Setup JS Stream Service
-    let service = JsStreamService::new(
-        jetstream::new(nats_client.clone()),
-        &WORKLOAD_SRV_NAME.to_string(),
-        &WORKLOAD_SRV_DESC.to_string(),
-        &WORKLOAD_SRV_VERSION.to_string(),
-        &WORKLOAD_SRV_SUBJ.to_string(),
-    );
-    let workload_stream_service = JsService::new(service);
-    let orchestrator_workload_client = nats_client
-        .add_js_services(vec![workload_stream_service])
-        .await;
+    let service_config = JsServiceParamsPartial {
+        name: WORKLOAD_SRV_NAME.to_string(),
+        description: WORKLOAD_SRV_DESC.to_string(),
+        version: WORKLOAD_SRV_VERSION.to_string(),
+        service_subject: WORKLOAD_SRV_SUBJ.to_string(),
+    };
+    let workload_service = nats_client.add_js_service(service_config).await?;
 
     // ==================== Setup API & Register Endpoints ====================
     // Instantiate the Workload API (requires access to db client)
-    let workload_api = OrchestratorWorkloadApi::new(&client).await?;
+    let workload_api = OrchestratorWorkloadApi::new(&db_client).await?;
 
     // Register Workload Streams for Orchestrator to consume and proceess
-    // NB: These subjects below are published by external Developer, the Nats-DB-Connector, or the Host Agent
+    // NB: These subjects are published by external Developer (via external api), the Nats-DB-Connector, or the Hosting Agent
     let workload_add_subject = serde_json::to_string(&WorkloadServiceSubjects::Add)?;
     let workload_update_subject = serde_json::to_string(&WorkloadServiceSubjects::Update)?;
     let workload_remove_subject = serde_json::to_string(&WorkloadServiceSubjects::Remove)?;
@@ -89,16 +76,9 @@ pub async fn run(
     let workload_db_modification_subject = serde_json::to_string(&WorkloadServiceSubjects::Modify)?;
     let workload_handle_status_subject =
         serde_json::to_string(&WorkloadServiceSubjects::HandleStatusUpdate)?;
-    let workload_start_subject = serde_json::to_string(&WorkloadServiceSubjects::Start)?;
+    let workload_install_subject = serde_json::to_string(&WorkloadServiceSubjects::Install)?;
     let workload_update_installed_subject =
         serde_json::to_string(&WorkloadServiceSubjects::UpdateInstalled)?;
-
-    let workload_service = orchestrator_workload_client
-        .get_js_service(WORKLOAD_SRV_NAME.to_string())
-        .await
-        .ok_or(anyhow!(
-            "Failed to locate Workload Service. Unable to spin up Orchestrator Workload Client."
-        ))?;
 
     // Published by Developer
     workload_service
@@ -153,7 +133,7 @@ pub async fn run(
             Some(create_callback_subject_to_host(
                 true,
                 "assigned_hosts".to_string(),
-                workload_start_subject,
+                workload_install_subject,
             )),
         )
         .await?;
@@ -189,5 +169,5 @@ pub async fn run(
         )
         .await?;
 
-    Ok(orchestrator_workload_client)
+    Ok(())
 }
