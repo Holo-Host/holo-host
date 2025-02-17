@@ -20,7 +20,6 @@ use agent_cli::DaemonzeArgs;
 use anyhow::Result;
 use clap::Parser;
 use dotenv::dotenv;
-use hpos_hal::inventory::HoloInventory;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -63,7 +62,7 @@ async fn daemonize(args: &DaemonzeArgs) -> Result<(), async_nats::Error> {
 
     // If user cred file is for the auth_guard user, run loop to authenticate host & hoster...
     if let keys::AuthCredType::Guard(_) = host_agent_keys.creds {
-        host_agent_keys = run_auth_loop(host_agent_keys).await?;
+        host_agent_keys = auth::utils::run_auth_loop(host_agent_keys).await?;
     }
 
     log::trace!(
@@ -98,50 +97,4 @@ async fn daemonize(args: &DaemonzeArgs) -> Result<(), async_nats::Error> {
     host_client.close().await?;
 
     Ok(())
-}
-
-async fn run_auth_loop(mut keys: keys::Keys) -> Result<keys::Keys, async_nats::Error> {
-    let mut start = chrono::Utc::now();
-    loop {
-        log::debug!("About to run the Hosting Agent Authentication Service");
-        let auth_guard_client: async_nats::Client;
-        (keys, auth_guard_client) = auth::init::run(keys).await?;
-
-        // If authenicated creds exist, then auth call was successful.
-        // Close buffer, exit loop, and return.
-        if let keys::AuthCredType::Authenticated(_) = keys.creds {
-            auth_guard_client.drain().await?;
-            break;
-        }
-
-        // Otherwise, send diagonostics and wait 24hrs, then exit while loop and retry auth.
-        // TODO: Discuss interval for sending diagnostic reports and wait duration before retrying auth with team.
-        let now = chrono::Utc::now();
-        let max_time_interval = chrono::TimeDelta::hours(24);
-
-        while max_time_interval > now.signed_duration_since(start) {
-            let pubkey_lowercase = keys.host_pubkey.to_string().to_lowercase();
-            let unauthenticated_user_inventory_subject =
-                format!("INVENTORY.update.{}.unauthenticated", pubkey_lowercase);
-            let inventory = HoloInventory::from_host();
-            let payload_bytes = serde_json::to_vec(&inventory)?;
-
-            if let Err(e) = auth_guard_client
-                .publish(unauthenticated_user_inventory_subject, payload_bytes.into())
-                .await
-            {
-                log::error!(
-                    "Encountered error when sending inventory as unauthenticated user. Err={:#?}",
-                    e
-                );
-            };
-            tokio::time::sleep(chrono::TimeDelta::hours(24).to_std()?).await;
-        }
-
-        // Close and drain internal buffer before exiting to make sure all messages are sent.
-        auth_guard_client.drain().await?;
-        start = chrono::Utc::now();
-    }
-
-    Ok(keys)
 }
