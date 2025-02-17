@@ -25,7 +25,7 @@ use workload::{
 };
 
 // TODO: Use _host_creds_path for auth once we add in the more resilient auth pattern.
-pub async fn run(mut host_client: JsClient) -> Result<JsClient, async_nats::Error> {
+pub async fn run(mut host_client: JsClient) -> Result<(), async_nats::Error> {
     log::info!("HPOS Agent Client: Connecting to server...");
     // ==================== NATS Setup ====================
     // Setup JS Stream Service
@@ -93,5 +93,5 @@ pub async fn run(mut host_client: JsClient) -> Result<JsClient, async_nats::Erro
         )
         .await?;
 
-    Ok(host_client)
+    Ok(())
 }

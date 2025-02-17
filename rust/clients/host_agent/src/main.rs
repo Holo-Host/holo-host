@@ -66,13 +66,15 @@ async fn daemonize(args: &DaemonzeArgs) -> Result<(), async_nats::Error> {
     )
     .await?;
 
-    let host_client_clone = workload_manager::run(host_client.clone()).await?;
+    workload_manager::run(host_client.clone()).await?;
 
     // Only exit program when explicitly requested
     tokio::signal::ctrl_c().await?;
 
+    // Close the host client connection
+    // NB: Calling drain/close on any one of the Client clones will closes the underlying connection.
+    // This affects all clones that share the same connection (including clones) because they are effectively just references to the same resource.
     host_client.close().await?;
-    host_client_clone.close().await?;
 
     Ok(())
 }

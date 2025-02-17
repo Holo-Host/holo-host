@@ -67,7 +67,7 @@ impl std::fmt::Debug for JsClient {
             .field("url", &self.url)
             .field("name", &self.name)
             .field("client", &self.client)
-            .field("js", &self.js)
+            .field("js", &self.js_context)
             .field("js_services", &self.js_services)
             .field("service_log_prefix", &self.service_log_prefix)
             .finish()
@@ -80,10 +80,10 @@ pub struct JsClient {
     name: String,
     on_msg_published_event: Option<EventHandler>,
     on_msg_failed_event: Option<EventHandler>,
-    client: async_nats::Client, // inner_client
-    pub js: jetstream::Context,
     pub js_services: Option<Vec<JsStreamService>>,
+    pub js_context: jetstream::Context,
     service_log_prefix: String,
+    client: async_nats::Client, // Built-in Nats Client which manages the cloned clients within jetstream contexts
 }
 
 #[derive(Deserialize, Default)]
@@ -106,11 +106,11 @@ pub struct NewJsClientParams {
 impl JsClient {
     pub async fn new(p: NewJsClientParams) -> Result<Self, async_nats::Error> {
         let connect_options = async_nats::ConnectOptions::new()
-            // .require_tls(true)
             .name(&p.name)
             .ping_interval(p.ping_interval.unwrap_or(Duration::from_secs(120)))
             .request_timeout(Some(p.request_timeout.unwrap_or(Duration::from_secs(10))))
             .custom_inbox_prefix(&p.inbox_prefix);
+        // .require_tls(true)
 
         let client = match p.credentials_path {
             Some(cp) => {
@@ -124,48 +124,25 @@ impl JsClient {
             None => connect_options.connect(&p.nats_url).await?,
         };
 
-        let jetstream = jetstream::new(client.clone());
-        let mut services = vec![];
-        for params in p.service_params {
-            let service = JsStreamService::new(
-                jetstream.clone(),
-                &params.name,
-                &params.description,
-                &params.version,
-                &params.service_subject,
-            )
-            .await?;
-            services.push(service);
-        }
+        let log_prefix = format!("NATS-CLIENT-LOG::{}::", p.name);
 
-        let js_services = if services.is_empty() {
-            None
-        } else {
-            Some(services)
-        };
-
-        let service_log_prefix = format!("NATS-CLIENT-LOG::{}::", p.name);
+        log::info!("{}Connected to NATS server at {}", log_prefix, p.nats_url);
 
         let mut default_client = JsClient {
             url: p.nats_url,
             name: p.name,
             on_msg_published_event: None,
             on_msg_failed_event: None,
+            js_services: None,
+            js_context: jetstream::new(client.clone()),
+            service_log_prefix: log_prefix,
             client,
-            js: jetstream,
-            js_services,
-            service_log_prefix: service_log_prefix.clone(),
         };
 
         for opt in p.opts {
             opt(&mut default_client);
         }
 
-        log::info!(
-            "{}Connected to NATS server at {}",
-            service_log_prefix,
-            default_client.url
-        );
         Ok(default_client)
     }
 
@@ -186,6 +163,7 @@ impl JsClient {
     }
 
     pub async fn close(&self) -> Result<(), async_nats::Error> {
+        // Drain closes the Nats Client as well as any associated JetStream Context
         self.client.drain().await?;
         Ok(())
     }
@@ -194,7 +172,7 @@ impl JsClient {
         if let async_nats::connection::State::Disconnected = self.client.connection_state() {
             return Err(Box::new(ErrClientDisconnected));
         }
-        let stream = &self.js.get_stream(stream_name).await?;
+        let stream = &self.js_context.get_stream(stream_name).await?;
         let info = stream.get_info().await?;
         log::debug!(
             "{}JetStream info: stream:{}, info:{:?}",
@@ -212,7 +190,7 @@ impl JsClient {
     pub async fn publish(&self, payload: &SendRequest) -> Result<(), async_nats::Error> {
         let now = Instant::now();
         let result = self
-            .js
+            .js_context
             .publish(payload.subject.clone(), payload.data.clone().into())
             .await;
 
@@ -242,7 +220,7 @@ impl JsClient {
         params: JsServiceParamsPartial,
     ) -> Result<(), async_nats::Error> {
         let new_service = JsStreamService::new(
-            self.js.to_owned(),
+            self.js_context.to_owned(),
             &params.name,
             &params.description,
             &params.version,
