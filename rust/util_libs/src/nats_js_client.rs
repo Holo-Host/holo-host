@@ -238,11 +238,11 @@ impl JsClient {
     }
 
     pub async fn add_js_service(
-        mut self,
+        &mut self,
         params: JsServiceParamsPartial,
-    ) -> Result<JsStreamService, async_nats::Error> {
+    ) -> Result<(), async_nats::Error> {
         let new_service = JsStreamService::new(
-            self.js,
+            self.js.to_owned(),
             &params.name,
             &params.description,
             &params.version,
@@ -250,11 +250,11 @@ impl JsClient {
         )
         .await?;
 
-        let mut current_services = self.js_services.unwrap_or_default();
-        current_services.push(new_service.clone());
+        let mut current_services = self.js_services.to_owned().unwrap_or_default();
+        current_services.push(new_service);
         self.js_services = Some(current_services);
 
-        Ok(new_service)
+        Ok(())
     }
 
     pub async fn get_js_service(&self, js_service_name: String) -> Option<&JsStreamService> {

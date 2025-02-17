@@ -66,12 +66,13 @@ async fn daemonize(args: &DaemonzeArgs) -> Result<(), async_nats::Error> {
     )
     .await?;
 
-    workload_manager::run(host_client.clone()).await?;
+    let host_client_clone = workload_manager::run(host_client.clone()).await?;
 
     // Only exit program when explicitly requested
     tokio::signal::ctrl_c().await?;
 
     host_client.close().await?;
+    host_client_clone.close().await?;
 
     Ok(())
 }

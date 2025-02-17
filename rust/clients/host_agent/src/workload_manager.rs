@@ -11,7 +11,7 @@
     - sending active periodic workload reports
 */
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use async_nats::Message;
 use mongodb::{options::ClientOptions, Client as MongoDBClient};
 use std::sync::Arc;
@@ -25,7 +25,7 @@ use workload::{
 };
 
 // TODO: Use _host_creds_path for auth once we add in the more resilient auth pattern.
-pub async fn run(host_client: JsClient) -> Result<(), async_nats::Error> {
+pub async fn run(mut host_client: JsClient) -> Result<JsClient, async_nats::Error> {
     log::info!("HPOS Agent Client: Connecting to server...");
     // ==================== NATS Setup ====================
     // Setup JS Stream Service
@@ -36,7 +36,13 @@ pub async fn run(host_client: JsClient) -> Result<(), async_nats::Error> {
         service_subject: WORKLOAD_SRV_SUBJ.to_string(),
     };
 
-    let workload_service = host_client.add_js_service(workload_stream_service).await?;
+    host_client.add_js_service(workload_stream_service).await?;
+    let workload_service = host_client
+        .get_js_service(WORKLOAD_SRV_NAME.to_string())
+        .await
+        .ok_or(anyhow!(
+            "Failed to start service. Unable to fetch workload service."
+        ))?;
 
     // ==================== DB Setup ====================
     // Create a new MongoDB Client and connect it to the cluster
@@ -87,5 +93,5 @@ pub async fn run(host_client: JsClient) -> Result<(), async_nats::Error> {
         )
         .await?;
 
-    Ok(())
+    Ok(host_client)
 }
