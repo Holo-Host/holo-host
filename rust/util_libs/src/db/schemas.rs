@@ -50,7 +50,7 @@ pub struct User {
     pub permissions: Vec<UserPermission>,
     pub user_info: Option<MongoDbId>,
     pub developer: Option<MongoDbId>,
-    pub host: Option<MongoDbId>,
+    pub hoster: Option<MongoDbId>,
 }
 
 // No Additional Indexing for Developer
