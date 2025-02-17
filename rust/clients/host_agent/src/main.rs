@@ -56,13 +56,13 @@ async fn daemonize(args: &DaemonzeArgs) -> Result<(), async_nats::Error> {
         &args.store_dir,
         args.hub_url.clone(),
         args.hub_tls_insecure,
+        args.nats_connect_timeout_secs,
     )
     .await?;
 
     let host_client = host_client::run(
         "host_id_placeholder>",
         &args.nats_leafnode_client_creds_path,
-        args.nats_connect_timeout_secs,
     )
     .await?;
 
