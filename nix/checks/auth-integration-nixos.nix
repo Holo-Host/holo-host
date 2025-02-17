@@ -52,7 +52,6 @@ pkgs.testers.runNixOSTest (
       { ... }:
       {
         imports = [
-          flake.nixosModules.holo-nats-server
           flake.nixosModules.holo-host-agent
         ];
 
