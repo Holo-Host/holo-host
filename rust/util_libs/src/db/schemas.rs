@@ -94,7 +94,7 @@ pub struct UserInfo {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub _id: Option<MongoDbId>,
     pub metadata: Metadata,
-    pub user: MongoDbId,
+    pub user_id: MongoDbId,
     pub email: String,
     pub given_names: String,
     pub family_name: String,
