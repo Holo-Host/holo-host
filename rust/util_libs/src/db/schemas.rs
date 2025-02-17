@@ -48,7 +48,7 @@ pub struct User {
     pub metadata: Metadata,
     pub jurisdiction: String,
     pub permissions: Vec<UserPermission>,
-    pub user_info: Option<MongoDbId>,
+    pub user_info_id: Option<MongoDbId>,
     pub developer: Option<MongoDbId>,
     pub hoster: Option<MongoDbId>,
 }
