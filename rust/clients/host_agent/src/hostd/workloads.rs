@@ -10,7 +10,7 @@ This client is responsible for subscribing to workload streams that handle:
     - sending out active periodic workload reports
 */
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use async_nats::Message;
 use std::sync::Arc;
 use util_libs::{
@@ -25,7 +25,7 @@ use workload::{
 };
 
 pub async fn run(
-    host_client: nats_js_client::JsClient,
+    mut host_client: nats_js_client::JsClient,
     host_pubkey: &str,
 ) -> Result<(), async_nats::Error> {
     log::info!("Host Agent Client: starting workload service...");
@@ -39,8 +39,14 @@ pub async fn run(
         version: WORKLOAD_SRV_VERSION.to_string(),
         service_subject: WORKLOAD_SRV_SUBJ.to_string(),
     };
+    host_client.add_js_service(workload_service_config).await?;
 
-    let workload_service = host_client.add_js_service(workload_service_config).await?;
+    let workload_service = host_client
+        .get_js_service(WORKLOAD_SRV_NAME.to_string())
+        .await
+        .ok_or(anyhow!(
+            "Failed to start service. Unable to fetch workload service."
+        ))?;
 
     // ==================== Setup API & Register Endpoints ====================
     // Instantiate the Workload API

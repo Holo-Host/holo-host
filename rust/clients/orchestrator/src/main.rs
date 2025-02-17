@@ -50,6 +50,8 @@ async fn main() -> Result<(), async_nats::Error> {
             println!("closing admin client...");
 
             // Close admin client and drain internal buffer before exiting to make sure all messages are sent
+            // NB: Calling drain/close on any one of the Client instances closes the underlying connection.
+            // This affects all instances that share the same connection (including clones) because they are all references to the same resource.
             admin_client
                 .close()
                 .await

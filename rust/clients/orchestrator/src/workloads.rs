@@ -14,7 +14,7 @@ This client is responsible for:
     - keeping service running until explicitly cancelled out
 */
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use async_nats::Message;
 use mongodb::Client as MongoDBClient;
 use std::vec;
@@ -52,7 +52,10 @@ pub fn create_callback_subject_to_host(
     })
 }
 
-pub async fn run(nats_client: JsClient, db_client: MongoDBClient) -> Result<(), async_nats::Error> {
+pub async fn run(
+    mut nats_client: JsClient,
+    db_client: MongoDBClient,
+) -> Result<(), async_nats::Error> {
     // ==================== Setup NATS ====================
     // Setup JS Stream Service
     let service_config = JsServiceParamsPartial {
@@ -61,7 +64,14 @@ pub async fn run(nats_client: JsClient, db_client: MongoDBClient) -> Result<(), 
         version: WORKLOAD_SRV_VERSION.to_string(),
         service_subject: WORKLOAD_SRV_SUBJ.to_string(),
     };
-    let workload_service = nats_client.add_js_service(service_config).await?;
+    nats_client.add_js_service(service_config).await?;
+
+    let workload_service = nats_client
+        .get_js_service(WORKLOAD_SRV_NAME.to_string())
+        .await
+        .ok_or(anyhow!(
+            "Failed to start service. Unable to fetch inventory service."
+        ))?;
 
     // ==================== Setup API & Register Endpoints ====================
     // Instantiate the Workload API (requires access to db client)

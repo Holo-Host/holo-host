@@ -93,7 +93,9 @@ async fn daemonize(args: &DaemonzeArgs) -> Result<(), async_nats::Error> {
     // Only exit program when explicitly requested
     tokio::signal::ctrl_c().await?;
 
-    // Close client and drain internal buffer before exiting to make sure all messages are sent
+    // Close host client connection and drain internal buffer before exiting to make sure all messages are sent
+    // NB: Calling drain/close on any one of the Client instances will close the underlying connection.
+    // This affects all instances that share the same connection (including clones) because they are all references to the same resource.
     host_client.close().await?;
 
     Ok(())
