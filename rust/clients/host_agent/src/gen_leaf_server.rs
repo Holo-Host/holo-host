@@ -1,12 +1,9 @@
 use anyhow::Context;
 use std::path::PathBuf;
 use tempfile::tempdir;
-use util_libs::{
-    nats_js_client,
-    nats_server::{
-        JetStreamConfig, LeafNodeRemote, LeafNodeRemoteTlsConfig, LeafServer, LoggingOptions,
-        LEAF_SERVER_CONFIG_PATH, LEAF_SERVER_DEFAULT_LISTEN_PORT,
-    },
+use util_libs::nats_server::{
+    JetStreamConfig, LeafNodeRemote, LeafNodeRemoteTlsConfig, LeafServer, LoggingOptions,
+    LEAF_SERVER_CONFIG_PATH, LEAF_SERVER_DEFAULT_LISTEN_PORT,
 };
 
 pub async fn run(
@@ -15,8 +12,7 @@ pub async fn run(
     maybe_store_dir: &Option<PathBuf>,
     hub_url: String,
     hub_tls_insecure: bool,
-    nats_connect_timeout_secs: u64,
-) -> anyhow::Result<nats_js_client::JsClient> {
+) -> anyhow::Result<()> {
     let leaf_client_conn_domain = "127.0.0.1";
     let leaf_client_conn_port = std::env::var("NATS_LISTEN_PORT")
         .map(|var| var.parse().expect("can't parse into number"))
