@@ -15,18 +15,18 @@ async fn main() -> Result<(), async_nats::Error> {
     dotenv().ok();
     env_logger::init();
 
-    // ==================== Setup MongoDB Client ====================
+    // Setup MongoDB Client
     let mongo_uri: String = get_mongodb_url();
     let db_client_options = ClientOptions::parse(mongo_uri).await?;
     let db_client = MongoDBClient::with_options(db_client_options)?;
     let thread_db_client = db_client.clone();
 
-    // ==================== Start Nats Auth Service ====================
+    // Start Nats Auth Service
     println!("starting auth...");
     let auth_client: Client = auth::run(db_client).await?;
     println!("finished setting up auth...");
 
-    // ==================== Start Nats Admin Services ====================
+    // Start Nats Admin Services
     spawn(async move {
         println!("spawning admin client...");
         let default_nats_connect_timeout_secs = 30;
@@ -42,7 +42,6 @@ async fn main() -> Result<(), async_nats::Error> {
                 log::error!("Error running inventory service. Err={:?}", e)
             };
 
-            // ==================== Close and Clean Admin Client ====================
             // Only exit program when explicitly requested
             tokio::signal::ctrl_c()
                 .await
@@ -50,7 +49,7 @@ async fn main() -> Result<(), async_nats::Error> {
 
             println!("closing admin client...");
 
-            // Close client and drain internal buffer before exiting to make sure all messages are sent
+            // Close admin client and drain internal buffer before exiting to make sure all messages are sent
             admin_client
                 .close()
                 .await
@@ -62,13 +61,12 @@ async fn main() -> Result<(), async_nats::Error> {
         }
     });
 
-    // ==================== Close and Clean Auth Client ====================
     // Only exit program when explicitly requested
     tokio::signal::ctrl_c().await?;
 
     log::debug!("Closing orchestrator auth service...");
 
-    // Close client and drain internal buffer before exiting to make sure all messages are sent
+    // Close auth client and drain internal buffer before exiting to make sure all messages are sent
     auth_client.drain().await?;
     log::debug!("Closed orchestrator auth service");
 

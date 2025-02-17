@@ -23,8 +23,8 @@ use types::{InventoryApiResult, InventoryPayloadType};
 use util_libs::db::mongodb::MongoDbAPI;
 use util_libs::{
     db::{
-        mongodb::{IntoIndexes, MongoCollection}, // MongoDbAPI
-        schemas::{self, Host, Workload},         // , RoleInfo
+        mongodb::{IntoIndexes, MongoCollection},
+        schemas::{self, Host, Workload},
     },
     nats_js_client::{AsyncEndpointHandler, JsServiceResponse, ServiceError},
 };

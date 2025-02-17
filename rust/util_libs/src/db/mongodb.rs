@@ -263,9 +263,10 @@ mod tests {
     }
 
     use super::*;
-    use crate::db::schemas::{self, Capacity, Metadata};
+    use crate::db::schemas::{self, Metadata};
     use bson::{self, doc, oid, DateTime};
     use dotenv::dotenv;
+    use hpos_hal::inventory::HoloInventory;
 
     #[tokio::test]
     async fn test_indexing_and_api() -> Result<()> {
@@ -286,14 +287,13 @@ mod tests {
         fn get_mock_host() -> schemas::Host {
             schemas::Host {
                 _id: Some(oid::ObjectId::new()),
-                // pubkey: "placeholder_pubkey".to_string(),
                 metadata: Metadata {
                     is_deleted: false,
                     created_at: Some(DateTime::now()),
                     updated_at: Some(DateTime::now()),
                     deleted_at: None,
                 },
-                device_id: "Vf3IceiD".to_string(),
+                device_id: "placeholder_pubkey_host".to_string(),
                 ip_address: "127.0.0.1".to_string(),
                 inventory: HoloInventory::default(),
                 avg_uptime: 95,
