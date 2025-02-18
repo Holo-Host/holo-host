@@ -16,6 +16,7 @@ pub mod types;
 
 use anyhow::{anyhow, Result};
 use async_nats::Message;
+use bson::oid::ObjectId;
 use bson::{doc, to_document, DateTime};
 use mongodb::{options::UpdateModifications, Client as MongoDBClient};
 use serde::{Deserialize, Serialize};
@@ -24,7 +25,7 @@ use std::{fmt::Debug, str::FromStr, sync::Arc};
 use util_libs::{
     db::{
         mongodb::{IntoIndexes, MongoCollection, MongoDbAPI},
-        schemas::{self, Host, MongoDbId, Workload, WorkloadState, WorkloadStatus},
+        schemas::{self, Host, Workload, WorkloadState, WorkloadStatus},
     },
     nats_js_client,
 };
@@ -85,7 +86,7 @@ impl WorkloadApi {
                         workload_id
                     );
                     let updated_workload = schemas::Workload {
-                        _id: Some(MongoDbId::from_str(&workload_id)?),
+                        _id: Some(ObjectId::from_str(&workload_id)?),
                         ..workload
                     };
                     Ok(types::ApiResult(
@@ -153,7 +154,7 @@ impl WorkloadApi {
         Ok(self.process_request(
             msg,
             WorkloadState::Removed,
-            |workload_id: schemas::MongoDbId| async move {
+            |workload_id: bson::oid::ObjectId| async move {
                 let workload_query = doc! { "_id":  workload_id };
                 self.workload_collection.update_one_within(
                     workload_query,
@@ -224,13 +225,18 @@ impl WorkloadApi {
                 // sample randomized results and always return back atleast 1 result
                 "$sample": std::cmp::min(workload.min_hosts as i32, 1)
             },
+            doc! {
+                "$project": {
+                    "_id": 1
+                }
+            }
         ];
         let results = self.host_collection.aggregate(pipeline).await?;
         if results.is_empty() {
             anyhow::bail!(
                 "Could not find a compatible host for this workload={:#?}",
                 workload._id
-            ));
+            );
         }
         Ok(results)
     }
@@ -275,17 +281,13 @@ impl WorkloadApi {
                 // 2. Otherwise call mongodb to get host collection to get hosts that meet the capacity requirements
                 let eligible_hosts = self.find_hosts_meeting_workload_criteria(workload.clone()).await?;
                 log::debug!("Eligible hosts for new workload. MongodDB Host IDs={:?}", eligible_hosts);
-                let host = eligible_hosts[0].clone();
 
-                // Note: The `_id` is an option because it is only generated upon the intial insertion of a record in
-                // a mongodb collection. This also means that whenever a record is fetched from mongodb, it must have the `_id` feild.
-                // Using `unwrap` is therefore safe.
-                let host_id = host._id.to_owned().unwrap();
+                let host_ids: Vec<ObjectId> = eligible_hosts.iter().map(|host| host._id.to_owned().unwrap()).collect();
 
                 // 4. Update the Workload Collection with the assigned Host ID
                 let workload_query = doc! { "_id":  workload_id };
                 let updated_workload = &Workload {
-                    assigned_hosts: vec![host_id],
+                    assigned_hosts: host_ids.clone(),
                     ..workload.clone()
                 };
                 let updated_workload_doc = to_document(updated_workload)?;
@@ -296,12 +298,16 @@ impl WorkloadApi {
                 );
 
                 // 5. Update the Host Collection with the assigned Workload ID
-                let host_query = doc! { "_id":  host.clone()._id };
-                let updated_host_doc =  to_document(&Host {
-                    assigned_workloads: vec![workload_id.to_hex()],
-                    ..host.to_owned()
-                })?;
-                let updated_host_result = self.host_collection.update_one_within(host_query, UpdateModifications::Document(updated_host_doc)).await?;
+                let host_query = doc! { "_id":  { "$in": host_ids } };
+                let updated_host_doc =  doc! {
+                    "$push": {
+                        "assigned_workloads": workload_id
+                    }
+                };
+                let updated_host_result = self.host_collection.update_many_within(
+                    host_query, 
+                    UpdateModifications::Document(updated_host_doc)
+                ).await?;
                 log::trace!(
                     "Successfully added new workload into the Workload Collection. MongodDB Host ID={:?}",
                     updated_host_result
@@ -402,7 +408,7 @@ impl WorkloadApi {
         self.workload_collection
             .update_one_within(
                 doc! {
-                    "_id": MongoDbId::parse_str(workload_status_id)?
+                    "_id": ObjectId::parse_str(workload_status_id)?
                 },
                 UpdateModifications::Document(doc! {
                     "$set": {

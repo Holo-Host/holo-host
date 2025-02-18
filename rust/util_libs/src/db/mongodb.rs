@@ -36,6 +36,11 @@ where
         query: Document,
         updated_doc: UpdateModifications,
     ) -> Result<UpdateResult>;
+    async fn update_many_within(
+        &self,
+        query: Document,
+        updated_doc: UpdateModifications,
+    ) -> Result<UpdateResult>;
     async fn delete_one_from(&self, query: Document) -> Result<DeleteResult>;
     async fn delete_all_from(&self) -> Result<DeleteResult>;
 }
@@ -185,6 +190,17 @@ where
             .map_err(|e| anyhow!(e))
     }
 
+    async fn update_many_within(
+        &self,
+        query: Document,
+        updated_doc: UpdateModifications,
+    ) -> Result<UpdateResult> {
+        self.collection
+            .update_many(query, updated_doc)
+            .await
+            .map_err(|e| anyhow!(e))
+    }
+
     async fn delete_one_from(&self, query: Document) -> Result<DeleteResult> {
         self.collection
             .delete_one(query)
@@ -328,7 +344,7 @@ mod tests {
                 avg_uptime: 95,
                 avg_network_speed: 500,
                 avg_latency: 10,
-                assigned_workloads: vec!["workload_id".to_string()],
+                assigned_workloads: vec![oid::ObjectId::new()],
                 assigned_hoster: oid::ObjectId::new(),
             }
         }

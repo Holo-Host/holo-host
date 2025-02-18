@@ -1,5 +1,6 @@
 use super::mongodb::IntoIndexes;
 use anyhow::Result;
+use bson::oid::ObjectId;
 use bson::{self, doc, DateTime, Document};
 use mongodb::options::IndexOptions;
 use semver::{BuildMetadata, Prerelease};
@@ -24,9 +25,6 @@ pub use String as DeveloperJWT;
 // Provide type Alias for SemVer (semantic versioning)
 pub use String as SemVer;
 
-// Providetype Alias for MongoDB ID (mongo's automated id)
-pub use bson::oid::ObjectId as MongoDbId;
-
 // ==================== User Schema ====================
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum UserPermission {
@@ -44,13 +42,13 @@ pub struct Metadata {
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct User {
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub _id: Option<MongoDbId>,
+    pub _id: Option<ObjectId>,
     pub metadata: Metadata,
     pub jurisdiction: String,
     pub permissions: Vec<UserPermission>,
-    pub user_info_id: Option<MongoDbId>,
-    pub developer: Option<MongoDbId>,
-    pub hoster: Option<MongoDbId>,
+    pub user_info_id: Option<ObjectId>,
+    pub developer: Option<ObjectId>,
+    pub hoster: Option<ObjectId>,
 }
 
 // No Additional Indexing for Developer
@@ -92,9 +90,9 @@ impl IntoIndexes for User {
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct UserInfo {
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub _id: Option<MongoDbId>,
+    pub _id: Option<ObjectId>,
     pub metadata: Metadata,
-    pub user_id: MongoDbId,
+    pub user_id: ObjectId,
     pub email: String,
     pub given_names: String,
     pub family_name: String,
@@ -121,10 +119,10 @@ impl IntoIndexes for UserInfo {
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct Developer {
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub _id: Option<MongoDbId>,
+    pub _id: Option<ObjectId>,
     pub metadata: Metadata,
     pub user_id: String, // MongoDB ID ref to `user._id` (which stores the hoster's pubkey, jurisdiction and email)
-    pub active_workloads: Vec<MongoDbId>, // MongoDB ID refs to `workload._id`
+    pub active_workloads: Vec<ObjectId>, // MongoDB ID refs to `workload._id`
 }
 
 // No Additional Indexing for Developer
@@ -138,10 +136,10 @@ impl IntoIndexes for Developer {
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct Hoster {
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub _id: Option<MongoDbId>,
+    pub _id: Option<ObjectId>,
     pub metadata: Metadata,
     pub user_id: String, // MongoDB ID ref to `user.id` (which stores the hoster's pubkey, jurisdiction and email)
-    pub assigned_hosts: Vec<MongoDbId>, // MongoDB ID refs to `host._id`
+    pub assigned_hosts: Vec<ObjectId>, // MongoDB ID refs to `host._id`
 }
 
 // No Additional Indexing for Hoster
@@ -162,16 +160,16 @@ pub struct Capacity {
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct Host {
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub _id: Option<MongoDbId>,
+    pub _id: Option<ObjectId>,
     pub metadata: Metadata,
-    pub assigned_hoster: MongoDbId,
+    pub assigned_hoster: ObjectId,
     pub device_id: String, // *INDEXED*, Auto-generated Nats server ID
     pub ip_address: String,
     pub remaining_capacity: Capacity,
     pub avg_uptime: i64,
     pub avg_network_speed: i64,
     pub avg_latency: i64,
-    pub assigned_workloads: Vec<String>, // MongoDB ID refs to `workload._id`
+    pub assigned_workloads: Vec<ObjectId>, // MongoDB ID refs to `workload._id`
 }
 
 impl IntoIndexes for Host {
@@ -222,15 +220,15 @@ pub struct SystemSpecs {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Workload {
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub _id: Option<MongoDbId>,
+    pub _id: Option<ObjectId>,
     pub metadata: Metadata,
     pub state: WorkloadState,
-    pub assigned_developer: MongoDbId, // *INDEXED*, Developer Mongodb ID
+    pub assigned_developer: ObjectId, // *INDEXED*, Developer Mongodb ID
     pub version: SemVer,
     pub nix_pkg: String, // (Includes everthing needed to deploy workload - ie: binary & env pkg & deps, etc)
     pub min_hosts: u16,
     pub system_specs: SystemSpecs,
-    pub assigned_hosts: Vec<MongoDbId>, // Host Device IDs (eg: assigned nats server id)
+    pub assigned_hosts: Vec<ObjectId>, // Host Device IDs (eg: assigned nats server id)
                                         // pub status: WorkloadStatus,
 }
 
@@ -257,7 +255,7 @@ impl Default for Workload {
             state: WorkloadState::Reported,
             version: semver,
             nix_pkg: String::new(),
-            assigned_developer: MongoDbId::new(),
+            assigned_developer: ObjectId::new(),
             min_hosts: 1,
             system_specs: SystemSpecs {
                 capacity: Capacity {
