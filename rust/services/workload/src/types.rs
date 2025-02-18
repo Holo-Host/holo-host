@@ -12,7 +12,7 @@ pub enum WorkloadServiceSubjects {
     Modify, // db change stream trigger
     HandleStatusUpdate,
     SendStatus,
-    Start,
+    Install,
     Uninstall,
     UpdateInstalled
 }

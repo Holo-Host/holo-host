@@ -56,7 +56,7 @@ impl Default for LeafNodeRemoteTlsConfig {
 
 #[derive(Debug, Clone)]
 pub struct LeafServer {
-    pub name: String,
+    pub name: Option<String>,
     pub config_path: String,
     host: String,
     pub port: u16,
@@ -69,7 +69,7 @@ pub struct LeafServer {
 // TODO: consider merging this with the `LeafServer` struct
 #[derive(Serialize)]
 struct NatsConfig {
-    server_name: String,
+    server_name: Option<String>,
     host: String,
     port: u16,
     jetstream: JetStreamConfig,
@@ -88,7 +88,7 @@ impl LeafServer {
     // Instantiate a new leaf server
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        server_name: &str,
+        server_name: Option<&str>,
         new_config_path: &str,
         host: &str,
         port: u16,
@@ -98,7 +98,7 @@ impl LeafServer {
     ) -> Self {
         Self {
             name: server_name.to_string(),
-            config_path: new_config_path.to_string(),
+            config_path: new_config_path.map(ToString::to_string),
             host: host.to_string(),
             port,
             jetstream_config,
@@ -142,7 +142,7 @@ impl LeafServer {
             .stdout(Stdio::inherit())
             .stderr(Stdio::inherit())
             .spawn()
-            .expect("Failed to start NATS server");
+            .context("Failed to start NATS server");
 
         // TODO: wait for a readiness indicator
         std::thread::sleep(std::time::Duration::from_millis(100));

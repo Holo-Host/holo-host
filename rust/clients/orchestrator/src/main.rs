@@ -10,8 +10,7 @@ async fn main() -> Result<(), async_nats::Error> {
     // TODO: invoke auth service (once ready)
 
     // Run workload service
-    if let Err(e) = workloads::run().await {
-        log::error!("{}", e)
-    }
+    workloads::run().await?
+
     Ok(())
 }

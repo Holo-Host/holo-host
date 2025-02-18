@@ -26,7 +26,7 @@ pub enum ServiceError {
 }
 
 pub type EventListener = Arc<Box<dyn Fn(&mut JsClient) + Send + Sync>>;
-pub type EventHandler = Pin<Box<dyn Fn(&str, &str, Duration) + Send + Sync>>;
+pub type EventHandler = Arc<Pin<Box<dyn Fn(&str, &str, Duration) + Send + Sync>>>;
 pub type JsServiceResponse<T> = Pin<Box<dyn Future<Output = Result<T, ServiceError>> + Send>>;
 pub type EndpointHandler<T> = Arc<dyn Fn(&Message) -> Result<T, ServiceError> + Send + Sync>;
 pub type AsyncEndpointHandler<T> = Arc<
@@ -81,7 +81,7 @@ impl std::fmt::Debug for JsClient {
             .field("url", &self.url)
             .field("name", &self.name)
             .field("client", &self.client)
-            .field("js", &self.js)
+            .field("js_context", &self.js)
             .field("js_services", &self.js_services)
             .field("service_log_prefix", &self.service_log_prefix)
             .finish()
@@ -94,7 +94,7 @@ pub struct JsClient {
     on_msg_published_event: Option<EventHandler>,
     on_msg_failed_event: Option<EventHandler>,
     client: async_nats::Client, // inner_client
-    pub js: jetstream::Context,
+    pub js_context: jetstream::Context,
     pub js_services: Option<Vec<JsStreamService>>,
     service_log_prefix: String,
 }
@@ -106,14 +106,14 @@ pub struct NewJsClientParams {
     pub inbox_prefix: String,
     #[serde(default)]
     pub service_params: Vec<JsServiceParamsPartial>,
-    #[serde(skip_deserializing)]
-    pub opts: Vec<EventListener>, // NB: These opts should not be required for client instantiation
     #[serde(default)]
     pub credentials_path: Option<String>,
     #[serde(default)]
     pub ping_interval: Option<Duration>,
     #[serde(default)]
     pub request_timeout: Option<Duration>, // Defaults to 5s
+    #[serde(skip_deserializing)]
+    pub listeners: Vec<EventListener>,
 }
 
 impl JsClient {
@@ -150,64 +150,34 @@ impl JsClient {
             .await?;
             services.push(service);
         }
+        
+        let log_prefix = format!("NATS-CLIENT-LOG::{}::", p.name);
+        log::info!("{}Connected to NATS server at {}", log_prefix, p.nats_url);
 
-        let js_services = if services.is_empty() {
-            None
-        } else {
-            Some(services)
-        };
-
-        let service_log_prefix = format!("NATS-CLIENT-LOG::{}::", p.name);
-
-        let mut default_client = JsClient {
+        let mut js_client = JsClient {
             url: p.nats_url,
             name: p.name,
             on_msg_published_event: None,
             on_msg_failed_event: None,
+            js_services: None,
+            js_context: jetstream::new(client.clone()),
+            service_log_prefix: log_prefix,
             client,
-            js: jetstream,
-            js_services,
-            service_log_prefix: service_log_prefix.clone(),
         };
 
-        for opt in p.opts {
-            opt(&mut default_client);
+        for listener in p.listeners {
+            listener(&mut js_client);
         }
 
-        log::info!(
-            "{}Connected to NATS server at {}",
-            service_log_prefix,
-            default_client.url
-        );
         Ok(default_client)
-    }
-
-    pub fn name(&self) -> &str {
-        &self.name
     }
 
     pub fn get_server_info(&self) -> ServerInfo {
         self.client.server_info()
     }
 
-    pub async fn monitor(&self) -> Result<(), async_nats::Error> {
-        if let async_nats::connection::State::Disconnected = self.client.connection_state() {
-            Err(Box::new(ErrClientDisconnected))
-        } else {
-            Ok(())
-        }
-    }
-
-    pub async fn close(&self) -> Result<(), async_nats::Error> {
-        self.client.drain().await?;
-        Ok(())
-    }
-
-    pub async fn health_check_stream(&self, stream_name: &str) -> Result<(), async_nats::Error> {
-        if let async_nats::connection::State::Disconnected = self.client.connection_state() {
-            return Err(Box::new(ErrClientDisconnected));
-        }
-        let stream = &self.js.get_stream(stream_name).await?;
+    pub async fn get_stream_info(&self, stream_name: &str) -> Result<(), async_nats::Error> {
+        let stream = &self.js_context.get_stream(stream_name).await?;
         let info = stream.get_info().await?;
         log::debug!(
             "{}JetStream info: stream:{}, info:{:?}",
@@ -218,17 +188,46 @@ impl JsClient {
         Ok(())
     }
 
-    pub async fn publish(&self, payload: PublishInfo) -> Result<(), async_nats::Error> {
+    pub async fn check_connection(
+        &self,
+    ) -> Result<async_nats::connection::State, async_nats::Error> {
+        let conn_state = self.client.connection_state();
+        if let async_nats::connection::State::Disconnected = conn_state {
+            Err(Box::new(ErrClientDisconnected))
+        } else {
+            Ok(conn_state)
+        }
+    }
+
+    pub async fn publish(
+        &self,
+        payload: PublishInfo,
+    ) -> Result<(), async_nats::error::Error<async_nats::jetstream::context::PublishErrorKind>>
+    {
+        log::debug!(
+            "{}Called Publish message: subj={}, msg_id={} data={:?}",
+            self.service_log_prefix,
+            payload.subject,
+            payload.msg_id,
+            payload.data
+        );
+
         let now = Instant::now();
         let result = match payload.headers {
-            Some(h) => self
-                .js
-                .publish_with_headers(payload.subject.clone(), h, payload.data.clone().into())
-                .await,
-            None => self
-                .js
-                .publish(payload.subject.clone(), payload.data.clone().into())
-                .await
+            Some(headers) => {
+                self.js_context
+                    .publish_with_headers(
+                        payload.subject.clone(),
+                        headers,
+                        payload.data.clone().into(),
+                    )
+                    .await
+            }
+            None => {
+                self.js_context
+                    .publish(payload.subject.clone(), payload.data.clone().into())
+                    .await
+            }
         };
 
         let duration = now.elapsed();
@@ -236,27 +235,33 @@ impl JsClient {
             if let Some(ref on_failed) = self.on_msg_failed_event {
                 on_failed(&payload.subject, &self.name, duration); // todo: add msg_id
             }
-            return Err(Box::new(err));
+            return Err(err);
         }
 
-        log::debug!(
-            "{}Published message: subj={}, msg_id={} data={:?}",
-            self.service_log_prefix,
-            payload.subject,
-            payload.msg_id,
-            payload.data
-        );
         if let Some(ref on_published) = self.on_msg_published_event {
             on_published(&payload.subject, &self.name, duration);
         }
         Ok(())
     }
 
-    pub async fn add_js_services(mut self, js_services: Vec<JsStreamService>) -> Self {
-        let mut current_services = self.js_services.unwrap_or_default();
-        current_services.extend(js_services);
+    pub async fn add_js_service(
+        &mut self,
+        params: JsServiceParamsPartial,
+    ) -> Result<(), async_nats::Error> {
+        let new_service = JsStreamService::new(
+            self.js_context.to_owned(),
+            &params.name,
+            &params.description,
+            &params.version,
+            &params.service_subject,
+        )
+        .await?;
+
+        let mut current_services = self.js_services.to_owned().unwrap_or_default();
+        current_services.push(new_service);
         self.js_services = Some(current_services);
-        self
+
+        Ok(())
     }
 
     pub async fn get_js_service(&self, js_service_name: String) -> Option<&JsStreamService> {
@@ -266,6 +271,11 @@ impl JsClient {
                 .find(|s| s.get_service_info().name == js_service_name);
         }
         None
+    }
+
+    pub async fn close(&self) -> Result<(), async_nats::Error> {
+        self.client.drain().await?;
+        Ok(())
     }
 }
 
@@ -284,7 +294,7 @@ where
     F: Fn(&str, &str, Duration) + Send + Sync + Clone + 'static,
 {
     Arc::new(Box::new(move |c: &mut JsClient| {
-        c.on_msg_published_event = Some(Box::pin(f.clone()));
+        c.on_msg_published_event = Some(Arc::new(Box::pin(f.clone())));
     }))
 }
 
@@ -293,7 +303,7 @@ where
     F: Fn(&str, &str, Duration) + Send + Sync + Clone + 'static,
 {
     Arc::new(Box::new(move |c: &mut JsClient| {
-        c.on_msg_failed_event = Some(Box::pin(f.clone()));
+        c.on_msg_failed_event = Some(Arc::new(Box::pin(f.clone())));
     }))
 }
 
@@ -330,7 +340,7 @@ pub fn get_event_listeners() -> Vec<EventListener> {
     };
 
     let event_listeners = vec![
-        on_msg_published_event(published_msg_handler),
+        on_msg_published_event(published_msg_handler), // Shouldn't this be the 'NATS_LISTEN_PORT'?
         on_msg_failed_event(failure_handler),
     ];
 

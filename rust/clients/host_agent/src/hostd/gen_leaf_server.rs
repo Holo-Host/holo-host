@@ -4,7 +4,7 @@ use anyhow::Context;
 use tempfile::tempdir;
 use util_libs::nats_server::{
     JetStreamConfig, LeafNodeRemote, LeafNodeRemoteTlsConfig, LeafServer, LoggingOptions,
-    LEAF_SERVER_CONFIG_PATH, LEAF_SERVER_DEFAULT_LISTEN_PORT, LEAF_SERVE_NAME,
+    LEAF_SERVER_CONFIG_PATH, LEAF_SERVER_DEFAULT_LISTEN_PORT,
 };
 
 pub async fn run(
@@ -58,7 +58,7 @@ pub async fn run(
 
     // Create a new Leaf Server instance
     let leaf_server = LeafServer::new(
-        LEAF_SERVE_NAME,
+        None,
         LEAF_SERVER_CONFIG_PATH,
         leaf_client_conn_domain,
         leaf_client_conn_port,
