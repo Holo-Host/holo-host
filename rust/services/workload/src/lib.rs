@@ -183,25 +183,6 @@ impl WorkloadApi {
         .await)
     }
 
-    // verifies if a host meets the workload criteria
-    pub fn verify_host_meets_workload_criteria(
-        &self,
-        workload: Workload,
-        assigned_host: Host,
-    ) -> bool {
-        if assigned_host.remaining_capacity.disk < workload.system_specs.capacity.disk {
-            return false;
-        }
-        if assigned_host.remaining_capacity.memory < workload.system_specs.capacity.memory {
-            return false;
-        }
-        if assigned_host.remaining_capacity.cores < workload.system_specs.capacity.cores {
-            return false;
-        }
-
-        true
-    }
-
     // looks through existing hosts to find possible hosts for a given workload
     // returns the minimum number of hosts required for workload
     pub async fn find_hosts_meeting_workload_criteria(

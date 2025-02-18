@@ -25,7 +25,6 @@ where
         &self,
         result: Result<ReturnType, mongodb::error::Error>,
     ) -> Result<ReturnType>;
-    async fn mongo_cursor_to_list(&self, cursor: mongodb::Cursor<T>) -> Result<Vec<T>>;
     async fn aggregate(&self, pipeline: Vec<Document>) -> Result<Vec<T>>;
     async fn get_one_from(&self, filter: Document) -> Result<Option<T>>;
     async fn get_many_from(&self, filter: Document) -> Result<Vec<T>>;
@@ -111,11 +110,6 @@ where
     ) -> Result<ReturnType> {
         let rtn = result.map_err(ServiceError::Database)?;
         Ok(rtn)
-    }
-
-    async fn mongo_cursor_to_list(&self, cursor: mongodb::Cursor<T>) -> Result<Vec<T>> {
-        let results: Vec<T> = cursor.try_collect().await.map_err(ServiceError::Database)?;
-        return Ok(results);
     }
 
     async fn aggregate(&self, pipeline: Vec<Document>) -> Result<Vec<T>> {
