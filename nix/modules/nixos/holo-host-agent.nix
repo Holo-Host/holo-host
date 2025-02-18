@@ -95,7 +95,7 @@ in
       };
 
       hposCredsPw = lib.mkOption {
-        type = lib.types.path;
+        type = lib.types.str;
         default = "pass";
       };
 
