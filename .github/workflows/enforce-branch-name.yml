@@ -2,6 +2,8 @@ name: Enforce Branch Naming
 
 on:
   pull_request:
+    branches:
+      - main
     types:
       - opened
       - edited
