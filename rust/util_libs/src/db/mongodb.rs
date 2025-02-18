@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use bson::{self, doc, Document};
 use futures::stream::TryStreamExt;
@@ -21,11 +21,21 @@ pub trait MongoDbAPI<T>
 where
     T: Serialize + for<'de> Deserialize<'de> + Unpin + Send + Sync,
 {
+    fn mongo_error_handler<ReturnType>(
+        &self,
+        result: Result<ReturnType, mongodb::error::Error>,
+    ) -> Result<ReturnType>;
+    async fn aggregate(&self, pipeline: Vec<Document>) -> Result<Vec<T>>;
     async fn get_one_from(&self, filter: Document) -> Result<Option<T>>;
     async fn get_many_from(&self, filter: Document) -> Result<Vec<T>>;
     async fn insert_one_into(&self, item: T) -> Result<String>;
     async fn insert_many_into(&self, items: Vec<T>) -> Result<Vec<String>>;
     async fn update_one_within(
+        &self,
+        query: Document,
+        updated_doc: UpdateModifications,
+    ) -> Result<UpdateResult>;
+    async fn update_many_within(
         &self,
         query: Document,
         updated_doc: UpdateModifications,
@@ -43,7 +53,7 @@ pub struct MongoCollection<T>
 where
     T: Serialize + for<'de> Deserialize<'de> + Unpin + Send + Sync + Default + IntoIndexes,
 {
-    collection: Collection<T>,
+    pub collection: Collection<T>,
     indices: Vec<IndexModel>,
 }
 
@@ -94,6 +104,31 @@ impl<T> MongoDbAPI<T> for MongoCollection<T>
 where
     T: Serialize + for<'de> Deserialize<'de> + Unpin + Send + Sync + Default + IntoIndexes + Debug,
 {
+    fn mongo_error_handler<ReturnType>(
+        &self,
+        result: Result<ReturnType, mongodb::error::Error>,
+    ) -> Result<ReturnType> {
+        let rtn = result.map_err(ServiceError::Database)?;
+        Ok(rtn)
+    }
+
+    async fn aggregate(&self, pipeline: Vec<Document>) -> Result<Vec<T>> {
+        log::info!("aggregate pipeline {:?}", pipeline);
+        let cursor = self.collection.aggregate(pipeline).await?;
+
+        let results_doc: Vec<bson::Document> =
+            cursor.try_collect().await.map_err(ServiceError::Database)?;
+
+        let results: Vec<T> = results_doc
+            .into_iter()
+            .map(|doc| {
+                bson::from_document::<T>(doc).with_context(|| "failed to deserialize document")
+            })
+            .collect::<Result<Vec<T>>>()?;
+
+        Ok(results)
+    }
+
     async fn get_one_from(&self, filter: Document) -> Result<Option<T>> {
         log::info!("get_one_from filter {:?}", filter);
 
@@ -145,6 +180,17 @@ where
     ) -> Result<UpdateResult> {
         self.collection
             .update_one(query, updated_doc)
+            .await
+            .map_err(|e| anyhow!(e))
+    }
+
+    async fn update_many_within(
+        &self,
+        query: Document,
+        updated_doc: UpdateModifications,
+    ) -> Result<UpdateResult> {
+        self.collection
+            .update_many(query, updated_doc)
             .await
             .map_err(|e| anyhow!(e))
     }
@@ -253,8 +299,8 @@ mod tests {
     }
 
     use super::*;
-    use crate::db::schemas::{self, Capacity};
-    use bson::{self, doc, oid};
+    use crate::db::schemas::{self, Capacity, Metadata};
+    use bson::{self, doc, oid, DateTime};
     use dotenv::dotenv;
 
     #[tokio::test]
@@ -275,7 +321,13 @@ mod tests {
 
         fn get_mock_host() -> schemas::Host {
             schemas::Host {
-                _id: Some(oid::ObjectId::new().to_string()),
+                _id: Some(oid::ObjectId::new()),
+                metadata: Metadata {
+                    is_deleted: false,
+                    created_at: Some(DateTime::now()),
+                    updated_at: Some(DateTime::now()),
+                    deleted_at: None,
+                },
                 device_id: "Vf3IceiD".to_string(),
                 ip_address: "127.0.0.1".to_string(),
                 remaining_capacity: Capacity {
@@ -286,19 +338,21 @@ mod tests {
                 avg_uptime: 95,
                 avg_network_speed: 500,
                 avg_latency: 10,
-                assigned_workloads: vec!["workload_id".to_string()],
-                assigned_hoster: "hoster".to_string(),
+                assigned_workloads: vec![oid::ObjectId::new()],
+                assigned_hoster: oid::ObjectId::new(),
             }
         }
 
         // insert a document
         let host_0 = get_mock_host();
-        host_api.insert_one_into(host_0.clone()).await?;
+        let r = host_api.insert_one_into(host_0.clone()).await?;
+        println!("result : {:?}", r);
 
         // get one (the same) document
-        let filter_one = doc! { "_id":  host_0._id.clone().unwrap().to_string() };
+        println!("host_0._id.unwrap() : {:?}", host_0._id.unwrap());
+        let filter_one = doc! { "_id":  host_0._id.unwrap() };
         let fetched_host = host_api.get_one_from(filter_one.clone()).await?;
-        let mongo_db_host = fetched_host.unwrap();
+        let mongo_db_host = fetched_host.expect("Failed to fetch host");
         assert_eq!(mongo_db_host._id, host_0._id);
 
         // insert many documents
@@ -311,20 +365,23 @@ mod tests {
 
         // get many docs
         let ids = vec![
-            host_1._id.unwrap().to_string(),
-            host_2._id.unwrap().to_string(),
-            host_3._id.unwrap().to_string(),
+            host_1._id.unwrap(),
+            host_2._id.unwrap(),
+            host_3._id.unwrap(),
         ];
         let filter_many = doc! {
-            "_id": { "$in": ids }
+            "_id": { "$in": ids.clone() }
         };
         let fetched_hosts = host_api.get_many_from(filter_many.clone()).await?;
 
         assert_eq!(fetched_hosts.len(), 3);
-        let ids: Vec<String> = fetched_hosts.into_iter().map(|h| h._id.unwrap()).collect();
-        assert!(ids.contains(&ids[0]));
-        assert!(ids.contains(&ids[1]));
-        assert!(ids.contains(&ids[2]));
+        let updated_ids: Vec<oid::ObjectId> = fetched_hosts
+            .into_iter()
+            .map(|h| h._id.unwrap_or_default())
+            .collect();
+        assert!(updated_ids.contains(&ids[0]));
+        assert!(updated_ids.contains(&ids[1]));
+        assert!(updated_ids.contains(&ids[2]));
 
         // delete all documents
         let DeleteResult { deleted_count, .. } = host_api.delete_all_from().await?;

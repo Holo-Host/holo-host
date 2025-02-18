@@ -1,9 +1,9 @@
 use std::path::PathBuf;
 
+use clap::{Args, Parser, Subcommand};
 /// MOdule containing all of the Clap Derive structs/definitions that make up the agent's
 /// command line. To start the agent daemon (usually from systemd), use `host_agent daemonize`.
 use netdiag::IPVersion;
-use clap::{Args, Parser, Subcommand};
 
 #[derive(Parser)]
 #[command(
