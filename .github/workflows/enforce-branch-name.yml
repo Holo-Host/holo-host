@@ -27,7 +27,7 @@ jobs:
             https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }} | jq -r .body)
 
           # Regex to check if the PR description contains "Closes #<number>" or "Fixes #<number>"
-          if [[ ! "$PR_BODY" =~ ([cC]loses|[fF]ixes|[rR]esolves) \[(\#[0-9]+)\]\(.*?\) ]]; then
+          if [[ ! "$PR_BODY" =~ ([cC]loses|[fF]ixes|[rR]esolves)\ \[(\#[0-9]+)\]\(.*\) ]]; then
             echo "❌ Error: PR description must mention the issue number (e.g., 'Closes [#123](https://github.com/holo-host/holo-host-private/issues/123)')"
             exit 1
           else
