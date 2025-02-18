@@ -17,6 +17,7 @@ use clap::Parser;
 use dotenv::dotenv;
 pub mod agent_cli;
 pub mod gen_leaf_server;
+pub mod host_client;
 pub mod host_cmds;
 pub mod support_cmds;
 use thiserror::Error;
@@ -49,27 +50,31 @@ async fn main() -> Result<(), AgentCliError> {
 
 async fn daemonize(args: &DaemonzeArgs) -> Result<(), async_nats::Error> {
     // let (host_pubkey, host_creds_path) = auth::initializer::run().await?;
-    let bare_client = gen_leaf_server::run(
+    gen_leaf_server::run(
         &args.nats_leafnode_server_name,
         &args.nats_leafnode_client_creds_path,
         &args.store_dir,
         args.hub_url.clone(),
         args.hub_tls_insecure,
+    )
+    .await?;
+
+    let host_client = host_client::run(
+        "host_id_placeholder>",
+        &args.nats_leafnode_client_creds_path,
         args.nats_connect_timeout_secs,
     )
     .await?;
-    // TODO: would it be a good idea to reuse this client in the workload_manager and elsewhere later on?
-    bare_client.close().await?;
 
-    let host_client = workload_manager::run(
-        "host_id_placeholder>",
-        &args.nats_leafnode_client_creds_path,
-    )
-    .await?;
+    workload_manager::run(host_client.clone()).await?;
 
     // Only exit program when explicitly requested
     tokio::signal::ctrl_c().await?;
 
+    // Close the host client connection
+    // NB: Calling drain/close on any one of the Client clones will closes the underlying connection.
+    // This affects all clones that share the same connection (including clones) because they are effectively just references to the same resource.
     host_client.close().await?;
+
     Ok(())
 }
