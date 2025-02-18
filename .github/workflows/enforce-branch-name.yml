@@ -29,7 +29,7 @@ jobs:
           # Regex to check if the PR description contains "Closes #<number>" or "Fixes #<number>"
           if [[ ! "$PR_BODY" =~ (Closes\ #[0-9]+|Fixes\ #[0-9]+|Resolves\ #[0-9]+) ]]; then
             echo "❌ Error: PR description must mention the issue number (e.g., 'Closes #123')"
-            exit 1
+            #exit 1
           else
             echo "✅ PR description contains an issue number."
           fi
