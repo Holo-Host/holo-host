@@ -1,1 +1,1 @@
-Closes [#issue-number](https://github.com/org/repo/issues/issue-number)
+Closes [#issue-number](https://github.com/holo-host/holo-host-private/issues/issue-number)
