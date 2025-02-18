@@ -2,7 +2,7 @@
 Service Name: AUTH
 Subject: "AUTH.>"
 Provisioning Account: AUTH Account (ie: This service is exclusively permissioned to the AUTH account.)
-Users: orchestrator & noauth
+Users: orchestrator auth user & auth guard user
 Endpoints & Managed Subjects:
     - handle_auth_callout: $SYS.REQ.USER.AUTH
     - handle_auth_validation: AUTH.validate
@@ -26,12 +26,12 @@ use std::sync::Arc;
 use types::{AuthApiResult, WORKLOAD_SK_ROLE};
 use util_libs::{
     db::{
-        mongodb::{IntoIndexes, MongoCollection, MongoDbAPI},
-        schemas::{self, Host, Hoster, Role, RoleInfo, User},
+        mongodb::{IntoIndexes, MongoCollection}, // , MongoDbAPI
+        schemas::{self, Host, Hoster, User}, //  Role, RoleInfo,
     },
     nats_js_client::{get_nats_jwt_by_nsc, AsyncEndpointHandler, JsServiceResponse, ServiceError},
 };
-use utils::handle_internal_err;
+// use utils::handle_internal_err;
 
 pub const AUTH_SRV_NAME: &str = "AUTH";
 pub const AUTH_SRV_SUBJ: &str = "AUTH";

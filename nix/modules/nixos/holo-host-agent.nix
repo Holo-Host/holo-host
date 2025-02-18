@@ -64,6 +64,41 @@ in
         default = "${cfg.nats.listenHost}:${builtins.toString cfg.nats.listenPort}";
       };
 
+      nscPath = lib.mkOption {
+        type = lib.types.path;
+        default = "/var/lib/.local/share/nats/nsc";
+      };
+
+      sharedCredsPath = lib.mkOption {
+        type = lib.types.path;
+        default = "${cfg.nats.nscPath}/shared_creds";
+      };
+
+      localCredsPath = lib.mkOption {
+        type = lib.types.path;
+        default = "${cfg.nats.nscPath}/local_creds";
+      };
+
+      hostNkeyPath = lib.mkOption {
+        type = lib.types.path;
+        default = "${cfg.nats.localCredsPath}/host.nk";
+      };
+
+      sysNkeyPath = lib.mkOption {
+        type = lib.types.path;
+        default = "${cfg.nats.localCredsPath}/sys.nk";
+      };
+
+      hposCredsPath = lib.mkOption {
+        type = lib.types.path;
+        default = "/var/lib/holo-host-agent/server-key-config.json";
+      };
+
+      hposCredsPw = lib.mkOption {
+        type = lib.types.str;
+        default = "pass";
+      };
+
       hub = {
         url = lib.mkOption {
           type = lib.types.str;
@@ -96,6 +131,12 @@ in
         {
           RUST_LOG = cfg.rust.log;
           RUST_BACKTRACE = cfg.rust.backtrace;
+          NSC_PATH = cfg.nats.nscPath;
+          LOCAL_CREDS_PATH = cfg.nats.localCredsPath;
+          HOSTING_AGENT_HOST_NKEY_PATH = cfg.nats.hostNkeyPath;
+          HOSTING_AGENT_SYS_NKEY_PATH = cfg.nats.sysNkeyPath;
+          HPOS_CONFIG_PATH = cfg.nats.hposCredsPath;
+          DEVICE_SEED_DEFAULT_PASSWORD = builtins.toString cfg.nats.hposCredsPw;
           NATS_LISTEN_PORT = builtins.toString cfg.nats.listenPort;
         }
         // lib.attrsets.optionalAttrs (cfg.nats.url != null) {
@@ -105,6 +146,14 @@ in
       path = [
         pkgs.nats-server
       ];
+
+      preStart = ''
+        echo "Start Host Auth Setup"
+        mkdir -p ${cfg.nats.hostNkeyPath}
+        mkdir -p ${cfg.nats.sysNkeyPath}
+        mkdir -p ${cfg.nats.hposCredsPath}
+        echo "Finshed Host Auth Setup"
+      '';
 
       script =
         let
