@@ -26,14 +26,17 @@ use std::sync::Arc;
 use types::{AuthApiResult, WORKLOAD_SK_ROLE};
 use util_libs::{
     db::{
-        mongodb::{IntoIndexes, MongoCollection, MongoDbAPI},
-        schemas::{self, Host, Hoster, Role, RoleInfo, User},
+        mongodb::{IntoIndexes, MongoCollection}, // MongoDbAPI
+        schemas::{self, Host, Hoster, User},     // RoleInfo,
     },
-    nats_js_client::{get_nats_jwt_by_nsc, AsyncEndpointHandler, JsServiceResponse, ServiceError},
+    nats::{
+        jetstream_client,
+        types::{AsyncEndpointHandler, JsServiceResponse, ServiceError},
+    },
 };
-use utils::handle_internal_err;
+// use utils::handle_internal_err;
 
-pub const AUTH_SRV_NAME: &str = "AUTH";
+pub const AUTH_SRV_NAME: &str = "AUTH_SERVICE";
 pub const AUTH_SRV_SUBJ: &str = "AUTH";
 pub const AUTH_SRV_VERSION: &str = "0.0.1";
 pub const AUTH_SRV_DESC: &str =
@@ -401,7 +404,7 @@ impl AuthServiceApi {
         }
 
         // 4. Create User JWT files (automatically signed with respective account key)
-        let host_jwt = std::fs::read_to_string(get_nats_jwt_by_nsc(
+        let host_jwt = std::fs::read_to_string(jetstream_client::get_nats_jwt_by_nsc(
             "HOLO",
             "WORKLOAD",
             &format!("host_user_{}.jwt", host_pubkey),
@@ -409,7 +412,7 @@ impl AuthServiceApi {
         .map_err(|e| ServiceError::Internal(e.to_string()))?;
 
         let sys_jwt = if maybe_sys_pubkey.is_some() {
-            std::fs::read_to_string(get_nats_jwt_by_nsc(
+            std::fs::read_to_string(jetstream_client::get_nats_jwt_by_nsc(
                 "HOLO",
                 "SYS",
                 &format!("sys_user_{}.jwt", host_pubkey),
