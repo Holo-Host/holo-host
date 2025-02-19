@@ -1,3 +1,4 @@
+mod extern_api;
 mod workloads;
 use anyhow::Result;
 use dotenv::dotenv;
@@ -10,7 +11,7 @@ async fn main() -> Result<(), async_nats::Error> {
     // TODO: invoke auth service (once ready)
 
     // Run workload service
-    workloads::run().await?
+    workloads::run().await?;
 
     Ok(())
 }

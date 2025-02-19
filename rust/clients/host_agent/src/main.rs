@@ -10,9 +10,9 @@ This client is responsible for subscribing the host agent to workload stream end
   - sending workload status upon request
 */
 
-mod hostd;
 pub mod agent_cli;
 pub mod host_cmds;
+mod hostd;
 pub mod support_cmds;
 use agent_cli::DaemonzeArgs;
 use anyhow::Result;
@@ -48,19 +48,21 @@ async fn main() -> Result<(), AgentCliError> {
 
 async fn daemonize(args: &DaemonzeArgs) -> Result<(), async_nats::Error> {
     // let host_pubkey = auth::init_agent::run().await?;
-    
-    let _ = hostd::gen_leaf_server::run(
+    let bare_client = hostd::gen_leaf_server::run(
+        &args.nats_leafnode_server_name,
         &args.nats_leafnode_client_creds_path,
         &args.store_dir,
         args.hub_url.clone(),
         args.hub_tls_insecure,
+        args.nats_connect_timeout_secs,
     )
-    .await;
+    .await?;
+    // TODO: would it be a good idea to reuse this client in the workload_manager and elsewhere later on?
+    bare_client.close().await?;
 
     let host_workload_client = hostd::workload_manager::run(
         "host_id_placeholder>",
         &args.nats_leafnode_client_creds_path,
-        args.nats_connect_timeout_secs,
     )
     .await?;
 

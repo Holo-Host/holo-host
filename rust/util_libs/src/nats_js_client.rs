@@ -2,8 +2,8 @@ use super::js_stream_service::{CreateTag, JsServiceParamsPartial, JsStreamServic
 use crate::nats_server::LEAF_SERVER_DEFAULT_LISTEN_PORT;
 
 use anyhow::Result;
-use core::option::Option::None;
 use async_nats::{jetstream, HeaderMap, Message, ServerInfo};
+use core::option::Option::None;
 use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::fmt;
@@ -63,7 +63,7 @@ pub struct PublishInfo {
     pub subject: String,
     pub msg_id: String,
     pub data: Vec<u8>,
-    pub headers: Option<HeaderMap> 
+    pub headers: Option<HeaderMap>,
 }
 
 #[derive(Debug)]
@@ -81,7 +81,7 @@ impl std::fmt::Debug for JsClient {
             .field("url", &self.url)
             .field("name", &self.name)
             .field("client", &self.client)
-            .field("js_context", &self.js)
+            .field("js_context", &self.js_context)
             .field("js_services", &self.js_services)
             .field("service_log_prefix", &self.service_log_prefix)
             .finish()
@@ -150,7 +150,7 @@ impl JsClient {
             .await?;
             services.push(service);
         }
-        
+
         let log_prefix = format!("NATS-CLIENT-LOG::{}::", p.name);
         log::info!("{}Connected to NATS server at {}", log_prefix, p.nats_url);
 
@@ -169,7 +169,7 @@ impl JsClient {
             listener(&mut js_client);
         }
 
-        Ok(default_client)
+        Ok(js_client)
     }
 
     pub fn get_server_info(&self) -> ServerInfo {

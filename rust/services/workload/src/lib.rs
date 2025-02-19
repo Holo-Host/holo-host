@@ -69,8 +69,8 @@ where
         &self,
         msg: Arc<Message>,
         desired_state: WorkloadState,
-        cb_fn: impl Fn(T) -> Fut + Send + Sync,
         error_state: impl Fn(String) -> WorkloadState + Send + Sync,
+        cb_fn: impl Fn(T) -> Fut + Send + Sync,
     ) -> Result<WorkloadApiResult, ServiceError>
     where
         T: for<'de> Deserialize<'de> + Clone + Send + Sync + Debug + 'static,
