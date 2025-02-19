@@ -1,6 +1,6 @@
 /*
  This client is associated with the:
-    - WORKLOAD account
+    - HPOS account
     - host user
 
 This client is responsible for subscribing to workload streams that handle:
@@ -15,7 +15,7 @@ use async_nats::Message;
 use std::{path::PathBuf, sync::Arc, time::Duration};
 use util_libs::nats::{
     jetstream_client,
-    types::{ConsumerBuilder, EndpointType, JsServiceParamsPartial},
+    types::{ConsumerBuilder, EndpointType, JsClientBuilder, JsServiceBuilder},
 };
 use workload::{
     host_api::HostWorkloadApi, types::WorkloadServiceSubjects, WorkloadServiceApi,
@@ -44,7 +44,7 @@ pub async fn run(
     let event_listeners = jetstream_client::get_event_listeners();
 
     // Setup JS Stream Service
-    let workload_stream_service_params = JsServiceParamsPartial {
+    let workload_stream_service = JsServiceBuilder {
         name: WORKLOAD_SRV_NAME.to_string(),
         description: WORKLOAD_SRV_DESC.to_string(),
         version: WORKLOAD_SRV_VERSION.to_string(),
@@ -52,23 +52,22 @@ pub async fn run(
     };
 
     // Spin up Nats Client and loaded in the Js Stream Service
-    let host_workload_client =
-        jetstream_client::JsClient::new(jetstream_client::NewJsClientParams {
-            nats_url: nats_url.clone(),
-            name: HOST_AGENT_CLIENT_NAME.to_string(),
-            inbox_prefix: format!("{}_{}", HOST_AGENT_INBOX_PREFIX, pubkey_lowercase),
-            service_params: vec![workload_stream_service_params.clone()],
-            credentials_path: host_creds_path
-                .as_ref()
-                .map(|path| path.to_string_lossy().to_string()),
-            ping_interval: Some(Duration::from_secs(10)),
-            request_timeout: Some(Duration::from_secs(29)),
-            listeners: vec![jetstream_client::with_event_listeners(
-                event_listeners.clone(),
-            )],
-        })
-        .await
-        .map_err(|e| anyhow::anyhow!("connecting to NATS via {nats_url}: {e}"))?;
+    let host_workload_client = jetstream_client::JsClient::new(JsClientBuilder {
+        nats_url: nats_url.clone(),
+        name: HOST_AGENT_CLIENT_NAME.to_string(),
+        inbox_prefix: format!("{}.{}", HOST_AGENT_INBOX_PREFIX, pubkey_lowercase),
+        service_params: vec![workload_stream_service.clone()],
+        credentials_path: host_creds_path
+            .as_ref()
+            .map(|path| path.to_string_lossy().to_string()),
+        ping_interval: Some(Duration::from_secs(10)),
+        request_timeout: Some(Duration::from_secs(29)),
+        listeners: vec![jetstream_client::with_event_listeners(
+            event_listeners.clone(),
+        )],
+    })
+    .await
+    .map_err(|e| anyhow::anyhow!("connecting to NATS via {nats_url}: {e}"))?;
 
     // ==================== Setup API & Register Endpoints ====================
     // Instantiate the Workload API
@@ -89,8 +88,8 @@ pub async fn run(
             endpoint_subject: format!(
                 "{}.{}",
                 pubkey_lowercase,
-                WorkloadServiceSubjects::Install.as_ref().to_string()
-            ), // consumer stream subj
+                WorkloadServiceSubjects::Install.as_ref()
+            ),
             handler: EndpointType::Async(
                 workload_api.call(|api: HostWorkloadApi, msg: Arc<Message>| async move {
                     api.install_workload(msg).await
@@ -106,10 +105,8 @@ pub async fn run(
             endpoint_subject: format!(
                 "{}.{}",
                 pubkey_lowercase,
-                WorkloadServiceSubjects::UpdateInstalled
-                    .as_ref()
-                    .to_string()
-            ), // consumer stream subj
+                WorkloadServiceSubjects::UpdateInstalled.as_ref()
+            ),
             handler: EndpointType::Async(
                 workload_api.call(|api: HostWorkloadApi, msg: Arc<Message>| async move {
                     api.update_workload(msg).await
@@ -125,8 +122,8 @@ pub async fn run(
             endpoint_subject: format!(
                 "{}.{}",
                 pubkey_lowercase,
-                WorkloadServiceSubjects::Uninstall.as_ref().to_string()
-            ), // consumer stream subj
+                WorkloadServiceSubjects::Uninstall.as_ref()
+            ),
             handler: EndpointType::Async(workload_api.call(
                 |api: HostWorkloadApi, msg: Arc<Message>| async move {
                     api.uninstall_workload(msg).await
@@ -142,8 +139,8 @@ pub async fn run(
             endpoint_subject: format!(
                 "{}.{}",
                 pubkey_lowercase,
-                WorkloadServiceSubjects::SendStatus.as_ref().to_string()
-            ), // consumer stream subj
+                WorkloadServiceSubjects::SendStatus.as_ref()
+            ),
             handler: EndpointType::Async(workload_api.call(
                 |api: HostWorkloadApi, msg: Arc<Message>| async move {
                     api.send_workload_status(msg).await

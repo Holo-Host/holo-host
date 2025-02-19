@@ -1,6 +1,6 @@
 /*
 This client is associated with the:
-  - WORKLOAD account
+  - HPOS account
   - host user
 
 This client is responsible for subscribing the host agent to workload stream endpoints:
@@ -60,7 +60,7 @@ async fn daemonize(args: &DaemonzeArgs) -> Result<(), async_nats::Error> {
     // TODO: would it be a good idea to reuse this client in the workload_manager and elsewhere later on?
     bare_client.close().await?;
 
-    let host_workload_client = hostd::workload_manager::run(
+    let host_workload_client = hostd::workload::run(
         "host_id_placeholder>",
         &args.nats_leafnode_client_creds_path,
     )

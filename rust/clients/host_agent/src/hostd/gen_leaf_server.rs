@@ -8,6 +8,7 @@ use util_libs::nats::{
         JetStreamConfig, LeafNodeRemote, LeafNodeRemoteTlsConfig, LeafServer, LoggingOptions,
         LEAF_SERVER_CONFIG_PATH, LEAF_SERVER_DEFAULT_LISTEN_PORT,
     },
+    types::JsClientBuilder,
 };
 
 pub async fn run(
@@ -102,7 +103,7 @@ pub async fn run(
 
     let nats_client = tokio::select! {
         client = async {loop {
-                let host_workload_client = jetstream_client::JsClient::new(jetstream_client::NewJsClientParams {
+                let host_workload_client = jetstream_client::JsClient::new(JsClientBuilder {
                     nats_url:nats_url.clone(),
                     name:HOST_AGENT_CLIENT_NAME.to_string(),
                     ping_interval:Some(Duration::from_secs(10)),

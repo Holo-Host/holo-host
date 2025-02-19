@@ -22,8 +22,8 @@ use std::{sync::Arc, time::Duration};
 use util_libs::{
     db::mongodb::get_mongodb_url,
     nats::{
-        jetstream_client::{self, JsClient, NewJsClientParams},
-        types::{ConsumerBuilder, EndpointType, JsServiceParamsPartial},
+        jetstream_client::{self, JsClient},
+        types::{ConsumerBuilder, EndpointType, JsClientBuilder, JsServiceBuilder},
     },
 };
 use workload::{
@@ -41,14 +41,14 @@ pub async fn run() -> Result<(), async_nats::Error> {
     let event_listeners = jetstream_client::get_event_listeners();
 
     // Setup JS Stream Service
-    let workload_stream_service_params = JsServiceParamsPartial {
+    let workload_stream_service_params = JsServiceBuilder {
         name: WORKLOAD_SRV_NAME.to_string(),
         description: WORKLOAD_SRV_DESC.to_string(),
         version: WORKLOAD_SRV_VERSION.to_string(),
         service_subject: WORKLOAD_SRV_SUBJ.to_string(),
     };
 
-    let orchestrator_workload_client = JsClient::new(NewJsClientParams {
+    let orchestrator_workload_client = JsClient::new(JsClientBuilder {
         nats_url,
         name: ORCHESTRATOR_WORKLOAD_CLIENT_NAME.to_string(),
         inbox_prefix: ORCHESTRATOR_WORKLOAD_CLIENT_INBOX_PREFIX.to_string(),

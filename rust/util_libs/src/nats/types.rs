@@ -147,8 +147,25 @@ where
     }
 }
 
+#[derive(Deserialize, Default)]
+pub struct JsClientBuilder {
+    pub nats_url: String,
+    pub name: String,
+    pub inbox_prefix: String,
+    #[serde(default)]
+    pub service_params: Vec<JsServiceBuilder>,
+    #[serde(default)]
+    pub credentials_path: Option<String>,
+    #[serde(default)]
+    pub ping_interval: Option<Duration>,
+    #[serde(default)]
+    pub request_timeout: Option<Duration>, // Defaults to 5s
+    #[serde(skip_deserializing)]
+    pub listeners: Vec<EventListener>,
+}
+
 #[derive(Clone, Deserialize, Default)]
-pub struct JsServiceParamsPartial {
+pub struct JsServiceBuilder {
     pub name: String,
     pub description: String,
     pub version: String,

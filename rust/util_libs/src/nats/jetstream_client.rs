@@ -2,13 +2,13 @@ use super::{
     jetstream_service::JsStreamService,
     leaf_server::LEAF_SERVER_DEFAULT_LISTEN_PORT,
     types::{
-        ErrClientDisconnected, EventHandler, EventListener, JsServiceParamsPartial, PublishInfo,
+        ErrClientDisconnected, EventHandler, EventListener, JsClientBuilder, JsServiceBuilder,
+        PublishInfo,
     },
 };
 use anyhow::Result;
 use async_nats::{jetstream, ServerInfo};
 use core::option::Option::None;
-use serde::Deserialize;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -36,25 +36,8 @@ pub struct JsClient {
     service_log_prefix: String,
 }
 
-#[derive(Deserialize, Default)]
-pub struct NewJsClientParams {
-    pub nats_url: String,
-    pub name: String,
-    pub inbox_prefix: String,
-    #[serde(default)]
-    pub service_params: Vec<JsServiceParamsPartial>,
-    #[serde(default)]
-    pub credentials_path: Option<String>,
-    #[serde(default)]
-    pub ping_interval: Option<Duration>,
-    #[serde(default)]
-    pub request_timeout: Option<Duration>, // Defaults to 5s
-    #[serde(skip_deserializing)]
-    pub listeners: Vec<EventListener>,
-}
-
 impl JsClient {
-    pub async fn new(p: NewJsClientParams) -> Result<Self, async_nats::Error> {
+    pub async fn new(p: JsClientBuilder) -> Result<Self, async_nats::Error> {
         let connect_options = async_nats::ConnectOptions::new()
             // .require_tls(true)
             .name(&p.name)
@@ -183,7 +166,7 @@ impl JsClient {
 
     pub async fn add_js_service(
         &mut self,
-        params: JsServiceParamsPartial,
+        params: JsServiceBuilder,
     ) -> Result<(), async_nats::Error> {
         let new_service = JsStreamService::new(
             self.js_context.to_owned(),
@@ -289,8 +272,8 @@ pub fn get_event_listeners() -> Vec<EventListener> {
 mod tests {
     use super::*;
 
-    pub fn get_default_params() -> NewJsClientParams {
-        NewJsClientParams {
+    pub fn get_default_params() -> JsClientBuilder {
+        JsClientBuilder {
             nats_url: "localhost:4222".to_string(),
             name: "test_client".to_string(),
             inbox_prefix: "_UNIQUE_INBOX".to_string(),

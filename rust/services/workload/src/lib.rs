@@ -1,7 +1,8 @@
 /*
 Service Name: WORKLOAD
 Subject: "WORKLOAD.>"
-Provisioning Account: WORKLOAD
+Provisioning Account: ADMIN
+Importing Account: HPOS
 Users: orchestrator & host
 */
 
@@ -23,7 +24,7 @@ use util_libs::{
     nats::types::{AsyncEndpointHandler, JsServiceResponse, ServiceError},
 };
 
-pub const WORKLOAD_SRV_NAME: &str = "WORKLOAD";
+pub const WORKLOAD_SRV_NAME: &str = "WORKLOAD_SERVICE";
 pub const WORKLOAD_SRV_SUBJ: &str = "WORKLOAD";
 pub const WORKLOAD_SRV_VERSION: &str = "0.0.1";
 pub const WORKLOAD_SRV_DESC: &str = "This service handles the flow of Workload requests between the Developer and the Orchestrator, and between the Orchestrator and Host.";
