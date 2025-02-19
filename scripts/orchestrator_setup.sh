@@ -72,14 +72,14 @@ nsc add account --name $ADMIN_ACCOUNT
 nsc edit account --name $ADMIN_ACCOUNT --js-streams -1 --js-consumer -1 --js-mem-storage 1G --js-disk-storage 5G
 SIGNING_KEY_ADMIN="$(echo "$(nsc edit account -n $ADMIN_ACCOUNT --sk generate 2>&1)" | grep -oP "signing key\s*\K\S+")"
 ROLE_NAME_ADMIN="admin_role"
-nsc edit signing-key --sk $SIGNING_KEY_ADMIN --role $ROLE_NAME_ADMIN --allow-pub "ADMIN_>" --allow-sub "ADMIN_>" --allow-pub-response
+nsc edit signing-key --sk $SIGNING_KEY_ADMIN --role $ROLE_NAME_ADMIN --allow-pub "ADMIN.>","AUTH.>","WORKLOAD.>","INVENTORY.>","\$JS.API.>","\$SYS.>","_INBOX.>","_INBOX_*.>","*._WORKLOAD_INBOX.>","_AUTH_INBOX_*.>" --allow-sub "ADMIN.>","AUTH.>","WORKLOAD.>","INVENTORY.>","\$JS.API.>","\$SYS.>","_INBOX.>","_INBOX_*.>","ORCHESTRATOR._WORKLOAD_INBOX.>","_AUTH_INBOX_ORCHESTRATOR.>" --allow-pub-response
 
 # Step 3: Create WORKLOAD Account with JetStream and scoped signing key
 nsc add account --name $WORKLOAD_ACCOUNT
 nsc edit account --name $WORKLOAD_ACCOUNT --js-streams -1 --js-consumer -1 --js-mem-storage 1G --js-disk-storage 5G
 SIGNING_KEY_WORKLOAD="$(echo "$(nsc edit account -n $WORKLOAD_ACCOUNT --sk generate 2>&1)" | grep -oP "signing key\s*\K\S+")"
 ROLE_NAME_WORKLOAD="workload-role"
-nsc edit signing-key --sk $SIGNING_KEY_WORKLOAD --role $ROLE_NAME_WORKLOAD --allow-pub "WORKLOAD.>" --allow-sub "WORKLOAD.>" --allow-pub-response
+nsc edit signing-key --sk $SIGNING_KEY_WORKLOAD --role $ROLE_NAME_WORKLOAD --allow-pub "WORKLOAD.>","{{tag(pubkey)}}._WORKLOAD_INBOX.>","INVENTORY.update.{{tag(pubkey)}}.>" --allow-sub "WORKLOAD.{{tag(pubkey)}}.*","{{tag(pubkey)}}._WORKLOAD_INBOX.>","INVENTORY.update.{{tag(pubkey)}}.>" --allow-pub-response
 
 # Step 4: Create User "orchestrator" in ADMIN Account // noauth
 nsc add user --name admin --account $ADMIN_ACCOUNT
@@ -100,3 +100,4 @@ nsc generate config --nats-resolver --sys-account $SYS_ACCOUNT --force --config-
 nsc push -A
 
 echo "Setup complete. JWTs and resolver file are in the $JWT_OUTPUT_DIR/ directory."
+echo "!! Don't forget to start the NATS server and push the credentials to the server with 'nsc push -A' !!"

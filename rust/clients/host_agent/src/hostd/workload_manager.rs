@@ -13,15 +13,13 @@ This client is responsible for subscribing to workload streams that handle:
 use anyhow::{anyhow, Result};
 use async_nats::Message;
 use std::{path::PathBuf, sync::Arc, time::Duration};
-use util_libs::{
-    js_stream_service::JsServiceParamsPartial,
-    nats_js_client::{self, EndpointType},
+use util_libs::nats::{
+    jetstream_client,
+    types::{ConsumerBuilder, EndpointType, JsServiceParamsPartial},
 };
 use workload::{
-    host_api::HostWorkloadApi,
-    types::{WorkloadApiResult, WorkloadServiceSubjects},
-    WorkloadServiceApi, WORKLOAD_SRV_DESC, WORKLOAD_SRV_NAME, WORKLOAD_SRV_SUBJ,
-    WORKLOAD_SRV_VERSION,
+    host_api::HostWorkloadApi, types::WorkloadServiceSubjects, WorkloadServiceApi,
+    WORKLOAD_SRV_DESC, WORKLOAD_SRV_NAME, WORKLOAD_SRV_SUBJ, WORKLOAD_SRV_VERSION,
 };
 
 const HOST_AGENT_CLIENT_NAME: &str = "Host Agent";
@@ -31,7 +29,7 @@ const HOST_AGENT_INBOX_PREFIX: &str = "_WORKLOAD_INBOX";
 pub async fn run(
     host_pubkey: &str,
     host_creds_path: &Option<PathBuf>,
-) -> Result<nats_js_client::JsClient, async_nats::Error> {
+) -> Result<jetstream_client::JsClient, async_nats::Error> {
     log::info!("Host Agent Client: Connecting to server...");
     log::info!("host_creds_path : {:?}", host_creds_path);
     log::info!("host_pubkey : {}", host_pubkey);
@@ -40,10 +38,10 @@ pub async fn run(
 
     // ==================== Setup NATS ====================
     // Connect to Nats server
-    let nats_url = nats_js_client::get_nats_url();
+    let nats_url = jetstream_client::get_nats_url();
     log::info!("nats_url : {}", nats_url);
 
-    let event_listeners = nats_js_client::get_event_listeners();
+    let event_listeners = jetstream_client::get_event_listeners();
 
     // Setup JS Stream Service
     let workload_stream_service_params = JsServiceParamsPartial {
@@ -54,22 +52,23 @@ pub async fn run(
     };
 
     // Spin up Nats Client and loaded in the Js Stream Service
-    let host_workload_client = nats_js_client::JsClient::new(nats_js_client::NewJsClientParams {
-        nats_url: nats_url.clone(),
-        name: HOST_AGENT_CLIENT_NAME.to_string(),
-        inbox_prefix: format!("{}_{}", HOST_AGENT_INBOX_PREFIX, pubkey_lowercase),
-        service_params: vec![workload_stream_service_params.clone()],
-        credentials_path: host_creds_path
-            .as_ref()
-            .map(|path| path.to_string_lossy().to_string()),
-        ping_interval: Some(Duration::from_secs(10)),
-        request_timeout: Some(Duration::from_secs(29)),
-        listeners: vec![nats_js_client::with_event_listeners(
-            event_listeners.clone(),
-        )],
-    })
-    .await
-    .map_err(|e| anyhow::anyhow!("connecting to NATS via {nats_url}: {e}"))?;
+    let host_workload_client =
+        jetstream_client::JsClient::new(jetstream_client::NewJsClientParams {
+            nats_url: nats_url.clone(),
+            name: HOST_AGENT_CLIENT_NAME.to_string(),
+            inbox_prefix: format!("{}_{}", HOST_AGENT_INBOX_PREFIX, pubkey_lowercase),
+            service_params: vec![workload_stream_service_params.clone()],
+            credentials_path: host_creds_path
+                .as_ref()
+                .map(|path| path.to_string_lossy().to_string()),
+            ping_interval: Some(Duration::from_secs(10)),
+            request_timeout: Some(Duration::from_secs(29)),
+            listeners: vec![jetstream_client::with_event_listeners(
+                event_listeners.clone(),
+            )],
+        })
+        .await
+        .map_err(|e| anyhow::anyhow!("connecting to NATS via {nats_url}: {e}"))?;
 
     // ==================== Setup API & Register Endpoints ====================
     // Instantiate the Workload API
@@ -77,12 +76,6 @@ pub async fn run(
 
     // Register Workload Streams for Host Agent to consume and process
     // NB: Subjects are published by orchestrator
-    let workload_install_subject = serde_json::to_string(&WorkloadServiceSubjects::Install)?;
-    let workload_send_status_subject = serde_json::to_string(&WorkloadServiceSubjects::SendStatus)?;
-    let workload_uninstall_subject = serde_json::to_string(&WorkloadServiceSubjects::Uninstall)?;
-    let workload_update_installed_subject =
-        serde_json::to_string(&WorkloadServiceSubjects::UpdateInstalled)?;
-
     let workload_service = host_workload_client
         .get_js_service(WORKLOAD_SRV_NAME.to_string())
         .await
@@ -91,55 +84,73 @@ pub async fn run(
         ))?;
 
     workload_service
-        .add_consumer::<WorkloadApiResult>(
-            "install_workload",                                            // consumer name
-            &format!("{}.{}", pubkey_lowercase, workload_install_subject), // consumer stream subj
-            EndpointType::Async(
+        .add_consumer(ConsumerBuilder {
+            name: "install_workload".to_string(),
+            endpoint_subject: format!(
+                "{}.{}",
+                pubkey_lowercase,
+                WorkloadServiceSubjects::Install.as_ref().to_string()
+            ), // consumer stream subj
+            handler: EndpointType::Async(
                 workload_api.call(|api: HostWorkloadApi, msg: Arc<Message>| async move {
                     api.install_workload(msg).await
                 }),
             ),
-            None,
-        )
+            response_subject_fn: None,
+        })
         .await?;
 
     workload_service
-        .add_consumer::<WorkloadApiResult>(
-            "update_installed_workload", // consumer name
-            &format!("{}.{}", pubkey_lowercase, workload_update_installed_subject), // consumer stream subj
-            EndpointType::Async(
+        .add_consumer(ConsumerBuilder {
+            name: "update_installed_workload".to_string(),
+            endpoint_subject: format!(
+                "{}.{}",
+                pubkey_lowercase,
+                WorkloadServiceSubjects::UpdateInstalled
+                    .as_ref()
+                    .to_string()
+            ), // consumer stream subj
+            handler: EndpointType::Async(
                 workload_api.call(|api: HostWorkloadApi, msg: Arc<Message>| async move {
                     api.update_workload(msg).await
                 }),
             ),
-            None,
-        )
+            response_subject_fn: None,
+        })
         .await?;
 
     workload_service
-        .add_consumer::<WorkloadApiResult>(
-            "uninstall_workload",                                            // consumer name
-            &format!("{}.{}", pubkey_lowercase, workload_uninstall_subject), // consumer stream subj
-            EndpointType::Async(workload_api.call(
+        .add_consumer(ConsumerBuilder {
+            name: "uninstall_workload".to_string(),
+            endpoint_subject: format!(
+                "{}.{}",
+                pubkey_lowercase,
+                WorkloadServiceSubjects::Uninstall.as_ref().to_string()
+            ), // consumer stream subj
+            handler: EndpointType::Async(workload_api.call(
                 |api: HostWorkloadApi, msg: Arc<Message>| async move {
                     api.uninstall_workload(msg).await
                 },
             )),
-            None,
-        )
+            response_subject_fn: None,
+        })
         .await?;
 
     workload_service
-        .add_consumer::<WorkloadApiResult>(
-            "send_workload_status", // consumer name
-            &format!("{}.{}", pubkey_lowercase, workload_send_status_subject), // consumer stream subj
-            EndpointType::Async(workload_api.call(
+        .add_consumer(ConsumerBuilder {
+            name: "send_workload_status".to_string(),
+            endpoint_subject: format!(
+                "{}.{}",
+                pubkey_lowercase,
+                WorkloadServiceSubjects::SendStatus.as_ref().to_string()
+            ), // consumer stream subj
+            handler: EndpointType::Async(workload_api.call(
                 |api: HostWorkloadApi, msg: Arc<Message>| async move {
                     api.send_workload_status(msg).await
                 },
             )),
-            None,
-        )
+            response_subject_fn: None,
+        })
         .await?;
 
     Ok(host_workload_client)

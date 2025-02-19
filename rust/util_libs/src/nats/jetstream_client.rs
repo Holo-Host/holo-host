@@ -1,79 +1,16 @@
-use super::js_stream_service::{CreateTag, JsServiceParamsPartial, JsStreamService};
-use crate::nats_server::LEAF_SERVER_DEFAULT_LISTEN_PORT;
-
+use super::{
+    jetstream_service::JsStreamService,
+    leaf_server::LEAF_SERVER_DEFAULT_LISTEN_PORT,
+    types::{
+        ErrClientDisconnected, EventHandler, EventListener, JsServiceParamsPartial, PublishInfo,
+    },
+};
 use anyhow::Result;
-use async_nats::{jetstream, HeaderMap, Message, ServerInfo};
+use async_nats::{jetstream, ServerInfo};
 use core::option::Option::None;
-use serde::{Deserialize, Serialize};
-use std::error::Error;
-use std::fmt;
-use std::fmt::Debug;
-use std::future::Future;
-use std::pin::Pin;
+use serde::Deserialize;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-
-#[derive(thiserror::Error, Debug, Clone)]
-pub enum ServiceError {
-    #[error("Request Error: {0}")]
-    Request(String),
-    #[error(transparent)]
-    Database(#[from] mongodb::error::Error),
-    #[error("Nats Error: {0}")]
-    NATS(String),
-    #[error("Internal Error: {0}")]
-    Internal(String),
-}
-
-pub type EventListener = Arc<Box<dyn Fn(&mut JsClient) + Send + Sync>>;
-pub type EventHandler = Arc<Pin<Box<dyn Fn(&str, &str, Duration) + Send + Sync>>>;
-pub type JsServiceResponse<T> = Pin<Box<dyn Future<Output = Result<T, ServiceError>> + Send>>;
-pub type EndpointHandler<T> = Arc<dyn Fn(&Message) -> Result<T, ServiceError> + Send + Sync>;
-pub type AsyncEndpointHandler<T> = Arc<
-    dyn Fn(Arc<Message>) -> Pin<Box<dyn Future<Output = Result<T, ServiceError>> + Send>>
-        + Send
-        + Sync,
->;
-
-#[derive(Clone)]
-pub enum EndpointType<T>
-where
-    T: Serialize + for<'de> Deserialize<'de> + Send + Sync + CreateTag,
-{
-    Sync(EndpointHandler<T>),
-    Async(AsyncEndpointHandler<T>),
-}
-
-impl<T> std::fmt::Debug for EndpointType<T>
-where
-    T: Serialize + for<'de> Deserialize<'de> + Send + Sync + Clone + Debug + CreateTag + 'static,
-{
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let t = match &self {
-            EndpointType::Async(_) => "EndpointType::Async(<function>)",
-            EndpointType::Sync(_) => "EndpointType::Sync(<function>)",
-        };
-
-        write!(f, "{}", t)
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct PublishInfo {
-    pub subject: String,
-    pub msg_id: String,
-    pub data: Vec<u8>,
-    pub headers: Option<HeaderMap>,
-}
-
-#[derive(Debug)]
-pub struct ErrClientDisconnected;
-impl fmt::Display for ErrClientDisconnected {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Could not reach nats: connection closed")
-    }
-}
-impl Error for ErrClientDisconnected {}
 
 impl std::fmt::Debug for JsClient {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

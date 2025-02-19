@@ -1,4 +1,5 @@
 mod extern_api;
+mod utils;
 mod workloads;
 use anyhow::Result;
 use dotenv::dotenv;

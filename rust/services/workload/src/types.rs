@@ -1,8 +1,12 @@
-use std::collections::HashMap;
-use util_libs::{db::schemas::{self, WorkloadStatus}, js_stream_service::{CreateResponse, CreateTag, EndpointTraits}};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use strum_macros::AsRefStr;
+use util_libs::{
+    db::schemas::{self, WorkloadStatus},
+    nats::types::{CreateResponse, CreateTag, EndpointTraits},
+};
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, AsRefStr)]
 #[serde(rename_all = "snake_case")]
 pub enum WorkloadServiceSubjects {
     Add,
@@ -14,7 +18,7 @@ pub enum WorkloadServiceSubjects {
     SendStatus,
     Install,
     Uninstall,
-    UpdateInstalled
+    UpdateInstalled,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -26,7 +30,7 @@ pub struct WorkloadResult {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorkloadApiResult {
     pub result: WorkloadResult,
-    pub maybe_response_tags: Option<HashMap<String, String>>
+    pub maybe_response_tags: Option<HashMap<String, String>>,
 }
 impl EndpointTraits for WorkloadApiResult {}
 impl CreateTag for WorkloadApiResult {

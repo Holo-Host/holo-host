@@ -2,9 +2,9 @@ use std::{path::PathBuf, time::Duration};
 
 use anyhow::Context;
 use tempfile::tempdir;
-use util_libs::{
-    nats_js_client,
-    nats_server::{
+use util_libs::nats::{
+    jetstream_client,
+    leaf_server::{
         JetStreamConfig, LeafNodeRemote, LeafNodeRemoteTlsConfig, LeafServer, LoggingOptions,
         LEAF_SERVER_CONFIG_PATH, LEAF_SERVER_DEFAULT_LISTEN_PORT,
     },
@@ -17,7 +17,7 @@ pub async fn run(
     hub_url: String,
     hub_tls_insecure: bool,
     nats_connect_timeout_secs: u64,
-) -> anyhow::Result<nats_js_client::JsClient> {
+) -> anyhow::Result<jetstream_client::JsClient> {
     let leaf_client_conn_domain = "127.0.0.1";
     let leaf_client_conn_port = std::env::var("NATS_LISTEN_PORT")
         .map(|var| var.parse().expect("can't parse into number"))
@@ -95,19 +95,18 @@ pub async fn run(
     // Spin up Nats Client
     // Nats takes a moment to become responsive, so we try to connecti in a loop for a few seconds.
     // TODO: how do we recover from a connection loss to Nats in case it crashes or something else?
-    let nats_url = nats_js_client::get_nats_url();
+    let nats_url = jetstream_client::get_nats_url();
     log::info!("nats_url : {}", nats_url);
 
     const HOST_AGENT_CLIENT_NAME: &str = "Host Agent Bare";
 
     let nats_client = tokio::select! {
         client = async {loop {
-                let host_workload_client = nats_js_client::JsClient::new(nats_js_client::NewJsClientParams {
+                let host_workload_client = jetstream_client::JsClient::new(jetstream_client::NewJsClientParams {
                     nats_url:nats_url.clone(),
                     name:HOST_AGENT_CLIENT_NAME.to_string(),
                     ping_interval:Some(Duration::from_secs(10)),
                     request_timeout:Some(Duration::from_secs(29)),
-
                     inbox_prefix: Default::default(),
                     service_params:Default::default(),
                     credentials_path: Default::default(),

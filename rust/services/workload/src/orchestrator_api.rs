@@ -27,7 +27,7 @@ use util_libs::{
         mongodb::{IntoIndexes, MongoCollection, MongoDbAPI},
         schemas::{self, Host, Workload, WorkloadState, WorkloadStatus},
     },
-    nats_js_client::ServiceError,
+    nats::types::ServiceError,
 };
 
 #[derive(Debug, Clone)]
@@ -112,7 +112,7 @@ impl OrchestratorWorkloadApi {
 
                 self.workload_collection
                     .update_one_within(
-                        doc! { "_id":  workload._id.clone() },
+                        doc! { "_id":  workload._id },
                         UpdateModifications::Document(doc! { "$set": updated_workload_doc }),
                     )
                     .await?;
@@ -153,7 +153,7 @@ impl OrchestratorWorkloadApi {
                     .map_err(|e| ServiceError::Internal(e.to_string()))?;
 
                 self.workload_collection.update_one_within(
-                    doc! { "_id":  workload_id.clone() },
+                    doc! { "_id":  workload_id },
                     UpdateModifications::Document(doc! {
                         "$set": {
                             "metadata.is_deleted": true,
@@ -436,7 +436,11 @@ impl OrchestratorWorkloadApi {
     }
 
     // Verifies that a host meets the workload criteria
-    fn verify_host_meets_workload_criteria(&self, assigned_host: Host, workload: Workload) -> bool {
+    fn verify_host_meets_workload_criteria(
+        &self,
+        assigned_host: &Host,
+        workload: &Workload,
+    ) -> bool {
         if assigned_host.remaining_capacity.disk < workload.system_specs.capacity.disk {
             return false;
         }
@@ -454,8 +458,7 @@ impl OrchestratorWorkloadApi {
         Ok(self
             .host_collection
             .get_many_from(doc! { "assigned_workloads": workload_id })
-            .await
-            .map_err(|e| e)?)
+            .await?)
     }
 
     async fn remove_workload_from_hosts(&self, workload_id: ObjectId) -> Result<()> {
@@ -484,22 +487,21 @@ impl OrchestratorWorkloadApi {
         let mut needed_host_count = workload.min_hosts;
         let mut still_eligible_host_ids: Vec<ObjectId> = vec![];
 
-        if maybe_existing_hosts.is_some() {
-            let hosts = maybe_existing_hosts.unwrap();
+        if let Some(hosts) = maybe_existing_hosts {
             still_eligible_host_ids = hosts.into_iter()
-                .filter(|h| {
-                    move |workload| {
-                        return self.verify_host_meets_workload_criteria(h.to_owned(), workload);
-                    };
-                    false
+                .filter_map(|h| {
+                    if self.verify_host_meets_workload_criteria(&h, &workload) {
+                        h._id.ok_or_else(|| {
+                            ServiceError::Internal(format!(
+                                "No `_id` found for workload. Unable to proceed verifying host eligibility. Workload={:?}",
+                                workload
+                            ))
+                        }).ok()
+                    } else {
+                        None
+                    }
                 })
-                .map(|h| h
-                    ._id
-                    .ok_or_else(|| 
-                        ServiceError::Internal(format!("No `_id` found for workload.  Unable to proceed verifying host elibility. Workload={:?}", workload))
-                    )
-                )
-                .collect::<Result<Vec<ObjectId>, ServiceError>>()?;
+                .collect();
             needed_host_count -= still_eligible_host_ids.len() as u16;
         }
 

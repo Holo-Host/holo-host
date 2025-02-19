@@ -5,22 +5,22 @@ Provisioning Account: WORKLOAD
 Users: orchestrator & host
 */
 
-pub mod orchestrator_api;
 pub mod host_api;
+pub mod orchestrator_api;
 pub mod types;
 
 use anyhow::Result;
-use core::option::Option::None;
 use async_nats::jetstream::ErrorCode;
-use async_trait::async_trait;
-use std::{fmt::Debug, sync::Arc};
 use async_nats::Message;
-use std::future::Future;
+use async_trait::async_trait;
+use core::option::Option::None;
 use serde::Deserialize;
+use std::future::Future;
+use std::{fmt::Debug, sync::Arc};
 use types::{WorkloadApiResult, WorkloadResult};
 use util_libs::{
-    nats_js_client::{ServiceError, AsyncEndpointHandler, JsServiceResponse},
-    db::schemas::{WorkloadState, WorkloadStatus}
+    db::schemas::{WorkloadState, WorkloadStatus},
+    nats::types::{AsyncEndpointHandler, JsServiceResponse, ServiceError},
 };
 
 pub const WORKLOAD_SRV_NAME: &str = "WORKLOAD";
@@ -28,26 +28,24 @@ pub const WORKLOAD_SRV_SUBJ: &str = "WORKLOAD";
 pub const WORKLOAD_SRV_VERSION: &str = "0.0.1";
 pub const WORKLOAD_SRV_DESC: &str = "This service handles the flow of Workload requests between the Developer and the Orchestrator, and between the Orchestrator and Host.";
 
-
 #[async_trait]
 pub trait WorkloadServiceApi
 where
     Self: std::fmt::Debug + Clone + 'static,
 {
-    fn call<F, Fut>(
-        &self,
-        handler: F,
-    ) -> AsyncEndpointHandler<WorkloadApiResult>
+    fn call<F, Fut>(&self, handler: F) -> AsyncEndpointHandler<WorkloadApiResult>
     where
         F: Fn(Self, Arc<Message>) -> Fut + Send + Sync + 'static,
         Fut: Future<Output = Result<WorkloadApiResult, ServiceError>> + Send + 'static,
-        Self: Send + Sync
+        Self: Send + Sync,
     {
-        let api = self.to_owned(); 
-        Arc::new(move |msg: Arc<Message>| -> JsServiceResponse<WorkloadApiResult> {
-            let api_clone = api.clone();
-            Box::pin(handler(api_clone, msg))
-        })
+        let api = self.to_owned();
+        Arc::new(
+            move |msg: Arc<Message>| -> JsServiceResponse<WorkloadApiResult> {
+                let api_clone = api.clone();
+                Box::pin(handler(api_clone, msg))
+            },
+        )
     }
 
     fn convert_msg_to_type<T>(msg: Arc<Message>) -> Result<T, ServiceError>
@@ -56,11 +54,14 @@ where
     {
         let payload_buf = msg.payload.to_vec();
         serde_json::from_slice::<T>(&payload_buf).map_err(|e| {
-            let err_msg = format!("Error: Failed to deserialize payload. Subject='{}' Err={}", msg.subject.clone().into_string(), e);
+            let err_msg = format!(
+                "Error: Failed to deserialize payload. Subject='{}' Err={}",
+                msg.subject.clone().into_string(),
+                e
+            );
             log::error!("{}", err_msg);
             ServiceError::Request(format!("{} Code={:?}", err_msg, ErrorCode::BAD_REQUEST))
         })
-        
     }
 
     // Helper function to streamline the processing of incoming workload messages
@@ -95,9 +96,9 @@ where
                 WorkloadApiResult {
                     result: WorkloadResult {
                         status,
-                        workload: None
+                        workload: None,
                     },
-                    maybe_response_tags: None
+                    maybe_response_tags: None,
                 }
             }
         })
