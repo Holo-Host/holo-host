@@ -11,6 +11,32 @@ pkgs.testers.runNixOSTest (
     hubJsDomain = "hub";
 
     hostUseOsNats = false;
+
+    sharedFiles = pkgs.runCommand "my-example" {nativeBuildInputs =
+            [
+              pkgs.coreutils
+              
+              ## NATS/mongodb integration tests
+              pkgs.nats-server
+              pkgs.nsc
+            ]} ''
+  echo My example command is running
+
+  mkdir $out
+
+  echo I can write data to the Nix store > $out/message
+
+  echo I can also run basic commands like:
+
+  echo ls
+  ls
+
+  echo whoami
+  whoami
+
+  echo date
+  date
+'';
   in
   {
     name = "auth-integration-nixos";
@@ -102,6 +128,8 @@ pkgs.testers.runNixOSTest (
           in
           pkgs.writeShellScript "cmd" ''
             set -xe
+
+            ls "${sharedFiles}"
 
             AUTH_ACCOUNT_AUTH_SETTINGS="$(${nsc} describe account AUTH --field nats.authorization | jq -r)"
             # test that AUTH account has `authorization.allowed_accounts` is a list of 2 accounts
