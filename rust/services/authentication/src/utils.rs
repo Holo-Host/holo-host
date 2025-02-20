@@ -1,5 +1,5 @@
 use super::types;
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use base32::decode as base32Decode;
 use base32::Alphabet;
 use data_encoding::{BASE32HEX_NOPAD, BASE64URL_NOPAD};
@@ -9,9 +9,11 @@ use serde::Deserialize;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::io::Write;
+use std::process::Command;
 use std::sync::Arc;
 use std::time::SystemTime;
-use util_libs::nats_js_client::ServiceError;
+use types::WORKLOAD_SK_ROLE;
+use util_libs::nats::{jetstream_client, types::ServiceError};
 
 pub fn handle_internal_err(err_msg: &str) -> ServiceError {
     log::error!("{}", err_msg);
@@ -198,4 +200,102 @@ pub fn generate_auth_response_claim(
         Some(BASE32HEX_NOPAD.encode(&hashed_claim_bytes));
 
     Ok(auth_response_claim)
+}
+
+pub fn add_user_keys_to_resolver(
+    host_pubkey: &str,
+    maybe_sys_pubkey: &Option<String>,
+) -> Result<(), ServiceError> {
+    match Command::new("nsc")
+        .args([
+            "add",
+            "user",
+            "-a",
+            "WORKLOAD",
+            "-n",
+            &format!("host_user_{}", host_pubkey),
+            "-k",
+            host_pubkey,
+            "-K",
+            WORKLOAD_SK_ROLE,
+            "--tag",
+            &format!("pubkey:{}", host_pubkey),
+        ])
+        .output()
+        .context("Failed to add host user with provided keys")
+        .map_err(|e| ServiceError::Internal(e.to_string()))
+    {
+        Ok(r) => {
+            let stderr = String::from_utf8_lossy(&r.stderr);
+            if !r.stderr.is_empty() && !stderr.contains("already exists") {
+                return Err(ServiceError::Internal(stderr.to_string()));
+            }
+        }
+        Err(e) => {
+            return Err(e);
+        }
+    };
+
+    if let Some(sys_pubkey) = maybe_sys_pubkey.clone() {
+        match Command::new("nsc")
+            .args([
+                "add",
+                "user",
+                "-a",
+                "SYS",
+                "-n",
+                &format!("sys_user_{}", host_pubkey),
+                "-k",
+                &sys_pubkey,
+            ])
+            .output()
+            .context("Failed to add host sys user with provided keys")
+            .map_err(|e| ServiceError::Internal(e.to_string()))
+        {
+            Ok(r) => {
+                let stderr = String::from_utf8_lossy(&r.stderr);
+                if !r.stderr.is_empty() && !stderr.contains("already exists") {
+                    return Err(ServiceError::Internal(stderr.to_string()));
+                }
+            }
+            Err(e) => {
+                return Err(e);
+            }
+        };
+    };
+
+    Ok(())
+}
+
+pub fn create_user_jwt_files(
+    host_pubkey: &str,
+    maybe_sys_pubkey: &Option<String>,
+) -> Result<(String, String)> {
+    let host_jwt = std::fs::read_to_string(jetstream_client::get_nats_jwt_by_nsc(
+        "HOLO",
+        "WORKLOAD",
+        &format!("host_user_{}.jwt", host_pubkey),
+    ))
+    .map_err(|e| ServiceError::Internal(e.to_string()))?;
+
+    let sys_jwt = if maybe_sys_pubkey.is_some() {
+        std::fs::read_to_string(jetstream_client::get_nats_jwt_by_nsc(
+            "HOLO",
+            "SYS",
+            &format!("sys_user_{}.jwt", host_pubkey),
+        ))
+        .map_err(|e| ServiceError::Internal(e.to_string()))?
+    } else {
+        String::new()
+    };
+
+    // PUSH the auth updates to resolver programmtically by sending jwts to `SYS.REQ.ACCOUNT.PUSH` subject
+    Command::new("nsc")
+        .arg("push -A")
+        .output()
+        .context("Failed to update resolver config file")
+        .map_err(|e| ServiceError::Internal(e.to_string()))?;
+    log::trace!("\nPushed new jwts to resolver server");
+
+    Ok((host_jwt, sys_jwt))
 }

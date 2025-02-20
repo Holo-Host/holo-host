@@ -11,8 +11,8 @@
 # The operator is generated and named "HOLO".  The JWT server URL set to nats://0.0.0.0:4222.
 
 # Account Creation:
-# Four accounts, named "ADMIN", "SYS", "AUTH", and "WORKLOAD" are all associated with the HOLO Operator.  The "ADMIN", "AUTH" and "WORKLOAD" accounts are created with JetStream enabled.
-# Each account has a signing key, of which both the ADMIN and WORKLOAD signing keys are scoped by an assigned role name.  This ensures that only the users assigned to the signing key role inheirt their scoped permissions.
+# Four accounts, named "ADMIN", "SYS", "AUTH", and "HPOS" are all associated with the HOLO Operator.  The "ADMIN", "AUTH" and "HPOS" accounts are created with JetStream enabled.
+# Each account has a signing key, of which both the ADMIN and HPOS signing keys are scoped by an assigned role name.  This ensures that only the users assigned to the signing key role inheirt their scoped permissions.
 
 # User Creation:
 # Four users:
@@ -35,17 +35,17 @@
 #   - AUTH_ACCOUNT
 #   - ORCHESTRATOR_AUTH_USER
 #   - AUTH_GUARD_USER
-#   - WORKLOAD_ACCOUNT 
+#   - HPOS_ACCOUNT 
 #   - SHARED_CREDS_DIR
 #   - LOCAL_CREDS_DIR 
 #   - RESOLVER_FILE
 
 # Output:
 # One Operator: HOLO
-# Four Accounts: HOLO/ADMIN & HOLO/SYS (SYS is automated) & HOLO/AUTH & HOLO/WORKLOAD
+# Four Accounts: HOLO/ADMIN & HOLO/SYS (SYS is automated) & HOLO/AUTH & HOLO/HPOS
 # Four Users: /HOLO/ADMIN/admin & HOLO/SYS/sys (sys is automated) & /HOLO/AUTH/orchestrator_auth & HOLO/AUTH/auth_guard
 # Private Files (to only be stored local to Orchestrator): `orchestrator_auth.creds` in the `local_creds/` directory.
-# Shared Files (to be exported to HPOSs): HOLO.jwt, SYS.jwt, `auth_guard.creds` in the `shared_creds/` directory.
+# Shared Files (to be exported to nix store in HPOSs): HOLO.jwt, SYS.jwt, `auth_guard.creds` in the `shared_creds/` directory.
 # --------
 
 set -e # Exit on any error
@@ -62,17 +62,17 @@ done
 
 # Variables
 NATS_SERVER_HOST=$1
+NATS_PORT="4222"
 OPERATOR_SERVICE_URL="nats://{$NATS_SERVER_HOST}:$NATS_PORT"
 ACCOUNT_JWT_SERVER="nats://{$NATS_SERVER_HOST}:$NATS_PORT"
 OPERATOR="HOLO"
 SYS_ACCOUNT="SYS"
-NATS_PORT="4222"
 ADMIN_ACCOUNT="ADMIN"
 ADMIN_USER="admin"
 AUTH_ACCOUNT="AUTH"
 ORCHESTRATOR_AUTH_USER="orchestrator_auth"
 AUTH_GUARD_USER="auth_guard"
-WORKLOAD_ACCOUNT="WORKLOAD"
+HPOS_ACCOUNT="HPOS"
 SHARED_CREDS_DIR="shared_creds"
 LOCAL_CREDS_DIR="local_creds"
 RESOLVER_FILE="main-resolver.conf"
@@ -113,7 +113,7 @@ nsc edit account --name $ADMIN_ACCOUNT --js-streams -1 --js-consumer -1 --js-mem
 
 ADMIN_SK="$(echo "$(nsc edit account -n $ADMIN_ACCOUNT --sk generate 2>&1)" | grep -oP "signing key\s*\K\S+")"
 ADMIN_ROLE_NAME="admin_role"
-nsc edit signing-key --sk $ADMIN_SK --role $ADMIN_ROLE_NAME --allow-pub "ADMIN.>","AUTH.>","WORKLOAD.>","\$JS.API.>","\$SYS.>","_INBOX.>","_INBOX_*.>","*._WORKLOAD_INBOX.>","_AUTH_INBOX_*.>" --allow-sub "ADMIN.>","AUTH.>","WORKLOAD.>","\$JS.API.>","\$SYS.>","_INBOX.>","_INBOX_*.>","ORCHESTRATOR._WORKLOAD_INBOX.>","_AUTH_INBOX_ORCHESTRATOR.>" --allow-pub-response
+nsc edit signing-key --sk $ADMIN_SK --role $ADMIN_ROLE_NAME --allow-pub "ADMIN.>","AUTH.>","WORKLOAD.>","\$JS.API.>","\$SYS.>","\$G.>","_INBOX.>","_ADMIN_INBOX.>","_AUTH_INBOX.>" --allow-sub "ADMIN.>","AUTH.>","WORKLOAD.>","\$JS.API.>","\$SYS.>","\$G.>","_INBOX.>","_ADMIN_INBOX.orchestrator.>","_AUTH_INBOX.orchestrator.>" --allow-pub-response
 
 # Step 3: Create AUTH with JetStream with non-scoped signing key
 nsc add account --name $AUTH_ACCOUNT
@@ -121,30 +121,38 @@ nsc edit account --name $AUTH_ACCOUNT --sk generate --js-streams -1 --js-consume
 AUTH_ACCOUNT_PUBKEY=$(nsc describe account $AUTH_ACCOUNT --field sub | jq -r)
 AUTH_SK_ACCOUNT_PUBKEY=$(nsc describe account $AUTH_ACCOUNT --field 'nats.signing_keys[0]' | tr -d '"')
 
-# Step 4: Create WORKLOAD Account with JetStream and scoped signing keys
-nsc add account --name $WORKLOAD_ACCOUNT
-nsc edit account --name $WORKLOAD_ACCOUNT --js-streams -1 --js-consumer -1 --js-mem-storage 1G --js-disk-storage 5G --conns -1 --leaf-conns -1
-WORKLOAD_SK="$(echo "$(nsc edit account -n $WORKLOAD_ACCOUNT --sk generate 2>&1)" | grep -oP "signing key\s*\K\S+")"
+# Step 4: Create HPOS Account with JetStream and scoped signing keys
+nsc add account --name $HPOS_ACCOUNT
+nsc edit account --name $HPOS_ACCOUNT --js-streams -1 --js-consumer -1 --js-mem-storage 1G --js-disk-storage 5G --conns -1 --leaf-conns -1
+HPOS_WORKLOAD_SK="$(echo "$(nsc edit account -n $HPOS_ACCOUNT --sk generate 2>&1)" | grep -oP "signing key\s*\K\S+")"
 WORKLOAD_ROLE_NAME="workload_role"
-nsc edit signing-key --sk $WORKLOAD_SK --role $WORKLOAD_ROLE_NAME --allow-pub "WORKLOAD.>","{{tag(pubkey)}}._WORKLOAD_INBOX.>" --allow-sub "WORKLOAD.{{tag(pubkey)}}.*","{{tag(pubkey)}}._WORKLOAD_INBOX.>" --allow-pub-response
+nsc edit signing-key --sk $HPOS_WORKLOAD_SK --role $WORKLOAD_ROLE_NAME --allow-pub "WORKLOAD.orchestrator.*","_ADMIN_INBOX.orchestrator.>","WORKLOAD.{{tag(pubkey)}}.>","_HPOS_INBOX.{{tag(pubkey)}}.>" --allow-sub "WORKLOAD.{{tag(pubkey)}}.>","_HPOS_INBOX.{{tag(pubkey)}}.>" --allow-pub-response
 
-# Step 5: Create Orchestrator User in ADMIN Account
+# Step 5: Export/Import WORKLOAD Service Stream between ADMIN and HPOS accounts
+# Share orchestrator (as admin user) workload streams with host
+nsc add export --name "WORKLOAD_SERVICE" --subject "WORKLOAD.>" --account ADMIN
+nsc add import --src-account ADMIN --name "WORKLOAD_SERVICE" --local-subject "WORKLOAD.>" --account HPOS
+# Share host workload streams with orchestrator (as admin user)
+nsc add export --name "WORKLOAD_SERVICE" --subject "WORKLOAD.>" --account HPOS
+nsc add import --src-account HPOS --name "WORKLOAD_SERVICE" --local-subject "WORKLOAD.>" --account ADMIN
+
+# Step 6: Create Orchestrator User in ADMIN Account
 nsc add user --name $ADMIN_USER --account $ADMIN_ACCOUNT -K $ADMIN_ROLE_NAME
 
-# Step 6: Create Orchestrator User in AUTH Account (used in auth-callout service)
+# Step 7: Create Orchestrator User in AUTH Account (used in auth-callout service)
 nsc add user --name $ORCHESTRATOR_AUTH_USER --account $AUTH_ACCOUNT --allow-pubsub ">"
 AUTH_USER_PUBKEY=$(nsc describe user --name $ORCHESTRATOR_AUTH_USER --account $AUTH_ACCOUNT --field sub | jq -r)
 echo "assigned auth user pubkey: $AUTH_USER_PUBKEY"
 
-# Step 7: Create "Sentinel" User in AUTH Account (used by host agents in auth-callout service)
+# Step 8: Create "Sentinel" User in AUTH Account (used by host agents in auth-callout service)
 nsc add user --name $AUTH_GUARD_USER --account $AUTH_ACCOUNT --deny-pubsub ">"
 
-# Step 8: Configure Auth Callout
+# Step 9: Configure Auth Callout
 echo $AUTH_ACCOUNT_PUBKEY
 echo $AUTH_SK_ACCOUNT_PUBKEY
 nsc edit authcallout --account $AUTH_ACCOUNT --allowed-account "\"$AUTH_ACCOUNT_PUBKEY\",\"$AUTH_SK_ACCOUNT_PUBKEY\"" --auth-user $AUTH_USER_PUBKEY
 
-# Step 9: Generate JWT files
+# Step 10: Generate JWT files
 nsc generate creds --name $ORCHESTRATOR_AUTH_USER --account $AUTH_ACCOUNT > $LOCAL_CREDS_DIR/$ORCHESTRATOR_AUTH_USER.creds # --> local to hub exclusively
 nsc describe operator --raw --output-file $SHARED_CREDS_DIR/$OPERATOR.jwt
 nsc describe account --name SYS --raw --output-file $SHARED_CREDS_DIR/$SYS_ACCOUNT.jwt
@@ -159,7 +167,7 @@ echo "extracted AUTH signing key"
 extract_signing_key AUTH_ROOT $AUTH_ACCOUNT_PUBKEY
 echo "extracted AUTH root key"
 
-# Step 10: Generate Resolver Config
+# Step 11: Generate Resolver Config
 nsc generate config --nats-resolver --sys-account $SYS_ACCOUNT --force --config-file $RESOLVER_FILE
 
 echo "Setup complete. Shared JWTs and resolver file are in the $SHARED_CREDS_DIR/ directory. Private creds are in the $LOCAL_CREDS_DIR/ directory."

@@ -1,0 +1,19 @@
+[package]
+name = "netdiag"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = { workspace = true }
+clap = { workspace = true }
+log = { workspace = true }
+rustdns = "0.4.0"
+rustls = { version ="0.23.10", features = ["logging", "ring"] }
+serde = { workspace = true }
+serde_yaml = "0.9.34"
+thiserror = "2.0.9"
+uuid = { version = "1.10.0", features = [ "v4" ] }
+webpki-roots = "0.26.3"
+
+[dev-dependencies]
+env_logger = { workspace = true }
