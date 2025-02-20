@@ -21,13 +21,13 @@ use bson::{doc, to_document, DateTime};
 use mongodb::{options::UpdateModifications, Client as MongoDBClient};
 use serde::{Deserialize, Serialize};
 use std::future::Future;
-use std::{fmt::Debug, str::FromStr, sync::Arc};
+use std::{fmt::Debug, sync::Arc};
 use util_libs::{
     db::{
         mongodb::{IntoIndexes, MongoCollection, MongoDbAPI},
         schemas::{self, Host, Workload, WorkloadState, WorkloadStatus},
     },
-    nats::types::{AsyncEndpointHandler, JsServiceResponse, ServiceError},
+    nats::types::{AsyncEndpointHandler, JsServiceResponse},
 };
 
 pub const WORKLOAD_SRV_NAME: &str = "WORKLOAD";
@@ -210,7 +210,7 @@ impl WorkloadApi {
                 "$project": {
                     "_id": 1
                 }
-            }
+            },
         ];
         let results = self.host_collection.aggregate(pipeline).await?;
         if results.is_empty() {
@@ -286,7 +286,7 @@ impl WorkloadApi {
                     }
                 };
                 let updated_host_result = self.host_collection.update_many_within(
-                    host_query, 
+                    host_query,
                     UpdateModifications::Document(updated_host_doc)
                 ).await?;
                 log::trace!(
@@ -377,10 +377,7 @@ impl WorkloadApi {
         if workload_status.id.is_none() {
             return Err(anyhow!("Got a status update for workload without an id!"));
         }
-        let workload_status_id = workload_status
-            .id
-            .clone()
-            .expect("workload is not provided");
+        let workload_status_id = workload_status.id.expect("workload is not provided");
 
         self.workload_collection
             .update_one_within(
