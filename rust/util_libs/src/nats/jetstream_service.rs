@@ -260,11 +260,14 @@ impl JsStreamService {
 
             let (response_bytes, maybe_subject_tags) = match result {
                 Ok(r) => {
-                    let bytes = r.get_response();
+                    let bytes: bytes::Bytes = match serde_json::to_vec(&r) {
+                        Ok(r) => r.into(),
+                        Err(e) => e.to_string().into(),
+                    };
                     let maybe_subject_tags = r.get_tags();
                     (bytes, maybe_subject_tags)
                 }
-                Err(err) => (err.to_string().into(), HashMap::new()),
+                Err(err) => (err.to_string().into(), None),
             };
 
             // Returns a response if a reply address exists.

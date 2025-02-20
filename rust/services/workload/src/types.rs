@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use util_libs::{
     db::schemas::WorkloadStatus,
-    js_stream_service::{CreateTag, EndpointTraits},
+    nats::types::{CreateTag, EndpointTraits},
 };
 
 pub use String as WorkloadId;
