@@ -40,19 +40,10 @@ pub async fn run() -> Result<(), async_nats::Error> {
     let creds_path = jetstream_client::get_nats_client_creds("HOLO", "WORKLOAD", "orchestrator");
     let event_listeners = jetstream_client::get_event_listeners();
 
-    // Setup JS Stream Service
-    let workload_stream_service_params = JsServiceBuilder {
-        name: WORKLOAD_SRV_NAME.to_string(),
-        description: WORKLOAD_SRV_DESC.to_string(),
-        version: WORKLOAD_SRV_VERSION.to_string(),
-        service_subject: WORKLOAD_SRV_SUBJ.to_string(),
-    };
-
-    let orchestrator_workload_client = JsClient::new(JsClientBuilder {
+    let mut orchestrator_workload_client = JsClient::new(JsClientBuilder {
         nats_url,
         name: ORCHESTRATOR_WORKLOAD_CLIENT_NAME.to_string(),
         inbox_prefix: ORCHESTRATOR_WORKLOAD_CLIENT_INBOX_PREFIX.to_string(),
-        service_params: vec![workload_stream_service_params],
         credentials_path: Some(creds_path),
         ping_interval: Some(Duration::from_secs(10)),
         request_timeout: Some(Duration::from_secs(5)),
@@ -66,9 +57,19 @@ pub async fn run() -> Result<(), async_nats::Error> {
     let client_options = ClientOptions::parse(mongo_uri).await?;
     let client = MongoDBClient::with_options(client_options)?;
 
-    // ==================== Setup API & Register Endpoints ====================
+    // ==================== Setup JS Stream Service ====================
     // Instantiate the Workload API (requires access to db client)
     let workload_api = OrchestratorWorkloadApi::new(&client).await?;
+
+    let workload_stream_service = JsServiceBuilder {
+        name: WORKLOAD_SRV_NAME.to_string(),
+        description: WORKLOAD_SRV_DESC.to_string(),
+        version: WORKLOAD_SRV_VERSION.to_string(),
+        service_subject: WORKLOAD_SRV_SUBJ.to_string(),
+    };
+    orchestrator_workload_client
+        .add_js_service(workload_stream_service)
+        .await?;
 
     // Register Workload Streams for Orchestrator to consume and proceess
     // NB: These subjects are published by external Developer (via external api), the Nats-DB-Connector, or the Hosting Agent

@@ -118,6 +118,7 @@ impl JsStreamService {
     where
         T: EndpointTraits,
     {
+        // Add the Service Subject prefix
         let consumer_subject = format!(
             "{}.{}",
             self.service_subject, builder_params.endpoint_subject

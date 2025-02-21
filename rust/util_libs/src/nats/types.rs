@@ -153,8 +153,6 @@ pub struct JsClientBuilder {
     pub name: String,
     pub inbox_prefix: String,
     #[serde(default)]
-    pub service_params: Vec<JsServiceBuilder>,
-    #[serde(default)]
     pub credentials_path: Option<String>,
     #[serde(default)]
     pub ping_interval: Option<Duration>,
