@@ -118,17 +118,11 @@ impl JsStreamService {
     where
         T: EndpointTraits,
     {
-        // Avoid adding the Service Subject prefix if the Endpoint Subject name starts with global keywords $SYS or $JS
-        let consumer_subject = if builder_params.endpoint_subject.starts_with("$SYS")
-            || builder_params.endpoint_subject.starts_with("$JS")
-        {
-            builder_params.endpoint_subject.to_string()
-        } else {
-            format!(
-                "{}.{}",
-                self.service_subject, builder_params.endpoint_subject
-            )
-        };
+        // Add the Service Subject prefix
+        let consumer_subject = format!(
+            "{}.{}",
+            self.service_subject, builder_params.endpoint_subject
+        );
 
         // Register JS Subject Consumer
         let consumer_config = consumer::pull::Config {
