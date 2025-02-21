@@ -1,4 +1,8 @@
-{ inputs, flake, ... }:
+{
+  inputs,
+  flake,
+  ...
+}:
 
 {
   mkCraneLib =
