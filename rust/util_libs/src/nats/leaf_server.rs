@@ -143,7 +143,7 @@ impl LeafServer {
             .stdout(Stdio::inherit())
             .stderr(Stdio::inherit())
             .spawn()
-            .expect("Failed to start NATS server");
+            .context("Failed to start NATS server")?;
 
         // TODO: wait for a readiness indicator
         std::thread::sleep(std::time::Duration::from_millis(100));
@@ -192,8 +192,8 @@ mod tests {
     const TMP_JS_DIR: &str = "./tmp";
     const TEST_AUTH_DIR: &str = "./tmp/test-auth";
     const OPERATOR_NAME: &str = "test-operator";
-    const USER_ACCOUNT_NAME: &str = "hpos-account";
-    const USER_NAME: &str = "hpos-user";
+    const USER_ACCOUNT_NAME: &str = "host-account";
+    const USER_NAME: &str = "host-user";
     const NEW_LEAF_CONFIG_PATH: &str = "./test_configs/leaf_server.conf";
     // NB: if changed, the resolver file path must also be changed in the `hub-server.conf` iteself as well.
     const RESOLVER_FILE_PATH: &str = "./test_configs/resolver.conf";
@@ -227,7 +227,7 @@ mod tests {
             .output()
             .expect("Failed to create edit operator");
 
-        // Create hpos account (with js enabled)
+        // Create host account (with js enabled)
         Command::new("nsc")
             .args(["add", "account", USER_ACCOUNT_NAME])
             .output()
@@ -245,7 +245,7 @@ mod tests {
             .output()
             .expect("Failed to create edit account");
 
-        // Create user for hpos account
+        // Create user for host account
         Command::new("nsc")
             .args(["add", "user", USER_NAME])
             .args(["--account", USER_ACCOUNT_NAME])
