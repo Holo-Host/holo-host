@@ -14,17 +14,22 @@ log = { workspace = true }
 dotenv = { workspace = true }
 clap = { workspace = true }
 thiserror = { workspace = true }
+env_logger = { workspace = true }
 url = { version = "2", features = ["serde"] }
 bson = { version = "2.6.1", features = ["chrono-0_4"] }
-env_logger = { workspace = true }
-mongodb = "3.1"
+ed25519-dalek = { version = "2.1.1" }
+nkeys = "=0.4.4"
+sha2 = "=0.10.8"
+nats-jwt = "0.3.0"
+data-encoding = "2.7.0"
+jsonwebtoken = "9.3.0"
+textnonce = "1.0.0"
 chrono = "0.4.0"
 bytes = "1.8.0"
-nkeys = "=0.4.4"
 rand = "0.8.5"
+tempfile = "3.15.0"
+machineid-rs = "1.2.4"
 util_libs = { path = "../../util_libs" }
 workload = { path = "../../services/workload" }
 hpos-hal = { path = "../../hpos-hal" }
 netdiag = { path = "../../netdiag" }
-tempfile = "3.15.0"
-machineid-rs = "1.2.4"
