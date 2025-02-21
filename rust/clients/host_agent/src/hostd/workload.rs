@@ -79,7 +79,7 @@ pub async fn run(
         .get_js_service(WORKLOAD_SRV_NAME.to_string())
         .await
         .ok_or(anyhow!(
-            "Failed to locate workload service. Unable to spin up Host Agent."
+            "Failed to locate workload service. Unable to run holo agent workload service."
         ))?;
 
     workload_service
