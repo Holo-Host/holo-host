@@ -77,7 +77,7 @@ pub async fn run() -> Result<(), async_nats::Error> {
         .get_js_service(WORKLOAD_SRV_NAME.to_string())
         .await
         .ok_or(anyhow!(
-            "Failed to locate Workload Service. Unable to spin up Orchestrator Workload Client."
+            "Failed to locate Workload Service. Unable to spin up Orchestrator Workload Service."
         ))?;
 
     // Published by Developer

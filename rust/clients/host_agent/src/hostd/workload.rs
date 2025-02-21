@@ -59,6 +59,7 @@ pub async fn run(
     })
     .await
     .map_err(|e| anyhow::anyhow!("connecting to NATS via {nats_url}: {e}"))?;
+
     // ==================== Setup JS Stream Service ====================
     // Instantiate the Workload API
     let workload_api = HostWorkloadApi::default();
