@@ -180,32 +180,32 @@ pkgs.testers.runNixOSTest (
 
         with subtest("start the hosts and ensure they have TCP level connectivity to the hub"):
           host1.start()
-          # host2.start()
-          # host3.start()
-          # host4.start()
-          # host5.start()
+          host2.start()
+          host3.start()
+          host4.start()
+          host5.start()
 
           host1.wait_for_open_port(addr = "${nodes.hub.networking.fqdn}", port = ${builtins.toString nodes.hub.holo.nats-server.websocket.externalPort}, timeout = 10)
 
           host1.wait_for_unit('holo-host-agent')
-          # host2.wait_for_unit('holo-host-agent')
-          # host3.wait_for_unit('holo-host-agent')
-          # host4.wait_for_unit('holo-host-agent')
-          # host5.wait_for_unit('holo-host-agent')
+          host2.wait_for_unit('holo-host-agent')
+          host3.wait_for_unit('holo-host-agent')
+          host4.wait_for_unit('holo-host-agent')
+          host5.wait_for_unit('holo-host-agent')
 
         with subtest("running the setup script on the hosts"):
           host1.succeed("${hostSetupScript}", timeout = 1)
-          # host2.succeed("${hostSetupScript}", timeout = 1)
-          # host3.succeed("${hostSetupScript}", timeout = 1)
-          # host4.succeed("${hostSetupScript}", timeout = 1)
-          # host5.succeed("${hostSetupScript}", timeout = 1)
+          host2.succeed("${hostSetupScript}", timeout = 1)
+          host3.succeed("${hostSetupScript}", timeout = 1)
+          host4.succeed("${hostSetupScript}", timeout = 1)
+          host5.succeed("${hostSetupScript}", timeout = 1)
 
         with subtest("wait until all hosts receive all published messages"):
           host1.succeed("${pkgs.writeShellScript "receive-all-msgs" ''set -x; ${natsCmdHosts} --trace sub --stream "${testStreamName}" '${testStreamName}.integrate' --count=10''}", timeout = 5)
-          # host2.succeed("${pkgs.writeShellScript "receive-all-msgs" ''set -x; ${natsCmdHosts} --trace sub --stream "${testStreamName}" '${testStreamName}.integrate' --count=10''}", timeout = 5)
-          # host3.succeed("${pkgs.writeShellScript "receive-all-msgs" ''set -x; ${natsCmdHosts} --trace sub --stream "${testStreamName}" '${testStreamName}.integrate' --count=10''}", timeout = 5)
-          # host4.succeed("${pkgs.writeShellScript "receive-all-msgs" ''set -x; ${natsCmdHosts} --trace sub --stream "${testStreamName}" '${testStreamName}.integrate' --count=10''}", timeout = 5)
-          # host5.succeed("${pkgs.writeShellScript "receive-all-msgs" ''set -x; ${natsCmdHosts} --trace sub --stream "${testStreamName}" '${testStreamName}.integrate' --count=10''}", timeout = 5)
+          host2.succeed("${pkgs.writeShellScript "receive-all-msgs" ''set -x; ${natsCmdHosts} --trace sub --stream "${testStreamName}" '${testStreamName}.integrate' --count=10''}", timeout = 5)
+          host3.succeed("${pkgs.writeShellScript "receive-all-msgs" ''set -x; ${natsCmdHosts} --trace sub --stream "${testStreamName}" '${testStreamName}.integrate' --count=10''}", timeout = 5)
+          host4.succeed("${pkgs.writeShellScript "receive-all-msgs" ''set -x; ${natsCmdHosts} --trace sub --stream "${testStreamName}" '${testStreamName}.integrate' --count=10''}", timeout = 5)
+          host5.succeed("${pkgs.writeShellScript "receive-all-msgs" ''set -x; ${natsCmdHosts} --trace sub --stream "${testStreamName}" '${testStreamName}.integrate' --count=10''}", timeout = 5)
 
         with subtest("publish more messages from the hub and ensure they arrive on all hosts"):
           hub.succeed("${pkgs.writeShellScript "script" ''
@@ -216,29 +216,29 @@ pkgs.testers.runNixOSTest (
           ''}", timeout = 1)
 
           host1.succeed("${pkgs.writeShellScript "receive-specific-msgs" ''${natsCmdHosts} sub --stream "${testStreamName}" '${testStreamName}.host1' --count=10''}", timeout = 5)
-          # host2.succeed("${pkgs.writeShellScript "receive-specific-msgs" ''${natsCmdHosts} sub --stream "${testStreamName}" '${testStreamName}.host2' --count=10''}", timeout = 5)
-          # host3.succeed("${pkgs.writeShellScript "receive-specific-msgs" ''${natsCmdHosts} sub --stream "${testStreamName}" '${testStreamName}.host3' --count=10''}", timeout = 5)
-          # host4.succeed("${pkgs.writeShellScript "receive-specific-msgs" ''${natsCmdHosts} sub --stream "${testStreamName}" '${testStreamName}.host4' --count=10''}", timeout = 5)
-          # host5.succeed("${pkgs.writeShellScript "receive-specific-msgs" ''${natsCmdHosts} sub --stream "${testStreamName}" '${testStreamName}.host5' --count=10''}", timeout = 5)
+          host2.succeed("${pkgs.writeShellScript "receive-specific-msgs" ''${natsCmdHosts} sub --stream "${testStreamName}" '${testStreamName}.host2' --count=10''}", timeout = 5)
+          host3.succeed("${pkgs.writeShellScript "receive-specific-msgs" ''${natsCmdHosts} sub --stream "${testStreamName}" '${testStreamName}.host3' --count=10''}", timeout = 5)
+          host4.succeed("${pkgs.writeShellScript "receive-specific-msgs" ''${natsCmdHosts} sub --stream "${testStreamName}" '${testStreamName}.host4' --count=10''}", timeout = 5)
+          host5.succeed("${pkgs.writeShellScript "receive-specific-msgs" ''${natsCmdHosts} sub --stream "${testStreamName}" '${testStreamName}.host5' --count=10''}", timeout = 5)
 
-        # with subtest("bring a host down, publish messages, bring it back up, make sure it receives all messages"):
-        #   host5.shutdown()
+        with subtest("bring a host down, publish messages, bring it back up, make sure it receives all messages"):
+          host5.shutdown()
 
-        #   hub.succeed("${pkgs.writeShellScript "script" ''
-        #     set -xeE
-        #     for i in `seq 1 5`; do
-        #       ${natsCmdHub} pub --count=10 "${testStreamName}.host''${i}" --js-domain ${hubJsDomain} "{\"message\":\"hello host''${i}\"}"
-        #     done
-        #   ''}", timeout = 2)
+          hub.succeed("${pkgs.writeShellScript "script" ''
+            set -xeE
+            for i in `seq 1 5`; do
+              ${natsCmdHub} pub --count=10 "${testStreamName}.host''${i}" --js-domain ${hubJsDomain} "{\"message\":\"hello host''${i}\"}"
+            done
+          ''}", timeout = 2)
 
-        #   host1.succeed("${pkgs.writeShellScript "receive-specific-msgs" ''${natsCmdHosts} sub --stream "${testStreamName}" '${testStreamName}.host1' --count=10''}", timeout = 5)
-        #   host2.succeed("${pkgs.writeShellScript "receive-specific-msgs" ''${natsCmdHosts} sub --stream "${testStreamName}" '${testStreamName}.host2' --count=10''}", timeout = 5)
-        #   host3.succeed("${pkgs.writeShellScript "receive-specific-msgs" ''${natsCmdHosts} sub --stream "${testStreamName}" '${testStreamName}.host3' --count=10''}", timeout = 5)
-        #   host4.succeed("${pkgs.writeShellScript "receive-specific-msgs" ''${natsCmdHosts} sub --stream "${testStreamName}" '${testStreamName}.host4' --count=10''}", timeout = 5)
+          host1.succeed("${pkgs.writeShellScript "receive-specific-msgs" ''${natsCmdHosts} sub --stream "${testStreamName}" '${testStreamName}.host1' --count=10''}", timeout = 5)
+          host2.succeed("${pkgs.writeShellScript "receive-specific-msgs" ''${natsCmdHosts} sub --stream "${testStreamName}" '${testStreamName}.host2' --count=10''}", timeout = 5)
+          host3.succeed("${pkgs.writeShellScript "receive-specific-msgs" ''${natsCmdHosts} sub --stream "${testStreamName}" '${testStreamName}.host3' --count=10''}", timeout = 5)
+          host4.succeed("${pkgs.writeShellScript "receive-specific-msgs" ''${natsCmdHosts} sub --stream "${testStreamName}" '${testStreamName}.host4' --count=10''}", timeout = 5)
 
-        #   host5.start()
-        #   host5.wait_for_unit('holo-host-agent')
-        #   host5.wait_until_succeeds("${pkgs.writeShellScript "receive-specific-msgs" ''${natsCmdHosts} sub --stream "${testStreamName}" '${testStreamName}.host5' --count=10''}", timeout = 5)
+          host5.start()
+          host5.wait_for_unit('holo-host-agent')
+          host5.wait_until_succeeds("${pkgs.writeShellScript "receive-specific-msgs" ''${natsCmdHosts} sub --stream "${testStreamName}" '${testStreamName}.host5' --count=10''}", timeout = 5)
       '';
   }
 )
