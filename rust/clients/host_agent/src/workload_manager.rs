@@ -47,20 +47,11 @@ pub async fn run(
 
     let event_listeners = jetstream_client::get_event_listeners();
 
-    // Setup JS Stream Service
-    let workload_stream_service_params = JsServiceBuilder {
-        name: WORKLOAD_SRV_NAME.to_string(),
-        description: WORKLOAD_SRV_DESC.to_string(),
-        version: WORKLOAD_SRV_VERSION.to_string(),
-        service_subject: WORKLOAD_SRV_SUBJ.to_string(),
-    };
-
     // Spin up Nats Client and loaded in the Js Stream Service
-    let host_workload_client = jetstream_client::JsClient::new(JsClientBuilder {
+    let mut host_workload_client = jetstream_client::JsClient::new(JsClientBuilder {
         nats_url: nats_url.clone(),
         name: HOST_AGENT_CLIENT_NAME.to_string(),
         inbox_prefix: format!("{}_{}", HOST_AGENT_INBOX_PREFIX, host_pubkey),
-        service_params: vec![workload_stream_service_params.clone()],
         credentials_path: host_creds_path
             .as_ref()
             .map(|path| path.to_string_lossy().to_string()),
@@ -82,9 +73,19 @@ pub async fn run(
     // Generate the Workload API with access to db
     let workload_api = WorkloadApi::new(&client).await?;
 
-    // ==================== API ENDPOINTS ====================
+    // ==================== Setup JS Stream Service ====================
     // Register Workload Streams for Host Agent to consume
     // NB: Subjects are published by orchestrator or nats-db-connector
+    let workload_stream_service = JsServiceBuilder {
+        name: WORKLOAD_SRV_NAME.to_string(),
+        description: WORKLOAD_SRV_DESC.to_string(),
+        version: WORKLOAD_SRV_VERSION.to_string(),
+        service_subject: WORKLOAD_SRV_SUBJ.to_string(),
+    };
+    host_workload_client
+        .add_js_service(workload_stream_service)
+        .await?;
+
     let workload_service = host_workload_client
         .get_js_service(WORKLOAD_SRV_NAME.to_string())
         .await
