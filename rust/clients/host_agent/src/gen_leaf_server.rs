@@ -108,9 +108,7 @@ pub async fn run(
                     name:HOST_AGENT_CLIENT_NAME.to_string(),
                     ping_interval:Some(Duration::from_secs(10)),
                     request_timeout:Some(Duration::from_secs(29)),
-
                     inbox_prefix: Default::default(),
-                    service_params:Default::default(),
                     listeners: Default::default(),
                     credentials_path: Default::default()
                 })

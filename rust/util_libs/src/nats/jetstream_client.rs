@@ -57,20 +57,6 @@ impl JsClient {
             None => connect_options.connect(&p.nats_url).await?,
         };
 
-        let jetstream = jetstream::new(client.clone());
-        let mut services = vec![];
-        for params in p.service_params {
-            let service = JsStreamService::new(
-                jetstream.clone(),
-                &params.name,
-                &params.description,
-                &params.version,
-                &params.service_subject,
-            )
-            .await?;
-            services.push(service);
-        }
-
         let log_prefix = format!("NATS-CLIENT-LOG::{}::", p.name);
         log::info!("{}Connected to NATS server at {}", log_prefix, p.nats_url);
 
