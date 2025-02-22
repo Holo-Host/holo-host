@@ -40,11 +40,11 @@ pub struct JsClient {
 impl JsClient {
     pub async fn new(p: JsClientBuilder) -> Result<Self, async_nats::Error> {
         let mut connect_options = async_nats::ConnectOptions::new()
-            // .require_tls(true)
             .name(&p.name)
             .ping_interval(p.ping_interval.unwrap_or(Duration::from_secs(120)))
             .request_timeout(Some(p.request_timeout.unwrap_or(Duration::from_secs(10))))
             .custom_inbox_prefix(&p.inbox_prefix);
+        // .require_tls(true)
 
         if let Some(credentials_list) = p.credentials {
             for credentials in credentials_list {
@@ -64,21 +64,6 @@ impl JsClient {
         };
 
         let client = connect_options.connect(&p.nats_url).await?;
-
-        let jetstream = jetstream::new(client.clone());
-        let mut services = vec![];
-        for params in p.service_params {
-            let service = JsStreamService::new(
-                jetstream.clone(),
-                &params.name,
-                &params.description,
-                &params.version,
-                &params.service_subject,
-            )
-            .await?;
-            services.push(service);
-        }
-
         let service_log_prefix = format!("NATS-CLIENT-LOG::{}::", p.name);
         log::info!(
             "{}Connected to NATS server at {}",

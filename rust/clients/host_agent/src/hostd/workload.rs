@@ -39,48 +39,47 @@ pub async fn run(
     let nats_url = jetstream_client::get_nats_url();
     log::info!("nats_url : {}", nats_url);
 
-    let event_listeners = jetstream_client::get_event_listeners();
-
-    // Setup JS Stream Service
-    let workload_stream_service = JsServiceBuilder {
-        name: WORKLOAD_SRV_NAME.to_string(),
-        description: WORKLOAD_SRV_DESC.to_string(),
-        version: WORKLOAD_SRV_VERSION.to_string(),
-        service_subject: WORKLOAD_SRV_SUBJ.to_string(),
-    };
-
     let host_creds = host_creds_path
         .to_owned()
         .map(Credentials::Path)
         .ok_or_else(|| async_nats::Error::from("error"))?;
 
     // Spin up Nats Client and load the Js Stream Service
-    let host_workload_client = jetstream_client::JsClient::new(JsClientBuilder {
+    let mut host_workload_client = jetstream_client::JsClient::new(JsClientBuilder {
         nats_url: nats_url.clone(),
         name: HOST_AGENT_CLIENT_NAME.to_string(),
         inbox_prefix: format!("{}.{}", HOST_AGENT_INBOX_PREFIX, pubkey_lowercase),
-        service_params: vec![workload_stream_service.clone()],
         credentials: Some(vec![host_creds.clone()]),
         ping_interval: Some(Duration::from_secs(10)),
         request_timeout: Some(Duration::from_secs(29)),
         listeners: vec![jetstream_client::with_event_listeners(
-            event_listeners.clone(),
+            jetstream_client::get_event_listeners(),
         )],
     })
     .await
     .map_err(|e| anyhow::anyhow!("connecting to NATS via {nats_url}: {e}"))?;
 
-    // ==================== Setup API & Register Endpoints ====================
+    // ==================== Setup JS Stream Service ====================
     // Instantiate the Workload API
     let workload_api = HostWorkloadApi::default();
 
-    // Register Workload Streams for Host Agent to consume and process
-    // NB: Subjects are published by orchestrator
+    // Register Workload Streams for Host Agent to consume
+    // NB: Subjects are published by orchestrator or nats-db-connector
+    let workload_stream_service = JsServiceBuilder {
+        name: WORKLOAD_SRV_NAME.to_string(),
+        description: WORKLOAD_SRV_DESC.to_string(),
+        version: WORKLOAD_SRV_VERSION.to_string(),
+        service_subject: WORKLOAD_SRV_SUBJ.to_string(),
+    };
+    host_workload_client
+        .add_js_service(workload_stream_service)
+        .await?;
+
     let workload_service = host_workload_client
         .get_js_service(WORKLOAD_SRV_NAME.to_string())
         .await
         .ok_or(anyhow!(
-            "Failed to locate workload service. Unable to spin up Host Agent."
+            "Failed to locate workload service. Unable to run holo agent workload service."
         ))?;
 
     workload_service

@@ -106,11 +106,10 @@ pub async fn run(
                 let host_workload_client = jetstream_client::JsClient::new(JsClientBuilder {
                     nats_url:nats_url.clone(),
                     name:HOST_AGENT_CLIENT_NAME.to_string(),
+                    inbox_prefix: Default::default(),
+                    credentials: Default::default(),
                     ping_interval:Some(Duration::from_secs(10)),
                     request_timeout:Some(Duration::from_secs(29)),
-                    inbox_prefix: Default::default(),
-                    service_params:Default::default(),
-                    credentials: Default::default(),
                     listeners: Default::default(),
                 })
                 .await

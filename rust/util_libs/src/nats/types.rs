@@ -159,8 +159,6 @@ pub struct JsClientBuilder {
     pub nats_url: String,
     pub name: String,
     pub inbox_prefix: String,
-    #[serde(default)]
-    pub service_params: Vec<JsServiceBuilder>,
     #[serde(default, skip_deserializing)]
     pub credentials: Option<Vec<Credentials>>,
     #[serde(default)]

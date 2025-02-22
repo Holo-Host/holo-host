@@ -33,9 +33,9 @@ const ORCHESTRATOR_ADMIN_CLIENT_NAME: &str = "Orchestrator Admin Client";
 const ORCHESTRATOR_ADMIN_CLIENT_INBOX_PREFIX: &str = "_ADMIN_INBOX.orchestrator";
 
 pub async fn run(
-    db_client: MongoDBClient,
     admin_creds_path: &Option<PathBuf>,
     nats_connect_timeout_secs: u64,
+    db_client: MongoDBClient,
 ) -> Result<(), async_nats::Error> {
     // ==================== Setup NATS ====================
     let nats_url = jetstream_client::get_nats_url();
@@ -47,21 +47,12 @@ pub async fn run(
         .map(Credentials::Path)
         .map_err(|e| anyhow!("Failed to locate admin credential path. Err={:?}", e))?;
 
-    // Setup JS Stream Service
-    let workload_stream_service_params = JsServiceBuilder {
-        name: WORKLOAD_SRV_NAME.to_string(),
-        description: WORKLOAD_SRV_DESC.to_string(),
-        version: WORKLOAD_SRV_VERSION.to_string(),
-        service_subject: WORKLOAD_SRV_SUBJ.to_string(),
-    };
-
-    let orchestrator_workload_client = tokio::select! {
+    let mut orchestrator_workload_client = tokio::select! {
         client = async {loop {
             let c = JsClient::new(JsClientBuilder {
                 nats_url: nats_url.clone(),
                 name: ORCHESTRATOR_ADMIN_CLIENT_NAME.to_string(),
                 inbox_prefix: ORCHESTRATOR_ADMIN_CLIENT_INBOX_PREFIX.to_string(),
-                service_params: vec![workload_stream_service_params.clone()],
                 credentials: Some(vec![creds_path.clone()]),
                 ping_interval: Some(Duration::from_secs(10)),
                 request_timeout: Some(Duration::from_secs(5)),
@@ -87,17 +78,27 @@ pub async fn run(
         }
     };
 
-    // ==================== Setup API & Register Endpoints ====================
+    // ==================== Setup JS Stream Service ====================
     // Instantiate the Workload API (requires access to db client)
     let workload_api = OrchestratorWorkloadApi::new(&db_client).await?;
 
     // Register Workload Streams for Orchestrator to consume and proceess
     // NB: These subjects are published by external Developer (via external api), the Nats-DB-Connector, or the Hosting Agent
+    let workload_stream_service = JsServiceBuilder {
+        name: WORKLOAD_SRV_NAME.to_string(),
+        description: WORKLOAD_SRV_DESC.to_string(),
+        version: WORKLOAD_SRV_VERSION.to_string(),
+        service_subject: WORKLOAD_SRV_SUBJ.to_string(),
+    };
+    orchestrator_workload_client
+        .add_js_service(workload_stream_service)
+        .await?;
+
     let workload_service = orchestrator_workload_client
         .get_js_service(WORKLOAD_SRV_NAME.to_string())
         .await
         .ok_or(anyhow!(
-            "Failed to locate Workload Service. Unable to spin up Orchestrator Workload Client."
+            "Failed to locate Workload Service. Unable to spin up Orchestrator Workload Service."
         ))?;
 
     // Published by Developer

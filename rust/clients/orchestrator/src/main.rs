@@ -31,9 +31,9 @@ async fn main() -> Result<(), async_nats::Error> {
         let default_nats_connect_timeout_secs = 30;
         let admin_creds_path = None;
         if let Err(e) = workloads::run(
-            thread_db_client,
             &admin_creds_path,
             default_nats_connect_timeout_secs,
+            thread_db_client,
         )
         .await
         {
