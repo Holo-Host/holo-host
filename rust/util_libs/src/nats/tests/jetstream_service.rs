@@ -195,9 +195,7 @@ async fn test_consumer_message_handling() -> Result<()> {
     }));
 
     fn response_handler() -> ResponseSubjectsGenerator {
-        Arc::new(move |_: HashMap<String, String>| -> Vec<String> {
-            return vec!["response".to_string()];
-        })
+        Arc::new(move |_: HashMap<String, String>| -> Vec<String> { vec!["response".to_string()] })
     }
 
     let consumer_builder = ConsumerBuilder {

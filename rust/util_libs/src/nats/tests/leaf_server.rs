@@ -44,7 +44,7 @@ async fn test_leaf_server_run() {
     let hub_conn_port = 4333;
     let hub_conn_url = format!("{}:{}", local_conn_domain, hub_conn_port);
 
-    let store = PathBuf::from_str(&TMP_JS_DIR).expect("Failed to convert str into PathBuf");
+    let store = PathBuf::from_str(TMP_JS_DIR).expect("Failed to convert str into PathBuf");
 
     let jetstream_config = JetStreamConfig {
         store_dir: store,
