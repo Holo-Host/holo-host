@@ -2,7 +2,7 @@ use async_nats::Message;
 use bson::{oid::ObjectId, DateTime};
 use mongodb::Client;
 use mongodb::{options::ClientOptions, Client as MongoDBClient};
-use std::{path::PathBuf, str::FromStr};
+use std::{path::PathBuf, process::Stdio, str::FromStr};
 use tempfile::TempDir;
 use util_libs::db::schemas::{self, Capacity};
 
@@ -62,7 +62,9 @@ pub async fn setup_test_db() -> (MongoDBClient, TempDir) {
         &socket_path,
         "--port",
         "0",
-    ]);
+    ])
+    .stdout(Stdio::null())
+    .stderr(Stdio::null());
 
     let _child = cmd
         .spawn()
