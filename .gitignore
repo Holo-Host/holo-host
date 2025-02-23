@@ -14,13 +14,11 @@ target/
 /treefmt.toml
 
 # nats
+rust/*/test_configs/
 rust/*/tmp
-rust/*/jwt
-rust/*/*/test_leaf_server/*
 rust/*/*/*.conf
+rust/*/*/test_leaf_server/*
 rust/*/*/leaf_server.conf
 rust/*/*/resolver.conf
 leaf_server.conf
 .local
-rust/*/*/*/tmp/
-rust/*/*/*/*/tmp/

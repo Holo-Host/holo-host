@@ -56,10 +56,10 @@ pub async fn run(
         // sys account user (automated)
         url: hub_url,
         credentials: user_creds_path.clone(),
-        tls: LeafNodeRemoteTlsConfig {
+        tls: Some(LeafNodeRemoteTlsConfig {
             insecure: hub_tls_insecure,
             ..Default::default()
-        },
+        }),
     }];
 
     let server_name = if let Some(server_name) = maybe_server_name {

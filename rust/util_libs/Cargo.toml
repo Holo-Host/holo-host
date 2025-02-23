@@ -30,6 +30,7 @@ bytes = "1.8.0"
 
 [dev-dependencies]
 tempfile = "3.14"
+serial_test = "2.0"
 
 [features]
 tests_integration_mongodb = []
