@@ -1,8 +1,8 @@
-use super::{create_test_host, create_test_workload, setup_test_db, TestMessage};
+use super::*;
 
 #[cfg(not(target_arch = "aarch64"))]
 mod tests {
-    use super::*;
+    use super::{create_test_host, create_test_workload, setup_test_db, TestMessage};
     use crate::{orchestrator_api::OrchestratorWorkloadApi, types::WorkloadResult};
     use anyhow::Result;
     use bson::doc;
