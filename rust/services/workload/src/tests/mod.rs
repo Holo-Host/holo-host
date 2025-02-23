@@ -1,13 +1,10 @@
-use anyhow::Result;
 use async_nats::Message;
 use bson::{oid::ObjectId, DateTime};
 use mongodb::Client;
 use mongodb::{options::ClientOptions, Client as MongoDBClient};
-use std::{path::PathBuf, str::FromStr, sync::Arc};
+use std::{path::PathBuf, str::FromStr};
 use tempfile::TempDir;
-use util_libs::db::schemas::{
-    self, Capacity, Host, Metadata, SystemSpecs, Workload, WorkloadState, WorkloadStatus,
-};
+use util_libs::db::schemas::{self, Capacity};
 
 pub mod orchestrator_api;
 
@@ -67,7 +64,11 @@ pub async fn setup_test_db() -> (MongoDBClient, TempDir) {
         "0",
     ]);
 
-    let _child = cmd.spawn().expect("Failed to spawn mongod");
+    let _child = cmd
+        .spawn()
+        .expect("Failed to spawn mongod")
+        .wait()
+        .expect("Failed to spawn mongod");
 
     let server_address = mongodb::options::ServerAddress::Unix {
         path: PathBuf::from_str(&socket_path).unwrap(),
