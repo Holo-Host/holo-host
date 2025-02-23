@@ -436,7 +436,7 @@ impl OrchestratorWorkloadApi {
     }
 
     // Verifies that a host meets the workload criteria
-    fn verify_host_meets_workload_criteria(
+    pub fn verify_host_meets_workload_criteria(
         &self,
         assigned_host: &Host,
         workload: &Workload,
