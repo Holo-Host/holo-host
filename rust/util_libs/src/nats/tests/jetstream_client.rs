@@ -17,7 +17,7 @@ async fn test_client_initialization() -> Result<()> {
     let server = TestNatsServer::new().await?;
 
     let client = JsClient::new(JsClientBuilder {
-        nats_url: "nats://localhost:4222".to_string(),
+        nats_url: "nats://localhost:4444".to_string(),
         name: "test_client".to_string(),
         inbox_prefix: "_INBOX".to_string(),
         credentials_path: None,
@@ -52,7 +52,7 @@ async fn test_publish_message() -> Result<()> {
     let server = TestNatsServer::new().await?;
 
     let client = JsClient::new(JsClientBuilder {
-        nats_url: "nats://localhost:4222".to_string(),
+        nats_url: "nats://localhost:4444".to_string(),
         name: "test_client".to_string(),
         inbox_prefix: "_INBOX".to_string(),
         credentials_path: None,
@@ -88,7 +88,7 @@ async fn test_add_js_service() -> Result<()> {
     let server = TestNatsServer::new().await?;
 
     let mut client = JsClient::new(JsClientBuilder {
-        nats_url: "nats://localhost:4222".to_string(),
+        nats_url: "nats://localhost:4444".to_string(),
         name: "test_client".to_string(),
         inbox_prefix: "_INBOX".to_string(),
         credentials_path: None,
@@ -127,7 +127,7 @@ async fn test_client_close() -> Result<()> {
     let server = TestNatsServer::new().await?;
 
     let client = JsClient::new(JsClientBuilder {
-        nats_url: "nats://localhost:4222".to_string(),
+        nats_url: "nats://localhost:4444".to_string(),
         name: "test_client".to_string(),
         inbox_prefix: "_INBOX".to_string(),
         credentials_path: None,

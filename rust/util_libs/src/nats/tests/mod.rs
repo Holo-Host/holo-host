@@ -41,7 +41,7 @@ impl TestNatsServer {
         std::fs::create_dir_all(&jetstream_dir)?;
 
         // Start NATS server with JetStream enabled
-        let port = "4222".to_string();
+        let port = "4444".to_string();
         let process = tokio::process::Command::new("nats-server")
             .args([
                 "--jetstream",
@@ -80,7 +80,7 @@ impl TestNatsServer {
 
     /// Gracefully shut down the NATS server
     pub async fn shutdown(self) -> Result<()> {
-        if let Some(mut child) = Arc::try_unwrap(self._process).ok() {
+        if let Ok(mut child) = Arc::try_unwrap(self._process) {
             child.kill().await?;
             child.wait().await?;
         }

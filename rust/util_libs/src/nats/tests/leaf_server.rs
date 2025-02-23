@@ -111,7 +111,7 @@ async fn test_leaf_server_run() {
     let leaf_server = LeafServer::new(
         Some("test_leaf_server"),
         NEW_LEAF_CONFIG_PATH,
-        &local_conn_domain,
+        local_conn_domain,
         leaf_server_conn_port,
         jetstream_config,
         logging_options,
