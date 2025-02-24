@@ -106,11 +106,11 @@ pub async fn run(
                 let host_workload_client = jetstream_client::JsClient::new(JsClientBuilder {
                     nats_url:nats_url.clone(),
                     name:HOST_AGENT_CLIENT_NAME.to_string(),
+                    inbox_prefix: Default::default(),
+                    credentials_path: Default::default(),
                     ping_interval:Some(Duration::from_secs(10)),
                     request_timeout:Some(Duration::from_secs(29)),
-                    inbox_prefix: Default::default(),
                     listeners: Default::default(),
-                    credentials_path: Default::default()
                 })
                 .await
                 .map_err(|e| anyhow::anyhow!("connecting to NATS via {nats_url}: {e}"));

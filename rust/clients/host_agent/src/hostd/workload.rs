@@ -59,6 +59,7 @@ pub async fn run(
     })
     .await
     .map_err(|e| anyhow::anyhow!("connecting to NATS via {nats_url}: {e}"))?;
+
     // ==================== Setup JS Stream Service ====================
     // Instantiate the Workload API
     let workload_api = HostWorkloadApi::default();
@@ -79,7 +80,7 @@ pub async fn run(
         .get_js_service(WORKLOAD_SRV_NAME.to_string())
         .await
         .ok_or(anyhow!(
-            "Failed to locate workload service. Unable to spin up Host Agent."
+            "Failed to locate workload service. Unable to run holo agent workload service."
         ))?;
 
     workload_service
