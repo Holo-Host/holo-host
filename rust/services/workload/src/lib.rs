@@ -204,7 +204,7 @@ impl WorkloadApi {
             doc! {
                 // the maximum number of hosts returned should be the minimum hosts required by workload
                 // sample randomized results and always return back atleast 1 result
-                "$sample": std::cmp::min(workload.min_hosts as i32, 1)
+                "$sample": std::cmp::min(workload.min_hosts, 1)
             },
             doc! {
                 "$project": {
