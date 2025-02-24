@@ -191,7 +191,7 @@ mod tests {
     /// This module implements running ephemeral Mongod instances.
     /// It disables TCP and relies only unix domain sockets.
     mod mongo_runner {
-        use std::{path::PathBuf, str::FromStr};
+        use std::{path::PathBuf, process::Stdio, str::FromStr};
 
         use anyhow::Context;
         use mongodb::{options::ClientOptions, Client};
@@ -232,7 +232,9 @@ mod tests {
                     &Self::socket_path(&tempdir)?,
                     "--port",
                     &0.to_string(),
-                ]);
+                ])
+                .stdout(Stdio::null())
+                .stderr(Stdio::null());
 
                 let child = cmd
                     .spawn()
