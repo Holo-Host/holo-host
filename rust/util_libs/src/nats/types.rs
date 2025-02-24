@@ -5,6 +5,7 @@ use async_nats::{HeaderMap, Message};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::any::Any;
+use std::collections::HashMap;
 use std::error::Error;
 use std::fmt;
 use std::fmt::Debug;
@@ -15,22 +16,31 @@ use std::time::Duration;
 
 pub type EventListener = Arc<Box<dyn Fn(&mut JsClient) + Send + Sync>>;
 pub type EventHandler = Arc<Pin<Box<dyn Fn(&str, &str, Duration) + Send + Sync>>>;
-pub type JsServiceResponse<T> = Pin<Box<dyn Future<Output = Result<T, anyhow::Error>> + Send>>;
-pub type EndpointHandler<T> = Arc<dyn Fn(&Message) -> Result<T, anyhow::Error> + Send + Sync>;
+pub type JsServiceResponse<T> = Pin<Box<dyn Future<Output = Result<T, ServiceError>> + Send>>;
+pub type EndpointHandler<T> = Arc<dyn Fn(&Message) -> Result<T, ServiceError> + Send + Sync>;
 pub type AsyncEndpointHandler<T> = Arc<
-    dyn Fn(Arc<Message>) -> Pin<Box<dyn Future<Output = Result<T, anyhow::Error>> + Send>>
+    dyn Fn(Arc<Message>) -> Pin<Box<dyn Future<Output = Result<T, ServiceError>> + Send>>
         + Send
         + Sync,
 >;
-pub type ResponseSubjectsGenerator = Arc<dyn Fn(Option<Vec<String>>) -> Vec<String> + Send + Sync>;
+pub type ResponseSubjectsGenerator =
+    Arc<dyn Fn(HashMap<String, String>) -> Vec<String> + Send + Sync>;
 
 pub trait EndpointTraits:
-    Serialize + for<'de> Deserialize<'de> + Send + Sync + Clone + Debug + CreateTag + 'static
+    Serialize
+    + for<'de> Deserialize<'de>
+    + Send
+    + Sync
+    + Clone
+    + Debug
+    + CreateTag
+    + CreateResponse
+    + 'static
 {
 }
 
 pub trait CreateTag: Send + Sync {
-    fn get_tags(&self) -> Option<Vec<String>>;
+    fn get_tags(&self) -> HashMap<String, String>;
 }
 
 pub trait CreateResponse: Send + Sync {

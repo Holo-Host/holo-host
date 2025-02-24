@@ -14,6 +14,9 @@ env_logger = { workspace = true }
 log = { workspace = true }
 dotenv = { workspace = true }
 thiserror = { workspace = true }
+strum = "0.25"
+strum_macros = "0.25"
+async-trait = "0.1.83"
 semver = "1.0.24"
 rand = "0.8.5"
 mongodb = "3.1"
