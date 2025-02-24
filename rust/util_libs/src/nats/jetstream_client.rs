@@ -39,11 +39,11 @@ pub struct JsClient {
 impl JsClient {
     pub async fn new(p: JsClientBuilder) -> Result<Self, async_nats::Error> {
         let connect_options = async_nats::ConnectOptions::new()
-            // .require_tls(true)
             .name(&p.name)
             .ping_interval(p.ping_interval.unwrap_or(Duration::from_secs(120)))
             .request_timeout(Some(p.request_timeout.unwrap_or(Duration::from_secs(10))))
             .custom_inbox_prefix(&p.inbox_prefix);
+        // .require_tls(true)
 
         let client = match p.credentials_path {
             Some(cp) => {
