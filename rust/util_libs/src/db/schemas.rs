@@ -224,7 +224,7 @@ pub struct Workload {
     pub assigned_developer: ObjectId, // *INDEXED*
     pub version: SemVer,
     pub nix_pkg: String, // (Includes everthing needed to deploy workload - ie: binary & env pkg & deps, etc)
-    pub min_hosts: u16,
+    pub min_hosts: i32,
     pub system_specs: SystemSpecs,
     pub assigned_hosts: Vec<ObjectId>,
     // pub state: WorkloadState,
