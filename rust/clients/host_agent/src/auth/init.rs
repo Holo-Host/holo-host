@@ -30,7 +30,7 @@ use hpos_hal::inventory::HoloInventory;
 use std::str::FromStr;
 use std::time::Duration;
 use textnonce::TextNonce;
-use util_libs::nats_js_client;
+use util_libs::nats::jetstream_client;
 
 pub const HOST_AUTH_CLIENT_NAME: &str = "Host Auth";
 pub const HOST_AUTH_CLIENT_INBOX_PREFIX: &str = "_AUTH_INBOX";
@@ -74,12 +74,13 @@ pub async fn run(
         ));
     };
     let user_unique_inbox = &format!(
-        "{}_{}",
-        HOST_AUTH_CLIENT_INBOX_PREFIX, host_agent_keys.host_pubkey
+        "{}.{}",
+        HOST_AUTH_CLIENT_INBOX_PREFIX,
+        host_agent_keys.host_pubkey.to_lowercase()
     );
 
     // Connect to Nats server as auth guard and call NATS AuthCallout
-    let nats_url = nats_js_client::get_nats_url();
+    let nats_url = jetstream_client::get_nats_url();
     let auth_guard_client = async_nats::ConnectOptions::new()
         .name(HOST_AUTH_CLIENT_NAME.to_string())
         .custom_inbox_prefix(user_unique_inbox.to_string())

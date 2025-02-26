@@ -1,6 +1,6 @@
 /*
 Endpoints & Managed Subjects:
-    - `start_workload`: handles the "WORKLOAD.<host_pukey>.start." subject
+    - `install_workload`: handles the "WORKLOAD.<host_pukey>.install." subject
     - `update_workload`: handles the "WORKLOAD.<host_pukey>.update_installed" subject
     - `uninstall_workload`: handles the "WORKLOAD.<host_pukey>.uninstall." subject
     - `send_workload_status`: handles the "WORKLOAD.<host_pukey>.send_status" subject
@@ -15,7 +15,7 @@ use core::option::Option::None;
 use std::{fmt::Debug, sync::Arc};
 use util_libs::{
     db::schemas::{WorkloadState, WorkloadStatus},
-    nats_js_client::ServiceError,
+    nats::types::ServiceError,
 };
 
 #[derive(Debug, Clone, Default)]
@@ -24,7 +24,7 @@ pub struct HostWorkloadApi {}
 impl WorkloadServiceApi for HostWorkloadApi {}
 
 impl HostWorkloadApi {
-    pub async fn start_workload(
+    pub async fn install_workload(
         &self,
         msg: Arc<Message>,
     ) -> Result<WorkloadApiResult, ServiceError> {

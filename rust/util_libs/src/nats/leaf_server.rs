@@ -13,7 +13,6 @@ use std::process::{Child, Command, Stdio};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-pub const LEAF_SERVE_NAME: &str = "test_leaf_server";
 pub const LEAF_SERVER_CONFIG_PATH: &str = "test_leaf_server.conf";
 pub const LEAF_SERVER_DEFAULT_LISTEN_PORT: u16 = 4111;
 
@@ -56,7 +55,9 @@ impl Default for LeafNodeRemoteTlsConfig {
 
 #[derive(Debug, Clone)]
 pub struct LeafServer {
-    pub name: String,
+    // needs to be unique
+    // [1465412] [ERR] 65.108.153.204:443 - lid_ws:5 - Leafnode Error 'Duplicate Remote LeafNode Connection'
+    pub name: Option<String>,
     pub config_path: String,
     host: String,
     pub port: u16,
@@ -69,7 +70,7 @@ pub struct LeafServer {
 // TODO: consider merging this with the `LeafServer` struct
 #[derive(Serialize)]
 struct NatsConfig {
-    server_name: String,
+    server_name: Option<String>,
     host: String,
     port: u16,
     jetstream: JetStreamConfig,
@@ -88,7 +89,7 @@ impl LeafServer {
     // Instantiate a new leaf server
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        server_name: &str,
+        server_name: Option<&str>,
         new_config_path: &str,
         host: &str,
         port: u16,
@@ -97,7 +98,7 @@ impl LeafServer {
         leaf_node_remotes: Vec<LeafNodeRemote>,
     ) -> Self {
         Self {
-            name: server_name.to_string(),
+            name: server_name.map(ToString::to_string),
             config_path: new_config_path.to_string(),
             host: host.to_string(),
             port,

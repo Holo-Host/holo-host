@@ -31,8 +31,8 @@ impl HosterConfig {
 }
 
 async fn get_from_config() -> Result<(SigningKey, String)> {
-    let config_path =
-        env::var("HPOS_CONFIG_PATH").context("Cannot read HPOS_CONFIG_PATH from env var. Was it set?")?;
+    let config_path = env::var("HPOS_CONFIG_PATH")
+        .context("Cannot read HPOS_CONFIG_PATH from env var. Was it set?")?;
     let password_file = env::var("DEVICE_SEED_DEFAULT_PASSWORD_FILE")
         .context("Cannot read DEVICE_SEED_DEFAULT_PASSWORD_FILE from env var. Was it set?")?;
     let password = std::fs::read_to_string(password_file)?;
