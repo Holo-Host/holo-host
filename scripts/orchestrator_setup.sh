@@ -126,7 +126,7 @@ nsc add account --name $HPOS_ACCOUNT
 nsc edit account --name $HPOS_ACCOUNT --js-streams -1 --js-consumer -1 --js-mem-storage 1G --js-disk-storage 5G --conns -1 --leaf-conns -1
 HPOS_WORKLOAD_SK="$(echo "$(nsc edit account -n $HPOS_ACCOUNT --sk generate 2>&1)" | grep -oP "signing key\s*\K\S+")"
 WORKLOAD_ROLE_NAME="workload_role"
-nsc edit signing-key --sk $HPOS_WORKLOAD_SK --role $WORKLOAD_ROLE_NAME --allow-pub "_ADMIN_INBOX.orchestrator.>","WORKLOAD.orchestrator.*","\$JS.API.>","WORKLOAD.{{tag(pubkey)}}.>","_HPOS_INBOX.{{tag(pubkey)}}.>" --allow-sub "WORKLOAD.{{tag(pubkey)}}.>","_HPOS_INBOX.{{tag(pubkey)}}.>","\$JS.API.>" --allow-pub-response
+nsc edit signing-key --sk $HPOS_WORKLOAD_SK --role $WORKLOAD_ROLE_NAME --allow-pub "_ADMIN_INBOX.orchestrator.>","WORKLOAD.orchestrator.>","\$JS.API.>","WORKLOAD.{{tag(pubkey)}}.>","_HPOS_INBOX.{{tag(pubkey)}}.>" --allow-sub "WORKLOAD.{{tag(pubkey)}}.>","_HPOS_INBOX.{{tag(pubkey)}}.>","\$JS.API.>" --allow-pub-response
 
 # Step 5: Export/Import WORKLOAD Service Stream between ADMIN and HPOS accounts
 # Share orchestrator (as admin user) workload streams with host

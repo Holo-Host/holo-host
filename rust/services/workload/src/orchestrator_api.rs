@@ -501,7 +501,7 @@ impl OrchestratorWorkloadApi {
                     }
                 })
                 .collect();
-            needed_host_count -= still_eligible_host_ids.len() as u16;
+            needed_host_count -= still_eligible_host_ids.len() as i32;
         }
 
         let pipeline = vec![
@@ -519,7 +519,7 @@ impl OrchestratorWorkloadApi {
             doc! {
                 // the maximum number of hosts returned should be the minimum hosts required by workload
                 // sample randomized results and always return back at least 1 result
-                "$sample": std::cmp::min( needed_host_count as i32, 1),
+                "$sample": std::cmp::min( needed_host_count, 1),
 
                 // only return the `host._id` feilds
                 "$project": { "_id": 1 }
@@ -532,7 +532,7 @@ impl OrchestratorWorkloadApi {
                 workload._id
             );
             return Err(ServiceError::Internal(err_msg));
-        } else if workload.min_hosts > host_ids.len() as u16 {
+        } else if workload.min_hosts > host_ids.len() as i32 {
             log::warn!(
                 "Failed to locate the the min required number of hosts for workload. Workload_Id={:?}",
                 workload._id
@@ -549,7 +549,7 @@ impl OrchestratorWorkloadApi {
         &self,
         workload_id: ObjectId,
         eligible_host_ids: Vec<ObjectId>,
-        needed_host_count: u16,
+        needed_host_count: i32,
     ) -> Result<Vec<ObjectId>> {
         // NB: This will attempt to assign the hosts up to 5 times.. then exit loop with warning message
         let assigned_host_ids: Vec<ObjectId>;
