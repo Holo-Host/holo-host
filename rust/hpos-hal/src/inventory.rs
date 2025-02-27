@@ -11,7 +11,7 @@ use procfs::{CpuInfo, FromBufRead};
 use serde_derive::{Deserialize, Serialize};
 use std::fmt::{self, Display};
 use std::io;
-use std::{fs, fs::File};
+use std::{fs, fs::read_to_string, fs::File};
 use thiserror::Error;
 use thiserror_context::{impl_context, Context};
 
@@ -88,6 +88,8 @@ pub struct HoloSystemInventory {
     pub kernel_version: String,
     /// OpenSSH Host public keys.
     pub ssh_host_keys: Vec<SSHPubKey>,
+    /// Small amounts of static state gathered from Nix
+    pub nix_state: Option<HoloNixState>,
 }
 
 /// A data structure representing an OpenSSH public key. When stored, each key is a single line of
@@ -103,6 +105,60 @@ pub struct SSHPubKey {
     pub key: String,
     /// An optional label. Must be present, even if it's an empty string.
     pub label: String,
+}
+
+/// A collection of infrequently-changing Nix state.
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct HoloNixState {
+    /// Nix channels configurated
+    pub channels: Vec<(String, String)>,
+    /// Canonicalisation of `/run/current-system` symlink
+    pub current_system: String,
+}
+
+impl HoloNixState {
+    const NIX_CURRENT_SYSTEM_FILE: &str = "/run/current-system";
+    // If we ever decide to enable `use-xdg-base-directories`, we'll need this to point to
+    // `$XDG_STATE_HOME/nix/channels` instead.
+    const NIX_CHANNELS_FILE: &str = "/root/.nix-channels";
+    fn from_host() -> Self {
+        let path = match fs::canonicalize(Self::NIX_CURRENT_SYSTEM_FILE) {
+            Ok(s) => s.to_string_lossy().to_string(),
+            Err(e) => {
+                // This only ought to happen if we're not running under Nix. Regardless, we can't
+                // do much more here and can't panic either.
+                info!(
+                    "Unable to canonicalise '{}': {}",
+                    Self::NIX_CURRENT_SYSTEM_FILE,
+                    e
+                );
+                return Self {
+                    channels: vec![],
+                    current_system: "".to_string(),
+                };
+            }
+        };
+
+        let content: Vec<String> = read_to_string(Self::NIX_CHANNELS_FILE)
+            .unwrap_or_default()
+            .lines()
+            .map(|line| String::from(line.trim()))
+            .collect();
+
+        let mut channels: Vec<(String, String)> = vec![];
+        for line in content {
+            let mut cols = line.split(" ");
+            channels.push((
+                cols.next().unwrap_or_default().to_string(),
+                cols.next().unwrap_or_default().to_string(),
+            ))
+        }
+
+        Self {
+            channels: vec![],
+            current_system: path.to_string(),
+        }
+    }
 }
 
 /// Data structure containing any SMBIOS/DMI attributes and identifiers that might be present.
@@ -408,6 +464,7 @@ impl HoloInventory {
                 machine_id: systemd_machine_id(),
                 kernel_version: linux_kernel_build(),
                 ssh_host_keys: ssh_host_keys(),
+                nix_state: Some(HoloNixState::from_host()),
             },
             drives: HoloDriveInventory::from_host(),
             cpus: HoloProcessorInventory::from_host(),
