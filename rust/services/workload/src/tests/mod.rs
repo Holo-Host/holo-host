@@ -60,8 +60,10 @@ impl MongodRunner {
 
     pub fn run() -> anyhow::Result<Self> {
         let tempdir = TempDir::new().unwrap();
-
         std::fs::File::create_new(Self::socket_path(&tempdir)?)?;
+
+        println!("tempdir {:?}", tempdir);
+        std::fs::exists(Self::socket_path(&tempdir)?).context("tmpdir should exist")?;
 
         let mut cmd = std::process::Command::new("mongod");
         cmd.args([
@@ -85,9 +87,9 @@ impl MongodRunner {
             _child: child,
             tempdir,
         };
-
         std::fs::exists(Self::socket_path(&new_self.tempdir)?)
             .context("mongod socket should exist")?;
+
         println!(
             "MongoDB Server is running at {:?}",
             new_self.socket_pathbuf()
