@@ -46,10 +46,17 @@ impl TestNatsServer {
 
         // Start NATS server with JetStream enabled
         let mut port = generate_random_port();
-        while check_port_availability(&port).await.is_err() {
+        println!("proposed port: {port}");
+
+        let is_port_availabe = check_port_availability(&port).await;
+        println!("is_port_availabe: {is_port_availabe:?}");
+
+        while is_port_availabe.is_err() {
+            println!("Port {port} is not available -- attempting to find a new port.");
             port = generate_random_port();
             sleep(Duration::from_secs(1)).await;
         }
+        println!("spinning up server on port: {port}");
 
         let process = tokio::process::Command::new("nats-server")
             .args([
