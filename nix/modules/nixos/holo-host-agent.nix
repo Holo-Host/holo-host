@@ -3,6 +3,7 @@
 # blueprint specific first level argument that's referred to as "publisherArgs"
 {
   inputs,
+  flake,
   ...
 }:
 
@@ -28,12 +29,18 @@ in
     };
 
     autoStart = lib.mkOption {
+      type = lib.types.bool;
       default = true;
     };
 
     package = lib.mkOption {
       type = lib.types.package;
       default = inputs.self.packages.${pkgs.stdenv.system}.rust-workspace;
+    };
+
+    hostAuthScriptPath =  lib.mkOption {
+      type = lib.types.path;
+      default = "${flake}/scripts/host_auth_setup.sh";
     };
 
     rust = {
@@ -94,9 +101,9 @@ in
         default = "/var/lib/holo-host-agent/server-key-config.json";
       };
 
-      hposCredsPw = lib.mkOption {
-        type = lib.types.str;
-        default = "pass";
+      hposCredsPwFile = lib.mkOption {
+        type = lib.types.path;
+        default = "/var/lib/holo-host-agent/hpos_creds_pw.txt";
       };
 
       hub = {
@@ -143,7 +150,7 @@ in
           HOSTING_AGENT_HOST_NKEY_PATH = cfg.nats.hostNkeyPath;
           HOSTING_AGENT_SYS_NKEY_PATH = cfg.nats.sysNkeyPath;
           HPOS_CONFIG_PATH = cfg.nats.hposCredsPath;
-          DEVICE_SEED_DEFAULT_PASSWORD = builtins.toString cfg.nats.hposCredsPw;
+          DEVICE_SEED_DEFAULT_PASSWORD_FILE = builtins.toString cfg.nats.hposCredsPwFile;
           NATS_LISTEN_PORT = builtins.toString cfg.nats.listenPort;
         }
         // lib.attrsets.optionalAttrs (cfg.nats.url != null) {
@@ -155,11 +162,16 @@ in
       ];
 
       preStart = ''
-        echo "Start Host Auth Setup"
+        echo "Starting Host Auth Setup"
         mkdir -p ${cfg.nats.hostNkeyPath}
         mkdir -p ${cfg.nats.sysNkeyPath}
         mkdir -p ${cfg.nats.hposCredsPath}
-        echo "Finshed Host Auth Setup"
+
+        init_host_auth_guard() {
+          ${cfg.hostAuthScriptPath} ${builtins.toString cfg.nats.nscPath} ${builtins.toString cfg.nats.sharedCredsPath}
+        }
+        init_host_auth_guard
+        echo "Finished Host Auth Guard Setup"
       '';
 
       script =
