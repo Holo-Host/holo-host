@@ -23,7 +23,7 @@ const USER_ACCOUNT_NAME: &str = "host-account";
 const USER_NAME: &str = "host-user";
 const NSC_CREDS_PATH: &str = ".local/share/nats/nsc/keys/creds";
 
-pub struct TestServerResponse {
+pub struct TestClientResponse {
     client: Client,
     js: Context,
 }
@@ -35,6 +35,7 @@ pub struct TestNatsServer {
 }
 
 impl TestNatsServer {
+    /// Spin up NATS server
     pub async fn new() -> Result<Self> {
         let temp_dir = TempDir::new()?;
         let jetstream_dir = temp_dir.path().join("jetstream");
@@ -65,14 +66,14 @@ impl TestNatsServer {
         Ok(server)
     }
 
-    /// Spin up NATS server
-    pub async fn connect(&self, port: &str) -> Result<TestServerResponse> {
+    /// Connect client to NATS server
+    pub async fn connect(&self, port: &str) -> Result<TestClientResponse> {
         let client = ConnectOptions::new()
             .name("test_client")
             .connect(&format!("nats://localhost:{}", port))
             .await?;
 
-        Ok(TestServerResponse {
+        Ok(TestClientResponse {
             client: client.clone(),
             js: jetstream::new(client),
         })
