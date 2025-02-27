@@ -511,9 +511,6 @@ impl OrchestratorWorkloadApi {
                     "remaining_capacity.disk": { "$gte": workload.system_specs.capacity.disk },
                     "remaining_capacity.memory": { "$gte": workload.system_specs.capacity.memory },
                     "remaining_capacity.cores": { "$gte": workload.system_specs.capacity.cores },
-
-                    // limit how many workloads a single host can have
-                    // "assigned_workloads": { "$lt": 1 }
                 }
             },
             doc! {
