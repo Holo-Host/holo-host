@@ -83,13 +83,56 @@ impl TestNatsServer {
     pub async fn shutdown(self) -> Result<()> {
         if let Ok(mut child) = Arc::try_unwrap(self._process) {
             child.kill().await?;
-            child.wait().await?;
+            let status = child.wait().await?;
+            if !status.success() {
+                return Err(anyhow::anyhow!("Failed to shut down NATS server").into());
+            }
         }
+
+        // Wait for the port to be free
+        wait_for_port_release(&self.port).await?;
+
         Ok(())
     }
 }
 
-// Helper function to check if nats-server is available
+// Helper function to check that a port is available
+pub async fn check_port_availability(port: &str) -> Result<()> {
+    let output = Command::new("lsof")
+        .arg("-i")
+        .arg(format!("{:?}", port))
+        .output()?;
+
+    if output.stdout.is_empty() {
+        Ok(())
+    } else {
+        Err(anyhow::anyhow!("Port is in use").into())
+    }
+}
+
+// Helper function to wait for a port to be available
+pub async fn wait_for_port_release(port: &str) -> Result<()> {
+    let max_retries = 10;
+    let mut retries = 0;
+
+    while retries < max_retries {
+        // Check that the port is free
+        if check_port_availability(port).await.is_ok() {
+            return Ok(());
+        }
+        retries += 1;
+        sleep(Duration::from_secs(1)).await;
+    }
+
+    Err(anyhow::anyhow!(
+        "Port {} is still occupied after {} retries",
+        port,
+        max_retries
+    )
+    .into())
+}
+
+// Helper function to check that the nats-server is available
 pub fn check_nats_server() -> bool {
     Command::new("nats-server")
         .arg("--version")

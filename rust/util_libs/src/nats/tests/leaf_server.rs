@@ -1,3 +1,6 @@
+#![allow(dead_code)]
+#![allow(unused_imports)]
+
 use super::*;
 use crate::nats::leaf_server::{JetStreamConfig, LeafNodeRemote, LeafServer, LoggingOptions};
 use dotenv::dotenv;
@@ -12,6 +15,7 @@ const HUB_SERVER_CONFIG_PATH: &str = "./test_configs/hub_server.conf";
 const TMP_JS_DIR: &str = "./tmp/leaf_store";
 const NEW_LEAF_CONFIG_PATH: &str = "./test_configs/leaf_server.conf";
 
+#[cfg(feature = "tests_integration_nats")]
 #[tokio::test]
 #[serial]
 async fn test_leaf_server_run() {
