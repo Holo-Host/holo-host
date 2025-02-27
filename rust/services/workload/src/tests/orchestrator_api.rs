@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use super::{
     create_test_host, create_test_workload, create_test_workload_default, MongodRunner, TestMessage,
 };
