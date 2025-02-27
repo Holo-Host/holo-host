@@ -143,8 +143,7 @@ pub async fn wait_for_port_release(port: &str) -> Result<()> {
         "Port {} is still occupied after {} retries",
         port,
         max_retries
-    )
-    .into())
+    ))
 }
 
 // Helper function to check that the nats-server is available
