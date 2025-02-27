@@ -1,26 +1,35 @@
-use super::*;
+use super::{
+    create_test_host, create_test_workload, create_test_workload_default, setup_test_db,
+    TestMessage,
+};
+use crate::{orchestrator_api::OrchestratorWorkloadApi, types::WorkloadResult};
+use anyhow::Result;
+use bson::doc;
+use std::sync::Arc;
+use util_libs::db::schemas::{WorkloadState, WorkloadStatus};
 
-#[cfg(not(target_arch = "aarch64"))]
+// #[cfg(feature = "tests_integration_workload_service")]
+#[cfg(test)]
 mod tests {
-    use super::{create_test_host, create_test_workload, setup_test_db, TestMessage};
-    use crate::{orchestrator_api::OrchestratorWorkloadApi, types::WorkloadResult};
-    use anyhow::Result;
-    use bson::doc;
-    use std::sync::Arc;
+    use mongodb::{options::ClientOptions, Client as MongoDBClient};
     use util_libs::db::{
-        mongodb::MongoDbAPI,
-        schemas::{WorkloadState, WorkloadStatus},
+        mongodb::{get_mongodb_url, MongoDbAPI},
+        schemas::Capacity,
     };
+
+    use super::*;
 
     #[tokio::test]
     async fn test_add_workload() -> Result<()> {
-        let (client, _tempdir) = setup_test_db().await;
-        let api = OrchestratorWorkloadApi::new(&client).await?;
+        let (db_client, _tempdir) = setup_test_db().await;
+        // let mongo_uri: String = get_mongodb_url();
+        // let client_options = ClientOptions::parse(mongo_uri).await?;
+        // let db_client = MongoDBClient::with_options(client_options)?;
 
-        let workload = create_test_workload();
+        let api = OrchestratorWorkloadApi::new(&db_client).await?;
+        let workload = create_test_workload_default();
         let msg_payload = serde_json::to_vec(&workload).unwrap();
         let msg = Arc::new(TestMessage::new("WORKLOAD.add", msg_payload).into_message());
-
         let result = api.add_workload(msg).await?;
 
         assert!(result.result.status.id.is_some());
@@ -32,17 +41,20 @@ mod tests {
             result.result.status.desired,
             WorkloadState::Running
         ));
-
         Ok(())
     }
 
     #[tokio::test]
     async fn test_update_workload() -> Result<()> {
         let (client, _tempdir) = setup_test_db().await;
-        let api = OrchestratorWorkloadApi::new(&client).await?;
+        // let mongo_uri: String = get_mongodb_url();
+        // let client_options = ClientOptions::parse(mongo_uri).await?;
+        // let db_client = MongoDBClient::with_options(client_options)?;
+
+        let api = OrchestratorWorkloadApi::new(&db_client).await?;
 
         // First add a workload
-        let mut workload = create_test_workload();
+        let mut workload = create_test_workload_default();
         let workload_id = api
             .workload_collection
             .insert_one_into(workload.clone())
@@ -70,10 +82,14 @@ mod tests {
     #[tokio::test]
     async fn test_remove_workload() -> Result<()> {
         let (client, _tempdir) = setup_test_db().await;
-        let api = OrchestratorWorkloadApi::new(&client).await?;
+        // let mongo_uri: String = get_mongodb_url();
+        // let client_options = ClientOptions::parse(mongo_uri).await?;
+        // let db_client = MongoDBClient::with_options(client_options)?;
+
+        let api = OrchestratorWorkloadApi::new(&db_client).await?;
 
         // First add a workload
-        let workload = create_test_workload();
+        let workload = create_test_workload_default();
         let workload_id = api.workload_collection.insert_one_into(workload).await?;
 
         // Then remove it
@@ -104,16 +120,106 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_verify_host_meets_workload_criteria() -> Result<()> {
+        let (client, _tempdir) = setup_test_db().await;
+        // let mongo_uri: String = get_mongodb_url();
+        // let client_options = ClientOptions::parse(mongo_uri).await?;
+        // let db_client = MongoDBClient::with_options(client_options)?;
+
+        let api = OrchestratorWorkloadApi::new(&db_client).await?;
+        let required_avg_network_speed = 100;
+        let required_avg_uptime = 0.85;
+        let required_capacity = Capacity {
+            memory: 8,
+            disk: 100,
+            cores: 4,
+        };
+        let valid_host_remaining_capacity = Capacity {
+            memory: 8,
+            disk: 100,
+            cores: 4,
+        };
+
+        let workload = create_test_workload(
+            None,
+            None,
+            Some(1),
+            Some(required_capacity),
+            Some(required_avg_network_speed),
+            Some(required_avg_uptime),
+        );
+        let host = create_test_host(
+            None,
+            None,
+            None,
+            Some(valid_host_remaining_capacity),
+            Some(required_avg_network_speed),
+            Some(required_avg_uptime),
+        );
+
+        // Test when host meets criteria
+        assert!(api.verify_host_meets_workload_criteria(&host, &workload));
+
+        // Test when host memorydoesn't meet memory criteria
+        let mut ineligible_host = host.clone();
+        ineligible_host.remaining_capacity.memory = 4; // Less than workload requirement
+        assert!(!api.verify_host_meets_workload_criteria(&ineligible_host, &workload));
+
+        // Test when host disk space doesn't meet disk criteria
+        let mut ineligible_host = host.clone();
+        ineligible_host.remaining_capacity.disk = 50; // Less than workload requirement
+        assert!(!api.verify_host_meets_workload_criteria(&ineligible_host, &workload));
+
+        // Test when host cores count doesn't meet cores criteria
+        let mut ineligible_host = host.clone();
+        ineligible_host.remaining_capacity.cores = 2; // Less than workload requirement
+        assert!(!api.verify_host_meets_workload_criteria(&ineligible_host, &workload));
+
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn test_handle_db_insertion() -> Result<()> {
         let (client, _tempdir) = setup_test_db().await;
-        let api = OrchestratorWorkloadApi::new(&client).await?;
+        // let mongo_uri: String = get_mongodb_url();
+        // let client_options = ClientOptions::parse(mongo_uri).await?;
+        // let db_client = MongoDBClient::with_options(client_options)?;
+
+        let api = OrchestratorWorkloadApi::new(&db_client).await?;
+        let required_avg_network_speed = 500;
+        let required_avg_uptime = 0.90;
+        let required_capacity = Capacity {
+            memory: 800,
+            disk: 1000,
+            cores: 20,
+        };
+        let valid_host_remaining_capacity = Capacity {
+            memory: 800,
+            disk: 1000,
+            cores: 20,
+        };
 
         // Create and add a host first
-        let host = create_test_host(None, None, None, None);
+        let host = create_test_host(
+            None,
+            None,
+            None,
+            Some(valid_host_remaining_capacity),
+            Some(required_avg_network_speed),
+            Some(required_avg_uptime),
+        );
         let host_id = api.host_collection.insert_one_into(host).await?;
 
         // Create workload
-        let mut workload = create_test_workload();
+        let mut workload = create_test_workload(
+            None,
+            None,
+            Some(1),
+            Some(required_capacity),
+            Some(required_avg_network_speed),
+            Some(required_avg_uptime),
+        );
+
         let workload_id = api
             .workload_collection
             .insert_one_into(workload.clone())
@@ -140,47 +246,22 @@ mod tests {
             .get_one_from(doc! { "_id": host_id })
             .await?
             .unwrap();
+
         assert!(updated_host.assigned_workloads.contains(&workload_id));
-
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn test_verify_host_meets_workload_criteria() -> Result<()> {
-        let (client, _tempdir) = setup_test_db().await;
-        let api = OrchestratorWorkloadApi::new(&client).await?;
-
-        let host = create_test_host(None, None, None, None);
-        let workload = create_test_workload();
-
-        // Test when host meets criteria
-        assert!(api.verify_host_meets_workload_criteria(&host, &workload));
-
-        // Test when host doesn't meet memory criteria
-        let mut ineligible = host.clone();
-        ineligible.remaining_capacity.memory = 4; // Less than workload requirement
-        assert!(!api.verify_host_meets_workload_criteria(&ineligible, &workload));
-
-        // Test when host doesn't meet disk criteria
-        let mut ineligible = host.clone();
-        ineligible.remaining_capacity.disk = 50; // Less than workload requirement
-        assert!(!api.verify_host_meets_workload_criteria(&ineligible, &workload));
-
-        // Test when host doesn't meet cores criteria
-        let mut ineligible = host;
-        ineligible.remaining_capacity.cores = 2; // Less than workload requirement
-        assert!(!api.verify_host_meets_workload_criteria(&ineligible, &workload));
-
         Ok(())
     }
 
     #[tokio::test]
     async fn test_handle_status_update() -> Result<()> {
         let (client, _tempdir) = setup_test_db().await;
-        let api = OrchestratorWorkloadApi::new(&client).await?;
+        // let mongo_uri: String = get_mongodb_url();
+        // let client_options = ClientOptions::parse(mongo_uri).await?;
+        // let db_client = MongoDBClient::with_options(client_options)?;
+
+        let api = OrchestratorWorkloadApi::new(&db_client).await?;
 
         // Create and add a workload first
-        let workload = create_test_workload();
+        let workload = create_test_workload_default();
         let workload_id = api.workload_collection.insert_one_into(workload).await?;
 
         // Create status update

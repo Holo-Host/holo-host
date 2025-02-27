@@ -163,7 +163,7 @@ pub struct Host {
     pub device_id: PubKey, // *INDEXED*
     pub ip_address: String,
     pub remaining_capacity: Capacity,
-    pub avg_uptime: i64,
+    pub avg_uptime: f64,
     pub avg_network_speed: i64,
     pub avg_latency: i64,
     pub assigned_hoster: ObjectId,
@@ -227,7 +227,6 @@ pub struct Workload {
     pub min_hosts: i32,
     pub system_specs: SystemSpecs,
     pub assigned_hosts: Vec<ObjectId>,
-    // pub state: WorkloadState,
     pub status: WorkloadStatus,
 }
 

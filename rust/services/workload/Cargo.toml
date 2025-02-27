@@ -19,7 +19,7 @@ strum_macros = "0.25"
 async-trait = "0.1.83"
 semver = "1.0.24"
 rand = "0.8.5"
-mongodb = "3.1"
+mongodb = { version = "3.1", features = ["sync"] }
 bson = { version = "2.6.1", features = ["chrono-0_4"] }
 url = { version = "2", features = ["serde"] }
 bytes = "1.8.0"
@@ -30,3 +30,6 @@ util_libs = { path = "../../util_libs" }
 [dev-dependencies]
 tempfile = "3.8"
 serde_json = "1.0"
+
+[features]
+tests_integration_workload_service = []
