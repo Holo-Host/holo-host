@@ -7,10 +7,7 @@ use bson::doc;
 use std::sync::Arc;
 use util_libs::db::schemas::{WorkloadState, WorkloadStatus};
 
-#[cfg(all(
-    // feature = "tests_integration_workload_service",
-    not(target_arch = "aarch64")
-))]
+#[cfg(not(target_arch = "aarch64"))]
 #[cfg(test)]
 mod tests {
     use util_libs::db::{mongodb::MongoDbAPI, schemas::Capacity};
