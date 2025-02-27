@@ -6,6 +6,9 @@ Importing Account: HPOS
 Users: orchestrator & host
 */
 
+#[cfg(test)]
+mod tests;
+
 pub mod host_api;
 pub mod orchestrator_api;
 pub mod types;

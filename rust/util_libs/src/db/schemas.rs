@@ -163,7 +163,7 @@ pub struct Host {
     pub device_id: PubKey, // *INDEXED*
     pub ip_address: String,
     pub remaining_capacity: Capacity,
-    pub avg_uptime: i64,
+    pub avg_uptime: f64,
     pub avg_network_speed: i64,
     pub avg_latency: i64,
     pub assigned_hoster: ObjectId,
@@ -189,7 +189,7 @@ impl IntoIndexes for Host {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum WorkloadState {
     Reported,
-    Assigned, // String = host id
+    Assigned,
     Pending,
     Installed,
     Running,

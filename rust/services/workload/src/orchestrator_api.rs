@@ -9,7 +9,7 @@ Endpoints & Managed Subjects:
 */
 
 use super::{types::WorkloadApiResult, WorkloadServiceApi};
-use crate::types::WorkloadResult;
+use crate::types::{ObjectIdJSON, WorkloadResult};
 use anyhow::Result;
 use async_nats::Message;
 use bson::{self, doc, oid::ObjectId, to_document, DateTime};
@@ -435,7 +435,7 @@ impl OrchestratorWorkloadApi {
     }
 
     // Verifies that a host meets the workload criteria
-    fn verify_host_meets_workload_criteria(
+    pub fn verify_host_meets_workload_criteria(
         &self,
         assigned_host: &Host,
         workload: &Workload,
@@ -511,21 +511,22 @@ impl OrchestratorWorkloadApi {
                     "remaining_capacity.disk": { "$gte": workload.system_specs.capacity.disk },
                     "remaining_capacity.memory": { "$gte": workload.system_specs.capacity.memory },
                     "remaining_capacity.cores": { "$gte": workload.system_specs.capacity.cores },
-
-                    // limit how many workloads a single host can have
-                    "assigned_workloads": { "$lt": 1 }
                 }
             },
             doc! {
                 // the maximum number of hosts returned should be the minimum hosts required by workload
                 // sample randomized results and always return back at least 1 result
-                "$sample": std::cmp::min( needed_host_count, 1),
-
-                // only return the `host._id` feilds
+                "$sample": { "size": std::cmp::max(needed_host_count, 1) }
+            },
+            doc! {
+                // only return the `host._id` field
                 "$project": { "_id": 1 }
             },
         ];
-        let host_ids = self.host_collection.aggregate::<ObjectId>(pipeline).await?;
+        let host_ids = self
+            .host_collection
+            .aggregate::<ObjectIdJSON>(pipeline)
+            .await?;
         if host_ids.is_empty() {
             let err_msg = format!(
                 "Failed to locate a compatible host for workload. Workload_Id={:?}",
@@ -539,7 +540,7 @@ impl OrchestratorWorkloadApi {
             );
         }
 
-        let mut eligible_host_ids = host_ids;
+        let mut eligible_host_ids: Vec<ObjectId> = host_ids.into_iter().map(|h| h._id).collect();
         eligible_host_ids.extend(still_eligible_host_ids);
 
         Ok(eligible_host_ids)
@@ -630,18 +631,18 @@ impl OrchestratorWorkloadApi {
                     "_id": workload_id
                 },
                 UpdateModifications::Document(doc! {
-                    "$set": [{
+                    "$set": {
                         "status": bson::to_bson(&new_status)
-                            .map_err(|e| ServiceError::Internal(e.to_string()))?
-                        }, {
+                            .map_err(|e| ServiceError::Internal(e.to_string()))?,
                         "assigned_hosts": assigned_host_ids
-                    }]
+                    }
                 }),
             )
-            .await;
+            .await?;
 
         log::trace!(
-            "Successfully added new workload into the Workload Collection. MongodDB Workload ID={:?}",
+            "Successfully added new workload into the Workload Collection. MongodDB Workload ID={:?}, MongodDB Workload Insert Result={:?}",
+            workload_id,
             updated_workload_result
         );
 
