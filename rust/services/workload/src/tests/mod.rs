@@ -1,3 +1,4 @@
+#[allow(dead_code)]
 use anyhow::Context;
 use async_nats::Message;
 use bson::oid::ObjectId;
