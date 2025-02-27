@@ -277,9 +277,9 @@ fn test_led_local_state() {
     let path = &temp_dir.path().to_string_lossy();
     let state_path = format!("{}/{}", path, HoloLed::LED_STATE_FILE);
     // ensure that the path doesn't already exist for some reason.
-    assert_eq!(Path::new(&state_path).exists(), false);
+    assert!(!Path::new(&state_path).exists());
 
-    l.set_state_for_test(&path, HoloDiagnosticState::StatusOk)
+    l.set_state_for_test(path, HoloDiagnosticState::StatusOk)
         .unwrap();
     let state_file = File::open(&state_path).unwrap();
     let reader = BufReader::new(state_file);
@@ -288,7 +288,7 @@ fn test_led_local_state() {
     assert_eq!(state.state, HoloDiagnosticState::StatusOk);
 
     // Check another variant.
-    l.set_state_for_test(&path, HoloDiagnosticState::StatusBad9)
+    l.set_state_for_test(path, HoloDiagnosticState::StatusBad9)
         .unwrap();
     let state_file = File::open(&state_path).unwrap();
     let reader = BufReader::new(state_file);
