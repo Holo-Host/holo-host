@@ -1,3 +1,6 @@
+#![allow(dead_code)]
+#![allow(unused_imports)]
+
 use super::{
     create_test_host, create_test_workload, create_test_workload_default, MongodRunner, TestMessage,
 };

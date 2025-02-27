@@ -1,4 +1,6 @@
-#[allow(dead_code)]
+#![allow(dead_code)]
+#![allow(unused_imports)]
+
 use anyhow::Context;
 use async_nats::Message;
 use bson::oid::ObjectId;
