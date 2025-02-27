@@ -67,7 +67,9 @@ pub async fn setup_test_db() -> (MongoDBClient, TempDir) {
 
     let _child = cmd
         .spawn()
-        .unwrap_or_else(|e| panic!("Failed to spawn {cmd:?}: {e}"));
+        .expect("Failed to spawn mongod")
+        .wait()
+        .expect("Failed to spawn mongod");
 
     let server_address = mongodb::options::ServerAddress::Unix {
         path: PathBuf::from_str(&socket_path).unwrap(),
