@@ -37,7 +37,7 @@ async fn test_service_initialization() -> Result<()> {
     }
 
     let server = TestNatsServer::new().await?;
-    let TestServerResponse { client: _, js } = server.connect(&server.port).await?;
+    let TestClientResponse { client: _, js } = server.connect(&server.port).await?;
 
     let service = JsStreamService::new(
         js,
@@ -67,7 +67,7 @@ async fn test_add_consumer() -> Result<()> {
     }
 
     let server = TestNatsServer::new().await?;
-    let TestServerResponse { client: _, js } = server.connect(&server.port).await?;
+    let TestClientResponse { client: _, js } = server.connect(&server.port).await?;
 
     let service = JsStreamService::new(
         js,
@@ -115,7 +115,7 @@ async fn test_adding_async_consumer() -> Result<()> {
     }
 
     let server = TestNatsServer::new().await?;
-    let TestServerResponse { client: _, js } = server.connect(&server.port).await?;
+    let TestClientResponse { client: _, js } = server.connect(&server.port).await?;
 
     let service = JsStreamService::new(
         js.clone(),
@@ -165,7 +165,7 @@ async fn test_consumer_message_handling() -> Result<()> {
     }
 
     let server = TestNatsServer::new().await?;
-    let TestServerResponse { client, js } = server.connect(&server.port).await?;
+    let TestClientResponse { client, js } = server.connect(&server.port).await?;
 
     let service = JsStreamService::new(
         js.clone(),
