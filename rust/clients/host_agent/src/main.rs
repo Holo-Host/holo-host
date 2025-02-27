@@ -1,7 +1,7 @@
 /*
 This client is associated with the:
-  - WORKLOAD account
-  - hpos user
+  - HPOS account
+  - host user
 
 This client is responsible for subscribing the host agent to workload stream endpoints:
   - installing new workloads
@@ -10,15 +10,14 @@ This client is responsible for subscribing the host agent to workload stream end
   - sending workload status upon request
 */
 
-mod workload_manager;
+pub mod agent_cli;
+pub mod host_cmds;
+mod hostd;
+pub mod support_cmds;
 use agent_cli::DaemonzeArgs;
 use anyhow::Result;
 use clap::Parser;
 use dotenv::dotenv;
-pub mod agent_cli;
-pub mod gen_leaf_server;
-pub mod host_cmds;
-pub mod support_cmds;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -49,8 +48,8 @@ async fn main() -> Result<(), AgentCliError> {
 }
 
 async fn daemonize(args: &DaemonzeArgs) -> Result<(), async_nats::Error> {
-    // let (host_pubkey, host_creds_path) = auth::initializer::run().await?;
-    let bare_client = gen_leaf_server::run(
+    // let host_pubkey = auth::init_agent::run().await?;
+    let bare_client = hostd::gen_leaf_server::run(
         &args.nats_leafnode_server_name,
         &args.nats_leafnode_client_creds_path,
         &args.store_dir,
@@ -62,7 +61,7 @@ async fn daemonize(args: &DaemonzeArgs) -> Result<(), async_nats::Error> {
     // TODO: would it be a good idea to reuse this client in the workload_manager and elsewhere later on?
     bare_client.close().await?;
 
-    let host_client = workload_manager::run(
+    let host_workload_client = hostd::workload::run(
         "host_id_placeholder>",
         &args.nats_leafnode_client_creds_path,
     )
@@ -71,7 +70,9 @@ async fn daemonize(args: &DaemonzeArgs) -> Result<(), async_nats::Error> {
     // Only exit program when explicitly requested
     tokio::signal::ctrl_c().await?;
 
-    host_client.close().await?;
+    // Close client and drain internal buffer before exiting to make sure all messages are sent
+    host_workload_client.close().await?;
+
     Ok(())
 }
 
