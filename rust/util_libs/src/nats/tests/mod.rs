@@ -93,7 +93,7 @@ impl TestNatsServer {
             child.kill().await?;
             let status = child.wait().await?;
             if !status.success() {
-                return Err(anyhow::anyhow!("Failed to shut down NATS server").into());
+                return Err(anyhow::anyhow!("Failed to shut down NATS server"));
             }
         }
 
@@ -114,7 +114,7 @@ pub async fn check_port_availability(port: &str) -> Result<()> {
     if output.stdout.is_empty() {
         Ok(())
     } else {
-        Err(anyhow::anyhow!("Port is in use").into())
+        Err(anyhow::anyhow!("Port is in use"))
     }
 }
 
