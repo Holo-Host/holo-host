@@ -143,7 +143,7 @@ impl HoloLed {
         state_dir: &str,
         state: HoloDiagnosticState,
     ) -> Result<(), InventoryError> {
-        self.set_state_with_path(&state_dir, state)
+        self.set_state_with_path(state_dir, state)
     }
 
     fn set_state_with_path(
