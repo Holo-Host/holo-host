@@ -1,6 +1,5 @@
 use super::{
-    create_test_host, create_test_workload, create_test_workload_default, setup_test_db,
-    TestMessage,
+    create_test_host, create_test_workload, create_test_workload_default, MongodRunner, TestMessage,
 };
 use crate::{orchestrator_api::OrchestratorWorkloadApi, types::WorkloadResult};
 use anyhow::Result;
@@ -17,10 +16,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_add_workload() -> Result<()> {
-        let (db_client, _tempdir) = setup_test_db().await;
-        // let mongo_uri: String = get_mongodb_url();
-        // let client_options = ClientOptions::parse(mongo_uri).await?;
-        // let db_client = MongoDBClient::with_options(client_options)?;
+        let mongod = MongodRunner::run().unwrap();
+        let db_client = mongod.client().unwrap(); // let mongo_uri: String = get_mongodb_url();
+                                                  // let client_options = ClientOptions::parse(mongo_uri).await?;
+                                                  // let db_client = MongoDBClient::with_options(client_options)?;
 
         let api = OrchestratorWorkloadApi::new(&db_client).await?;
         let workload = create_test_workload_default();
@@ -42,10 +41,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_update_workload() -> Result<()> {
-        let (db_client, _tempdir) = setup_test_db().await;
-        // let mongo_uri: String = get_mongodb_url();
-        // let client_options = ClientOptions::parse(mongo_uri).await?;
-        // let db_client = MongoDBClient::with_options(client_options)?;
+        let mongod = MongodRunner::run().unwrap();
+        let db_client = mongod.client().unwrap(); // let mongo_uri: String = get_mongodb_url();
+                                                  // let client_options = ClientOptions::parse(mongo_uri).await?;
+                                                  // let db_client = MongoDBClient::with_options(client_options)?;
 
         let api = OrchestratorWorkloadApi::new(&db_client).await?;
 
@@ -77,10 +76,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_remove_workload() -> Result<()> {
-        let (db_client, _tempdir) = setup_test_db().await;
-        // let mongo_uri: String = get_mongodb_url();
-        // let client_options = ClientOptions::parse(mongo_uri).await?;
-        // let db_client = MongoDBClient::with_options(client_options)?;
+        let mongod = MongodRunner::run().unwrap();
+        let db_client = mongod.client().unwrap(); // let mongo_uri: String = get_mongodb_url();
+                                                  // let client_options = ClientOptions::parse(mongo_uri).await?;
+                                                  // let db_client = MongoDBClient::with_options(client_options)?;
 
         let api = OrchestratorWorkloadApi::new(&db_client).await?;
 
@@ -117,10 +116,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_verify_host_meets_workload_criteria() -> Result<()> {
-        let (db_client, _tempdir) = setup_test_db().await;
-        // let mongo_uri: String = get_mongodb_url();
-        // let client_options = ClientOptions::parse(mongo_uri).await?;
-        // let db_client = MongoDBClient::with_options(client_options)?;
+        let mongod = MongodRunner::run().unwrap();
+        let db_client = mongod.client().unwrap(); // let mongo_uri: String = get_mongodb_url();
+                                                  // let client_options = ClientOptions::parse(mongo_uri).await?;
+                                                  // let db_client = MongoDBClient::with_options(client_options)?;
 
         let api = OrchestratorWorkloadApi::new(&db_client).await?;
         let required_avg_network_speed = 100;
@@ -176,7 +175,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_handle_db_insertion() -> Result<()> {
-        let (db_client, _tempdir) = setup_test_db().await;
+        let mongod = MongodRunner::run().unwrap();
+        let db_client = mongod.client().unwrap();
         // let mongo_uri: String = get_mongodb_url();
         // let client_options = ClientOptions::parse(mongo_uri).await?;
         // let db_client = MongoDBClient::with_options(client_options)?;
@@ -249,7 +249,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_handle_status_update() -> Result<()> {
-        let (db_client, _tempdir) = setup_test_db().await;
+        let mongod = MongodRunner::run().unwrap();
+        let db_client = mongod.client().unwrap();
         // let mongo_uri: String = get_mongodb_url();
         // let client_options = ClientOptions::parse(mongo_uri).await?;
         // let db_client = MongoDBClient::with_options(client_options)?;

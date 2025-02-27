@@ -1,3 +1,4 @@
+use anyhow::Context;
 use async_nats::Message;
 use bson::oid::ObjectId;
 use mongodb::{options::ClientOptions, Client as MongoDBClient};
@@ -35,50 +36,77 @@ impl TestMessage {
     }
 }
 
-// Helper function to create a test MongoDB instance
-pub async fn setup_test_db() -> (MongoDBClient, TempDir) {
-    let tempdir = TempDir::new().unwrap();
-    let socket_path = format!(
-        "{}/mongod.sock",
-        tempdir
-            .path()
-            .canonicalize()
-            .unwrap()
-            .as_mut_os_str()
-            .to_str()
-            .unwrap()
-    );
+/// This module implements running ephemeral Mongod instances.
+/// It disables TCP and relies only unix domain sockets.
+pub struct MongodRunner {
+    _child: std::process::Child,
 
-    std::fs::File::create_new(&socket_path).unwrap();
+    // this is stored to prevent premature removing of the tempdir
+    tempdir: TempDir,
+}
 
-    let mut cmd = std::process::Command::new("mongod");
-    cmd.args([
-        "--unixSocketPrefix",
-        &tempdir.path().to_string_lossy(),
-        "--dbpath",
-        &tempdir.path().to_string_lossy(),
-        "--bind_ip",
-        &socket_path,
-        "--port",
-        "0",
-    ])
-    .stdout(Stdio::null())
-    .stderr(Stdio::null());
+impl MongodRunner {
+    fn socket_path(tempdir: &TempDir) -> anyhow::Result<String> {
+        Ok(format!(
+            "{}/mongod.sock",
+            tempdir
+                .path()
+                .canonicalize()?
+                .as_mut_os_str()
+                .to_str()
+                .ok_or_else(|| anyhow::anyhow!("can't convert path to str"))?
+        ))
+    }
 
-    let _child = cmd
-        .spawn()
-        .expect("Failed to spawn mongod")
-        .wait()
-        .expect("Failed to spawn mongod");
+    pub fn run() -> anyhow::Result<Self> {
+        let tempdir = TempDir::new().unwrap();
 
-    let server_address = mongodb::options::ServerAddress::Unix {
-        path: PathBuf::from_str(&socket_path).unwrap(),
-    };
+        std::fs::File::create_new(Self::socket_path(&tempdir)?)?;
 
-    let client_options = ClientOptions::builder().hosts(vec![server_address]).build();
-    let client = MongoDBClient::with_options(client_options).unwrap();
-    log::debug!("setup_test_db client created");
-    (client, tempdir)
+        let mut cmd = std::process::Command::new("mongod");
+        cmd.args([
+            "--unixSocketPrefix",
+            &tempdir.path().to_string_lossy(),
+            "--dbpath",
+            &tempdir.path().to_string_lossy(),
+            "--bind_ip",
+            &Self::socket_path(&tempdir)?,
+            "--port",
+            &0.to_string(),
+        ])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+
+        let child = cmd
+            .spawn()
+            .unwrap_or_else(|e| panic!("Failed to spawn {cmd:?}: {e}"));
+
+        let new_self = Self {
+            _child: child,
+            tempdir,
+        };
+
+        std::fs::exists(Self::socket_path(&new_self.tempdir)?)
+            .context("mongod socket should exist")?;
+        println!(
+            "MongoDB Server is running at {:?}",
+            new_self.socket_pathbuf()
+        );
+
+        Ok(new_self)
+    }
+
+    fn socket_pathbuf(&self) -> anyhow::Result<PathBuf> {
+        Ok(PathBuf::from_str(&Self::socket_path(&self.tempdir)?)?)
+    }
+
+    pub fn client(&self) -> anyhow::Result<MongoDBClient> {
+        let server_address = mongodb::options::ServerAddress::Unix {
+            path: self.socket_pathbuf()?,
+        };
+        let client_options = ClientOptions::builder().hosts(vec![server_address]).build();
+        Ok(MongoDBClient::with_options(client_options)?)
+    }
 }
 
 // Helper function to create a test workload
