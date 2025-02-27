@@ -1,8 +1,11 @@
+#![allow(dead_code)]
+
 use anyhow::Result;
 use async_nats::{
     jetstream::{self, Context},
     Client, ConnectOptions,
 };
+use rand::Rng;
 use std::fs::File;
 use std::io::Write;
 use std::{fs, path::Path, process::Command, sync::Arc};
@@ -42,7 +45,12 @@ impl TestNatsServer {
         std::fs::create_dir_all(&jetstream_dir)?;
 
         // Start NATS server with JetStream enabled
-        let port = "4444".to_string();
+        let mut port = generate_random_port();
+        while check_port_availability(&port).await.is_err() {
+            port = generate_random_port();
+            sleep(Duration::from_secs(1)).await;
+        }
+
         let process = tokio::process::Command::new("nats-server")
             .args([
                 "--jetstream",
@@ -108,6 +116,13 @@ pub async fn check_port_availability(port: &str) -> Result<()> {
     } else {
         Err(anyhow::anyhow!("Port is in use").into())
     }
+}
+
+// Helper function to get a random port
+fn generate_random_port() -> String {
+    let mut rng = rand::rng();
+    let port = rng.random_range(4444..5555);
+    port.to_string()
 }
 
 // Helper function to wait for a port to be available
