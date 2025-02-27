@@ -1,172 +1,110 @@
 /*
 Service Name: WORKLOAD
 Subject: "WORKLOAD.>"
-Provisioning Account: ORCHESTRATOR Account
-Importing Account: HPOS Account
-Endpoints & Managed Subjects:
-- `add_workload`: handles the "WORKLOAD.add" subject
-- `handle_changed_workload`: handles the "WORKLOAD.handle_change" subject // the stream changed output by the mongo<>nats connector (stream eg: DB_COLL_CHANGE_WORKLOAD).
-- TODO: `start_workload`: handles the "WORKLOAD.start.{{hpos_id}}" subject
-- TODO: `remove_workload`: handles the "WORKLOAD.remove.{{hpos_id}}" subject
-
+Provisioning Account: ADMIN
+Importing Account: HPOS
+Users: orchestrator & host
 */
 
-use anyhow::Result;
-use async_nats::Message;
-// use mongodb::Client as MongoDBClient;
-use serde::{Deserialize, Serialize};
-use std::sync::Arc;
-use util_libs::db::schemas; // mongodb::MongoCollection,
+#[cfg(test)]
+mod tests;
 
-pub const WORKLOAD_SRV_OWNER_NAME: &str = "WORKLOAD_OWNER";
-pub const WORKLOAD_SRV_NAME: &str = "WORKLOAD";
+pub mod host_api;
+pub mod orchestrator_api;
+pub mod types;
+
+use anyhow::Result;
+use async_nats::jetstream::ErrorCode;
+use async_nats::Message;
+use async_trait::async_trait;
+use core::option::Option::None;
+use serde::Deserialize;
+use std::future::Future;
+use std::{fmt::Debug, sync::Arc};
+use types::{WorkloadApiResult, WorkloadResult};
+use util_libs::{
+    db::schemas::{WorkloadState, WorkloadStatus},
+    nats::types::{AsyncEndpointHandler, JsServiceResponse, ServiceError},
+};
+
+pub const WORKLOAD_SRV_NAME: &str = "WORKLOAD_SERVICE";
 pub const WORKLOAD_SRV_SUBJ: &str = "WORKLOAD";
 pub const WORKLOAD_SRV_VERSION: &str = "0.0.1";
-pub const WORKLOAD_SRV_DESC: &str = "This service handles the flow of Workload requests between the Developer and the Orchestrator, and between the Orchestrator and HPOS.";
+pub const WORKLOAD_SRV_DESC: &str = "This service handles the flow of Workload requests between the Developer and the Orchestrator, and between the Orchestrator and Host.";
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum WorkloadState {
-    Reported,
-    Pending,
-    Installed,
-    Running,
-    Failed,
-    Uninstalled,
-    Unknown(String),
-}
+#[async_trait]
+pub trait WorkloadServiceApi
+where
+    Self: std::fmt::Debug + Clone + 'static,
+{
+    fn call<F, Fut>(&self, handler: F) -> AsyncEndpointHandler<WorkloadApiResult>
+    where
+        F: Fn(Self, Arc<Message>) -> Fut + Send + Sync + 'static,
+        Fut: Future<Output = Result<WorkloadApiResult, ServiceError>> + Send + 'static,
+        Self: Send + Sync,
+    {
+        let api = self.to_owned();
+        Arc::new(
+            move |msg: Arc<Message>| -> JsServiceResponse<WorkloadApiResult> {
+                let api_clone = api.clone();
+                Box::pin(handler(api_clone, msg))
+            },
+        )
+    }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct WorkloadStatus {
-    desired: WorkloadState,
-    actual: WorkloadState,
-}
-
-#[derive(Debug, Clone)]
-pub struct WorkloadApi {
-    // pub workload_collection: MongoCollection<schemas::Workload>,
-    // pub host_collection: MongoCollection<schemas::Host>,
-    // pub user_collection: MongoCollection<schemas::User>,
-}
-
-impl WorkloadApi {
-    pub async fn new(/*client: &MongoDBClient*/) -> Result<Self> {
-        // Create a typed collection for Workload
-        // let workload_api: MongoCollection<schemas::Workload> =
-        //     MongoCollection::<schemas::Workload>::new(
-        //         client,
-        //         schemas::DATABASE_NAME,
-        //         schemas::HOST_COLLECTION_NAME,
-        //     )
-        //     .await?;
-
-        // Create a typed collection for User
-        // let user_api = MongoCollection::<schemas::User>::new(
-        //     client,
-        //     schemas::DATABASE_NAME,
-        //     schemas::HOST_COLLECTION_NAME,
-        // )
-        // .await?;
-
-        // // Create a typed collection for Host
-        // let host_api = MongoCollection::<schemas::Host>::new(
-        //     client,
-        //     schemas::DATABASE_NAME,
-        //     schemas::HOST_COLLECTION_NAME,
-        // )
-        // .await?;
-
-        Ok(Self {
-            // workload_collection: workload_api,
-            // host_collection: host_api,
-            // user_collection: user_api,
+    fn convert_msg_to_type<T>(msg: Arc<Message>) -> Result<T, ServiceError>
+    where
+        T: for<'de> Deserialize<'de> + Send + Sync,
+    {
+        let payload_buf = msg.payload.to_vec();
+        serde_json::from_slice::<T>(&payload_buf).map_err(|e| {
+            let err_msg = format!(
+                "Error: Failed to deserialize payload. Subject='{}' Err={}",
+                msg.subject.clone().into_string(),
+                e
+            );
+            log::error!("{}", err_msg);
+            ServiceError::Request(format!("{} Code={:?}", err_msg, ErrorCode::BAD_REQUEST))
         })
     }
 
-    pub async fn add_workload(&self, msg: Arc<Message>) -> Result<Vec<u8>, anyhow::Error> {
-        let payload_buf = msg.payload.to_vec();
-        let workload: schemas::Workload = serde_json::from_slice(&payload_buf)?;
-        log::trace!("Incoming message to add workload. Workload={:#?}", workload);
+    // Helper function to streamline the processing of incoming workload messages
+    // NB: Currently used to process requests for MongoDB ops and the subsequent db change streams these db edits create (via the mongodb<>nats connector)
+    async fn process_request<T, Fut>(
+        &self,
+        msg: Arc<Message>,
+        desired_state: WorkloadState,
+        error_state: impl Fn(String) -> WorkloadState + Send + Sync,
+        cb_fn: impl Fn(T) -> Fut + Send + Sync,
+    ) -> Result<WorkloadApiResult, ServiceError>
+    where
+        T: for<'de> Deserialize<'de> + Clone + Send + Sync + Debug + 'static,
+        Fut: Future<Output = Result<WorkloadApiResult, ServiceError>> + Send,
+    {
+        // 1. Deserialize payload into the expected type
+        let payload: T = Self::convert_msg_to_type::<T>(msg.clone())?;
 
-        // 1. Add new workload data into mongodb collection
-        // let workload_id = self.workload_collection.insert_one_into(workload).await?;
-        // log::info!(
-        //     "Successfully added new workload into the Workload Collection. MongodDB Workload ID={}",
-        //     workload_id
-        // );
+        // 2. Call callback handler
+        Ok(match cb_fn(payload.clone()).await {
+            Ok(r) => r,
+            Err(e) => {
+                let err_msg = format!("Failed to process Workload Service Endpoint. Subject={} Payload={:?}, Error={:?}", msg.subject.clone().into_string(), payload, e);
+                log::error!("{}", err_msg);
+                let status = WorkloadStatus {
+                    id: None,
+                    desired: desired_state,
+                    actual: error_state(err_msg),
+                };
 
-        // 2. Respond to endpoint request
-        let status = WorkloadStatus {
-            desired: WorkloadState::Running,
-            actual: WorkloadState::Reported,
-        };
-        let result = status;
-        Ok(serde_json::to_vec(&result)?)
-    }
-
-    // NB: This is the stream that is automatically published to by the nats-db-connector
-    pub async fn handle_db_change(&self, _msg: Arc<Message>) -> Result<Vec<u8>, anyhow::Error> {
-        // 1. Map over workload items in message and grab capacity requirements
-
-        // 2. Call mongodb to get host collection to get host info and filter by capacity availability
-
-        // 3. Randomly choose host/node *and* send the workload request there
-
-        // 4. Respond to endpoint request
-        let response = b"Successfully handled updated workload!".to_vec();
-        Ok(response)
-    }
-
-    // For hpos
-    pub async fn start_workload(&self, msg: Arc<Message>) -> Result<Vec<u8>, anyhow::Error> {
-        log::debug!("Incoming message for 'WORKLOAD.start' : {:?}", msg);
-
-        let payload_buf = msg.payload.to_vec();
-        let _workload = serde_json::from_slice::<schemas::Workload>(&payload_buf)?;
-
-        // TODO: Talk through with Stefan
-        // 1. Connect to interface for Nix and instruct systemd to install workload...
-        // eg: nix_install_with(workload)
-
-        // 2. Respond to endpoint request
-        let result = WorkloadStatus {
-            desired: WorkloadState::Running,
-            actual: WorkloadState::Unknown("..".to_string()),
-        };
-        Ok(serde_json::to_vec(&result)?)
-    }
-
-    // For hpos ?
-    pub async fn signal_status_update(&self, msg: Arc<Message>) -> Result<Vec<u8>, anyhow::Error> {
-        log::debug!(
-            "Incoming message for 'WORKLOAD.signal_status_update' : {:?}",
-            msg
-        );
-
-        let payload_buf = msg.payload.to_vec();
-        let workload_state = serde_json::from_slice::<WorkloadState>(&payload_buf)?;
-
-        // Send updated reponse:
-        // NB: This will send the update to both the requester (if one exists)
-        // and will broadcast the update to for any `response_subject` address registred for the endpoint
-        Ok(serde_json::to_vec(&workload_state)?)
-    }
-
-    // For hpos
-    pub async fn remove_workload(&self, msg: Arc<Message>) -> Result<Vec<u8>, anyhow::Error> {
-        log::debug!("Incoming message for 'WORKLOAD.remove' : {:?}", msg);
-
-        let payload_buf = msg.payload.to_vec();
-        let _workload_id = serde_json::from_slice::<String>(&payload_buf)?;
-
-        // TODO: Talk through with Stefan
-        // 1. Connect to interface for Nix and instruct systemd to UNinstall workload...
-        // nix_uninstall_with(workload_id)
-
-        // 2. Respond to endpoint request
-        let result = WorkloadStatus {
-            desired: WorkloadState::Uninstalled,
-            actual: WorkloadState::Unknown("..".to_string()),
-        };
-        Ok(serde_json::to_vec(&result)?)
+                // 3. return response for stream
+                WorkloadApiResult {
+                    result: WorkloadResult {
+                        status,
+                        workload: None,
+                    },
+                    maybe_response_tags: None,
+                }
+            }
+        })
     }
 }

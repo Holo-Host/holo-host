@@ -1,28 +1,24 @@
 /*
- This client is associated with the:
-- WORKLOAD account
-- hpos user
+This client is associated with the:
+  - HPOS account
+  - host user
 
-// This client is responsible for:
-  - subscribing to workload streams
-    - installing new workloads
-    - removing workloads
-    - send workload status upon request
+This client is responsible for subscribing the host agent to workload stream endpoints:
+  - installing new workloads
+  - removing workloads
   - sending active periodic workload reports
+  - sending workload status upon request
 */
 
-// mod auth;
-// mod utils;
-mod workloads;
+pub mod agent_cli;
+pub mod host_cmds;
+mod hostd;
+pub mod support_cmds;
+use agent_cli::DaemonzeArgs;
 use anyhow::Result;
 use clap::Parser;
 use dotenv::dotenv;
-pub mod agent_cli;
-pub mod gen_leaf_server;
-pub mod host_cmds;
-pub mod support_cmds;
 use thiserror::Error;
-use util_libs::nats_js_client;
 
 #[derive(Error, Debug)]
 pub enum AgentCliError {
@@ -39,30 +35,42 @@ async fn main() -> Result<(), AgentCliError> {
 
     let cli = agent_cli::Root::parse();
     match &cli.scope {
-        Some(agent_cli::CommandScopes::Daemonize) => {
+        agent_cli::CommandScopes::Daemonize(daemonize_args) => {
             log::info!("Spawning host agent.");
-            daemonize().await?;
+            daemonize(daemonize_args).await?;
         }
-        Some(agent_cli::CommandScopes::Host { command }) => host_cmds::host_command(command)?,
-        Some(agent_cli::CommandScopes::Support { command }) => {
-            support_cmds::support_command(command)?
-        }
-        None => {
-            log::warn!("No arguments given. Spawning host agent.");
-            daemonize().await?;
-        }
+        agent_cli::CommandScopes::Host { command } => host_cmds::host_command(command)?,
+        agent_cli::CommandScopes::Support { command } => support_cmds::support_command(command)?,
     }
 
     Ok(())
 }
 
-async fn daemonize() -> Result<(), async_nats::Error> {
-    // let user_creds_path = auth::initializer::run().await?;
-    let user_creds_path = "placeholder_creds_that_will_not_be_read".to_string();
-    gen_leaf_server::run(&user_creds_path).await;
+async fn daemonize(args: &DaemonzeArgs) -> Result<(), async_nats::Error> {
+    // let host_pubkey = auth::init_agent::run().await?;
+    let bare_client = hostd::gen_leaf_server::run(
+        &args.nats_leafnode_server_name,
+        &args.nats_leafnode_client_creds_path,
+        &args.store_dir,
+        args.hub_url.clone(),
+        args.hub_tls_insecure,
+        args.nats_connect_timeout_secs,
+    )
+    .await?;
+    // TODO: would it be a good idea to reuse this client in the workload_manager and elsewhere later on?
+    bare_client.close().await?;
 
-    let user_creds_path = nats_js_client::get_nats_client_creds("HOLO", "HPOS", "hpos");
-    workloads::manager::run(&user_creds_path).await?;
+    let host_workload_client = hostd::workload::run(
+        "host_id_placeholder>",
+        &args.nats_leafnode_client_creds_path,
+    )
+    .await?;
+
+    // Only exit program when explicitly requested
+    tokio::signal::ctrl_c().await?;
+
+    // Close client and drain internal buffer before exiting to make sure all messages are sent
+    host_workload_client.close().await?;
 
     Ok(())
 }

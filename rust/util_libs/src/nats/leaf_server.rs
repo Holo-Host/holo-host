@@ -3,16 +3,22 @@
     NB: This setup expects the `nats-server` binary to be locally installed and accessible.
 -------- */
 use anyhow::Context;
+use serde::Serialize;
+use serde_with::skip_serializing_none;
 use std::fmt::Debug;
 use std::fs::File;
 use std::io::Write;
+use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-#[derive(Debug, Clone)]
+pub const LEAF_SERVER_CONFIG_PATH: &str = "test_leaf_server.conf";
+pub const LEAF_SERVER_DEFAULT_LISTEN_PORT: u16 = 4111;
+
+#[derive(Serialize, Debug, Clone)]
 pub struct JetStreamConfig {
-    pub store_dir: String,
+    pub store_dir: PathBuf,
     pub max_memory_store: u64,
     pub max_file_store: u64,
 }
@@ -24,15 +30,34 @@ pub struct LoggingOptions {
     pub longtime: bool,
 }
 
-#[derive(Debug, Clone)]
+#[skip_serializing_none]
+#[derive(Debug, Clone, Serialize)]
 pub struct LeafNodeRemote {
     pub url: String,
-    pub credentials_path: Option<String>,
+    pub credentials: Option<PathBuf>,
+    pub tls: LeafNodeRemoteTlsConfig,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct LeafNodeRemoteTlsConfig {
+    pub insecure: bool,
+    pub handshake_first: bool,
+}
+
+impl Default for LeafNodeRemoteTlsConfig {
+    fn default() -> Self {
+        Self {
+            insecure: false,
+            handshake_first: true,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
 pub struct LeafServer {
-    pub name: String,
+    // needs to be unique
+    // [1465412] [ERR] 65.108.153.204:443 - lid_ws:5 - Leafnode Error 'Duplicate Remote LeafNode Connection'
+    pub name: Option<String>,
     pub config_path: String,
     host: String,
     pub port: u16,
@@ -42,11 +67,29 @@ pub struct LeafServer {
     server_handle: Arc<Mutex<Option<Child>>>,
 }
 
+// TODO: consider merging this with the `LeafServer` struct
+#[derive(Serialize)]
+struct NatsConfig {
+    server_name: Option<String>,
+    host: String,
+    port: u16,
+    jetstream: JetStreamConfig,
+    leafnodes: LeafNodes,
+    debug: bool,
+    trace: bool,
+    logtime: bool,
+}
+
+#[derive(Serialize)]
+struct LeafNodes {
+    remotes: Vec<LeafNodeRemote>,
+}
+
 impl LeafServer {
     // Instantiate a new leaf server
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        server_name: &str,
+        server_name: Option<&str>,
         new_config_path: &str,
         host: &str,
         port: u16,
@@ -55,7 +98,7 @@ impl LeafServer {
         leaf_node_remotes: Vec<LeafNodeRemote>,
     ) -> Self {
         Self {
-            name: server_name.to_string(),
+            name: server_name.map(ToString::to_string),
             config_path: new_config_path.to_string(),
             host: host.to_string(),
             port,
@@ -70,85 +113,37 @@ impl LeafServer {
     pub async fn run(&self) -> Result<(), Box<dyn std::error::Error>> {
         let mut config_file = File::create(&self.config_path)?;
 
-        // Generate logging options
-        let logging_config = format!(
-            "debug: {}\ntrace: {}\nlogtime: {}\n",
-            self.logging.debug, self.logging.trace, self.logging.longtime
-        );
+        let config = NatsConfig {
+            server_name: self.name.clone(),
+            host: self.host.clone(),
+            port: self.port,
+            jetstream: self.jetstream_config.clone(),
+            leafnodes: LeafNodes {
+                remotes: self.leaf_node_remotes.clone(),
+            },
 
-        // Generate the "leafnodes" block
-        // ..and only includes the credentials file whenever the username/password auth is *not* being used
-        // NB: Nats does not allow combining auths for same port.
-        let leafnodes_config = self
-            .leaf_node_remotes
-            .iter()
-            .map(|remote| {
-                if remote.credentials_path.is_some() {
-                    format!(
-                        r#"
-        {{
-            url: "{}",
-            credentials: "{}",
-        }}
-                    "#,
-                        remote.url,
-                        remote.credentials_path.as_ref().unwrap() // Unwrap is safe here as the check for `Some()` wraps this condition
-                    )
-                } else {
-                    format!(
-                        r#"
-        {{
-            url: "{}",
-        }}
-                    "#,
-                        remote.url
-                    )
-                }
-            })
-            .collect::<Vec<String>>()
-            .join(",\n");
+            debug: self.logging.debug,
+            trace: self.logging.trace,
+            logtime: self.logging.longtime,
+        };
 
-        // Write the full config file
-        write!(
-            config_file,
-            r#"
-server_name: {}
-listen: "{}:{}"
+        let config_str = serde_json::to_string_pretty(&config)?;
 
-jetstream {{
-    domain: "leaf",
-    store_dir: "{}",
-    max_mem: {},
-    max_file: {}
-}}
+        log::trace!("NATS leaf config:\n{config_str}");
 
-leafnodes {{
-    remotes = [
-        {}
-    ]
-}}
-
-{}
-"#,
-            self.name,
-            self.host,
-            self.port,
-            self.jetstream_config.store_dir,
-            self.jetstream_config.max_memory_store,
-            self.jetstream_config.max_file_store,
-            leafnodes_config,
-            logging_config
-        )?;
+        config_file
+            .write_all(config_str.as_bytes())
+            .context("writing config to config at {config_path}")?;
 
         // Run the server with the generated config
         let child = Command::new("nats-server")
             .arg("-c")
             .arg(&self.config_path)
-            // TODO: direct these to a file or make it conditional. this is silenced because it was very verbose
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
+            // TODO: make this configurable and give options to log it to a seperate log file
+            .stdout(Stdio::inherit())
+            .stderr(Stdio::inherit())
             .spawn()
-            .expect("Failed to start NATS server");
+            .context("Failed to start NATS server")?;
 
         // TODO: wait for a readiness indicator
         std::thread::sleep(std::time::Duration::from_millis(100));
@@ -181,14 +176,6 @@ leafnodes {{
     }
 }
 
-pub fn get_hub_server_url() -> String {
-    const VAR: &str = "NATS_HUB_SERVER_URL";
-    std::env::var(VAR)
-        .context(format!("reading env var {VAR}"))
-        .unwrap()
-        .to_string()
-}
-
 #[cfg(feature = "tests_integration_nats")]
 #[cfg(test)]
 mod tests {
@@ -205,8 +192,8 @@ mod tests {
     const TMP_JS_DIR: &str = "./tmp";
     const TEST_AUTH_DIR: &str = "./tmp/test-auth";
     const OPERATOR_NAME: &str = "test-operator";
-    const USER_ACCOUNT_NAME: &str = "hpos-account";
-    const USER_NAME: &str = "hpos-user";
+    const USER_ACCOUNT_NAME: &str = "host-account";
+    const USER_NAME: &str = "host-user";
     const NEW_LEAF_CONFIG_PATH: &str = "./test_configs/leaf_server.conf";
     // NB: if changed, the resolver file path must also be changed in the `hub-server.conf` iteself as well.
     const RESOLVER_FILE_PATH: &str = "./test_configs/resolver.conf";
@@ -240,7 +227,7 @@ mod tests {
             .output()
             .expect("Failed to create edit operator");
 
-        // Create hpos account (with js enabled)
+        // Create host account (with js enabled)
         Command::new("nsc")
             .args(["add", "account", USER_ACCOUNT_NAME])
             .output()
@@ -258,7 +245,7 @@ mod tests {
             .output()
             .expect("Failed to create edit account");
 
-        // Create user for hpos account
+        // Create user for host account
         Command::new("nsc")
             .args(["add", "user", USER_NAME])
             .args(["--account", USER_ACCOUNT_NAME])
@@ -425,7 +412,7 @@ mod tests {
             .await
             .expect("Failed to publish jetstream message.");
 
-        // Force shut down the Hub Server (note: leaf server run on port 4111)
+        // Force shut down the Hub Server (note: leaf server run on port LEAF_SERVER_DEFAULT_LISTEN_PORT)
         let test_stream_consumer_name = "test_stream_consumer".to_string();
         let consumer = stream
             .get_or_create_consumer(
@@ -470,6 +457,7 @@ mod tests {
             log::error!("Failed to shut down Leaf Server.  Err:{:#?}", err);
 
             // Force the port to close
+            // TODO(techdebt): use the command child handle to terminate the process.
             Command::new("kill")
                 .arg("-9")
                 .arg(format!("`lsof -t -i:{}`", leaf_client_conn_port))
@@ -480,10 +468,11 @@ mod tests {
         }
         log::info!("Leaf Server has shut down successfully");
 
-        // Force shut down the Hub Server (note: leaf server run on port 4111)
+        // Force shut down the Hub Server (note: leaf server run on port LEAF_SERVER_DEFAULT_LISTEN_PORT)
+        // TODO(techdebt): use the command child handle to terminate the process.
         Command::new("kill")
             .arg("-9")
-            .arg("`lsof -t -i:4111`")
+            .arg(format!("`lsof -t -i:{LEAF_SERVER_DEFAULT_LISTEN_PORT}`"))
             .spawn()
             .expect("Error spawning kill command")
             .wait()

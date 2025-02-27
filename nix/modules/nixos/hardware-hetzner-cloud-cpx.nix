@@ -1,6 +1,6 @@
 # This is an opinionated module to configure Hetzner Cloud CPX instances.
-
-{ lib, flake, ... }:
+{ flake, ... }:
+{ lib, ... }:
 {
   imports = [
     flake.nixosModules.hardware-hetzner-cloud
