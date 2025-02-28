@@ -35,11 +35,11 @@ pub async fn run(host_client: JsClient, host_pubkey: &str) -> Result<(), async_n
 
     let one_hour_interval = tokio::time::Duration::from_secs(3600); // 1 hour in seconds
     let check_interval_duration = chrono::TimeDelta::seconds(one_hour_interval.as_secs() as i64);
-    let mut start_time = chrono::Utc::now();
+    let mut last_check_time = chrono::Utc::now();
 
     loop {
         // Periodically check inventory and compare against latest state (in-memory)
-        if should_check_inventory(start_time, check_interval_duration) {
+        if should_check_inventory(last_check_time, check_interval_duration) {
             log::debug!("Host Inventory has changed.  About to push update to Orchestrator");
             let current_inventory = HoloInventory::from_host();
             if in_memory_cache != current_inventory {
@@ -58,7 +58,7 @@ pub async fn run(host_client: JsClient, host_pubkey: &str) -> Result<(), async_n
                 host_client.publish(payload).await?;
                 in_memory_cache = current_inventory
             }
-            start_time = chrono::Utc::now();
+            last_check_time = chrono::Utc::now();
         } else {
             log::debug!("Host Inventory has not changed.");
         }
