@@ -444,6 +444,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "base32"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "022dfe9eb35f19ebbcb51e0b40a5ab759f46ad60cadf7297e0bd085afb50e076"
+
+[[package]]
 name = "base64"
 version = "0.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1888,6 +1894,36 @@ dependencies = [
 ]
 
 [[package]]
+name = "inventory"
+version = "0.0.1"
+dependencies = [
+ "anyhow",
+ "async-nats",
+ "async-trait",
+ "base32",
+ "bson",
+ "bytes",
+ "chrono",
+ "data-encoding",
+ "dotenv",
+ "env_logger",
+ "futures",
+ "hpos-hal",
+ "jsonwebtoken",
+ "log",
+ "mongodb",
+ "nats-jwt",
+ "nkeys",
+ "serde",
+ "serde_json",
+ "sha2",
+ "thiserror 2.0.11",
+ "tokio",
+ "url",
+ "util_libs",
+]
+
+[[package]]
 name = "ioctl-rs"
 version = "0.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2443,6 +2479,7 @@ dependencies = [
  "dotenv",
  "env_logger",
  "futures",
+ "inventory",
  "log",
  "mongodb",
  "nkeys",
@@ -4176,6 +4213,7 @@ dependencies = [
  "dotenv",
  "env_logger",
  "futures",
+ "hpos-hal",
  "log",
  "mongodb",
  "nats-jwt",
@@ -4726,6 +4764,7 @@ dependencies = [
  "dotenv",
  "env_logger",
  "futures",
+ "hpos-hal",
  "log",
  "mongodb",
  "nkeys",

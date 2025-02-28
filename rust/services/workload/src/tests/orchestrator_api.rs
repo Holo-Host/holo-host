@@ -2,11 +2,13 @@
 #![allow(unused_imports)]
 
 use super::{
-    create_test_host, create_test_workload, create_test_workload_default, MongodRunner, TestMessage,
+    create_test_host, create_test_workload, create_test_workload_default, gen_mock_processors,
+    MongodRunner, TestMessage,
 };
 use crate::{orchestrator_api::OrchestratorWorkloadApi, types::WorkloadResult};
 use anyhow::Result;
 use bson::doc;
+use hpos_hal::inventory::{HoloDriveInventory, HoloInventory, HoloProcessorInventory};
 use std::sync::Arc;
 use util_libs::db::schemas::{WorkloadState, WorkloadStatus};
 
@@ -120,15 +122,18 @@ mod tests {
         let required_avg_network_speed = 100;
         let required_avg_uptime = 0.85;
         let required_capacity = Capacity {
-            memory: 8,
-            disk: 100,
-            cores: 4,
+            drive: 200,
+            cores: 18,
         };
-        let valid_host_remaining_capacity = Capacity {
-            memory: 8,
-            disk: 100,
-            cores: 4,
-        };
+        let mut valid_host_remaining_capacity = HoloInventory::default();
+        let mut mock_holo_drive = HoloDriveInventory::default();
+        mock_holo_drive.capacity_bytes = Some(100);
+        valid_host_remaining_capacity.drives = vec![
+            mock_holo_drive.clone(),
+            mock_holo_drive.clone(),
+            mock_holo_drive.clone(),
+        ];
+        valid_host_remaining_capacity.cpus = gen_mock_processors(20);
 
         let workload = create_test_workload(
             None,
@@ -148,22 +153,23 @@ mod tests {
         );
 
         // Test when host meets criteria
-        assert!(api.verify_host_meets_workload_criteria(&host, &workload));
+        assert!(api.verify_host_meets_workload_criteria(&host.inventory, &workload));
 
-        // Test when host memorydoesn't meet memory criteria
+        // Test when host drive space doesn't meet disk criteria
         let mut ineligible_host = host.clone();
-        ineligible_host.remaining_capacity.memory = 4; // Less than workload requirement
-        assert!(!api.verify_host_meets_workload_criteria(&ineligible_host, &workload));
-
-        // Test when host disk space doesn't meet disk criteria
-        let mut ineligible_host = host.clone();
-        ineligible_host.remaining_capacity.disk = 50; // Less than workload requirement
-        assert!(!api.verify_host_meets_workload_criteria(&ineligible_host, &workload));
+        // Create new holo drive with available capacity less than workload requirement
+        mock_holo_drive.capacity_bytes = Some(0);
+        ineligible_host.inventory.drives = vec![
+            mock_holo_drive.clone(),
+            mock_holo_drive.clone(),
+            mock_holo_drive,
+        ];
+        assert!(!api.verify_host_meets_workload_criteria(&ineligible_host.inventory, &workload));
 
         // Test when host cores count doesn't meet cores criteria
         let mut ineligible_host = host.clone();
-        ineligible_host.remaining_capacity.cores = 2; // Less than workload requirement
-        assert!(!api.verify_host_meets_workload_criteria(&ineligible_host, &workload));
+        ineligible_host.inventory.cpus = gen_mock_processors(14); // Less than workload requirement
+        assert!(!api.verify_host_meets_workload_criteria(&ineligible_host.inventory, &workload));
 
         Ok(())
     }
@@ -177,15 +183,18 @@ mod tests {
         let required_avg_network_speed = 500;
         let required_avg_uptime = 0.90;
         let required_capacity = Capacity {
-            memory: 800,
-            disk: 1000,
+            drive: 1000,
             cores: 20,
         };
-        let valid_host_remaining_capacity = Capacity {
-            memory: 800,
-            disk: 1000,
-            cores: 20,
-        };
+        let mut valid_host_remaining_capacity = HoloInventory::default();
+        let mut mock_holo_drive = HoloDriveInventory::default();
+        mock_holo_drive.capacity_bytes = Some(100);
+        valid_host_remaining_capacity.drives = vec![
+            mock_holo_drive.clone(),
+            mock_holo_drive.clone(),
+            mock_holo_drive,
+        ];
+        valid_host_remaining_capacity.cpus = gen_mock_processors(20);
 
         // Create and add a host first
         let host = create_test_host(
