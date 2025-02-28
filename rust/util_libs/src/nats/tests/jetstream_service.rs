@@ -88,7 +88,7 @@ async fn test_add_consumer() -> Result<()> {
 
     let consumer_builder = ConsumerBuilder {
         name: "test_consumer".to_string(),
-        endpoint_subject: "endpoint".to_string(),
+        subject: "endpoint".to_string(),
         handler,
         response_subject_fn: None,
     };
@@ -138,7 +138,7 @@ async fn test_adding_async_consumer() -> Result<()> {
 
     let consumer_builder = ConsumerBuilder {
         name: "async_consumer".to_string(),
-        endpoint_subject: "async_endpoint".to_string(),
+        subject: "async_endpoint".to_string(),
         handler,
         response_subject_fn: None,
     };
@@ -200,7 +200,7 @@ async fn test_consumer_message_handling() -> Result<()> {
 
     let consumer_builder = ConsumerBuilder {
         name: "test_consumer".to_string(),
-        endpoint_subject: "endpoint".to_string(),
+        subject: "endpoint".to_string(),
         handler,
         response_subject_fn: Some(response_handler()),
     };
