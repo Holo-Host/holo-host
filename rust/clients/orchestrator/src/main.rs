@@ -22,13 +22,13 @@ async fn main() -> Result<(), async_nats::Error> {
     // let auth_client: Client = auth::run(db_client).await?;
 
     // Start Nats Admin Services
-    println!("spawning admin client...");
-    let default_nats_connect_timeout_secs = 30;
-    let admin_client = admin_client::run(&None, default_nats_connect_timeout_secs).await?;
-    println!("starting workload service...");
+    log::debug!("spawning admin client...");
+    let admin_client = admin_client::run(&None).await?;
+
+    log::debug!("starting workload service...");
     workloads::run(admin_client.clone(), db_client.clone()).await?;
 
-    println!("starting inventory service...");
+    log::debug!("starting inventory service...");
     inventory::run(admin_client.clone(), db_client.clone()).await?;
 
     // Only exit program when explicitly requested
@@ -37,13 +37,13 @@ async fn main() -> Result<(), async_nats::Error> {
         .expect("Failed to close service gracefully");
 
     // Close all mongodb connections
-    println!("closing db connection...");
+    log::debug!("closing db connection...");
     db_client.shutdown().await;
 
     // Close admin client and drain internal buffer before exiting to make sure all messages are sent
     // NB: Calling drain/close on any one of the Client instances closes the underlying connection.
     // This affects all instances that share the same connection (including clones) because they are all references to the same resource.
-    println!("closing admin client...");
+    log::debug!("closing admin client...");
     admin_client.close().await?;
     log::debug!("Closed orchestrator auth service");
 

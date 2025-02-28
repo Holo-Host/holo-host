@@ -66,7 +66,6 @@ impl InventoryServiceApi {
         &self,
         msg: Arc<Message>,
     ) -> Result<InventoryApiResult, ServiceError> {
-        log::debug!("Incoming message for 'INVENTORY.*.{{host_pubkey}}.update'");
         let msg_subject = msg.subject.clone().into_string();
         let message_payload = Self::convert_msg_to_type::<InventoryPayloadType>(msg)?;
         log::trace!(
@@ -80,7 +79,9 @@ impl InventoryServiceApi {
 
         match message_payload {
             InventoryPayloadType::Authenticated(host_inventory) => {
-                println!("Incoming message for 'INVENTORY.authenticated.{{host_pubkey}}.update'");
+                log::debug!(
+                    "Incoming message for 'INVENTORY.authenticated.{{host_pubkey}}.update'"
+                );
                 self.update_host_inventory(&host_pubkey, &host_inventory)
                     .await?;
 
@@ -142,7 +143,9 @@ impl InventoryServiceApi {
                 }
             }
             InventoryPayloadType::Unauthenticated(host_inventory) => {
-                println!("Incoming message for 'INVENTORY.unauthenticated.{{host_pubkey}}.update'");
+                log::debug!(
+                    "Incoming message for 'INVENTORY.unauthenticated.{{host_pubkey}}.update'"
+                );
                 self.update_host_inventory(&host_pubkey, &host_inventory)
                     .await?;
             }

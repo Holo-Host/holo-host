@@ -19,5 +19,3 @@ hpos-hal = { path = "../../hpos-hal" }
 [dev-dependencies]
 tempfile = "3.8"
 
-# [features]
-# tests_integration_inventory_service = ["util_libs/tests_integration_mongodb"]
