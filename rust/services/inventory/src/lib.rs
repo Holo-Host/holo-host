@@ -26,7 +26,6 @@ use mongodb::results::UpdateResult;
 use mongodb::{options::UpdateModifications, Client as MongoDBClient};
 use serde::{Deserialize, Serialize};
 use std::future::Future;
-use std::str::FromStr;
 use std::sync::Arc;
 use types::{InventoryApiResult, InventoryPayloadType};
 use util_libs::db::mongodb::MongoDbAPI;
@@ -77,25 +76,28 @@ impl InventoryServiceApi {
         );
 
         let subject_sections: Vec<&str> = msg_subject.split(".").collect();
-        let host_pubkey = subject_sections[2];
-
-        let host_id =
-            ObjectId::from_str(host_pubkey).map_err(|e| ServiceError::Internal(e.to_string()))?;
+        let host_pubkey: schemas::PubKey = subject_sections[2].into();
 
         match message_payload {
             InventoryPayloadType::Authenticated(host_inventory) => {
                 println!("Incoming message for 'INVENTORY.authenticated.{{host_pubkey}}.update'");
-                self.update_host_inventory(host_id, &host_inventory).await?;
+                self.update_host_inventory(&host_pubkey, &host_inventory)
+                    .await?;
 
                 // Fetch Host collection
                 let host = self
                     .host_collection
-                    .get_one_from(doc! { "_id": host_id })
+                    .get_one_from(doc! { "device_id": &host_pubkey })
                     .await?
                     .ok_or(ServiceError::Internal(format!(
-                        "Failed to fetch Host. host_id={}",
-                        host_id
+                        "Failed to fetch Host. host_pubkey={}",
+                        host_pubkey
                     )))?;
+
+                let host_id = host._id.ok_or(ServiceError::Internal(format!(
+                    "Failed to fetch Host. host_pubkey={}",
+                    host_pubkey
+                )))?;
 
                 // Ensure assigned host *still* has enough capacity for assigned workload(s)
                 // ..and if no, remove host from workload and create collection of all ineligible workloads
@@ -141,7 +143,8 @@ impl InventoryServiceApi {
             }
             InventoryPayloadType::Unauthenticated(host_inventory) => {
                 println!("Incoming message for 'INVENTORY.unauthenticated.{{host_pubkey}}.update'");
-                self.update_host_inventory(host_id, &host_inventory).await?;
+                self.update_host_inventory(&host_pubkey, &host_inventory)
+                    .await?;
             }
         }
 
@@ -196,12 +199,12 @@ impl InventoryServiceApi {
     // Add updated Holo Inventory to Host collection
     async fn update_host_inventory(
         &self,
-        host_id: ObjectId,
+        host_pubkey: &schemas::PubKey,
         inventory: &HoloInventory,
     ) -> Result<UpdateResult, ServiceError> {
         self.host_collection
             .update_one_within(
-                doc! { "_id": host_id },
+                doc! { "device_id": host_pubkey },
                 UpdateModifications::Document(doc! {
                     "$set": {
                         "inventory": bson::to_bson(inventory)

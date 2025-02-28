@@ -1537,6 +1537,7 @@ dependencies = [
  "env_logger",
  "futures",
  "hpos-hal",
+ "inventory",
  "jsonwebtoken",
  "log",
  "machineid-rs",

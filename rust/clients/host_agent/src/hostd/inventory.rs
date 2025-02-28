@@ -12,6 +12,7 @@ This client is responsible for subscribing to workload streams that handle:
 
 use anyhow::Result;
 use hpos_hal::inventory::HoloInventory;
+use inventory::HOST_AUTHENTICATED_SUBJECT;
 use tokio::time::sleep;
 use util_libs::nats::{jetstream_client::JsClient, types::PublishInfo};
 
@@ -44,7 +45,7 @@ pub async fn run(host_client: JsClient, host_pubkey: &str) -> Result<(), async_n
             let current_inventory = HoloInventory::from_host();
             if in_memory_cache != current_inventory {
                 let authenticated_user_inventory_subject =
-                    format!("INVENTORY.{}.update.authenticated", pubkey_lowercase);
+                    format!("INVENTORY.{HOST_AUTHENTICATED_SUBJECT}.{pubkey_lowercase}.update");
 
                 let payload_bytes = serde_json::to_vec(&current_inventory)?;
 
