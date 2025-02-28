@@ -9,6 +9,10 @@ Endpoints & Managed Subjects:
 */
 
 pub mod types;
+
+#[cfg(test)]
+mod tests;
+
 use anyhow::Result;
 use async_nats::jetstream::ErrorCode;
 use async_nats::Message;
@@ -202,9 +206,6 @@ impl InventoryServiceApi {
         if host_inventory.cpus.len() < workload.system_specs.capacity.cores as usize {
             return false;
         }
-        // if host_inventory.memory < workload.system_specs.capacity.memory {
-        //     return false;
-        // }
 
         true
     }

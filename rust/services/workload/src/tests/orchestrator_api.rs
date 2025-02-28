@@ -77,8 +77,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_remove_workload() -> Result<()> {
-        let mongod = MongodRunner::run().unwrap();
-        let db_client = mongod.client().unwrap();
+        let mongod = MongodRunner::run().expect("Failed to run mongod");
+        let db_client = mongod.client().expect("Failed to create db client");
 
         let api = OrchestratorWorkloadApi::new(&db_client).await?;
 
@@ -87,7 +87,8 @@ mod tests {
         let workload_id = api.workload_collection.insert_one_into(workload).await?;
 
         // Then remove it
-        let msg_payload = serde_json::to_vec(&workload_id).unwrap();
+        let msg_payload =
+            serde_json::to_vec(&workload_id).expect("Failed to serialize workload id");
         let msg = Arc::new(TestMessage::new("WORKLOAD.remove", msg_payload).into_message());
 
         let result = api.remove_workload(msg).await?;
