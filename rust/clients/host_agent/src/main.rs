@@ -60,17 +60,22 @@ async fn daemonize(args: &DaemonzeArgs) -> Result<(), async_nats::Error> {
     // TODO: would it be a good idea to reuse this client in the workload_manager and elsewhere later on?
     bare_client.close().await?;
 
-    let host_workload_client = hostd::workload::run(
-        "host_id_placeholder>",
+    let host_client = hostd::host_client::run(
+        "host_pubkey_placeholder>",
         &args.nats_leafnode_client_creds_path,
     )
     .await?;
 
+    hostd::inventory::run(host_client.clone(), "host_pubkey_placeholder>").await?;
+
+    hostd::workload::run(host_client.clone(), "host_pubkey_placeholder>").await?;
+
     // Only exit program when explicitly requested
     tokio::signal::ctrl_c().await?;
 
-    // Close client and drain internal buffer before exiting to make sure all messages are sent
-    host_workload_client.close().await?;
-
+    // Close host client connection and drain internal buffer before exiting to make sure all messages are sent
+    // NB: Calling drain/close on any one of the Client instances will close the underlying connection.
+    // This affects all instances that share the same connection (including clones) because they are all references to the same resource.
+    host_client.close().await?;
     Ok(())
 }

@@ -4,6 +4,7 @@
 use anyhow::Context;
 use async_nats::Message;
 use bson::oid::ObjectId;
+use hpos_hal::inventory::{HoloDriveInventory, HoloInventory, HoloProcessorInventory};
 use mongodb::{options::ClientOptions, Client as MongoDBClient};
 use std::{path::PathBuf, process::Stdio, str::FromStr};
 use tempfile::TempDir;
@@ -147,12 +148,21 @@ pub fn create_test_workload(
     workload
 }
 
+// Helper function to create a list of mock holo processors in bulk
+pub fn gen_mock_processors(max_processors: i64) -> Vec<HoloProcessorInventory> {
+    let mut mock_holo_processors = vec![];
+    for _i in 0..max_processors {
+        mock_holo_processors.push(HoloProcessorInventory::default());
+    }
+    mock_holo_processors
+}
+
 // Helper function to create a test host
 pub fn create_test_host(
     device_id: Option<String>,
     assigned_hoster: Option<ObjectId>,
     assigned_workloads: Option<Vec<ObjectId>>,
-    remaining_capacity: Option<Capacity>,
+    holo_inventory: Option<HoloInventory>,
     avg_network_speed: Option<i64>,
     avg_uptime: Option<f64>,
 ) -> schemas::Host {
@@ -166,8 +176,8 @@ pub fn create_test_host(
     if let Some(assigned_workloads) = assigned_workloads {
         host.assigned_workloads = assigned_workloads;
     }
-    if let Some(remaining_capacity) = remaining_capacity {
-        host.remaining_capacity = remaining_capacity;
+    if let Some(holo_inventory) = holo_inventory {
+        host.inventory = holo_inventory;
     }
     if let Some(avg_network_speed) = avg_network_speed {
         host.avg_network_speed = avg_network_speed;
