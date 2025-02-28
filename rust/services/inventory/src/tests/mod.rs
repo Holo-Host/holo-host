@@ -155,16 +155,16 @@ pub fn create_mock_inventory(
 ) -> HoloInventory {
     let mut inventory = HoloInventory::default();
 
-    let drive_capacity = drive_capacity.unwrap_or(100);
-    let num_drives = num_drives.unwrap_or(3);
-    let num_processors = num_processors.unwrap_or(8);
-
+    let drive_capacity = drive_capacity.unwrap_or_default();
     let mock_drive = HoloDriveInventory {
         capacity_bytes: Some(drive_capacity),
         ..Default::default()
     };
 
+    let num_drives = num_drives.unwrap_or_default();
     inventory.drives = vec![mock_drive; num_drives];
+
+    let num_processors = num_processors.unwrap_or_default();
     inventory.cpus = gen_mock_processors(num_processors);
 
     inventory
