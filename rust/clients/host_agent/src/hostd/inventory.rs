@@ -12,6 +12,7 @@ This client is responsible for subscribing to workload streams that handle:
 
 use anyhow::Result;
 use hpos_hal::inventory::HoloInventory;
+use tokio::time::sleep;
 use util_libs::nats::{jetstream_client::JsClient, types::PublishInfo};
 
 pub fn should_check_inventory(
@@ -32,12 +33,13 @@ pub async fn run(host_client: JsClient, host_pubkey: &str) -> Result<(), async_n
     // Store latest inventory record in memory
     let mut in_memory_cache = HoloInventory::from_host();
 
-    // Periodically check inventory and compare against latest state (in-memory)
-    let start = chrono::Utc::now();
-    let check_interval_duration = chrono::TimeDelta::hours(1);
+    let one_hour_interval = tokio::time::Duration::from_secs(3600); // 1 hour in seconds
+    let check_interval_duration = chrono::TimeDelta::seconds(one_hour_interval.as_secs() as i64);
+    let mut start_time = chrono::Utc::now();
 
     loop {
-        if should_check_inventory(start, check_interval_duration) {
+        // Periodically check inventory and compare against latest state (in-memory)
+        if should_check_inventory(start_time, check_interval_duration) {
             log::debug!("Host Inventory has changed.  About to push update to Orchestrator");
             let current_inventory = HoloInventory::from_host();
             if in_memory_cache != current_inventory {
@@ -54,11 +56,13 @@ pub async fn run(host_client: JsClient, host_pubkey: &str) -> Result<(), async_n
                 };
 
                 host_client.publish(payload).await?;
-
                 in_memory_cache = current_inventory
             }
+            start_time = chrono::Utc::now();
         } else {
             log::debug!("Host Inventory has not changed.");
         }
+
+        sleep(one_hour_interval).await;
     }
 }
