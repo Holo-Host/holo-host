@@ -127,7 +127,7 @@ mod tests {
         };
         #[allow(clippy::field_reassign_with_default)]
         let mut valid_host_remaining_capacity = HoloInventory::default();
-        let mock_holo_drive = HoloDriveInventory {
+        let mut mock_holo_drive = HoloDriveInventory {
             capacity_bytes: Some(100),
             ..Default::default()
         };
