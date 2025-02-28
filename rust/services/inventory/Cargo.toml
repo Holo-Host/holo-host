@@ -7,16 +7,17 @@ edition = "2021"
 tokio = { workspace = true }
 anyhow = { workspace = true }
 async-nats = { workspace = true }
-bson = { workspace = true }
 log = { workspace = true }
-mongodb = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-hpos-hal = { workspace = true }
+bson = { version = "2.6.1", features = ["chrono-0_4"] }
+mongodb = "3.1"
+bytes = "1.8.0"
 util_libs = { path = "../../util_libs" }
+hpos-hal = { path = "../../hpos-hal" }
 
 [dev-dependencies]
 tempfile = "3.8"
 
-[features]
+# [features]
 # tests_integration_inventory_service = ["util_libs/tests_integration_mongodb"]

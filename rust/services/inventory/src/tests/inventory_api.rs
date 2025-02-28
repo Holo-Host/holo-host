@@ -36,7 +36,7 @@ mod tests {
             .expect("Failed to insert host");
 
         // Create workload with specific requirements
-        let workload = create_test_workload(
+        let workload = create_mock_workload(
             None,
             Some(vec![host_id]),
             Some(1),
@@ -192,7 +192,7 @@ async fn test_handle_inventory_update_with_insufficient_resources() -> Result<()
     api.host_collection.insert_one_into(host).await?;
 
     // Create workload with specific requirements
-    let workload = create_test_workload(
+    let workload = create_mock_workload(
         None,
         Some(vec![host_id]),
         Some(1),

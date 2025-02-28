@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 #![allow(unused_imports)]
 
+use anyhow::Context;
 use anyhow::Result;
 use async_nats::Message;
 use bson::oid::ObjectId;
@@ -107,7 +108,7 @@ impl MongodRunner {
 }
 
 // Helper function to create test workloads and hosts
-pub fn create_test_workload(
+pub fn create_mock_workload(
     assigned_developer: Option<ObjectId>,
     assigned_hosts: Option<Vec<ObjectId>>,
     min_hosts: Option<i32>,
