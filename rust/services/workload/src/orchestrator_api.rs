@@ -2,7 +2,7 @@
 Endpoints & Managed Subjects:
     - `add_workload`: handles the "WORKLOAD.add" subject
     - `update_workload`: handles the "WORKLOAD.update" subject
-    - `remove_workload`: handles the "WORKLOAD.remove" subject
+    - `delete_workload`: handles the "WORKLOAD.delete" subject
     - `handle_db_insertion`: handles the "WORKLOAD.insert" subject // published by mongo<>nats connector
     - `handle_db_modification`: handles the "WORKLOAD.modify" subject // published by mongo<>nats connector
     - `handle_status_update`: handles the "WORKLOAD.handle_status_update" subject // published by hosting agent
@@ -132,20 +132,20 @@ impl OrchestratorWorkloadApi {
         .await
     }
 
-    pub async fn remove_workload(
+    pub async fn delete_workload(
         &self,
         msg: Arc<Message>,
     ) -> Result<WorkloadApiResult, ServiceError> {
-        log::debug!("Incoming message for 'WORKLOAD.remove'");
+        log::debug!("Incoming message for 'WORKLOAD.delete'");
         self.process_request(
             msg,
-            WorkloadState::Removed,
+            WorkloadState::Deleted,
             WorkloadState::Error,
             |workload_id: ObjectId| async move {
                 let status = WorkloadStatus {
                     id: Some(workload_id),
-                    desired: WorkloadState::Uninstalled,
-                    actual: WorkloadState::Removed,
+                    desired: WorkloadState::Removed,
+                    actual: WorkloadState::Deleted,
                 };
 
                 let updated_status_doc = bson::to_bson(&status)
@@ -162,7 +162,7 @@ impl OrchestratorWorkloadApi {
                     })
                 ).await?;
                 log::info!(
-                    "Successfully removed workload from the Workload Collection. MongodDB Workload ID={:?}",
+                    "Successfully deleted workload from the Workload Collection. MongodDB Workload ID={:?}",
                     workload_id
                 );
                 Ok(WorkloadApiResult {
@@ -272,7 +272,7 @@ impl OrchestratorWorkloadApi {
             workload_id
         );
 
-        // Match on state (updating or removed) and handle each case
+        // Match on state (updating or deleted) and handle each case
         let result = match workload.status.actual {
             WorkloadState::Updating => {
                 log::trace!("Updated workload to handle. Workload={:#?}", workload);
@@ -336,8 +336,8 @@ impl OrchestratorWorkloadApi {
                     maybe_response_tags: Some(tag_map),
                 }
             }
-            WorkloadState::Removed => {
-                log::trace!("Removed workload to handle. Workload={:#?}", workload);
+            WorkloadState::Deleted => {
+                log::trace!("Deleted workload to handle. Workload={:#?}", workload);
                 // 1. Fetch current hosts with `workload_id`` to know which
                 // hosts to send uninstall workload request to...
                 let hosts = self
@@ -378,8 +378,8 @@ impl OrchestratorWorkloadApi {
             }
             _ => {
                 // Catches all other cases wherein a record in the workload collection was modified (not created),
-                // with a state other than "Updating" or "Removed".
-                // In this case, we don't want to do take any new action, so we return a default status without any updates or frowarding tags.
+                // with a state other than "Updating" or "Deleted".
+                // In this case, we don't want to do take any new action, so we return a default status without any updates or fowarding tags.
                 WorkloadApiResult {
                     result: WorkloadResult {
                         status: WorkloadStatus {

@@ -5,6 +5,7 @@ use bson::{self, doc, DateTime, Document};
 use mongodb::options::IndexOptions;
 use semver::{BuildMetadata, Prerelease};
 use serde::{Deserialize, Serialize};
+use strum_macros::AsRefStr;
 
 pub const DATABASE_NAME: &str = "holo-hosting";
 pub const USER_COLLECTION_NAME: &str = "user";
@@ -186,19 +187,20 @@ impl IntoIndexes for Host {
 }
 
 // ==================== Workload Schema ====================
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, AsRefStr)]
 pub enum WorkloadState {
-    Reported,
-    Assigned,
-    Pending,
-    Installed,
-    Running,
-    Updating,
-    Updated,
-    Removed,
-    Uninstalled,
-    Error(String),   // String = error message
-    Unknown(String), // String = context message
+    Reported,        // workload reported by developer
+    Assigned,        // workload assigned to host
+    Pending,         // workload installation pending on host device
+    Installed,       // workload installed on host device
+    Running,         // workload running on host device
+    Updating,        // workload modified to have "updating" state and time series tag
+    Updated,         // bi-directional workload<>host links added
+    Deleted,         // workload modified to have "deleted" state and time series tag
+    Removed,         // bi-directional workload<>host links removed
+    Uninstalled,     // workload installed on host device
+    Error(String),   // nb: String = error message
+    Unknown(String), // nb: String = context message
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

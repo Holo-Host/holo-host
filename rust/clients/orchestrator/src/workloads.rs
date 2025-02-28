@@ -8,7 +8,7 @@ This client is responsible for:
     - registering with the host workload service to:
         - handling requests to add workloads
         - handling requests to update workloads
-        - handling requests to remove workloads
+        - handling requests to delete workloads
         - handling workload status updates
     - interfacing with mongodb DB
     - keeping service running until explicitly cancelled out
@@ -19,8 +19,7 @@ use crate::generate_call_method;
 use anyhow::{anyhow, Result};
 use async_nats::Message;
 use mongodb::Client as MongoDBClient;
-use std::str::FromStr;
-use std::{path::PathBuf, sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration};
 use util_libs::nats::{
     jetstream_client::{self, JsClient},
     types::{Credentials, JsClientBuilder, JsServiceBuilder},
@@ -34,27 +33,20 @@ const ORCHESTRATOR_ADMIN_CLIENT_NAME: &str = "Orchestrator Admin Client";
 const ORCHESTRATOR_ADMIN_CLIENT_INBOX_PREFIX: &str = "_ADMIN_INBOX.orchestrator";
 
 pub async fn run(
-    admin_creds_path: &Option<PathBuf>,
+    nats_url: &str,
+    admin_creds_path: Option<Credentials>,
     nats_connect_timeout_secs: u64,
     db_client: MongoDBClient,
-) -> Result<(), async_nats::Error> {
+) -> Result<JsClient, async_nats::Error> {
     // ==================== Setup NATS ====================
-    let nats_url = jetstream_client::get_nats_url();
-    let creds_path = admin_creds_path
-        .to_owned()
-        .ok_or(PathBuf::from_str(&jetstream_client::get_nats_creds_by_nsc(
-            "HOLO", "ADMIN", "admin",
-        )))
-        .map(Credentials::Path)
-        .map_err(|e| anyhow!("Failed to locate admin credential path. Err={:?}", e))?;
-
+    let credentials = admin_creds_path.as_ref().map(|path| vec![path.clone()]);
     let mut orchestrator_workload_client = tokio::select! {
         client = async {loop {
             let c = JsClient::new(JsClientBuilder {
-                nats_url: nats_url.clone(),
+                nats_url: nats_url.to_string(),
                 name: ORCHESTRATOR_ADMIN_CLIENT_NAME.to_string(),
                 inbox_prefix: ORCHESTRATOR_ADMIN_CLIENT_INBOX_PREFIX.to_string(),
-                credentials: Some(vec![creds_path.clone()]),
+                credentials: credentials.clone(),
                 ping_interval: Some(Duration::from_secs(10)),
                 request_timeout: Some(Duration::from_secs(5)),
                 listeners: vec![jetstream_client::with_event_listeners(jetstream_client::get_event_listeners())],
@@ -123,9 +115,9 @@ pub async fn run(
 
     workload_service
         .add_consumer(create_consumer(WorkloadConsumerBuilder {
-            name: "remove_workload".to_string(),
-            subject: WorkloadServiceSubjects::Remove,
-            async_handler: generate_call_method!(workload_api, remove_workload),
+            name: "delete_workload".to_string(),
+            subject: WorkloadServiceSubjects::Delete,
+            async_handler: generate_call_method!(workload_api, delete_workload),
             response_subject_fn: None,
         }))
         .await?;
@@ -171,11 +163,5 @@ pub async fn run(
         }))
         .await?;
 
-    // ==================== Close and Clean Client ====================
-    // Only exit program when explicitly requested
-    tokio::signal::ctrl_c().await?;
-
-    // Close client and drain internal buffer before exiting to make sure all messages are sent
-    orchestrator_workload_client.close().await?;
-    Ok(())
+    Ok(orchestrator_workload_client)
 }

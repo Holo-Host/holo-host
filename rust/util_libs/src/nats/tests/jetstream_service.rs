@@ -60,7 +60,7 @@ async fn test_service_initialization() -> Result<()> {
 
 #[tokio::test]
 #[serial]
-async fn test_add_consumer() -> Result<()> {
+async fn test_adding_sync_consumer() -> Result<()> {
     if !check_nats_server() {
         log::debug!("Skipping test: nats-server not available");
         return Ok(());
@@ -185,7 +185,6 @@ async fn test_consumer_message_handling() -> Result<()> {
     // Create a sync endpoint handler
     let handler = EndpointType::Sync(Arc::new(|msg| {
         let test_str_payload = std::str::from_utf8(&msg.payload).expect("Invalid UTF-8");
-        println!(" >> test_str_payload {}", test_str_payload);
         let test_payload = serde_json::from_str::<TestResponse>(test_str_payload)
             .expect("Failed to convert str to TestResponse");
         assert_eq!(test_payload.message, "Incoming test message".to_string());
@@ -210,7 +209,7 @@ async fn test_consumer_message_handling() -> Result<()> {
         .await
         .expect("Failed to add consumer.");
 
-    // Spawn the subcription to the response subject
+    // Spawn the subcription to the consumer's response subject
     let s = client.subscribe("TEST.response".to_string()).await;
     assert!(s.is_ok());
     let mut subscriber = s.expect("Failed to create subscriber.");

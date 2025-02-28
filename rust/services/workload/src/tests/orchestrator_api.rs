@@ -74,7 +74,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_remove_workload() -> Result<()> {
+    async fn test_delete_workload() -> Result<()> {
         let mongod = MongodRunner::run().unwrap();
         let db_client = mongod.client().unwrap();
 
@@ -84,29 +84,29 @@ mod tests {
         let workload = create_test_workload_default();
         let workload_id = api.workload_collection.insert_one_into(workload).await?;
 
-        // Then remove it
+        // Then delete it
         let msg_payload = serde_json::to_vec(&workload_id).unwrap();
-        let msg = Arc::new(TestMessage::new("WORKLOAD.remove", msg_payload).into_message());
+        let msg = Arc::new(TestMessage::new("WORKLOAD.delete", msg_payload).into_message());
 
-        let result = api.remove_workload(msg).await?;
+        let result = api.delete_workload(msg).await?;
 
         assert!(matches!(
             result.result.status.actual,
-            WorkloadState::Removed
+            WorkloadState::Deleted
         ));
         assert!(matches!(
             result.result.status.desired,
-            WorkloadState::Uninstalled
+            WorkloadState::Removed
         ));
 
         // Verify workload is marked as deleted
-        let removed_workload = api
+        let deleted_workload = api
             .workload_collection
             .get_one_from(doc! { "_id": workload_id })
             .await?
             .unwrap();
-        assert!(removed_workload.metadata.is_deleted);
-        assert!(removed_workload.metadata.deleted_at.is_some());
+        assert!(deleted_workload.metadata.is_deleted);
+        assert!(deleted_workload.metadata.deleted_at.is_some());
 
         Ok(())
     }

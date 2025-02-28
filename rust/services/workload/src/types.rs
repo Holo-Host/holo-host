@@ -17,7 +17,7 @@ pub struct ObjectIdJSON {
 pub enum WorkloadServiceSubjects {
     Add,
     Update,
-    Remove,
+    Delete,
     Insert, // db change stream trigger
     Modify, // db change stream trigger
     HandleStatusUpdate,

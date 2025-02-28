@@ -10,6 +10,7 @@ This client is responsible for subscribing to workload streams that handle:
     - sending out active periodic workload reports
 */
 
+use super::utils::create_callback_subject_to_orchestrator;
 use anyhow::{anyhow, Result};
 use async_nats::Message;
 use std::{path::PathBuf, sync::Arc, time::Duration};
@@ -133,9 +134,14 @@ pub async fn run(
         })
         .await?;
 
+    let update_workload_status_response = create_callback_subject_to_orchestrator(
+        WorkloadServiceSubjects::HandleStatusUpdate
+            .as_ref()
+            .to_string(),
+    );
     workload_service
         .add_consumer(ConsumerBuilder {
-            name: "send_workload_status".to_string(),
+            name: "fetch_workload_status".to_string(),
             subject: format!(
                 "{}.{}",
                 pubkey_lowercase,
@@ -143,10 +149,10 @@ pub async fn run(
             ),
             handler: EndpointType::Async(workload_api.call(
                 |api: HostWorkloadApi, msg: Arc<Message>| async move {
-                    api.send_workload_status(msg).await
+                    api.fetch_workload_status(msg).await
                 },
             )),
-            response_subject_fn: None,
+            response_subject_fn: Some(update_workload_status_response),
         })
         .await?;
 
