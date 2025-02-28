@@ -87,7 +87,7 @@ where
     T: EndpointTraits,
 {
     pub name: String,
-    pub endpoint_subject: String,
+    pub subject: String,
     pub handler: EndpointType<T>,
     #[debug(skip)]
     pub response_subject_fn: Option<ResponseSubjectsGenerator>,

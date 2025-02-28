@@ -28,7 +28,7 @@ impl std::fmt::Debug for JsClient {
 #[derive(Clone)]
 pub struct JsClient {
     url: String,
-    name: String,
+    pub name: String,
     on_msg_published_event: Option<EventHandler>,
     on_msg_failed_event: Option<EventHandler>,
     client: async_nats::Client, // inner_client
@@ -282,47 +282,4 @@ pub fn get_event_listeners() -> Vec<EventListener> {
     ];
 
     event_listeners
-}
-
-#[cfg(feature = "tests_integration_nats")]
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    pub fn get_default_params() -> JsClientBuilder {
-        JsClientBuilder {
-            nats_url: "localhost:4222".to_string(),
-            name: "test_client".to_string(),
-            inbox_prefix: "_UNIQUE_INBOX".to_string(),
-            service_params: vec![],
-            credentials_path: None,
-            ping_interval: Some(Duration::from_secs(10)),
-            request_timeout: Some(Duration::from_secs(5)),
-            opts: vec![],
-        }
-    }
-
-    #[tokio::test]
-    async fn test_jetstream_client_init() {
-        let params = get_default_params();
-        let client = JsClient::new(params).await;
-        assert!(client.is_ok(), "Client initialization failed: {:?}", client);
-
-        let client = client.unwrap();
-        assert_eq!(client.name(), "test_client");
-    }
-
-    #[tokio::test]
-    async fn test_jetstream_client_publish() {
-        let params = get_default_params();
-        let client = JsClient::new(params).await.unwrap();
-        let payload = PublishInfo {
-            subject: "test_subject".to_string(),
-            msg_id: "test_msg".to_string(),
-            data: b"Hello, NATS!".to_vec(),
-        };
-
-        let result = client.publish(&publish_options).await;
-        assert!(result.is_ok(), "Publishing message failed: {:?}", result);
-    }
 }

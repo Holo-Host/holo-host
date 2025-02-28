@@ -85,7 +85,7 @@ pub async fn run(
     workload_service
         .add_consumer(ConsumerBuilder {
             name: "install_workload".to_string(),
-            endpoint_subject: format!(
+            subject: format!(
                 "{}.{}",
                 pubkey_lowercase,
                 WorkloadServiceSubjects::Install.as_ref()
@@ -102,7 +102,7 @@ pub async fn run(
     workload_service
         .add_consumer(ConsumerBuilder {
             name: "update_installed_workload".to_string(),
-            endpoint_subject: format!(
+            subject: format!(
                 "{}.{}",
                 pubkey_lowercase,
                 WorkloadServiceSubjects::UpdateInstalled.as_ref()
@@ -119,7 +119,7 @@ pub async fn run(
     workload_service
         .add_consumer(ConsumerBuilder {
             name: "uninstall_workload".to_string(),
-            endpoint_subject: format!(
+            subject: format!(
                 "{}.{}",
                 pubkey_lowercase,
                 WorkloadServiceSubjects::Uninstall.as_ref()
@@ -136,7 +136,7 @@ pub async fn run(
     workload_service
         .add_consumer(ConsumerBuilder {
             name: "send_workload_status".to_string(),
-            endpoint_subject: format!(
+            subject: format!(
                 "{}.{}",
                 pubkey_lowercase,
                 WorkloadServiceSubjects::SendStatus.as_ref()

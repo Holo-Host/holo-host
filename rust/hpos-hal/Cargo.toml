@@ -4,6 +4,10 @@ version = "0.1.0"
 edition = "2021"
 
 [[bin]]
+name = "led-test"
+path = "bin/led-test.rs"
+
+[[bin]]
 name = "holo-inventory"
 path = "bin/holo-inventory.rs"
 
@@ -20,10 +24,16 @@ glob = "0.3.1"
 procfs = "0.17.0"
 test-files = "0.1.2"
 uuid = "1.11.0"
+failure = "0.1.8"
+
+[dependencies.aorura]
+git = "https://github.com/Holo-Host/aorura.git"
+rev = "2aef90935d6e965cf6ec02208f84e4b6f43221bd"
 
 [dev-dependencies]
 env_logger = "0.11.5"
 assert_cmd = "2.0.16"
+tempfile = "3.17.1"
 
 [features]
 tests_sudo = []

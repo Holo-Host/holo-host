@@ -1,10 +1,10 @@
+use crate::fs::parse_fs;
+use crate::sysfs;
 /// Module for handling inventory collection, including hardware, platform, system level attributes
 /// and components. This shouldn't ever fail and is considered best-effort. The intent is that the
 /// caller gathers inventory periodically, and the caller compares it with previous copies of the
 /// inventory, highlighting differences. To facilitate this, many of the operations throughout will
 /// return empty data and swallow and errors, rather than abort and return no inventory.
-use crate::fs::parse_fs;
-use crate::sysfs;
 use glob::glob;
 use log::{debug, info};
 use procfs::{CpuInfo, FromBufRead};
@@ -26,6 +26,8 @@ pub enum InventoryErrorInner {
     UTF8(#[from] std::str::Utf8Error),
     #[error("Object not found")]
     NotFound,
+    #[error("Serialisation Error")]
+    SerialisationError(#[from] serde_json::Error),
 }
 impl_context!(InventoryError(InventoryErrorInner));
 
@@ -216,6 +218,13 @@ impl HoloUsbInventory {
     }
 }
 
+/// A struct to represent a discovered LED device
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub enum HoloLedDevice {
+    None(),
+    HoloportUsbLed { device_node: String },
+}
+
 /// A structure representing Holo Platform related meta-inventory
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct HoloPlatform {
@@ -224,6 +233,7 @@ pub struct HoloPlatform {
     pub admin_interface: Option<String>,
     pub system_drive: Option<String>,
     pub data_drive: Option<String>,
+    pub led_device: HoloLedDevice,
 }
 
 impl Display for HoloPlatform {
@@ -259,6 +269,17 @@ impl HoloPlatform {
                 admin_interface: None,
                 system_drive: None,
                 data_drive: None,
+                led_device: HoloLedDevice::HoloportUsbLed {
+                    device_node: "ttyUSB0".to_string(),
+                },
+            },
+            HoloPlatformType::HoloportNoLed => Self {
+                platform_type,
+                hypervisor_guest,
+                admin_interface: None,
+                system_drive: None,
+                data_drive: None,
+                led_device: HoloLedDevice::None(),
             },
             // TODO: find admin interface and system and data drives by path.
             HoloPlatformType::HoloportPlus => Self {
@@ -267,6 +288,17 @@ impl HoloPlatform {
                 admin_interface: None,
                 system_drive: None,
                 data_drive: None,
+                led_device: HoloLedDevice::HoloportUsbLed {
+                    device_node: "ttyUSB0".to_string(),
+                },
+            },
+            HoloPlatformType::HoloportPlusNoLed => Self {
+                platform_type,
+                hypervisor_guest,
+                admin_interface: None,
+                system_drive: None,
+                data_drive: None,
+                led_device: HoloLedDevice::None(),
             },
             HoloPlatformType::Yoloport => Self {
                 platform_type,
@@ -274,6 +306,7 @@ impl HoloPlatform {
                 admin_interface: None,
                 system_drive: None,
                 data_drive: None,
+                led_device: HoloLedDevice::None(),
             },
             HoloPlatformType::Unknown => {
                 // Unknown model type, so we don't have any hints for admin interface, etc. Note:
@@ -285,6 +318,7 @@ impl HoloPlatform {
                     admin_interface: None,
                     system_drive: None,
                     data_drive: None,
+                    led_device: HoloLedDevice::None(),
                 }
             }
         }
@@ -310,9 +344,6 @@ impl HoloPlatform {
         // holoports have a single NIC of a specific model at a specific part of the PCI tree. We
         // should add more criteria for determining whether it's a holoport or not, but this is a
         // start.
-        //
-        // Holoports should also have a USB device visible that is the LED on the front. Why
-        // doesn't mine? It has the LED and the LED appears lit up.
         if inventory.nics.len() == 1
             && inventory.nics[0].location == "pci0000:00/0000:00:1c.0/0000:01:00.0"
             && inventory.nics[0].model == Some("0x8168".to_string())
@@ -323,14 +354,24 @@ impl HoloPlatform {
             // plus has a 2G SATA rotational drive model ST2000LM015-2E81 and a SATA SSD model
             // KINGSTON RBUSMS1.
             //
+            // Note too that there are variants of these criteria that don't have a USB LED device.
+            // The have an LED, but it's a simple on/off state. The [leds] module needs us to help
+            // distinguish between the two.
+            //
             // We may need to relax some of the criteria here, around the path. We're making an
             // assumption that the drives have been cabled consistently for each holoport, but
             // we've yet to see whether that's the case in the field.
+            let has_usb_led: bool = true; // TODO: FIXME
+
             for drive in inventory.drives.iter() {
                 if drive.location == "pci0000:00/0000:00:17.0/ata3/host2/target2:0:0/2:0:0:0"
                     && drive.model == Some("ST1000LM035-1RK1".to_string())
                 {
-                    return HoloPlatformType::Holoport;
+                    if has_usb_led {
+                        return HoloPlatformType::Holoport;
+                    } else {
+                        return HoloPlatformType::HoloportNoLed;
+                    }
                 }
             }
             for drive in inventory.drives.iter() {
@@ -339,7 +380,11 @@ impl HoloPlatform {
                 {
                     // We could/should also check for the SSD here too, but this will work for
                     // now.
-                    return HoloPlatformType::HoloportPlus;
+                    if has_usb_led {
+                        return HoloPlatformType::HoloportPlus;
+                    } else {
+                        return HoloPlatformType::HoloportPlusNoLed;
+                    }
                 }
             }
         }
@@ -359,8 +404,12 @@ impl HoloPlatform {
 pub enum HoloPlatformType {
     /// A Holoport node
     Holoport,
+    /// A holoport with no USB LED
+    HoloportNoLed,
     /// A Holodport Plus node
     HoloportPlus,
+    /// A Holoport Plus with no USB LED
+    HoloportPlusNoLed,
     /// Temporary model type just for testing in the short term
     Yoloport,
     /// Not known
@@ -371,7 +420,9 @@ impl Display for HoloPlatformType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             HoloPlatformType::Holoport => write!(f, "Holoport"),
+            HoloPlatformType::HoloportNoLed => write!(f, "Holoport (no LED)"),
             HoloPlatformType::HoloportPlus => write!(f, "Holoport Plus"),
+            HoloPlatformType::HoloportPlusNoLed => write!(f, "Holoport Plus (no LED)"),
             HoloPlatformType::Yoloport => write!(f, "YOLO port (testing)"),
             HoloPlatformType::Unknown => write!(f, "Unknown Platform Type"),
         }
