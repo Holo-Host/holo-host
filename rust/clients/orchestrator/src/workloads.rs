@@ -32,7 +32,6 @@ pub async fn run(
     mut orchestrator_client: JsClient,
     db_client: MongoDBClient,
 ) -> Result<JsClient, async_nats::Error> {
-    // ==================== Setup JS Stream Service ====================
     // Instantiate the Workload API (requires access to db client)
     let workload_api = OrchestratorWorkloadApi::new(&db_client).await?;
 

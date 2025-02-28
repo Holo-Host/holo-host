@@ -30,11 +30,9 @@ pub async fn run(
     log::info!("Host Agent Client: starting workload service...");
     log::info!("host_pubkey : {}", host_pubkey);
 
-    let pubkey_lowercase = host_pubkey.to_string().to_lowercase();
-
-    // ==================== Setup JS Stream Service ====================
     // Instantiate the Workload API
     let workload_api = HostWorkloadApi::default();
+    let pubkey_lowercase = host_pubkey.to_string().to_lowercase();
 
     // Register Workload Streams for Host Agent to consume
     // NB: Subjects are published by orchestrator or nats-db-connector

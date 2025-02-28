@@ -28,7 +28,6 @@ pub async fn run(
     mut nats_client: JsClient,
     db_client: MongoDBClient,
 ) -> Result<(), async_nats::Error> {
-    // ==================== Setup API & Register Endpoints ====================
     // Setup JS Stream Service
     let inventory_stream_service = JsServiceBuilder {
         name: INVENTORY_SRV_NAME.to_string(),

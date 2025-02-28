@@ -63,7 +63,6 @@ async fn daemonize(args: &DaemonzeArgs) -> Result<(), async_nats::Error> {
     let host_client = hostd::host_client::run(
         "host_pubkey_placeholder>",
         &args.nats_leafnode_client_creds_path,
-        args.nats_connect_timeout_secs,
     )
     .await?;
 

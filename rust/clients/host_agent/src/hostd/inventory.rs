@@ -26,17 +26,15 @@ pub fn should_check_inventory(
 
 pub async fn run(host_client: JsClient, host_pubkey: &str) -> Result<(), async_nats::Error> {
     log::info!("Host Agent Client: starting Inventory job...");
-    log::info!("host_pubkey : {}", host_pubkey);
 
-    let pubkey_lowercase = host_pubkey.to_string().to_lowercase();
-
-    // ==================== Handle Inventory Check-Ups and Updates ====================
     // Store latest inventory record in memory
     let mut in_memory_cache = HoloInventory::from_host();
 
     let one_hour_interval = tokio::time::Duration::from_secs(3600); // 1 hour in seconds
     let check_interval_duration = chrono::TimeDelta::seconds(one_hour_interval.as_secs() as i64);
     let mut last_check_time = chrono::Utc::now();
+
+    let pubkey_lowercase = host_pubkey.to_string().to_lowercase();
 
     loop {
         // Periodically check inventory and compare against latest state (in-memory)
