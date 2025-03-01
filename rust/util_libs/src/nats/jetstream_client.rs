@@ -25,6 +25,7 @@ impl std::fmt::Debug for JsClient {
     }
 }
 
+#[derive(Clone)]
 pub struct JsClient {
     url: String,
     name: String,

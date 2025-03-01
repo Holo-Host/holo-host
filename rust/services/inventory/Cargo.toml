@@ -1,0 +1,21 @@
+[package]
+name = "inventory"
+version = "0.0.1"
+edition = "2021"
+
+[dependencies]
+tokio = { workspace = true }
+anyhow = { workspace = true }
+async-nats = { workspace = true }
+log = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+bson = { version = "2.6.1", features = ["chrono-0_4"] }
+mongodb = "3.1"
+bytes = "1.8.0"
+util_libs = { path = "../../util_libs" }
+hpos-hal = { path = "../../hpos-hal" }
+
+[dev-dependencies]
+tempfile = "3.8"
+
