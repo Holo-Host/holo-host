@@ -13,6 +13,9 @@ Endpoints & Managed Subjects:
 
 pub mod types;
 
+#[cfg(test)]
+mod tests;
+
 use anyhow::Result;
 use async_nats::jetstream::ErrorCode;
 use async_nats::Message;
