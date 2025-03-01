@@ -35,6 +35,8 @@ pub async fn run(
     // Instantiate the Workload API (requires access to db client)
     let workload_api = OrchestratorWorkloadApi::new(&db_client).await?;
 
+    // Register Workload Streams for Orchestrator to consume and proceess
+    // NB: These subjects are published by external Developer (via external api), the Nats-DB-Connector, or the Hosting Agent
     let workload_stream_service = JsServiceBuilder {
         name: WORKLOAD_SRV_NAME.to_string(),
         description: WORKLOAD_SRV_DESC.to_string(),

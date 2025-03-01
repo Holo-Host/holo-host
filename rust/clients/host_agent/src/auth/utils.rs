@@ -2,6 +2,7 @@ use crate::{auth, keys};
 use anyhow::Result;
 use data_encoding::BASE64URL_NOPAD;
 use hpos_hal::inventory::HoloInventory;
+use inventory::HOST_UNAUTHENTICATED_SUBJECT;
 
 /// Encode a json string into a b64 string
 pub fn json_to_base64(json_data: &str) -> Result<String, serde_json::Error> {
@@ -34,7 +35,7 @@ pub async fn run_auth_loop(mut keys: keys::Keys) -> Result<keys::Keys, async_nat
 
         while max_time_interval > now.signed_duration_since(start) {
             let unauthenticated_user_inventory_subject =
-                format!("INVENTORY.unauthenticated.{}.update", pubkey_lowercase);
+                format!("INVENTORY.{HOST_UNAUTHENTICATED_SUBJECT}.{pubkey_lowercase}.update");
             let inventory = HoloInventory::from_host();
             let payload_bytes = serde_json::to_vec(&inventory)?;
 

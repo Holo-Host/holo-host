@@ -7,8 +7,10 @@ Users: admin user & host user (the authenticated host user) & auth guard user (t
 (NB: Orchestrator admin user can listen to ALL "Inventory.>" subjects)
 
 Endpoints & Managed Subjects:
-    - handle_inventory_update: INVENTORY.{{host_pubkey}}.authenticated
-    - handle_error_host_inventory: INVENTORY.{{host_pubkey}}.unauthenticated
+    - handle_inventory_update:
+        handles 2 cases:
+        1. INVENTORY.authenticated.{{host_pubkey}}.update
+        2. INVENTORY.unauthenticated.{{host_pubkey}}.update
 */
 
 pub mod types;

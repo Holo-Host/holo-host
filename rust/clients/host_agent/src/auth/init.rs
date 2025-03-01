@@ -27,6 +27,7 @@ use authentication::{
     AUTH_SRV_SUBJ, VALIDATE_AUTH_SUBJECT,
 };
 use hpos_hal::inventory::HoloInventory;
+use inventory::HOST_AUTHENTICATED_SUBJECT;
 use std::str::FromStr;
 use std::time::Duration;
 use textnonce::TextNonce;
@@ -73,8 +74,8 @@ pub async fn run(
             "Failed to locate Auth Guard credentials",
         ));
     };
-    let pubkey_lowercase = host_agent_keys.host_pubkey.to_string().to_lowercase();
 
+    let pubkey_lowercase = host_agent_keys.host_pubkey.to_string().to_lowercase();
     let user_unique_inbox = &format!("{HOST_AUTH_CLIENT_INBOX_PREFIX}.{pubkey_lowercase}");
 
     // Connect to Nats server as auth guard and call NATS AuthCallout
@@ -165,7 +166,7 @@ pub async fn run(
 
                 // Send host inventory to orchestrator to add to mongodb (allows for host matching to start)
                 let authenticated_user_inventory_subject =
-                    format!("INVENTORY.authenticated.{}.update", pubkey_lowercase);
+                    format!("INVENTORY.{HOST_AUTHENTICATED_SUBJECT}.{pubkey_lowercase}.update");
                 let inventory = HoloInventory::from_host();
                 let payload_bytes = serde_json::to_vec(&inventory)?;
 

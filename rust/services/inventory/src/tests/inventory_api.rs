@@ -2,7 +2,7 @@
 #![allow(unused_imports)]
 
 use super::*;
-use crate::{types::InventoryPayloadType, InventoryServiceApi};
+use crate::{types::InventoryPayloadType, InventoryServiceApi, HOST_AUTHENTICATED_SUBJECT};
 use bson::doc;
 use std::sync::Arc;
 use util_libs::db::mongodb::MongoDbAPI;
@@ -59,7 +59,10 @@ mod tests {
         let msg_payload = serde_json::to_vec(&payload).unwrap();
         let msg = Arc::new(
             TestMessage::new(
-                format!("INVENTORY.authenticated.{}.update", host.device_id),
+                format!(
+                    "INVENTORY.{HOST_AUTHENTICATED_SUBJECT}.{}.update",
+                    host.device_id
+                ),
                 msg_payload,
             )
             .into_message(),
@@ -219,7 +222,10 @@ mod tests {
         let msg_payload = serde_json::to_vec(&payload).unwrap();
         let msg = Arc::new(
             TestMessage::new(
-                format!("INVENTORY.authenticated.{}.update", host.device_id),
+                format!(
+                    "INVENTORY.{HOST_AUTHENTICATED_SUBJECT}.{}.update",
+                    host.device_id
+                ),
                 msg_payload,
             )
             .into_message(),

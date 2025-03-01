@@ -10,43 +10,38 @@ Endpoints & Managed Subjects:
 
 pub mod types;
 pub mod utils;
-use anyhow::{Context, Result};
+use anyhow::Result;
 use async_nats::jetstream::ErrorCode;
 use async_nats::HeaderValue;
 use async_nats::{AuthError, Message};
+use bson::{self, doc, to_document};
 use core::option::Option::None;
 use data_encoding::BASE64URL_NOPAD;
-use mongodb::Client as MongoDBClient;
+use inventory::HOST_AUTHENTICATED_SUBJECT;
+use mongodb::{options::UpdateModifications, Client as MongoDBClient};
 use nkeys::KeyPair;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::future::Future;
-use std::process::Command;
-use std::sync::Arc;
-use types::{AuthApiResult, WORKLOAD_SK_ROLE};
-// use utils::handle_internal_err;
+use std::{collections::HashMap, fmt::Debug, sync::Arc};
+use types::{AuthApiResult, DbValidationData};
 use util_libs::{
     db::{
-        mongodb::{IntoIndexes, MongoCollection}, // MongoDbAPI
-        schemas::{self, Host, Hoster, User},     // , RoleInfo
+        mongodb::{IntoIndexes, MongoCollection, MongoDbAPI},
+        schemas::{self, Host, Hoster, User},
     },
-    nats::{
-        jetstream_client::get_nats_jwt_by_nsc,
-        types::{AsyncEndpointHandler, JsServiceResponse, ServiceError},
-    },
+    nats::types::ServiceError,
 };
 
-pub const AUTH_SRV_NAME: &str = "AUTH";
+pub const AUTH_SRV_NAME: &str = "AUTH_SERVICE";
 pub const AUTH_SRV_SUBJ: &str = "AUTH";
 pub const AUTH_SRV_VERSION: &str = "0.0.1";
 pub const AUTH_SRV_DESC: &str =
     "This service handles the Authentication flow the Host and the Orchestrator.";
 
 // Service Endpoint Names:
-pub const VALIDATE_AUTH_SUBJECT: &str = "validate";
 // NB: Do not change this subject name unless NATS.io has changed the naming of their auth permissions subject.
 // NB: `AUTH_CALLOUT_SUBJECT` attached to the global subject `$SYS.REQ.USER`
 pub const AUTH_CALLOUT_SUBJECT: &str = "AUTH";
+pub const VALIDATE_AUTH_SUBJECT: &str = "validate";
 
 #[derive(Clone, Debug)]
 pub struct AuthServiceApi {
@@ -101,7 +96,7 @@ impl AuthServiceApi {
         )
         .map_err(|e| ServiceError::Authentication(AuthError::new(e)))?;
         let host_pubkey: &str = user_data.host_pubkey.as_ref();
-        let pubkey_lowercase = host_pubkey.to_string().to_lowercase();
+        let pubkey_lowercase = host_pubkey.to_lowercase();
 
         let host_signature = user_data.get_host_signature();
         let decoded_sig = BASE64URL_NOPAD
@@ -109,7 +104,7 @@ impl AuthServiceApi {
             .map_err(|e| ServiceError::Internal(e.to_string()))?;
         let user_verifying_keypair = KeyPair::from_public_key(host_pubkey)
             .map_err(|e| ServiceError::Internal(e.to_string()))?;
-        let payload_no_sig = &user_data.clone().without_signature();
+        let payload_no_sig = &(user_data.clone().without_signature());
         let raw_payload = serde_json::to_vec(payload_no_sig)
             .map_err(|e| ServiceError::Internal(e.to_string()))?;
 
@@ -123,116 +118,10 @@ impl AuthServiceApi {
         };
 
         // 3. If provided, authenticate the Hoster pubkey and email and assign full permissions if successful
-        let is_hoster_valid = if user_data.email.is_some() && user_data.hoster_hc_pubkey.is_some() {
-            true
-            // TODO:
-            // let hoster_hc_pubkey = user_data.hoster_hc_pubkey.unwrap(); // unwrap is safe here as checked above
-            // let hoster_email = user_data.email.unwrap(); // unwrap is safe here as checked above
-
-            // let is_valid: bool = match self
-            //     .user_collection
-            //     .get_one_from(doc! { "roles.role.Hoster": hoster_hc_pubkey.clone() })
-            //     .await?
-            // {
-            //     Some(u) => {
-            //         let mut is_valid = true;
-            //         // If hoster exists with pubkey, verify email
-            //         if u.email != hoster_email {
-            //             log::error!(
-            //                 "Error: Failed to validate hoster email. Email='{}'.",
-            //                 hoster_email
-            //             );
-            //             is_valid = false;
-            //         }
-
-            //         // ...then find the host collection that contains the provided host pubkey
-            //         match self
-            //             .host_collection
-            //             .get_one_from(doc! { "pubkey": host_pubkey })
-            //             .await?
-            //         {
-            //             Some(host) => {
-            //                 // ...and pair the host with hoster pubkey (if the hoster is not already assiged to host)
-            //                 if host.assigned_hoster != hoster_hc_pubkey {
-            //                     let host_query: bson::Document = doc! { "_id":  host._id.clone() };
-            //                     let updated_host_doc = to_document(&Host {
-            //                         assigned_hoster: hoster_hc_pubkey,
-            //                         ..host
-            //                     })
-            //                     .map_err(|e| ServiceError::Internal(e.to_string()))?;
-
-            //                     self.host_collection
-            //                         .update_one_within(
-            //                             host_query,
-            //                             UpdateModifications::Document(updated_host_doc),
-            //                         )
-            //                         .await?;
-            //                 }
-            //             }
-            //             None => {
-            //                 log::error!(
-            //                     "Error: Failed to locate Host record. Subject='{}'.",
-            //                     msg.subject
-            //                 );
-            //                 is_valid = false;
-            //             }
-            //         }
-
-            //         // Find the mongo_id ref for the hoster associated with this user
-            //         let RoleInfo { ref_id, role: _ } = u.roles.into_iter().find(|r| matches!(r.role, Role::Hoster(_))).ok_or_else(|| {
-            //             let err_msg = format!("Error: Failed to locate Hoster record id in User collection. Subject='{}'.", msg.subject);
-            //             handle_internal_err(&err_msg)
-            //         })?;
-
-            //         // Finally, find the hoster collection
-            //         match self
-            //             .hoster_collection
-            //             .get_one_from(doc! { "_id":  ref_id.clone() })
-            //             .await?
-            //         {
-            //             Some(hoster) => {
-            //                 // ...and pair the hoster with host (if the host is not already assiged to the hoster)
-            //                 let mut updated_assigned_hosts = hoster.assigned_hosts;
-            //                 if !updated_assigned_hosts.contains(&host_pubkey.to_string()) {
-            //                     let hoster_query: bson::Document =
-            //                         doc! { "_id":  hoster._id.clone() };
-            //                     updated_assigned_hosts.push(host_pubkey.to_string());
-            //                     let updated_hoster_doc = to_document(&Hoster {
-            //                         assigned_hosts: updated_assigned_hosts,
-            //                         ..hoster
-            //                     })
-            //                     .map_err(|e| ServiceError::Internal(e.to_string()))?;
-
-            //                     self.host_collection
-            //                         .update_one_within(
-            //                             hoster_query,
-            //                             UpdateModifications::Document(updated_hoster_doc),
-            //                         )
-            //                         .await?;
-            //                 }
-            //             }
-            //             None => {
-            //                 log::error!(
-            //                     "Error: Failed to locate Hoster record. Subject='{}'.",
-            //                     msg.subject
-            //                 );
-            //                 is_valid = false;
-            //             }
-            //         }
-            //         is_valid
-            //     }
-            //     None => {
-            //         log::error!(
-            //             "Error: Failed to find User Collection with Hoster pubkey. Subject='{}'.",
-            //             msg.subject
-            //         );
-            //         false
-            //     }
-            // };
-            // is_valid
-        } else {
-            false
-        };
+        let is_hoster_valid = self
+            .verify_is_valid_in_db(user_data.clone())
+            .await
+            .map_err(|e| ServiceError::Internal(e.to_string()))?;
 
         // 4. Assign permissions based on whether the hoster was successfully validated
         let permissions = if is_hoster_valid {
@@ -240,7 +129,7 @@ impl AuthServiceApi {
             let user_unique_auth_subject = &format!("AUTH.{}.>", pubkey_lowercase);
             let user_unique_inbox = &format!("_AUTH_INBOX.{}.>", pubkey_lowercase);
             let authenticated_user_inventory_subject =
-                &format!("INVENTORY.authenticated.{}.update.>", pubkey_lowercase);
+                &format!("INVENTORY.{HOST_AUTHENTICATED_SUBJECT}.{pubkey_lowercase}.update.>");
 
             types::Permissions {
                 publish: types::PermissionLimits {
@@ -348,95 +237,16 @@ impl AuthServiceApi {
         };
 
         // 3. Add User keys to nsc resolver (and automatically create account-signed refernce to user key)
-        match Command::new("nsc")
-            .args([
-                "add",
-                "user",
-                "-a",
-                "WORKLOAD",
-                "-n",
-                &format!("host_user_{}", host_pubkey),
-                "-k",
-                &host_pubkey,
-                "-K",
-                WORKLOAD_SK_ROLE,
-                "--tag",
-                &format!("pubkey:{}", host_pubkey),
-            ])
-            .output()
-            .context("Failed to add host user with provided keys")
-            .map_err(|e| ServiceError::Internal(e.to_string()))
-        {
-            Ok(r) => {
-                let stderr = String::from_utf8_lossy(&r.stderr);
-                if !r.stderr.is_empty() && !stderr.contains("already exists") {
-                    return Err(ServiceError::Internal(stderr.to_string()));
-                }
-            }
-            Err(e) => {
-                return Err(e);
-            }
-        };
-
-        if let Some(sys_pubkey) = maybe_sys_pubkey.clone() {
-            match Command::new("nsc")
-                .args([
-                    "add",
-                    "user",
-                    "-a",
-                    "SYS",
-                    "-n",
-                    &format!("sys_user_{}", host_pubkey),
-                    "-k",
-                    &sys_pubkey,
-                ])
-                .output()
-                .context("Failed to add host sys user with provided keys")
-                .map_err(|e| ServiceError::Internal(e.to_string()))
-            {
-                Ok(r) => {
-                    let stderr = String::from_utf8_lossy(&r.stderr);
-                    if !r.stderr.is_empty() && !stderr.contains("already exists") {
-                        return Err(ServiceError::Internal(stderr.to_string()));
-                    }
-                }
-                Err(e) => {
-                    return Err(e);
-                }
-            };
-        }
+        utils::add_user_keys_to_resolver(&host_pubkey, &maybe_sys_pubkey)?;
 
         // 4. Create User JWT files (automatically signed with respective account key)
-        let host_jwt = std::fs::read_to_string(get_nats_jwt_by_nsc(
-            "HOLO",
-            "WORKLOAD",
-            &format!("host_user_{}.jwt", host_pubkey),
-        ))
-        .map_err(|e| ServiceError::Internal(e.to_string()))?;
-
-        let sys_jwt = if maybe_sys_pubkey.is_some() {
-            std::fs::read_to_string(get_nats_jwt_by_nsc(
-                "HOLO",
-                "SYS",
-                &format!("sys_user_{}.jwt", host_pubkey),
-            ))
-            .map_err(|e| ServiceError::Internal(e.to_string()))?
-        } else {
-            String::new()
-        };
-
-        // 5. PUSH the auth updates to resolver programmtically by sending jwts to `SYS.REQ.ACCOUNT.PUSH` subject
-        Command::new("nsc")
-            .arg("push -A")
-            .output()
-            .context("Failed to update resolver config file")
+        let (host_jwt, sys_jwt) = utils::create_user_jwt_files(&host_pubkey, &maybe_sys_pubkey)
             .map_err(|e| ServiceError::Internal(e.to_string()))?;
-        log::trace!("\nPushed new jwts to resolver server");
 
         let mut tag_map: HashMap<String, String> = HashMap::new();
         tag_map.insert("host_pubkey".to_string(), host_pubkey.clone());
 
-        // 6. Form the result and return
+        // 5. Form the result and return
         Ok(AuthApiResult {
             result: types::AuthResult::Authorization(types::AuthJWTResult {
                 host_pubkey: host_pubkey.clone(),
@@ -449,6 +259,121 @@ impl AuthServiceApi {
     }
 
     // Helper function to initialize mongodb collections
+    async fn verify_is_valid_in_db(
+        &self,
+        user_data: types::AuthGuardPayload,
+    ) -> Result<bool, ServiceError> {
+        if let (Some(hoster_hc_pubkey), Some(hoster_email)) =
+            (user_data.hoster_hc_pubkey, user_data.email)
+        {
+            let host_pubkey = user_data.host_pubkey;
+
+            let pipeline = vec![
+                // Step 1: Find the `user` document with a matching `hoster_hc_pubkey``
+                doc! {
+                    "$match": { "hoster.pubkey": hoster_hc_pubkey.clone() }
+                },
+                // Step 2: Look-up the associated `user_info`` document by referencing the `user.user_info_id` field
+                // NB: The `local_field` references a field  local to the `user` document matched in step 1
+                doc! {
+                    "$lookup": {
+                        "from": "user_info",
+                        "localField": "user_info_id",
+                        "foreignField": "_id",
+                        "as": "user_info"
+                    }
+                },
+                // Extract the matching `user_info` document from resulting array
+                doc! { "$unwind": "$user_info" },
+                doc! {
+                    "$lookup": {
+                        "from": "hoster",
+                        "localField": "hoster.collection_id",
+                        "foreignField": "_id",
+                        "as": "hoster_record"
+                    }
+                },
+                // Extract the matching `hoster` document from resulting array
+                // NB: `hoster` is aliased to `hoster_record` to avoid namespace collision with the `user`` document field `hoster`
+                doc! { "$unwind": "$hoster_record" },
+                doc! {
+                    "$project": {
+                        "_id": 0,
+                        "jurisdiction": 1,
+                        "hoster.pubkey": 1,
+                        "hoster_record": 1,
+                        "user_info.email": 1,
+                    }
+                },
+            ];
+
+            // Run the aggregation pipeline
+            let result = self
+                .user_collection
+                .aggregate::<DbValidationData>(pipeline)
+                .await
+                .unwrap_or(vec![]);
+
+            println!("Aggregate pipeline result: {:#?}", result);
+
+            // If no result is returned or more than 1 item exists, call failed
+            if result.is_empty() {
+                println!("Failed update pipeline...");
+                log::error!("Failed DB Authorization. REASON=Failed to locate user collection associated with the valid hoster and user_info document.");
+                return Ok(false);
+            } else if result.len() > 1 {
+                log::error!("Failed DB Authorization. REASON=Recieved unexpected volume of results when validating user data.");
+                return Ok(false);
+            }
+
+            let DbValidationData {
+                jurisdiction: _,
+                user_info,
+                hoster,
+                hoster_pubkey,
+            } = &result[0];
+
+            if user_info.email != hoster_email {
+                log::error!("Failed DB Authorization. REASON=Invalid hoster email.");
+                return Ok(false);
+            }
+
+            if hoster_pubkey.pubkey != hoster_hc_pubkey {
+                log::error!("Failed DB Authorization. REASON=Invalid hoster pubkey.");
+                return Ok(false);
+            }
+
+            // Now that host & hoster are successfully validated...
+            // Create a new host document in db and assign the bidirectional references
+            let mut new_host = Host::default();
+            new_host.metadata.created_at = Some(bson::DateTime::now());
+            new_host.device_id = host_pubkey;
+
+            // Assign Hoster to Host
+            new_host.assigned_hoster = hoster._id.ok_or(ServiceError::Internal(
+                "Passed DB Authorization, but failed to assign hoster to host. REASON=Failed."
+                    .to_string(),
+            ))?;
+            let host_id = self.host_collection.insert_one_into(new_host).await?;
+
+            // Assign Host to Hoster
+            let mut updated_hoster = hoster.to_owned();
+            updated_hoster.assigned_hosts.push(host_id);
+            self.hoster_collection.update_one_within(
+                doc! {
+                    "_id": hoster._id
+                },
+                UpdateModifications::Document(doc! {
+                    "$set": to_document(&updated_hoster).map_err(|e| ServiceError::Authentication(AuthError::new(e)))?
+                }),
+            ).await?;
+
+            Ok(true)
+        } else {
+            Ok(false)
+        }
+    }
+
     async fn init_collection<T>(
         client: &MongoDBClient,
         collection_name: &str,
@@ -457,21 +382,6 @@ impl AuthServiceApi {
         T: Serialize + for<'de> Deserialize<'de> + Unpin + Send + Sync + Default + IntoIndexes,
     {
         Ok(MongoCollection::<T>::new(client, schemas::DATABASE_NAME, collection_name).await?)
-    }
-
-    pub fn call<F, Fut>(&self, handler: F) -> AsyncEndpointHandler<AuthApiResult>
-    where
-        F: Fn(Self, Arc<Message>) -> Fut + Send + Sync + 'static,
-        Fut: Future<Output = Result<AuthApiResult, ServiceError>> + Send + 'static,
-        Self: Send + Sync,
-    {
-        let api = self.to_owned();
-        Arc::new(
-            move |msg: Arc<Message>| -> JsServiceResponse<AuthApiResult> {
-                let api_clone = api.clone();
-                Box::pin(handler(api_clone, msg))
-            },
-        )
     }
 
     fn convert_msg_to_type<T>(msg: Arc<Message>) -> Result<T, ServiceError>

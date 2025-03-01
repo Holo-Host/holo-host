@@ -34,7 +34,7 @@ pub async fn run(host_client: JsClient, host_pubkey: &str) -> Result<(), async_n
     let check_interval_duration = chrono::TimeDelta::seconds(one_hour_interval.as_secs() as i64);
     let mut last_check_time = chrono::Utc::now();
 
-    let pubkey_lowercase = host_pubkey.to_string().to_lowercase();
+    let pubkey_lowercase = host_pubkey.to_lowercase();
 
     loop {
         // Periodically check inventory and compare against latest state (in-memory)

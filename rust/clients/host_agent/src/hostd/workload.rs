@@ -32,7 +32,7 @@ pub async fn run(
 
     // Instantiate the Workload API
     let workload_api = HostWorkloadApi::default();
-    let pubkey_lowercase = host_pubkey.to_string().to_lowercase();
+    let pubkey_lowercase = host_pubkey.to_lowercase();
 
     // Register Workload Streams for Host Agent to consume
     // NB: Subjects are published by orchestrator or nats-db-connector

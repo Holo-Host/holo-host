@@ -64,7 +64,6 @@ impl JsClient {
         };
 
         let client = connect_options.connect(&p.nats_url).await?;
-
         let service_log_prefix = format!("NATS-CLIENT-LOG::{}::", p.name);
         log::info!(
             "{}Connected to NATS server at {}",

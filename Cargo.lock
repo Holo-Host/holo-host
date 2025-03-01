@@ -453,6 +453,7 @@ dependencies = [
  "dotenv",
  "env_logger",
  "futures",
+ "inventory",
  "jsonwebtoken",
  "log",
  "mongodb",
