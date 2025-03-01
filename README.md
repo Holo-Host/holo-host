@@ -2,6 +2,8 @@
 
 This is an experiment to contain the code for all components in a single repository, also known as a monorepository.
 
+Please run `sh setup-hooks.sh` to enforce correct naming convention for branches.
+
 ## Repository Layout
 
 The code is grouped by language or framework name.
@@ -20,14 +22,11 @@ The code is grouped by language or framework name.
 /Cargo.toml
 /Cargo.lock
 /rust/ # all rust code lives here
-/rust/common/Cargo.toml
-/rust/common/src/lib.rs
-/rust/holo-agentctl/Cargo.toml
-/rust/holo-agentctl/src/main.rs
-/rust/holo-agentd/Cargo.toml
-/rust/holo-agentd/src/main.rs
-/rust/holo-hqd/Cargo.toml
-/rust/holo-hqd/src/main.rs
+/rust/clients/
+/rust/services/
+/rust/hpos-hal/
+/rust/netdiag/
+/rust/util_libs/
 ```
 
 ### Pulumi for Infrastructure-as-Code

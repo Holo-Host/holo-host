@@ -15,7 +15,7 @@ use core::option::Option::None;
 use std::{fmt::Debug, sync::Arc};
 use util_libs::{
     db::schemas::{WorkloadState, WorkloadStatus},
-    nats_js_client::ServiceError,
+    nats::types::ServiceError,
 };
 
 #[derive(Debug, Clone, Default)]

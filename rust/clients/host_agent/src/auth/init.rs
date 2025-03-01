@@ -30,7 +30,7 @@ use hpos_hal::inventory::HoloInventory;
 use std::str::FromStr;
 use std::time::Duration;
 use textnonce::TextNonce;
-use util_libs::nats_js_client;
+use util_libs::nats::jetstream_client;
 
 pub const HOST_AUTH_CLIENT_NAME: &str = "Host Auth";
 pub const HOST_AUTH_CLIENT_INBOX_PREFIX: &str = "_AUTH_INBOX";
@@ -73,13 +73,12 @@ pub async fn run(
             "Failed to locate Auth Guard credentials",
         ));
     };
-    let user_unique_inbox = &format!(
-        "{}_{}",
-        HOST_AUTH_CLIENT_INBOX_PREFIX, host_agent_keys.host_pubkey
-    );
+    let pubkey_lowercase = host_agent_keys.host_pubkey.to_string().to_lowercase();
+
+    let user_unique_inbox = &format!("{HOST_AUTH_CLIENT_INBOX_PREFIX}.{pubkey_lowercase}");
 
     // Connect to Nats server as auth guard and call NATS AuthCallout
-    let nats_url = nats_js_client::get_nats_url();
+    let nats_url = jetstream_client::get_nats_url();
     let auth_guard_client = async_nats::ConnectOptions::new()
         .name(HOST_AUTH_CLIENT_NAME.to_string())
         .custom_inbox_prefix(user_unique_inbox.to_string())
@@ -131,10 +130,8 @@ pub async fn run(
         Err(e) => {
             log::error!("{:#?}", e);
             if let RequestErrorKind::TimedOut = e.kind() {
-                let unauthenticated_user_inventory_subject = format!(
-                    "INVENTORY.update.{}.unauthenticated",
-                    host_agent_keys.host_pubkey
-                );
+                let unauthenticated_user_inventory_subject =
+                    format!("INVENTORY.unauthenticated.{}.update", pubkey_lowercase);
                 let diganostics = HoloInventory::from_host();
                 let payload_bytes = serde_json::to_vec(&diganostics)?;
                 if (auth_guard_client
@@ -167,9 +164,8 @@ pub async fn run(
                     .await?;
 
                 // Send host inventory to orchestrator to add to mongodb (allows for host matching to start)
-                let pubkey_lowercase = host_agent_keys.host_pubkey.to_string().to_lowercase();
                 let authenticated_user_inventory_subject =
-                    format!("INVENTORY.update.{}.authenticated", pubkey_lowercase);
+                    format!("INVENTORY.authenticated.{}.update", pubkey_lowercase);
                 let inventory = HoloInventory::from_host();
                 let payload_bytes = serde_json::to_vec(&inventory)?;
 

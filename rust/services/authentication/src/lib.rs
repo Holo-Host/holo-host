@@ -30,7 +30,10 @@ use util_libs::{
         mongodb::{IntoIndexes, MongoCollection}, // MongoDbAPI
         schemas::{self, Host, Hoster, User},     // , RoleInfo
     },
-    nats_js_client::{get_nats_jwt_by_nsc, AsyncEndpointHandler, JsServiceResponse, ServiceError},
+    nats::{
+        jetstream_client::get_nats_jwt_by_nsc,
+        types::{AsyncEndpointHandler, JsServiceResponse, ServiceError},
+    },
 };
 
 pub const AUTH_SRV_NAME: &str = "AUTH";
@@ -97,7 +100,9 @@ impl AuthServiceApi {
             &auth_request_claim.auth_request.connect_opts.user_auth_token,
         )
         .map_err(|e| ServiceError::Authentication(AuthError::new(e)))?;
-        let host_pubkey = user_data.host_pubkey.as_ref();
+        let host_pubkey: &str = user_data.host_pubkey.as_ref();
+        let pubkey_lowercase = host_pubkey.to_string().to_lowercase();
+
         let host_signature = user_data.get_host_signature();
         let decoded_sig = BASE64URL_NOPAD
             .decode(&host_signature)
@@ -232,10 +237,10 @@ impl AuthServiceApi {
         // 4. Assign permissions based on whether the hoster was successfully validated
         let permissions = if is_hoster_valid {
             // If successful, assign personalized inbox and auth permissions
-            let user_unique_auth_subject = &format!("AUTH.{}.>", host_pubkey);
-            let user_unique_inbox = &format!("_AUTH_INBOX_{}.>", host_pubkey);
+            let user_unique_auth_subject = &format!("AUTH.{}.>", pubkey_lowercase);
+            let user_unique_inbox = &format!("_AUTH_INBOX.{}.>", pubkey_lowercase);
             let authenticated_user_inventory_subject =
-                &format!("INVENTORY.update.{}.>", host_pubkey);
+                &format!("INVENTORY.authenticated.{}.update.>", pubkey_lowercase);
 
             types::Permissions {
                 publish: types::PermissionLimits {
@@ -260,7 +265,7 @@ impl AuthServiceApi {
             // Otherwise, exclusively grant publication permissions for the unauthenticated inventory subj
             // ...to allow the host device to still send diganostic reports
             let unauthenticated_user_inventory_subject =
-                format!("INVENTORY.update.{}.unauthenticated.>", host_pubkey);
+                format!("INVENTORY.unauthenticated.{}.update.>", pubkey_lowercase);
             types::Permissions {
                 publish: types::PermissionLimits {
                     allow: Some(vec![unauthenticated_user_inventory_subject]),

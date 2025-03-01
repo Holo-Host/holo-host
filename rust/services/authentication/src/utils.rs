@@ -11,7 +11,7 @@ use sha2::{Digest, Sha256};
 use std::io::Write;
 use std::sync::Arc;
 use std::time::SystemTime;
-use util_libs::nats_js_client::ServiceError;
+use util_libs::nats::types::ServiceError;
 
 pub fn handle_internal_err(err_msg: &str) -> ServiceError {
     log::error!("{}", err_msg);

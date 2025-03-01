@@ -2,22 +2,30 @@
 Service Name: ADMIN
 Subject: "INVENTORY.>"
 Provisioning Account: ADMIN Account (ie: This service is exclusively permissioned to the ADMIN account.)
-Users: admin user & host_<host_pubkey> user (the authenticated host user) & auth guard user (the unauthenticated host user)
+
+Users: admin user & host user (the authenticated host user) & auth guard user (the unauthenticated host user)
+(NB: Orchestrator admin user can listen to ALL "Inventory.>" subjects)
+
 Endpoints & Managed Subjects:
-    - handle_inventory_update: INVENTORY.host_<host_pubkey>.authenticated
-    - handle_error_host_inventory: INVENTORY.host_<host_pubkey>.unauthenticated
+    - handle_inventory_update: INVENTORY.{{host_pubkey}}.authenticated
+    - handle_error_host_inventory: INVENTORY.{{host_pubkey}}.unauthenticated
 */
 
 pub mod types;
+
+#[cfg(test)]
+mod tests;
+
 use anyhow::Result;
 use async_nats::jetstream::ErrorCode;
 use async_nats::Message;
+use bson::oid::ObjectId;
 use bson::{self, doc, DateTime};
 use hpos_hal::inventory::HoloInventory;
+use mongodb::results::UpdateResult;
 use mongodb::{options::UpdateModifications, Client as MongoDBClient};
 use serde::{Deserialize, Serialize};
 use std::future::Future;
-use std::str::FromStr;
 use std::sync::Arc;
 use types::{InventoryApiResult, InventoryPayloadType};
 use util_libs::db::mongodb::MongoDbAPI;
@@ -26,7 +34,7 @@ use util_libs::{
         mongodb::{IntoIndexes, MongoCollection},
         schemas::{self, Host, Workload},
     },
-    nats_js_client::{AsyncEndpointHandler, JsServiceResponse, ServiceError},
+    nats::types::{AsyncEndpointHandler, JsServiceResponse, ServiceError},
 };
 
 pub const INVENTORY_SRV_NAME: &str = "INVENTORY";
@@ -35,8 +43,9 @@ pub const INVENTORY_SRV_VERSION: &str = "0.0.1";
 pub const INVENTORY_SRV_DESC: &str = "This service handles the Inventory updates from Host.";
 
 // Service Endpoint Names:
-pub const INVENTORY_UPDATE_SUBJECT: &str = "authenticated";
-pub const HOST_DEVICE_ERROR_STATE_SUBJECT: &str = "unauthenticated";
+pub const HOST_UNAUTHENTICATED_SUBJECT: &str = "unauthenticated";
+pub const HOST_AUTHENTICATED_SUBJECT: &str = "authenticated";
+pub const INVENTORY_UPDATE_SUBJECT: &str = "*.update";
 
 #[derive(Clone, Debug)]
 pub struct InventoryServiceApi {
@@ -57,78 +66,87 @@ impl InventoryServiceApi {
         &self,
         msg: Arc<Message>,
     ) -> Result<InventoryApiResult, ServiceError> {
-        log::debug!("Incoming message for 'INVENTORY.update'");
         let msg_subject = msg.subject.clone().into_string();
         let message_payload = Self::convert_msg_to_type::<InventoryPayloadType>(msg)?;
-        log::debug!("Message payload '{}' : {:?}", msg_subject, message_payload);
+        log::trace!(
+            "INVENTORY message payload. subject='{}', msg={:?}",
+            msg_subject,
+            message_payload
+        );
 
         let subject_sections: Vec<&str> = msg_subject.split(".").collect();
-        let host_pubkey = subject_sections[2];
-        let host_id = schemas::MongoDbId::from_str(host_pubkey)
-            .map_err(|e| ServiceError::Internal(e.to_string()))?;
+        let host_pubkey: schemas::PubKey = subject_sections[2].into();
 
-        let inventory = match message_payload.clone() {
-            InventoryPayloadType::Authenticated(i) => {
-                log::debug!("Incoming message for 'INVENTORY.update.<>.authenticated'");
-                i
-            }
-            InventoryPayloadType::Unauthenticated(i) => {
-                log::debug!("Incoming message for 'INVENTORY.update.<>.unauthenticated'");
-                i
-            }
-        };
+        match message_payload {
+            InventoryPayloadType::Authenticated(host_inventory) => {
+                log::debug!(
+                    "Incoming message for 'INVENTORY.authenticated.{{host_pubkey}}.update'"
+                );
+                self.update_host_inventory(&host_pubkey, &host_inventory)
+                    .await?;
 
-        // Add Update Inventory to Host collection
-        self
-            .host_collection
-            .update_one_within(
-                doc! { "_id": host_id },
-                UpdateModifications::Document(doc! { "$set": doc! {
-                    "$set": {
-                        "inventory": bson::to_bson(&inventory).map_err(|e| ServiceError::Internal(e.to_string()))?,
-                        "metadata.updated_at": DateTime::now()
-                    }
-                }}),
-            )
-            .await?;
-
-        if let InventoryPayloadType::Authenticated(host_inventory) = message_payload {
-            // Fetch Host collection
-            let host = self
-                .host_collection
-                .get_one_from(doc! { "_id": host_id })
-                .await?
-                .ok_or(ServiceError::Internal(format!(
-                    "Failed to fetch Host. host_id={}",
-                    host_id
-                )))?;
-
-            // Check for to ensure assigned host *still* has enough capacity for assigned workload(s)
-            let mut ineligible_assigned_workloads: Vec<schemas::MongoDbId> = vec![];
-            for workload_id in host.assigned_workloads {
-                let workload = self
-                    .workload_collection
-                    .get_one_from(doc! { "_id": workload_id })
+                // Fetch Host collection
+                let host = self
+                    .host_collection
+                    .get_one_from(doc! { "device_id": &host_pubkey })
                     .await?
                     .ok_or(ServiceError::Internal(format!(
-                        "Failed to fetch Workload. workload_id={}",
-                        host_id
+                        "Failed to fetch Host. host_pubkey={}",
+                        host_pubkey
                     )))?;
 
-                if !self.verify_host_meets_workload_criteria(&workload, &host_inventory) {
-                    ineligible_assigned_workloads.push(workload_id);
-                };
+                let host_id = host._id.ok_or(ServiceError::Internal(format!(
+                    "Failed to fetch Host. host_pubkey={}",
+                    host_pubkey
+                )))?;
+
+                // Ensure assigned host *still* has enough capacity for assigned workload(s)
+                // ..and if no, remove host from workload and create collection of all ineligible workloads
+                let mut ineligible_assigned_workloads: Vec<ObjectId> = vec![];
+                for workload_id in host.assigned_workloads {
+                    let workload = self
+                        .workload_collection
+                        .get_one_from(doc! { "_id": workload_id })
+                        .await?
+                        .ok_or(ServiceError::Internal(format!(
+                            "Failed to fetch Workload. workload_id={}",
+                            workload_id
+                        )))?;
+
+                    if !self.verify_host_meets_workload_criteria(&host_inventory, &workload) {
+                        ineligible_assigned_workloads.push(workload_id);
+
+                        self.host_collection
+                            .update_one_within(
+                                doc! { "_id": host_id },
+                                UpdateModifications::Document(doc! {
+                                    "$pull": {
+                                        "assigned_workloads": workload_id
+                                    }
+                                }),
+                            )
+                            .await?;
+                    };
+                }
+                // ...and remove host from all ineligible workloads
+                if !ineligible_assigned_workloads.is_empty() {
+                    self.workload_collection
+                        .update_many_within(
+                            doc! { "_id": { "$in": ineligible_assigned_workloads } },
+                            UpdateModifications::Document(doc! {
+                                "$pull": {
+                                    "assigned_hosts": host_id
+                                }
+                            }),
+                        )
+                        .await?;
+                }
             }
-            if !ineligible_assigned_workloads.is_empty() {
-                self.workload_collection
-                    .update_many_within(
-                        doc! { "_id": { "$in": ineligible_assigned_workloads } },
-                        UpdateModifications::Document(doc! {
-                            "$pull": {
-                                "assigned_hosts": host_id
-                            }
-                        }),
-                    )
+            InventoryPayloadType::Unauthenticated(host_inventory) => {
+                log::debug!(
+                    "Incoming message for 'INVENTORY.unauthenticated.{{host_pubkey}}.update'"
+                );
+                self.update_host_inventory(&host_pubkey, &host_inventory)
                     .await?;
             }
         }
@@ -181,11 +199,31 @@ impl InventoryServiceApi {
         })
     }
 
+    // Add updated Holo Inventory to Host collection
+    async fn update_host_inventory(
+        &self,
+        host_pubkey: &schemas::PubKey,
+        inventory: &HoloInventory,
+    ) -> Result<UpdateResult, ServiceError> {
+        self.host_collection
+            .update_one_within(
+                doc! { "device_id": host_pubkey },
+                UpdateModifications::Document(doc! {
+                    "$set": {
+                        "inventory": bson::to_bson(inventory)
+                            .map_err(|e| ServiceError::Internal(e.to_string()))?,
+                        "metadata.updated_at": DateTime::now()
+                    }
+                }),
+            )
+            .await
+    }
+
     // Verifies that a host meets the workload criteria
     pub fn verify_host_meets_workload_criteria(
         &self,
-        workload: &Workload,
         host_inventory: &HoloInventory,
+        workload: &Workload,
     ) -> bool {
         let host_drive_capacity = host_inventory.drives.iter().fold(0, |mut acc, d| {
             if let Some(capacity) = d.capacity_bytes {
@@ -199,9 +237,6 @@ impl InventoryServiceApi {
         if host_inventory.cpus.len() < workload.system_specs.capacity.cores as usize {
             return false;
         }
-        // if host_inventory.memory < workload.system_specs.capacity.memory {
-        //     return false;
-        // }
 
         true
     }

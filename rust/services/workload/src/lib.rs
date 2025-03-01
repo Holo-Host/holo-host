@@ -1,9 +1,13 @@
 /*
 Service Name: WORKLOAD
 Subject: "WORKLOAD.>"
-Provisioning Account: WORKLOAD
+Provisioning Account: ADMIN
+Importing Account: HPOS
 Users: orchestrator & host
 */
+
+#[cfg(test)]
+mod tests;
 
 pub mod host_api;
 pub mod orchestrator_api;
@@ -20,10 +24,10 @@ use std::{fmt::Debug, sync::Arc};
 use types::{WorkloadApiResult, WorkloadResult};
 use util_libs::{
     db::schemas::{WorkloadState, WorkloadStatus},
-    nats_js_client::{AsyncEndpointHandler, JsServiceResponse, ServiceError},
+    nats::types::{AsyncEndpointHandler, JsServiceResponse, ServiceError},
 };
 
-pub const WORKLOAD_SRV_NAME: &str = "WORKLOAD";
+pub const WORKLOAD_SRV_NAME: &str = "WORKLOAD_SERVICE";
 pub const WORKLOAD_SRV_SUBJ: &str = "WORKLOAD";
 pub const WORKLOAD_SRV_VERSION: &str = "0.0.1";
 pub const WORKLOAD_SRV_DESC: &str = "This service handles the flow of Workload requests between the Developer and the Orchestrator, and between the Orchestrator and Host.";
@@ -70,8 +74,8 @@ where
         &self,
         msg: Arc<Message>,
         desired_state: WorkloadState,
-        cb_fn: impl Fn(T) -> Fut + Send + Sync,
         error_state: impl Fn(String) -> WorkloadState + Send + Sync,
+        cb_fn: impl Fn(T) -> Fut + Send + Sync,
     ) -> Result<WorkloadApiResult, ServiceError>
     where
         T: for<'de> Deserialize<'de> + Clone + Send + Sync + Debug + 'static,

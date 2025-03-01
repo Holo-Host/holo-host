@@ -1,5 +1,6 @@
 use super::mongodb::IntoIndexes;
 use anyhow::Result;
+use bson::oid::ObjectId;
 use bson::{self, doc, DateTime, Document};
 use hpos_hal::inventory::HoloInventory;
 use mongodb::options::IndexOptions;
@@ -19,14 +20,11 @@ pub use String as PubKey;
 // Provide type Alias for SemVer (semantic versioning)
 pub use String as SemVer;
 
-// Providetype Alias for MongoDB ID (mongo's automated id)
-pub use bson::oid::ObjectId as MongoDbId;
-
 // ==================== User Schema ====================
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct RoleInfo {
-    pub collection_id: MongoDbId, // Hoster/Developer colleciton Mongodb ID ref
-    pub pubkey: PubKey,           //  Hoster/Developer Pubkey *INDEXED*
+    pub collection_id: ObjectId, // Hoster/Developer colleciton Mongodb ID ref
+    pub pubkey: PubKey,          //  Hoster/Developer Pubkey *INDEXED*
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -45,16 +43,16 @@ pub struct Metadata {
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct User {
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub _id: Option<MongoDbId>,
+    pub _id: Option<ObjectId>,
     pub metadata: Metadata,
     pub jurisdiction: String,
     pub permissions: Vec<UserPermission>,
-    pub user_info_id: Option<MongoDbId>, // MongoDB ID ref to `user_info._id`
-    pub developer: Option<RoleInfo>,
-    pub hoster: Option<RoleInfo>,
+    pub user_info_id: Option<ObjectId>, // *INDEXED*
+    pub developer: Option<RoleInfo>,    // *INDEXED*
+    pub hoster: Option<RoleInfo>,       // *INDEXED*
 }
 
-// No Additional Indexing for Developer
+// Indexing for User
 impl IntoIndexes for User {
     fn into_indices(self) -> Result<Vec<(Document, Option<IndexOptions>)>> {
         let mut indices = vec![];
@@ -93,10 +91,10 @@ impl IntoIndexes for User {
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct UserInfo {
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub _id: Option<MongoDbId>,
+    pub _id: Option<ObjectId>,
     pub metadata: Metadata,
-    pub user_id: MongoDbId, // MongoDB ID ref to `user._id`
-    pub email: String,
+    pub user_id: ObjectId,
+    pub email: String, // *INDEXED*
     pub given_names: String,
     pub family_name: String,
 }
@@ -104,7 +102,6 @@ pub struct UserInfo {
 impl IntoIndexes for UserInfo {
     fn into_indices(self) -> Result<Vec<(Document, Option<IndexOptions>)>> {
         let mut indices = vec![];
-
         // add email index
         let email_index_doc = doc! { "email": 1 };
         let email_index_opts = Some(
@@ -113,7 +110,6 @@ impl IntoIndexes for UserInfo {
                 .build(),
         );
         indices.push((email_index_doc, email_index_opts));
-
         Ok(indices)
     }
 }
@@ -122,10 +118,10 @@ impl IntoIndexes for UserInfo {
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct Developer {
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub _id: Option<MongoDbId>,
+    pub _id: Option<ObjectId>,
     pub metadata: Metadata,
-    pub user_id: MongoDbId, // MongoDB ID ref to `user._id` (user collection stores the hoster's pubkey, jurisdiction and a ref to the `user_info` collection, which stores personal info (like email)
-    pub active_workloads: Vec<MongoDbId>, // MongoDB ID refs to `workload._id`
+    pub user_id: ObjectId,
+    pub active_workloads: Vec<ObjectId>,
 }
 
 // No Additional Indexing for Developer
@@ -139,10 +135,10 @@ impl IntoIndexes for Developer {
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct Hoster {
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub _id: Option<MongoDbId>,
+    pub _id: Option<ObjectId>,
     pub metadata: Metadata,
-    pub user_id: MongoDbId, // MongoDB ID ref to `user.id` (which stores the hoster's pubkey, jurisdiction and email)
-    pub assigned_hosts: Vec<MongoDbId>, // MongoDB ID refs to `host._id`
+    pub user_id: ObjectId,
+    pub assigned_hosts: Vec<ObjectId>,
 }
 
 // No Additional Indexing for Hoster
@@ -156,22 +152,21 @@ impl IntoIndexes for Hoster {
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct Host {
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub _id: Option<MongoDbId>,
+    pub _id: Option<ObjectId>,
     pub metadata: Metadata,
-    pub device_id: PubKey, // = the host pubkey // *INDEXED* // nb: Unlike the hoster and developer pubkeys, this pubkey is not considered peronal info as it is not directly connected to a "natural person".
+    pub device_id: PubKey, // *INDEXED*
     pub ip_address: String,
     pub inventory: HoloInventory,
-    pub avg_uptime: i64,
+    pub avg_uptime: f64,
     pub avg_network_speed: i64,
     pub avg_latency: i64,
-    pub assigned_workloads: Vec<MongoDbId>, // MongoDB ID refs to `workload._id`
-    pub assigned_hoster: MongoDbId,
+    pub assigned_hoster: ObjectId,
+    pub assigned_workloads: Vec<ObjectId>,
 }
 
 impl IntoIndexes for Host {
     fn into_indices(self) -> Result<Vec<(Document, Option<IndexOptions>)>> {
         let mut indices = vec![];
-
         //  Add Device ID Index
         let pubkey_index_doc = doc! { "device_id": 1 };
         let pubkey_index_opts = Some(
@@ -180,7 +175,6 @@ impl IntoIndexes for Host {
                 .build(),
         );
         indices.push((pubkey_index_doc, pubkey_index_opts));
-
         Ok(indices)
     }
 }
@@ -189,11 +183,12 @@ impl IntoIndexes for Host {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum WorkloadState {
     Reported,
-    Assigned, // String = host id
+    Assigned,
     Pending,
     Installed,
     Running,
     Updating,
+    Updated,
     Removed,
     Uninstalled,
     Error(String),   // String = error message
@@ -202,7 +197,8 @@ pub enum WorkloadState {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorkloadStatus {
-    pub id: Option<MongoDbId>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub id: Option<ObjectId>,
     pub desired: WorkloadState,
     pub actual: WorkloadState,
 }
@@ -224,15 +220,15 @@ pub struct SystemSpecs {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Workload {
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub _id: Option<MongoDbId>,
+    pub _id: Option<ObjectId>,
     pub metadata: Metadata,
-    pub state: WorkloadState,
-    pub assigned_developer: MongoDbId, // *INDEXED*, Developer Mongodb ID
+    pub assigned_developer: ObjectId, // *INDEXED*
     pub version: SemVer,
     pub nix_pkg: String, // (Includes everthing needed to deploy workload - ie: binary & env pkg & deps, etc)
-    pub min_hosts: u16,
+    pub min_hosts: i32,
     pub system_specs: SystemSpecs,
-    pub assigned_hosts: Vec<MongoDbId>, // Host Device IDs (eg: assigned nats server id)
+    pub assigned_hosts: Vec<ObjectId>,
+    pub status: WorkloadStatus,
 }
 
 impl Default for Workload {
@@ -255,20 +251,24 @@ impl Default for Workload {
                 updated_at: Some(DateTime::now()),
                 deleted_at: None,
             },
-            state: WorkloadState::Reported,
             version: semver,
             nix_pkg: String::new(),
-            assigned_developer: MongoDbId::new(),
+            assigned_developer: ObjectId::new(),
             min_hosts: 1,
             system_specs: SystemSpecs {
                 capacity: Capacity {
                     drive: 512,
                     cores: 20,
                 },
-                avg_network_speed: 200, // Mbps
-                avg_uptime: 0.8,        // decimal value between 0-1
+                avg_network_speed: 200,
+                avg_uptime: 0.8,
             },
             assigned_hosts: Vec::new(),
+            status: WorkloadStatus {
+                id: None, // skips serialization when `None`
+                desired: WorkloadState::Unknown("default state".to_string()),
+                actual: WorkloadState::Unknown("default state".to_string()),
+            },
         }
     }
 }

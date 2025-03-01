@@ -8,8 +8,8 @@ members = [
     "rust/clients/host_agent",
     "rust/clients/orchestrator",
     "rust/services/authentication",
-    "rust/services/workload",
     "rust/services/inventory",
+    "rust/services/workload",
     "rust/util_libs",
     "rust/netdiag",
 ]

@@ -2,6 +2,7 @@ mod admin_client;
 mod auth;
 mod extern_api;
 mod inventory;
+mod utils;
 mod workloads;
 use anyhow::Result;
 use async_nats::Client;
@@ -22,22 +23,22 @@ async fn main() -> Result<(), async_nats::Error> {
     let thread_db_client = db_client.clone();
 
     // Start Nats Auth Service
-    println!("starting auth...");
-    let auth_client: Client = auth::run(db_client).await?;
-    println!("finished setting up auth...");
+    log::info!("Starting auth...");
+    let auth_client: Client = auth::run(db_client.clone()).await?;
+    log::debug!("Finished setting up auth...");
 
     // Start Nats Admin Services
     spawn(async move {
-        println!("spawning admin client...");
-        let default_nats_connect_timeout_secs = 30;
-        if let Ok(admin_client) = admin_client::run(&None, default_nats_connect_timeout_secs).await
-        {
-            println!("starting workload service...");
+        log::debug!("Spawning admin client...");
+
+        if let Ok(admin_client) = admin_client::run(&None).await {
+            log::info!("Starting workload service...");
+
             if let Err(e) = workloads::run(admin_client.clone(), thread_db_client.clone()).await {
                 log::error!("Error running workload service. Err={:?}", e)
             };
 
-            println!("starting inventory service...");
+            log::info!("Starting inventory service...");
             if let Err(e) = inventory::run(admin_client.clone(), thread_db_client).await {
                 log::error!("Error running inventory service. Err={:?}", e)
             };
@@ -47,11 +48,10 @@ async fn main() -> Result<(), async_nats::Error> {
                 .await
                 .expect("Failed to close service gracefully");
 
-            println!("closing admin client...");
-
             // Close admin client and drain internal buffer before exiting to make sure all messages are sent
             // NB: Calling drain/close on any one of the Client instances closes the underlying connection.
             // This affects all instances that share the same connection (including clones) because they are all references to the same resource.
+            log::info!("Closing admin client...");
             admin_client
                 .close()
                 .await
@@ -66,11 +66,14 @@ async fn main() -> Result<(), async_nats::Error> {
     // Only exit program when explicitly requested
     tokio::signal::ctrl_c().await?;
 
-    log::debug!("Closing orchestrator auth service...");
+    // Close all mongodb connections
+    log::debug!("Closing db connection...");
+    db_client.shutdown().await;
 
     // Close auth client and drain internal buffer before exiting to make sure all messages are sent
+    log::info!("Closing orchestrator auth service...");
     auth_client.drain().await?;
-    log::debug!("Closed orchestrator auth service");
 
+    log::info!("Successfully shut down orchestrator");
     Ok(())
 }

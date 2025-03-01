@@ -13,29 +13,29 @@ This client is responsible for:
 use anyhow::{anyhow, Result};
 use async_nats::Message;
 use inventory::{
-    types::InventoryApiResult, InventoryServiceApi, INVENTORY_SRV_DESC, INVENTORY_SRV_NAME,
-    INVENTORY_SRV_SUBJ, INVENTORY_SRV_VERSION,
+    InventoryServiceApi, HOST_AUTHENTICATED_SUBJECT, HOST_UNAUTHENTICATED_SUBJECT,
+    INVENTORY_SRV_DESC, INVENTORY_SRV_NAME, INVENTORY_SRV_SUBJ, INVENTORY_SRV_VERSION,
+    INVENTORY_UPDATE_SUBJECT,
 };
 use mongodb::Client as MongoDBClient;
 use std::sync::Arc;
-use util_libs::{
-    js_stream_service::JsServiceParamsPartial,
-    nats_js_client::{EndpointType, JsClient},
+use util_libs::nats::{
+    jetstream_client::JsClient,
+    types::{ConsumerBuilder, EndpointType, JsServiceBuilder},
 };
 
 pub async fn run(
     mut nats_client: JsClient,
     db_client: MongoDBClient,
 ) -> Result<(), async_nats::Error> {
-    // ==================== Setup API & Register Endpoints ====================
     // Setup JS Stream Service
-    let service_config = JsServiceParamsPartial {
+    let inventory_stream_service = JsServiceBuilder {
         name: INVENTORY_SRV_NAME.to_string(),
         description: INVENTORY_SRV_DESC.to_string(),
         version: INVENTORY_SRV_VERSION.to_string(),
         service_subject: INVENTORY_SRV_SUBJ.to_string(),
     };
-    nats_client.add_js_service(service_config).await?;
+    nats_client.add_js_service(inventory_stream_service).await?;
 
     let inventory_service = nats_client
         .get_js_service(INVENTORY_SRV_NAME.to_string())
@@ -47,18 +47,31 @@ pub async fn run(
     // Instantiate the Workload API (requires access to db client)
     let inventory_api = InventoryServiceApi::new(&db_client).await?;
 
-    // Subject published by hosting agent
+    // Subjects published by hosting agent:
     inventory_service
-        .add_consumer::<InventoryApiResult>(
-            "update_host_inventory", // consumer name
-            INVENTORY_SRV_NAME,      // consumer stream subj
-            EndpointType::Async(inventory_api.call(
+        .add_consumer(ConsumerBuilder {
+            name: "update_host_inventory".to_string(),
+            endpoint_subject: format!("{HOST_AUTHENTICATED_SUBJECT}.{INVENTORY_UPDATE_SUBJECT}"),
+            handler: EndpointType::Async(inventory_api.call(
                 |api: InventoryServiceApi, msg: Arc<Message>| async move {
                     api.handle_host_inventory_update(msg).await
                 },
             )),
-            None,
-        )
+            response_subject_fn: None,
+        })
+        .await?;
+
+    inventory_service
+        .add_consumer(ConsumerBuilder {
+            name: "send_host_error_inventory".to_string(),
+            endpoint_subject: format!("{HOST_UNAUTHENTICATED_SUBJECT}.{INVENTORY_UPDATE_SUBJECT}"),
+            handler: EndpointType::Async(inventory_api.call(
+                |api: InventoryServiceApi, msg: Arc<Message>| async move {
+                    api.handle_host_inventory_update(msg).await
+                },
+            )),
+            response_subject_fn: None,
+        })
         .await?;
 
     Ok(())

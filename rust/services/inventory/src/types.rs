@@ -1,7 +1,7 @@
 use hpos_hal::inventory::HoloInventory;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use util_libs::js_stream_service::{CreateResponse, CreateTag, EndpointTraits};
+use util_libs::nats::types::{CreateResponse, CreateTag, EndpointTraits};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum InventoryPayloadType {

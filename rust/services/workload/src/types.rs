@@ -1,11 +1,18 @@
+use bson::oid::ObjectId;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use strum_macros::AsRefStr;
 use util_libs::{
     db::schemas::{self, WorkloadStatus},
-    js_stream_service::{CreateResponse, CreateTag, EndpointTraits},
+    nats::types::{CreateResponse, CreateTag, EndpointTraits},
 };
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct ObjectIdJSON {
+    pub _id: ObjectId,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, AsRefStr)]
 #[serde(rename_all = "snake_case")]
 pub enum WorkloadServiceSubjects {
     Add,

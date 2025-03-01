@@ -32,13 +32,13 @@ use std::io::Read;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::{sync::Arc, time::Duration};
-use util_libs::{
-    js_stream_service::CreateResponse,
-    nats_js_client::{get_nats_creds_by_nsc, get_nats_url},
+use util_libs::nats::{
+    jetstream_client::{get_nats_creds_by_nsc, get_nats_url},
+    types::CreateResponse,
 };
 
 pub const ORCHESTRATOR_AUTH_CLIENT_NAME: &str = "Orchestrator Auth Manager";
-pub const ORCHESTRATOR_AUTH_CLIENT_INBOX_PREFIX: &str = "_AUTH_INBOX_ORCHESTRATOR";
+pub const ORCHESTRATOR_AUTH_CLIENT_INBOX_PREFIX: &str = "_AUTH_INBOX.orchestrator";
 
 pub async fn run(db_client: MongoDBClient) -> Result<Client, async_nats::Error> {
     let admin_account_creds_path =
