@@ -15,17 +15,15 @@ use async_nats::Message;
 use std::{path::PathBuf, sync::Arc, time::Duration};
 use util_libs::nats::{
     jetstream_client,
-    types::{ConsumerBuilder, EndpointType, JsClientBuilder, JsServiceBuilder},
+    types::{ConsumerBuilder, Credentials, EndpointType, JsClientBuilder, JsServiceBuilder},
 };
 use workload::{
     host_api::HostWorkloadApi, types::WorkloadServiceSubjects, WorkloadServiceApi,
     WORKLOAD_SRV_DESC, WORKLOAD_SRV_NAME, WORKLOAD_SRV_SUBJ, WORKLOAD_SRV_VERSION,
 };
-
 const HOST_AGENT_CLIENT_NAME: &str = "Host Agent";
-const HOST_AGENT_INBOX_PREFIX: &str = "_WORKLOAD_INBOX";
+const HOST_AGENT_INBOX_PREFIX: &str = "_HPOS_INBOX";
 
-// TODO: Use _host_creds_path for auth once we add in the more resilient auth pattern.
 pub async fn run(
     host_pubkey: &str,
     host_creds_path: &Option<PathBuf>,
@@ -41,20 +39,21 @@ pub async fn run(
     let nats_url = jetstream_client::get_nats_url();
     log::info!("nats_url : {}", nats_url);
 
-    let event_listeners = jetstream_client::get_event_listeners();
+    let host_creds = host_creds_path
+        .to_owned()
+        .map(Credentials::Path)
+        .ok_or_else(|| async_nats::Error::from("error"))?;
 
-    // Spin up Nats Client and loaded in the Js Stream Service
+    // Spin up Nats Client and load the Js Stream Service
     let mut host_workload_client = jetstream_client::JsClient::new(JsClientBuilder {
         nats_url: nats_url.clone(),
         name: HOST_AGENT_CLIENT_NAME.to_string(),
         inbox_prefix: format!("{}.{}", HOST_AGENT_INBOX_PREFIX, pubkey_lowercase),
-        credentials_path: host_creds_path
-            .as_ref()
-            .map(|path| path.to_string_lossy().to_string()),
+        credentials: Some(vec![host_creds.clone()]),
         ping_interval: Some(Duration::from_secs(10)),
         request_timeout: Some(Duration::from_secs(29)),
         listeners: vec![jetstream_client::with_event_listeners(
-            event_listeners.clone(),
+            jetstream_client::get_event_listeners(),
         )],
     })
     .await

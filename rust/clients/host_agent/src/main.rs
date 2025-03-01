@@ -11,8 +11,10 @@ This client is responsible for subscribing the host agent to workload stream end
 */
 
 pub mod agent_cli;
+mod auth;
 pub mod host_cmds;
 mod hostd;
+mod keys;
 pub mod support_cmds;
 use agent_cli::DaemonzeArgs;
 use anyhow::Result;
@@ -47,10 +49,31 @@ async fn main() -> Result<(), AgentCliError> {
 }
 
 async fn daemonize(args: &DaemonzeArgs) -> Result<(), async_nats::Error> {
-    // let host_pubkey = auth::init_agent::run().await?;
+    let mut host_agent_keys = keys::Keys::try_from_storage(
+        &args.nats_leafnode_client_creds_path,
+        &args.nats_leafnode_client_sys_creds_path,
+    )
+    .or_else(|_| {
+        keys::Keys::new().map_err(|e| {
+            log::error!("Failed to create new keys: {:?}", e);
+            async_nats::Error::from(e)
+        })
+    })?;
+
+    // If user cred file is for the auth_guard user, run loop to authenticate host & hoster...
+    if let keys::AuthCredType::Guard(_) = host_agent_keys.creds {
+        host_agent_keys = auth::utils::run_auth_loop(host_agent_keys).await?;
+    }
+
+    log::trace!(
+        "Host Agent Keys after successful authentication: {:#?}",
+        host_agent_keys
+    );
+
+    // Once authenticated, start leaf server and run workload api calls.
     let bare_client = hostd::gen_leaf_server::run(
         &args.nats_leafnode_server_name,
-        &args.nats_leafnode_client_creds_path,
+        &host_agent_keys.get_host_creds_path(),
         &args.store_dir,
         args.hub_url.clone(),
         args.hub_tls_insecure,
@@ -61,8 +84,8 @@ async fn daemonize(args: &DaemonzeArgs) -> Result<(), async_nats::Error> {
     bare_client.close().await?;
 
     let host_workload_client = hostd::workload::run(
-        "host_id_placeholder>",
-        &args.nats_leafnode_client_creds_path,
+        &host_agent_keys.host_pubkey,
+        &host_agent_keys.get_host_creds_path(),
     )
     .await?;
 

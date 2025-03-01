@@ -17,50 +17,73 @@ This client is responsible for:
 use super::utils;
 use anyhow::{anyhow, Result};
 use async_nats::Message;
-use mongodb::{options::ClientOptions, Client as MongoDBClient};
-use std::{sync::Arc, time::Duration};
-use util_libs::{
-    db::mongodb::get_mongodb_url,
-    nats::{
-        jetstream_client::{self, JsClient},
-        types::{ConsumerBuilder, EndpointType, JsClientBuilder, JsServiceBuilder},
-    },
+use mongodb::Client as MongoDBClient;
+use std::str::FromStr;
+use std::{path::PathBuf, sync::Arc, time::Duration};
+use util_libs::nats::{
+    jetstream_client::{self, JsClient},
+    types::{ConsumerBuilder, Credentials, EndpointType, JsClientBuilder, JsServiceBuilder},
 };
 use workload::{
     orchestrator_api::OrchestratorWorkloadApi, types::WorkloadServiceSubjects, WorkloadServiceApi,
     WORKLOAD_SRV_DESC, WORKLOAD_SRV_NAME, WORKLOAD_SRV_SUBJ, WORKLOAD_SRV_VERSION,
 };
 
-const ORCHESTRATOR_WORKLOAD_CLIENT_NAME: &str = "Orchestrator Workload Agent";
-const ORCHESTRATOR_WORKLOAD_CLIENT_INBOX_PREFIX: &str = "ORCHESTRATOR._WORKLOAD_INBOX";
+const ORCHESTRATOR_ADMIN_CLIENT_NAME: &str = "Orchestrator Admin Client";
+const ORCHESTRATOR_ADMIN_CLIENT_INBOX_PREFIX: &str = "_ADMIN_INBOX.orchestrator";
 
-pub async fn run() -> Result<(), async_nats::Error> {
+pub async fn run(
+    admin_creds_path: &Option<PathBuf>,
+    nats_connect_timeout_secs: u64,
+    db_client: MongoDBClient,
+) -> Result<(), async_nats::Error> {
     // ==================== Setup NATS ====================
     let nats_url = jetstream_client::get_nats_url();
-    let creds_path = jetstream_client::get_nats_client_creds("HOLO", "WORKLOAD", "orchestrator");
-    let event_listeners = jetstream_client::get_event_listeners();
+    let creds_path = admin_creds_path
+        .to_owned()
+        .ok_or(PathBuf::from_str(&jetstream_client::get_nats_creds_by_nsc(
+            "HOLO", "ADMIN", "admin",
+        )))
+        .map(Credentials::Path)
+        .map_err(|e| anyhow!("Failed to locate admin credential path. Err={:?}", e))?;
 
-    let mut orchestrator_workload_client = JsClient::new(JsClientBuilder {
-        nats_url,
-        name: ORCHESTRATOR_WORKLOAD_CLIENT_NAME.to_string(),
-        inbox_prefix: ORCHESTRATOR_WORKLOAD_CLIENT_INBOX_PREFIX.to_string(),
-        credentials_path: Some(creds_path),
-        ping_interval: Some(Duration::from_secs(10)),
-        request_timeout: Some(Duration::from_secs(5)),
-        listeners: vec![jetstream_client::with_event_listeners(event_listeners)],
-    })
-    .await?;
+    let mut orchestrator_workload_client = tokio::select! {
+        client = async {loop {
+            let c = JsClient::new(JsClientBuilder {
+                nats_url: nats_url.clone(),
+                name: ORCHESTRATOR_ADMIN_CLIENT_NAME.to_string(),
+                inbox_prefix: ORCHESTRATOR_ADMIN_CLIENT_INBOX_PREFIX.to_string(),
+                credentials: Some(vec![creds_path.clone()]),
+                ping_interval: Some(Duration::from_secs(10)),
+                request_timeout: Some(Duration::from_secs(5)),
+                listeners: vec![jetstream_client::with_event_listeners(jetstream_client::get_event_listeners())],
+            })
+            .await
+                .map_err(|e| anyhow::anyhow!("connecting to NATS via {nats_url}: {e}"));
 
-    // ==================== Setup DB ====================
-    // Create a new MongoDB Client and connect it to the cluster
-    let mongo_uri = get_mongodb_url();
-    let client_options = ClientOptions::parse(mongo_uri).await?;
-    let client = MongoDBClient::with_options(client_options)?;
+                match c {
+                    Ok(client) => break client,
+                    Err(e) => {
+                        let duration = tokio::time::Duration::from_millis(100);
+                        log::warn!("{}, retrying in {duration:?}", e);
+                        tokio::time::sleep(duration).await;
+                    }
+                }
+            }} => client,
+        _ = {
+            log::debug!("will time out waiting for NATS after {nats_connect_timeout_secs:?}");
+            tokio::time::sleep(tokio::time::Duration::from_secs(nats_connect_timeout_secs))
+        } => {
+            return Err(async_nats::Error::from(anyhow!("timed out waiting for NATS on {:?}", nats_url)));
+        }
+    };
 
     // ==================== Setup JS Stream Service ====================
     // Instantiate the Workload API (requires access to db client)
-    let workload_api = OrchestratorWorkloadApi::new(&client).await?;
+    let workload_api = OrchestratorWorkloadApi::new(&db_client).await?;
 
+    // Register Workload Streams for Orchestrator to consume and proceess
+    // NB: These subjects are published by external Developer (via external api), the Nats-DB-Connector, or the Hosting Agent
     let workload_stream_service = JsServiceBuilder {
         name: WORKLOAD_SRV_NAME.to_string(),
         description: WORKLOAD_SRV_DESC.to_string(),
@@ -71,8 +94,6 @@ pub async fn run() -> Result<(), async_nats::Error> {
         .add_js_service(workload_stream_service)
         .await?;
 
-    // Register Workload Streams for Orchestrator to consume and proceess
-    // NB: These subjects are published by external Developer (via external api), the Nats-DB-Connector, or the Hosting Agent
     let workload_service = orchestrator_workload_client
         .get_js_service(WORKLOAD_SRV_NAME.to_string())
         .await

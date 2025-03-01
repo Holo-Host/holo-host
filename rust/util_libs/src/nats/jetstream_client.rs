@@ -2,8 +2,8 @@ use super::{
     jetstream_service::JsStreamService,
     leaf_server::LEAF_SERVER_DEFAULT_LISTEN_PORT,
     types::{
-        ErrClientDisconnected, EventHandler, EventListener, JsClientBuilder, JsServiceBuilder,
-        PublishInfo,
+        Credentials, ErrClientDisconnected, EventHandler, EventListener, JsClientBuilder,
+        JsServiceBuilder, PublishInfo,
     },
 };
 use anyhow::Result;
@@ -25,6 +25,7 @@ impl std::fmt::Debug for JsClient {
     }
 }
 
+#[derive(Clone)]
 pub struct JsClient {
     url: String,
     name: String,
@@ -38,27 +39,37 @@ pub struct JsClient {
 
 impl JsClient {
     pub async fn new(p: JsClientBuilder) -> Result<Self, async_nats::Error> {
-        let connect_options = async_nats::ConnectOptions::new()
+        let mut connect_options = async_nats::ConnectOptions::new()
             .name(&p.name)
             .ping_interval(p.ping_interval.unwrap_or(Duration::from_secs(120)))
             .request_timeout(Some(p.request_timeout.unwrap_or(Duration::from_secs(10))))
             .custom_inbox_prefix(&p.inbox_prefix);
         // .require_tls(true)
 
-        let client = match p.credentials_path {
-            Some(cp) => {
-                let path = std::path::Path::new(&cp);
-                connect_options
-                    .credentials_file(path)
-                    .await?
-                    .connect(&p.nats_url)
-                    .await?
+        if let Some(credentials_list) = p.credentials {
+            for credentials in credentials_list {
+                match credentials {
+                    Credentials::Password(user, pw) => {
+                        connect_options = connect_options.user_and_password(user, pw);
+                    }
+                    Credentials::Path(cp) => {
+                        let path = std::path::Path::new(&cp);
+                        connect_options = connect_options.credentials_file(path).await?;
+                    }
+                    Credentials::Token(t) => {
+                        connect_options = connect_options.token(t);
+                    }
+                }
             }
-            None => connect_options.connect(&p.nats_url).await?,
         };
 
-        let log_prefix = format!("NATS-CLIENT-LOG::{}::", p.name);
-        log::info!("{}Connected to NATS server at {}", log_prefix, p.nats_url);
+        let client = connect_options.connect(&p.nats_url).await?;
+        let service_log_prefix = format!("NATS-CLIENT-LOG::{}::", p.name);
+        log::info!(
+            "{}Connected to NATS server at {}",
+            service_log_prefix,
+            p.nats_url
+        );
 
         let mut js_client = JsClient {
             url: p.nats_url,
@@ -67,7 +78,7 @@ impl JsClient {
             on_msg_failed_event: None,
             js_services: None,
             js_context: jetstream::new(client.clone()),
-            service_log_prefix: log_prefix,
+            service_log_prefix,
             client,
         };
 
@@ -217,19 +228,39 @@ where
 // TODO: there's overlap with the NATS_LISTEN_PORT. refactor this to e.g. read NATS_LISTEN_HOST and NATS_LISTEN_PORT
 pub fn get_nats_url() -> String {
     std::env::var("NATS_URL").unwrap_or_else(|_| {
-        let default = format!("127.0.0.1:{}", LEAF_SERVER_DEFAULT_LISTEN_PORT);
+        let default = format!("127.0.0.1:{}", LEAF_SERVER_DEFAULT_LISTEN_PORT); // Shouldn't this be the 'NATS_LISTEN_PORT'?
         log::debug!("using default for NATS_URL: {default}");
         default
     })
 }
 
-pub fn get_nats_client_creds(operator: &str, account: &str, user: &str) -> String {
-    std::env::var("HOST_CREDS_FILE_PATH").unwrap_or_else(|_| {
-        format!(
-            "/.local/share/nats/nsc/keys/creds/{}/{}/{}.creds",
-            operator, account, user
-        )
-    })
+fn get_nsc_root_path() -> String {
+    std::env::var("NSC_PATH").unwrap_or_else(|_| "/.local/share/nats/nsc".to_string())
+}
+
+pub fn get_local_creds_path() -> String {
+    std::env::var("LOCAL_CREDS_PATH")
+        .unwrap_or_else(|_| format!("{}/local_creds", get_nsc_root_path()))
+}
+
+pub fn get_nats_creds_by_nsc(operator: &str, account: &str, user: &str) -> String {
+    format!(
+        "{}/keys/creds/{}/{}/{}.creds",
+        get_nsc_root_path(),
+        operator,
+        account,
+        user
+    )
+}
+
+pub fn get_nats_jwt_by_nsc(operator: &str, account: &str, user: &str) -> String {
+    format!(
+        "{}/stores/{}/accounts/{}/users/{}.jwt",
+        get_nsc_root_path(),
+        operator,
+        account,
+        user
+    )
 }
 
 pub fn get_event_listeners() -> Vec<EventListener> {
@@ -272,7 +303,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_nats_js_client_init() {
+    async fn test_jetstream_client_init() {
         let params = get_default_params();
         let client = JsClient::new(params).await;
         assert!(client.is_ok(), "Client initialization failed: {:?}", client);
@@ -282,7 +313,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_nats_js_client_publish() {
+    async fn test_jetstream_client_publish() {
         let params = get_default_params();
         let client = JsClient::new(params).await.unwrap();
         let payload = PublishInfo {

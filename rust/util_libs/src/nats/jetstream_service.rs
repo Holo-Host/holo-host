@@ -185,6 +185,8 @@ impl JsStreamService {
             let messages = consumer
                 .stream()
                 .heartbeat(std::time::Duration::from_secs(10))
+                .max_messages_per_batch(100)
+                .expires(std::time::Duration::from_secs(30))
                 .messages()
                 .await?;
 

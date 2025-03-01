@@ -1,7 +1,7 @@
 use super::jetstream_client::JsClient;
 use anyhow::Result;
 use async_nats::jetstream::consumer::PullConsumer;
-use async_nats::{HeaderMap, Message};
+use async_nats::{AuthError, HeaderMap, Message};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::any::Any;
@@ -147,13 +147,20 @@ where
     }
 }
 
+#[derive(Clone)]
+pub enum Credentials {
+    Path(std::path::PathBuf), // String = pathbuf as string
+    Password(String, String),
+    Token(String),
+}
+
 #[derive(Deserialize, Default)]
 pub struct JsClientBuilder {
     pub nats_url: String,
     pub name: String,
     pub inbox_prefix: String,
-    #[serde(default)]
-    pub credentials_path: Option<String>,
+    #[serde(default, skip_deserializing)]
+    pub credentials: Option<Vec<Credentials>>,
     #[serde(default)]
     pub ping_interval: Option<Duration>,
     #[serde(default)]
@@ -193,6 +200,8 @@ pub enum ServiceError {
     Request(String),
     #[error(transparent)]
     Database(#[from] mongodb::error::Error),
+    #[error(transparent)]
+    Authentication(#[from] AuthError),
     #[error("Nats Error: {0}")]
     NATS(String),
     #[error("Internal Error: {0}")]
