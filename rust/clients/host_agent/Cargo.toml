@@ -33,6 +33,7 @@ netdiag = { path = "../../netdiag" }
 hpos-hal = { path = "../../hpos-hal" }
 util_libs = { path = "../../util_libs" }
 workload = { path = "../../services/workload" }
+inventory = { path = "../../services/inventory" }
 authentication = { path = "../../services/authentication" }
 hpos-config-core = { git = "https://github.com/holo-host/hpos-config.git", rev = "77d740c83a02e322e670e360eb450076b593b328" }
 hpos-config-seed-bundle-explorer = { git = "https://github.com/holo-host/hpos-config.git", rev = "77d740c83a02e322e670e360eb450076b593b328" }

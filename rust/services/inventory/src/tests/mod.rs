@@ -2,6 +2,7 @@
 #![allow(unused_imports)]
 
 use anyhow::Context;
+use anyhow::Result;
 use async_nats::Message;
 use bson::oid::ObjectId;
 use hpos_hal::inventory::{HoloDriveInventory, HoloInventory, HoloProcessorInventory};
@@ -10,7 +11,7 @@ use std::{path::PathBuf, process::Stdio, str::FromStr};
 use tempfile::TempDir;
 use util_libs::db::schemas::{self, Capacity};
 
-pub mod orchestrator_api;
+pub mod inventory_api;
 
 pub struct TestMessage {
     subject: String,
@@ -44,8 +45,6 @@ impl TestMessage {
 /// It disables TCP and relies only unix domain sockets.
 pub struct MongodRunner {
     _child: std::process::Child,
-
-    // this is stored to prevent premature removing of the tempdir
     tempdir: TempDir,
 }
 
@@ -92,11 +91,6 @@ impl MongodRunner {
         std::fs::exists(Self::socket_path(&new_self.tempdir)?)
             .context("mongod socket should exist")?;
 
-        println!(
-            "MongoDB Server is running at {:?}",
-            new_self.socket_pathbuf()
-        );
-
         Ok(new_self)
     }
 
@@ -113,12 +107,8 @@ impl MongodRunner {
     }
 }
 
-// Helper function to create a test workload
-pub fn create_test_workload_default() -> schemas::Workload {
-    create_test_workload(None, None, None, None, None, None)
-}
-
-pub fn create_test_workload(
+// Helper function to create test workloads and hosts
+pub fn create_mock_workload(
     assigned_developer: Option<ObjectId>,
     assigned_hosts: Option<Vec<ObjectId>>,
     min_hosts: Option<i32>,
@@ -157,33 +147,25 @@ pub fn gen_mock_processors(max_processors: i64) -> Vec<HoloProcessorInventory> {
     mock_holo_processors
 }
 
-// Helper function to create a test host
-pub fn create_test_host(
-    device_id: Option<String>,
-    assigned_hoster: Option<ObjectId>,
-    assigned_workloads: Option<Vec<ObjectId>>,
-    holo_inventory: Option<HoloInventory>,
-    avg_network_speed: Option<i64>,
-    avg_uptime: Option<f64>,
-) -> schemas::Host {
-    let mut host = schemas::Host::default();
-    if let Some(device_id) = device_id {
-        host.device_id = device_id;
-    }
-    if let Some(assigned_hoster) = assigned_hoster {
-        host.assigned_hoster = assigned_hoster;
-    }
-    if let Some(assigned_workloads) = assigned_workloads {
-        host.assigned_workloads = assigned_workloads;
-    }
-    if let Some(holo_inventory) = holo_inventory {
-        host.inventory = holo_inventory;
-    }
-    if let Some(avg_network_speed) = avg_network_speed {
-        host.avg_network_speed = avg_network_speed;
-    }
-    if let Some(avg_uptime) = avg_uptime {
-        host.avg_uptime = avg_uptime;
-    }
-    host
+// Helper function to create a test host inventory
+pub fn create_mock_inventory(
+    drive_capacity: Option<u64>,
+    num_drives: Option<usize>,
+    num_processors: Option<i64>,
+) -> HoloInventory {
+    let mut inventory = HoloInventory::default();
+
+    let drive_capacity = drive_capacity.unwrap_or_default();
+    let mock_drive = HoloDriveInventory {
+        capacity_bytes: Some(drive_capacity),
+        ..Default::default()
+    };
+
+    let num_drives = num_drives.unwrap_or_default();
+    inventory.drives = vec![mock_drive; num_drives];
+
+    let num_processors = num_processors.unwrap_or_default();
+    inventory.cpus = gen_mock_processors(num_processors);
+
+    inventory
 }

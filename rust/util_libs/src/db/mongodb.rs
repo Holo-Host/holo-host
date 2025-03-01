@@ -16,7 +16,6 @@ where
     T: Serialize + for<'de> Deserialize<'de> + Unpin + Send + Sync,
 {
     type Error;
-
     async fn aggregate<R: for<'de> Deserialize<'de>>(
         &self,
         pipeline: Vec<Document>,
