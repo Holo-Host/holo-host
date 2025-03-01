@@ -155,11 +155,7 @@ in
       ];
 
       preStart = ''
-<<<<<<< HEAD
-              echo "Start Host Auth Setup"
-=======
         echo "Start Host Auth Setup"
->>>>>>> nats-proposal-auth
         mkdir -p ${cfg.nats.hostNkeyPath}
         mkdir -p ${cfg.nats.sysNkeyPath}
         mkdir -p ${cfg.nats.hposCredsPath}
