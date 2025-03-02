@@ -1,0 +1,21 @@
+[package]
+name = "holo-public-api"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+actix-web = "4"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+config = "0.13"
+dotenvy = "0.15"
+jsonwebtoken = "9.3"
+chrono = "0.4"
+utoipa = "5"
+utoipa-swagger-ui = { version = "9", features = ["actix-web"] }
+mongodb = "2.1"
+bson = { version = "2", features = ["chrono-0_4"] }
+tokio = "1"
+anyhow = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
