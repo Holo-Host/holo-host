@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
+use validator::Validate;
 use crate::providers::database::schemas::shared::{meta::meta_validator, system_specs::system_spec_validator};
 
 use super::shared::{
@@ -32,8 +33,9 @@ pub struct Host {
     pub device_id: String,
 }
 
-#[derive(Debug, Serialize, Deserialize, ToSchema, Clone)]
+#[derive(Debug, Serialize, Deserialize, ToSchema, Clone, Validate)]
 pub struct HostDto {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
     pub meta: MetaDto,
     pub owner_user_id: String,

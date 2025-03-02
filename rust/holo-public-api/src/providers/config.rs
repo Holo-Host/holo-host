@@ -5,8 +5,10 @@ use config::{Config, File, Environment};
 pub struct AppConfig {
     pub host: String,
     pub port: u16,
-    pub database_url: String,
+    pub mongo_url: String,
+    pub redis_url: String,
     pub jwt_secret: String,
+    pub enable_swagger: bool,
 }
 
 pub fn load_config() -> Result<AppConfig, config::ConfigError> {
@@ -19,11 +21,13 @@ pub fn load_config() -> Result<AppConfig, config::ConfigError> {
         .build()
         .unwrap();
     
-    let config: AppConfig = settings.try_deserialize()?;
-
-    if config.database_url.is_empty() {
-        return Err(config::ConfigError::Message("database_url is not set".to_string()));
-    }
+    let config: AppConfig = match settings.try_deserialize() {
+        Ok(config) => config,
+        Err(err) => {
+            tracing::error!("Error loading config: {}", err);
+            std::process::exit(1);
+        }
+    };
 
     Ok(config)
 }

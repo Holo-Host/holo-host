@@ -2,7 +2,14 @@ use actix_web::{post, HttpResponse, Responder, web};
 use bson::doc;
 use chrono::{Duration, Utc};
 use mongodb::Database;
-use crate::providers::{self, database::{self, schemas}, permissions::get_user_permissions};
+use crate::providers::{
+    self,
+    database::{
+        self,
+        schemas
+    },
+    permissions::get_permissions_from_user
+};
 
 use super::login_response::LoginResponse;
 use serde_json::json;
@@ -97,7 +104,10 @@ pub async fn login_with_api_key(
 
     let api_key = api_key.first().unwrap();
     let user_id = api_key.user._id.map(|id| id.to_string()).unwrap();
-    let permissions = get_user_permissions(api_key.user.clone());
+    let permissions = get_permissions_from_user(
+        api_key.user.roles.clone(),
+        api_key.user.permissions.clone()
+    );
 
     let access_token_exp = Utc::now() + Duration::minutes(5);
     let refresh_token_exp = Utc::now() + Duration::days(7);

@@ -22,6 +22,7 @@ pub struct UserInfo {
 
 #[derive(Debug, Serialize, Deserialize, ToSchema, Clone)]
 pub struct UserInfoDto {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
     pub meta: MetaDto,
     pub user_id: String,

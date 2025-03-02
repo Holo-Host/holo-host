@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use actix_web::{HttpMessage, HttpRequest};
 
-use super::{database::schemas::user::User, jwt::AccessTokenClaims};
+use super::jwt::AccessTokenClaims;
 
 // workload permissions
 pub const WORKLOADS_CREATE: &str = "workloads.create";
@@ -91,33 +91,25 @@ pub fn get_permissions_from_roles(roles: Vec<String>) -> Vec<String> {
     roles.iter().map(|role| roles_map[role].clone()).flatten().collect()
 }
 
-pub fn get_user_permissions(user: User) -> Vec<String> {
-    let mut permissions = user.permissions.clone();
-    permissions.extend(get_permissions_from_roles(user.roles.clone()));
+pub fn get_permissions_from_user(
+    roles: Vec<String>,
+    permissions: Vec<String>
+) -> Vec<String> {
+    let mut permissions = permissions.clone();
+    permissions.extend(get_permissions_from_roles(roles.clone()));
     permissions
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::providers::database::schemas::shared::meta::Meta;
-
     use super::*;
     
     #[test]
     fn should_return_permissions_for_admin_role() {
-        let user = User {
-            _id: Some(bson::oid::ObjectId::new()),
-            _meta: Meta {
-                created_at: bson::DateTime::now(),
-                updated_at: bson::DateTime::now(),
-                deleted_at: None,
-                is_deleted: false,
-            },
-            refresh_token_version: 0,
-            permissions: vec![],
-            roles: vec!["admin".to_string()],
-        };
-        let permissions = get_user_permissions(user);
+        let permissions = get_permissions_from_user(
+            vec!["admin".to_string()],
+            vec![]
+        );
         let admin_permissions = get_roles()["admin"].clone();
         assert_eq!(permissions.len(), admin_permissions.len());
         for permission in admin_permissions.iter() {
@@ -127,19 +119,10 @@ mod tests {
 
     #[test]
     fn should_return_permissions_for_developer_role() {
-        let user = User {
-            _id: Some(bson::oid::ObjectId::new()),
-            _meta: Meta {
-                created_at: bson::DateTime::now(),
-                updated_at: bson::DateTime::now(),
-                deleted_at: None,
-                is_deleted: false,
-            },
-            refresh_token_version: 0,
-            permissions: vec![],
-            roles: vec!["developer".to_string()],
-        };
-        let permissions = get_user_permissions(user);
+        let permissions = get_permissions_from_user(
+            vec!["developer".to_string()],
+            vec![]
+        );
         let developer_permissions = get_roles()["developer"].clone();
         assert_eq!(permissions.len(), developer_permissions.len());
         for permission in developer_permissions.iter() {

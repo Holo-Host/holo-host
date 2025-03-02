@@ -92,15 +92,17 @@ pub async fn perform_integration_test<C: HttpServiceFactory + 'static>(
 pub fn get_app_config() -> AppConfig {
     AppConfig{
         port: 3000,
-        database_url: "mongodb://admin:password@localhost:27017/".to_string(),
+        mongo_url: "mongodb://admin:password@localhost:27017/".to_string(),
+        redis_url: "redis://localhost:6379".to_string(),
         host: "http://localhost".to_string(),
         jwt_secret: "jwt_secret".to_string(),
+        enable_swagger: true,
     }
 }
 
 pub async fn get_db(app_config: &AppConfig) -> Database {
     database::setup_database(
-        &app_config.database_url, "holo"
+        &app_config.mongo_url, "holo"
     ).await.unwrap()
 }
 

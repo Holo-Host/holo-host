@@ -56,6 +56,7 @@ pub struct Workload {
 
 #[derive(Debug, Serialize, Deserialize, ToSchema, Clone)]
 pub struct WorkloadDto {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
     pub meta: MetaDto,
     pub owner_user_id: String,
