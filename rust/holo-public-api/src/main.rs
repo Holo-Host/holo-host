@@ -45,6 +45,14 @@ async fn main() -> std::io::Result<()> {
         std::process::exit(1);
     });
 
+    // setup cache
+    let cache = providers::cache::setup_cache(
+        &app_config.redis_url
+    ).await.unwrap_or_else(|err| {
+        tracing::error!("Error setting up cache: {}", err);
+        std::process::exit(1);
+    });
+
     // setup rate limiters
     // limit requests by ip for unauthenticated users
     let limit_by_ip = providers::limiter::limit_requests_by_ip(
@@ -67,7 +75,9 @@ async fn main() -> std::io::Result<()> {
         // create app with required app data
         let mut app = App::new()
             .app_data(web::Data::new(app_config.clone()))
-            .app_data(web::Data::new(mongodb.clone()));
+            .app_data(web::Data::new(mongodb.clone()))
+            .app_data(web::Data::new(cache.clone()))
+            .wrap(from_fn(middleware::logging::logging_middleware));
 
         // open api spec and swagger ui
         if app_config.enable_swagger {
