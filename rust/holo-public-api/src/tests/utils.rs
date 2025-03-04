@@ -109,7 +109,7 @@ pub fn create_credentials(secret: &str, user_id: bson::oid::ObjectId) -> (String
         sub: user_id.to_string(),
         exp: 0,
         permissions: vec![],
-    }, secret).unwrap();
+    }, secret).expect(&format!("signing {secret} for {user_id:#?}"));
     let refresh_token = sign_refresh_token(RefreshTokenClaims {
         sub: user_id.to_string(),
         exp: 900000000000,
