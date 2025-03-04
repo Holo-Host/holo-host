@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use actix_web::{HttpMessage, HttpRequest};
 
@@ -49,7 +49,7 @@ pub fn verify_user_has_permission(claims: AccessTokenClaims, required_permission
     None
 }
 
-pub fn get_roles() -> HashMap<String, Vec<String>> {
+pub fn get_roles() -> HashMap<String, HashSet<String>> {
     vec![
         ("admin".to_string(), vec![
             WORKLOADS_CREATE.to_string(),
@@ -66,21 +66,21 @@ pub fn get_roles() -> HashMap<String, Vec<String>> {
             USER_READ_ALL.to_string(),
             USER_DELETE_ALL.to_string(),
             USER_UPDATE_ALL.to_string(),
-        ]),
+        ].into_iter().collect()),
         ("developer".to_string(), vec![
             WORKLOADS_READ.to_string(),
             WORKLOADS_CREATE.to_string(),
             WORKLOADS_DELETE.to_string(),
             WORKLOADS_UPDATE.to_string(),
             USER_READ.to_string(),
-        ]),
+        ].into_iter().collect()),
         ("hoster".to_string(), vec![
             HOST_READ.to_string(),
             USER_READ.to_string(),
             HOST_CREATE.to_string(),
             HOST_DELETE.to_string(),
             HOST_UPDATE.to_string(),
-        ]),
+        ].into_iter().collect()),
     ]
     .into_iter()
     .collect()
