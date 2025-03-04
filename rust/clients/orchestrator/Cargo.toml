@@ -23,10 +23,10 @@ nkeys = "=0.4.4"
 rand = "0.8.5"
 actix-web = "4"
 utoipa-swagger-ui = { version = "9", features = [
-    "actix-web",
-    # Enables vendored Swagger UI via utoipa-swagger-ui-vendored crate.
-    "vendored"
-]}
+  "actix-web",
+  # Enables vendored Swagger UI via utoipa-swagger-ui-vendored crate.
+  "vendored",
+] }
 utoipa = { version = "5", features = ["actix_extras"] }
 util_libs = { path = "../../util_libs" }
 workload = { path = "../../services/workload" }
