@@ -101,7 +101,7 @@ pub fn get_app_config() -> AppConfig {
 pub async fn get_db(app_config: &AppConfig) -> Database {
     database::setup_database(
         &app_config.database_url, "holo"
-    ).await.unwrap()
+    ).await.expect(&format!("test database with config {app_config:#?}"))
 }
 
 pub fn create_credentials(secret: &str, user_id: bson::oid::ObjectId) -> (String, String) {
