@@ -443,7 +443,7 @@ impl OrchestratorWorkloadApi {
     ) -> bool {
         let host_drive_capacity = assigned_host_inventory.drives.iter().fold(0, |mut acc, d| {
             if let Some(capacity) = d.capacity_bytes {
-                acc += capacity;
+                acc += capacity as i64;
             }
             acc
         });

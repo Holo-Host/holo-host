@@ -140,40 +140,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_verify_host_meets_workload_criteria() -> Result<()> {
-        let mongod = MongodRunner::run()?;
-        let db_client = mongod.client()?;
-        let api = InventoryServiceApi::new(&db_client).await?;
-
-        // Create mock workload
-        let workload = create_mock_workload(
-            None,
-            None,
-            Some(1),
-            Some(Capacity {
-                drive: 500,
-                cores: 16,
-            }),
-            Some(100),
-            Some(0.9),
-        );
-
-        // Test case: host meets criteria
-        let valid_inventory = create_mock_inventory(Some(1000), Some(3), Some(20));
-        assert!(api.verify_host_meets_workload_criteria(&valid_inventory, &workload));
-
-        // Test case: host doesn't meet drive capacity
-        let inventory_insufficient_drives = create_mock_inventory(Some(100), Some(3), Some(20));
-        assert!(!api.verify_host_meets_workload_criteria(&inventory_insufficient_drives, &workload));
-
-        // Test case: host doesn't meet CPU requirements
-        let inventory_insufficient_cpus = create_mock_inventory(Some(1000), Some(3), Some(8));
-        assert!(!api.verify_host_meets_workload_criteria(&inventory_insufficient_cpus, &workload));
-
-        Ok(())
-    }
-
-    #[tokio::test]
     async fn test_handle_inventory_update_with_insufficient_resources() -> Result<()> {
         let mongod = MongodRunner::run().expect("Failed to run mongod");
         let db_client = mongod.client().expect("Failed to create db client");

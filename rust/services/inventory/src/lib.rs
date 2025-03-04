@@ -74,7 +74,8 @@ impl InventoryServiceApi {
         );
 
         let subject_sections: Vec<&str> = msg_subject.split(".").collect();
-        let host_pubkey: schemas::PubKey = subject_sections[2].into();
+        let host_pubkey_index = 2;
+        let host_pubkey: schemas::PubKey = subject_sections[host_pubkey_index].into();
 
         match message_payload {
             InventoryPayloadType::Authenticated(host_inventory) => {
@@ -176,7 +177,7 @@ impl InventoryServiceApi {
     }
 
     fn calculate_host_drive_capacity(&self, host_inventory: &HoloInventory) -> i64 {
-        host_inventory.drives.iter().fold(0 as i64, |mut acc, d| {
+        host_inventory.drives.iter().fold(0_i64, |mut acc, d| {
             if let Some(capacity) = d.capacity_bytes {
                 acc += capacity as i64;
             }
@@ -194,25 +195,27 @@ impl InventoryServiceApi {
 
         // Fetch all assigned workloads that exceed the host's capcity in a single query
         let ineligible_assigned_workloads: Vec<ObjectId> = self
-                  .workload_collection
-                  .get_many_from(doc! {
-                      "_id": { "$in": &host.assigned_workloads },
-                      "$expr": {
-                          "$and": [
-                              { "$gt": ["$workload.system_specs.capacity.drive", Bson::Int64(self.calculate_host_drive_capacity(&host.inventory))] },
-                              { "$gt": ["$workload.system_specs.capacity.cores", Bson::Int64( host.inventory.cpus.len() as i64)] }
-                          ]
-                      }
-                  })
-                  .await?
-                  .into_iter()
-                  .map(|workload| workload._id.ok_or_else(|| {
-                      ServiceError::Internal(format!(
-                          "Host is missing '_id' field. host_pubkey={}",
-                          host.device_id
-                      ))
-                  }))
-                  .collect::<Result<Vec<ObjectId>, _>>()?;
+            .workload_collection
+            .get_many_from(doc! {
+                "_id": { "$in": &host.assigned_workloads },
+                "$expr": {
+                    "$and": [
+                        { "$gt": ["$system_specs.capacity.drive", Bson::Int64(self.calculate_host_drive_capacity(&host.inventory))] },
+                        { "$gt": ["$system_specs.capacity.cores", Bson::Int64( host.inventory.cpus.len() as i64)] }
+                    ]
+                }
+            })
+            .await?
+            .into_iter()
+            .map(|workload| {
+                workload._id.ok_or_else(|| {
+                    ServiceError::Internal(format!(
+                        "Host is missing '_id' field. host_pubkey={}",
+                        host.device_id
+                    ))
+                })
+            })
+            .collect::<Result<Vec<ObjectId>, _>>()?;
 
         // Update database only if there are ineligible workloads
         if !ineligible_assigned_workloads.is_empty() {
