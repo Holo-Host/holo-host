@@ -49,71 +49,72 @@ impl TestNatsServer {
         let jetstream_dir = temp_dir.path().join("jetstream");
         std::fs::create_dir_all(&jetstream_dir)?;
 
-        // Start NATS server with JetStream enabled
-        let mut attempts = 0;
-        let max_attempts = 5;
         let mut port = String::new();
         let mut process = None;
+        let max_attempts = 5;
+        let mut attempts = 0;
 
         while attempts < max_attempts {
             port = generate_random_port();
             println!("Attempting to start NATS server on port: {port}");
-            if check_port_availability(&port).await.is_ok() {
-                println!("Port {port} is available. Attempting to start NATS server...");
-                let spawn_result = tokio::process::Command::new("nats-server")
-                    .args([
-                        "--jetstream",
-                        "--store_dir",
-                        jetstream_dir.to_str().unwrap(),
-                        "--port",
-                        &port,
-                    ])
-                    .kill_on_drop(true)
-                    .spawn();
+            // if check_port_availability(&port).await.is_ok() {
+            // println!("Port {port} is available. Attempting to start NATS server...");
 
-                match spawn_result {
-                    Ok(p) => {
-                        process = Some(p);
-                        // Wait a bit for the server to be ready
-                        sleep(Duration::from_secs(1)).await;
+            // Start NATS server with JetStream enabled
+            let spawn_result = tokio::process::Command::new("nats-server")
+                .args([
+                    "--jetstream",
+                    "--store_dir",
+                    jetstream_dir.to_str().unwrap(),
+                    "--port",
+                    &port,
+                ])
+                .kill_on_drop(true)
+                .spawn();
 
-                        // Try to connect to verify the server is up
-                        match tokio::time::timeout(Duration::from_secs(2), async {
-                            let connect_result = ConnectOptions::new()
-                                .name("test_client")
-                                .connect(&format!("nats://localhost:{}", port))
-                                .await;
-                            if connect_result.is_ok() {
-                                Ok(())
-                            } else {
-                                Err(anyhow::anyhow!("Failed to connect to test server"))
+            match spawn_result {
+                Ok(p) => {
+                    process = Some(p);
+                    // Wait a bit for the server to be ready
+                    sleep(Duration::from_secs(1)).await;
+
+                    // Try to connect to verify the server is up
+                    match tokio::time::timeout(Duration::from_secs(2), async {
+                        let connect_result = ConnectOptions::new()
+                            .name("test_client")
+                            .connect(&format!("nats://localhost:{}", port))
+                            .await;
+                        if connect_result.is_ok() {
+                            Ok(())
+                        } else {
+                            Err(anyhow::anyhow!("Failed to connect to test server"))
+                        }
+                    })
+                    .await
+                    {
+                        Ok(Ok(_)) => break,
+                        _ => {
+                            if let Some(mut p) = process.take() {
+                                let _ = p.kill().await;
                             }
-                        })
-                        .await
-                        {
-                            Ok(Ok(_)) => break,
-                            _ => {
-                                if let Some(mut p) = process.take() {
-                                    let _ = p.kill().await;
-                                }
-                                attempts += 1;
-                                sleep(Duration::from_secs(1)).await;
-                                continue;
-                            }
+                            attempts += 1;
+                            sleep(Duration::from_secs(1)).await;
+                            continue;
                         }
                     }
-                    Err(_) => {
-                        attempts += 1;
-                        sleep(Duration::from_secs(1)).await;
-                        continue;
-                    }
+                }
+                Err(_) => {
+                    attempts += 1;
+                    sleep(Duration::from_secs(1)).await;
+                    continue;
                 }
             }
-            attempts += 1;
-            println!(
-                "Port {port} is not available. Will re-attempt to start NATS server in 3 seconds..."
-            );
-            sleep(Duration::from_secs(3)).await;
+            // }
+            // attempts += 1;
+            // println!(
+            //     "Port {port} is not available. Will re-attempt to start NATS server in 1 second..."
+            // );
+            // sleep(Duration::from_secs(1)).await;
         }
 
         let process = process.ok_or_else(|| anyhow::anyhow!("Failed to start NATS server"))?;
@@ -198,10 +199,10 @@ pub async fn wait_for_port_release(port: &str) -> Result<()> {
 
 // Helper function to check that the nats-server is available
 pub fn check_nats_server() -> bool {
-    match Command::new("nats-server").arg("--version").output() {
-        Ok(_) => true,
-        Err(_) => false,
-    }
+    Command::new("nats-server")
+        .arg("--version")
+        .output()
+        .is_ok()
 }
 
 // TODO: Clean up this function to abstract away redundacy and improve readability
