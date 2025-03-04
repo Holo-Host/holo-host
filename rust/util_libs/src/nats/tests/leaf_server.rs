@@ -62,7 +62,7 @@ async fn test_leaf_server_run() {
         longtime: false,
     };
 
-    gen_test_agents(&hub_conn_url);
+    gen_test_agents_for_leaf(&hub_conn_url);
 
     // Start the Hub Server in a separate thread
     log::info!("Spawning Hub server");

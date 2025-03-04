@@ -1,12 +1,15 @@
-use super::*;
 use crate::nats::{
     jetstream_service::JsStreamService,
+    tests::test_nats_server::{check_nats_server, TestClientResponse, TestNatsServer},
     types::{ConsumerBuilder, EndpointTraits, EndpointType, ResponseSubjectsGenerator},
 };
+use anyhow::Result;
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use serial_test::serial;
 use std::collections::HashMap;
+use std::sync::Arc;
+use tokio::time::{sleep, Duration};
 
 // Test response type
 #[derive(Debug, Clone, Serialize, Deserialize)]

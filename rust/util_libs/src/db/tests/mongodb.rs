@@ -1,23 +1,25 @@
-#![allow(dead_code)]
 #![allow(unused_imports)]
-
-use super::*;
-use crate::db::mongodb::{MongoCollection, MongoDbAPI};
-use crate::db::schemas::{self, Capacity, Metadata};
-use bson::{self, doc, oid, DateTime};
-use dotenv::dotenv;
-
 #[cfg(not(target_arch = "aarch64"))]
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::db::{
+        mongodb::{MongoCollection, MongoDbAPI},
+        schemas::{self, Capacity, Metadata},
+        tests::mongo_runner::mongo_runner::MongodRunner,
+    };
+    use anyhow::{Context, Result};
+    use bson::{self, doc, oid, DateTime};
+    use dotenv::dotenv;
+    use mongodb::{options::ClientOptions, Client};
+    use std::{path::PathBuf, process::Stdio, str::FromStr};
+    use tempfile::TempDir;
 
     #[tokio::test]
     async fn test_indexing_and_api() -> Result<()> {
         dotenv().ok();
         env_logger::init();
 
-        let mongod = mongo_runner::MongodRunner::run().unwrap();
+        let mongod = MongodRunner::run().unwrap();
         let client = mongod.client().unwrap();
 
         let database_name = "holo-hosting-test";

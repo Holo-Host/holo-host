@@ -1,8 +1,9 @@
-use super::*;
 use crate::nats::{
     jetstream_client::{get_event_listeners, JsClient},
+    tests::test_nats_server::{check_nats_server, TestNatsServer},
     types::{JsClientBuilder, PublishInfo},
 };
+use anyhow::Result;
 use serial_test::serial;
 use std::time::Duration;
 
