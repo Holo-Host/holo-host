@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use std::fs::File;
 use std::io::Write;
 use std::{fs, path::Path, process::Command};
@@ -18,7 +16,7 @@ pub const NSC_CREDS_PATH: &str = ".local/share/nats/nsc/keys/creds";
 // Generates Operator, SYS account with user, and holo-account Account with user,
 // then instantiates the nats resolver and generates the jwt and creds needed
 // for the Leaf server to connect to Hub with JWT Chain-Of-Trust auth
-pub fn gen_test_agents(jwt_server_url: &str) {
+pub fn gen_test_agents_for_leaf(jwt_server_url: &str) {
     if Path::new(JWT_TEST_DIR).exists() {
         fs::remove_dir_all(JWT_TEST_DIR).expect("Failed to delete already existing jwt dir");
     }

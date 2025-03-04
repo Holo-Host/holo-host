@@ -1,5 +1,3 @@
-#![allow(unused_imports)]
-#[cfg(not(target_arch = "aarch64"))]
 #[cfg(test)]
 mod tests {
     use crate::db::{
@@ -7,12 +5,9 @@ mod tests {
         schemas::{self, Capacity, Metadata},
         tests::mongo_runner::MongodRunner,
     };
-    use anyhow::{Context, Result};
+    use anyhow::Result;
     use bson::{self, doc, oid, DateTime};
     use dotenv::dotenv;
-    use mongodb::{options::ClientOptions, Client};
-    use std::{path::PathBuf, process::Stdio, str::FromStr};
-    use tempfile::TempDir;
 
     #[tokio::test]
     async fn test_indexing_and_api() -> Result<()> {
