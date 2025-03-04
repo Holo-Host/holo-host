@@ -56,9 +56,7 @@ impl TestNatsServer {
 
         while attempts < max_attempts {
             port = generate_random_port();
-            println!("Attempting to start NATS server on port: {port}");
-            // if check_port_availability(&port).await.is_ok() {
-            // println!("Port {port} is available. Attempting to start NATS server...");
+            log::info!("Attempting to start NATS server on port: {port}");
 
             // Start NATS server with JetStream enabled
             let spawn_result = tokio::process::Command::new("nats-server")
@@ -109,12 +107,6 @@ impl TestNatsServer {
                     continue;
                 }
             }
-            // }
-            // attempts += 1;
-            // println!(
-            //     "Port {port} is not available. Will re-attempt to start NATS server in 1 second..."
-            // );
-            // sleep(Duration::from_secs(1)).await;
         }
 
         let process = process.ok_or_else(|| anyhow::anyhow!("Failed to start NATS server"))?;
@@ -152,23 +144,8 @@ impl TestNatsServer {
             let _ = child.kill().await;
             let _ = tokio::time::timeout(Duration::from_secs(5), child.wait()).await;
         }
-        println!("NATS server successfully shut down...");
+        log::info!("NATS server successfully shut down...");
         Ok(())
-    }
-}
-
-// Helper function to check that a port is available
-pub async fn check_port_availability(port: &str) -> Result<()> {
-    let output = tokio::process::Command::new("lsof")
-        .arg("-i")
-        .arg(format!(":{}", port))
-        .output()
-        .await?;
-
-    if output.stdout.is_empty() {
-        Ok(())
-    } else {
-        Err(anyhow::anyhow!("Port {} is in use", port))
     }
 }
 
@@ -176,25 +153,6 @@ pub async fn check_port_availability(port: &str) -> Result<()> {
 fn generate_random_port() -> String {
     let mut rng = rand::rng();
     rng.random_range(4444..5555).to_string()
-}
-
-// Helper function to wait for a port to be available
-pub async fn wait_for_port_release(port: &str) -> Result<()> {
-    let timeout = Duration::from_secs(5);
-    let start = std::time::Instant::now();
-
-    while start.elapsed() < timeout {
-        if check_port_availability(port).await.is_ok() {
-            return Ok(());
-        }
-        sleep(Duration::from_millis(100)).await;
-    }
-
-    Err(anyhow::anyhow!(
-        "Port {} is still occupied after {:?}",
-        port,
-        timeout
-    ))
 }
 
 // Helper function to check that the nats-server is available
