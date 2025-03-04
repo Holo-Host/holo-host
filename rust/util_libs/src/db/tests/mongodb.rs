@@ -5,7 +5,7 @@ mod tests {
     use crate::db::{
         mongodb::{MongoCollection, MongoDbAPI},
         schemas::{self, Capacity, Metadata},
-        tests::mongo_runner::mongo_runner::MongodRunner,
+        tests::mongo_runner::MongodRunner,
     };
     use anyhow::{Context, Result};
     use bson::{self, doc, oid, DateTime};
