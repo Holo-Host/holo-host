@@ -13,9 +13,8 @@ This client is responsible for:
 use anyhow::{anyhow, Result};
 use async_nats::Message;
 use inventory::{
-    InventoryServiceApi, HOST_AUTHENTICATED_SUBJECT, HOST_UNAUTHENTICATED_SUBJECT,
-    INVENTORY_SRV_DESC, INVENTORY_SRV_NAME, INVENTORY_SRV_SUBJ, INVENTORY_SRV_VERSION,
-    INVENTORY_UPDATE_SUBJECT,
+    InventoryServiceApi, INVENTORY_SRV_DESC, INVENTORY_SRV_NAME, INVENTORY_SRV_SUBJ,
+    INVENTORY_SRV_VERSION, INVENTORY_UPDATE_SUBJECT,
 };
 use mongodb::Client as MongoDBClient;
 use std::sync::Arc;
@@ -51,20 +50,7 @@ pub async fn run(
     inventory_service
         .add_consumer(ConsumerBuilder {
             name: "update_host_inventory".to_string(),
-            endpoint_subject: format!("{HOST_AUTHENTICATED_SUBJECT}.{INVENTORY_UPDATE_SUBJECT}"),
-            handler: EndpointType::Async(inventory_api.call(
-                |api: InventoryServiceApi, msg: Arc<Message>| async move {
-                    api.handle_host_inventory_update(msg).await
-                },
-            )),
-            response_subject_fn: None,
-        })
-        .await?;
-
-    inventory_service
-        .add_consumer(ConsumerBuilder {
-            name: "send_host_error_inventory".to_string(),
-            endpoint_subject: format!("{HOST_UNAUTHENTICATED_SUBJECT}.{INVENTORY_UPDATE_SUBJECT}"),
+            endpoint_subject: format!("*.{INVENTORY_UPDATE_SUBJECT}"),
             handler: EndpointType::Async(inventory_api.call(
                 |api: InventoryServiceApi, msg: Arc<Message>| async move {
                     api.handle_host_inventory_update(msg).await
