@@ -106,8 +106,8 @@ mod tests {
     #[test]
     fn should_return_permissions_for_admin_role() {
         let user = User {
-            _id: Some(bson::oid::ObjectId::new()),
-            _meta: Meta {
+            oid: Some(bson::oid::ObjectId::new()),
+            meta: Meta {
                 created_at: bson::DateTime::now(),
                 updated_at: bson::DateTime::now(),
                 deleted_at: None,
@@ -128,8 +128,8 @@ mod tests {
     #[test]
     fn should_return_permissions_for_developer_role() {
         let user = User {
-            _id: Some(bson::oid::ObjectId::new()),
-            _meta: Meta {
+            oid: Some(bson::oid::ObjectId::new()),
+            meta: Meta {
                 created_at: bson::DateTime::now(),
                 updated_at: bson::DateTime::now(),
                 deleted_at: None,
