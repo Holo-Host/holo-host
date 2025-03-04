@@ -7,8 +7,7 @@ Users: admin user & host user (the authenticated host user) & auth guard user (t
 (NB: Orchestrator admin user can listen to ALL "Inventory.>" subjects)
 
 Endpoints & Managed Subjects:
-    - handle_inventory_update: INVENTORY.{{host_pubkey}}.authenticated
-    - handle_error_host_inventory: INVENTORY.{{host_pubkey}}.unauthenticated
+    - handle_inventory_update: INVENTORY.{{host_pubkey}}
 */
 
 pub mod types;
@@ -31,7 +30,7 @@ use nats_utils::types::{AsyncEndpointHandler, JsServiceResponse, ServiceError};
 use serde::{Deserialize, Serialize};
 use std::future::Future;
 use std::sync::Arc;
-use types::{InventoryApiResult, InventoryPayloadType};
+use types::InventoryApiResult;
 
 pub const INVENTORY_SRV_NAME: &str = "INVENTORY";
 pub const INVENTORY_SRV_SUBJ: &str = "INVENTORY";
@@ -39,9 +38,7 @@ pub const INVENTORY_SRV_VERSION: &str = "0.0.1";
 pub const INVENTORY_SRV_DESC: &str = "This service handles the Inventory updates from Host.";
 
 // Service Endpoint Names:
-pub const HOST_UNAUTHENTICATED_SUBJECT: &str = "unauthenticated";
-pub const HOST_AUTHENTICATED_SUBJECT: &str = "authenticated";
-pub const INVENTORY_UPDATE_SUBJECT: &str = "*.update";
+pub const INVENTORY_UPDATE_SUBJECT: &str = "update";
 
 #[derive(Clone, Debug)]
 pub struct InventoryServiceApi {
@@ -63,47 +60,31 @@ impl InventoryServiceApi {
         msg: Arc<Message>,
     ) -> Result<InventoryApiResult, ServiceError> {
         let msg_subject = msg.subject.clone().into_string();
-        let message_payload = Self::convert_msg_to_type::<InventoryPayloadType>(msg)?;
+        let host_inventory = Self::convert_msg_to_type::<HoloInventory>(msg)?;
         log::trace!(
             "INVENTORY message payload. subject='{}', msg={:?}",
             msg_subject,
-            message_payload
+            host_inventory
         );
 
         let subject_sections: Vec<&str> = msg_subject.split(".").collect();
-        let host_pubkey_index = 2;
+        let host_pubkey_index = 1;
         let host_pubkey: schemas::PubKey = subject_sections[host_pubkey_index].into();
 
-        match message_payload {
-            InventoryPayloadType::Authenticated(host_inventory) => {
-                log::debug!(
-                    "Incoming message for 'INVENTORY.authenticated.{{host_pubkey}}.update'"
-                );
-                self.update_host_inventory(&host_pubkey, &host_inventory)
-                    .await?;
+        log::debug!("Incoming message for 'INVENTORY.{{host_pubkey}}.update'");
+        self.update_host_inventory(&host_pubkey, &host_inventory)
+            .await?;
 
-                // Fetch Host collection
-                let host = self
-                    .host_collection
-                    .get_one_from(doc! { "device_id": &host_pubkey })
-                    .await?
-                    .ok_or_else(|| {
-                        ServiceError::Internal(format!(
-                            "Failed to fetch Host. host_pubkey={}",
-                            host_pubkey
-                        ))
-                    })?;
+        // Fetch Host collection
+        let host = self
+            .host_collection
+            .get_one_from(doc! { "device_id": &host_pubkey })
+            .await?
+            .ok_or_else(|| {
+                ServiceError::Internal(format!("Failed to fetch Host. host_pubkey={}", host_pubkey))
+            })?;
 
-                self.handle_ineligible_host_workloads(host).await?;
-            }
-            InventoryPayloadType::Unauthenticated(host_inventory) => {
-                log::debug!(
-                    "Incoming message for 'INVENTORY.unauthenticated.{{host_pubkey}}.update'"
-                );
-                self.update_host_inventory(&host_pubkey, &host_inventory)
-                    .await?;
-            }
-        }
+        self.handle_ineligible_host_workloads(host).await?;
 
         Ok(InventoryApiResult {
             status: types::InventoryUpdateStatus::Ok,
