@@ -1,5 +1,4 @@
-#![allow(dead_code)]
-
+#![allow(unused_imports)]
 use crate::{orchestrator_api::OrchestratorWorkloadApi, types::WorkloadResult};
 use anyhow::Result;
 use bson::doc;
@@ -16,9 +15,8 @@ use std::sync::Arc;
 #[cfg(not(target_arch = "aarch64"))]
 #[cfg(test)]
 mod tests {
-    use db_utils::{mongodb::MongoDbAPI, schemas::Capacity};
-
     use super::*;
+    use db_utils::{mongodb::MongoDbAPI, schemas::Capacity};
 
     #[tokio::test]
     async fn test_add_workload() -> Result<()> {

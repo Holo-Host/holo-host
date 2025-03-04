@@ -1,5 +1,4 @@
-#![allow(dead_code)]
-
+#![allow(unused_imports)]
 use crate::{types::InventoryPayloadType, InventoryServiceApi};
 use anyhow::Result;
 use bson::doc;
@@ -13,10 +12,9 @@ use std::sync::Arc;
 #[cfg(not(target_arch = "aarch64"))]
 #[cfg(test)]
 mod tests {
+    use super::*;
     use bson::oid::ObjectId;
     use db_utils::schemas::{Capacity, Host};
-
-    use super::*;
 
     #[tokio::test]
     async fn test_handle_authenticated_inventory_update() -> Result<()> {
