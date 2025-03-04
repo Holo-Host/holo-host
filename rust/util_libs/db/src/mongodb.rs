@@ -1,4 +1,3 @@
-use crate::nats::types::ServiceError;
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use bson::oid::ObjectId;
@@ -7,6 +6,7 @@ use futures::stream::TryStreamExt;
 use mongodb::options::UpdateModifications;
 use mongodb::results::UpdateResult;
 use mongodb::{options::IndexOptions, Client, Collection, IndexModel};
+use nats_utils::types::ServiceError;
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 

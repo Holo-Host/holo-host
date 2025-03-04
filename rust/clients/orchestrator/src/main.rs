@@ -4,9 +4,9 @@ mod inventory;
 mod utils;
 mod workloads;
 use anyhow::Result;
+use db_utils::mongodb::get_mongodb_url;
 use dotenv::dotenv;
 use mongodb::{options::ClientOptions, Client as MongoDBClient};
-use util_libs::db::mongodb::get_mongodb_url;
 
 #[tokio::main]
 async fn main() -> Result<(), async_nats::Error> {

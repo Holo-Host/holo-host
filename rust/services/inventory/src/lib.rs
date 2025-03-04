@@ -20,21 +20,18 @@ use anyhow::Result;
 use async_nats::jetstream::ErrorCode;
 use async_nats::Message;
 use bson::{self, doc, oid::ObjectId, Bson, DateTime};
+use db_utils::{
+    mongodb::{IntoIndexes, MongoCollection, MongoDbAPI},
+    schemas::{self, Host, Workload},
+};
 use hpos_hal::inventory::HoloInventory;
 use mongodb::results::UpdateResult;
 use mongodb::{options::UpdateModifications, Client as MongoDBClient};
+use nats_utils::types::{AsyncEndpointHandler, JsServiceResponse, ServiceError};
 use serde::{Deserialize, Serialize};
 use std::future::Future;
 use std::sync::Arc;
 use types::{InventoryApiResult, InventoryPayloadType};
-use util_libs::db::mongodb::MongoDbAPI;
-use util_libs::{
-    db::{
-        mongodb::{IntoIndexes, MongoCollection},
-        schemas::{self, Host, Workload},
-    },
-    nats::types::{AsyncEndpointHandler, JsServiceResponse, ServiceError},
-};
 
 pub const INVENTORY_SRV_NAME: &str = "INVENTORY";
 pub const INVENTORY_SRV_SUBJ: &str = "INVENTORY";

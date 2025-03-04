@@ -13,8 +13,8 @@ This client is responsible for subscribing to workload streams that handle:
 use anyhow::Result;
 use hpos_hal::inventory::HoloInventory;
 use inventory::HOST_AUTHENTICATED_SUBJECT;
+use nats_utils::{jetstream_client::JsClient, types::PublishInfo};
 use tokio::time::sleep;
-use util_libs::nats::{jetstream_client::JsClient, types::PublishInfo};
 
 pub fn should_check_inventory(
     start: chrono::DateTime<chrono::Utc>,

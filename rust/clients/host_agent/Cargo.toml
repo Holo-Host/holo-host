@@ -29,7 +29,7 @@ bytes = "1.8.0"
 rand = "0.8.5"
 tempfile = "3.15.0"
 machineid-rs = "1.2.4"
-util_libs = { path = "../../util_libs" }
+nats_utils = { path = "../../util_libs/nats" }
 workload = { path = "../../services/workload" }
 inventory = { path = "../../services/inventory" }
 hpos-hal = { path = "../../hpos-hal" }

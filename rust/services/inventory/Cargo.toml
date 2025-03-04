@@ -13,9 +13,11 @@ serde_json = { workspace = true }
 bson = { version = "2.6.1", features = ["chrono-0_4"] }
 mongodb = "3.1"
 bytes = "1.8.0"
-util_libs = { path = "../../util_libs" }
+db_utils = { path = "../../util_libs/db" }
+nats_utils = { path = "../../util_libs/nats" }
 hpos-hal = { path = "../../hpos-hal" }
 
 [dev-dependencies]
 tempfile = "3.8"
+mock_utils = { path = "../../util_libs/mocks" }
 

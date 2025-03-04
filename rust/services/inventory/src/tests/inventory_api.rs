@@ -1,15 +1,21 @@
 #![allow(dead_code)]
-#![allow(unused_imports)]
 
-use super::*;
 use crate::{types::InventoryPayloadType, InventoryServiceApi};
+use anyhow::Result;
 use bson::doc;
+use db_utils::mongodb::MongoDbAPI;
+use mock_utils::{
+    host::create_mock_inventory, mongodb_runner::MongodRunner, nats_message::NatsMessage,
+    workload::create_test_workload,
+};
 use std::sync::Arc;
-use util_libs::db::mongodb::MongoDbAPI;
 
 #[cfg(not(target_arch = "aarch64"))]
 #[cfg(test)]
 mod tests {
+    use bson::oid::ObjectId;
+    use db_utils::schemas::{Capacity, Host};
+
     use super::*;
 
     #[tokio::test]
@@ -22,7 +28,7 @@ mod tests {
         let host_id = ObjectId::new();
 
         // Create workload with specific requirements
-        let workload = create_mock_workload(
+        let workload = create_test_workload(
             None,
             Some(vec![host_id]),
             Some(1),
@@ -41,7 +47,7 @@ mod tests {
 
         // Create initial host with reference to workload (id) created above
         let initial_inventory = create_mock_inventory(Some(1000), Some(3), Some(20));
-        let host = schemas::Host {
+        let host = Host {
             _id: Some(host_id),
             device_id: "mock_pubkey".to_string(),
             inventory: initial_inventory.clone(),
@@ -58,7 +64,7 @@ mod tests {
         let payload = InventoryPayloadType::Authenticated(inventory_update);
         let msg_payload = serde_json::to_vec(&payload).unwrap();
         let msg = Arc::new(
-            TestMessage::new(
+            NatsMessage::new(
                 format!("INVENTORY.authenticated.{}.update", host.device_id),
                 msg_payload,
             )
@@ -95,7 +101,7 @@ mod tests {
 
         // Create initial host
         let initial_inventory = create_mock_inventory(Some(1000), Some(3), Some(20));
-        let host = schemas::Host {
+        let host = Host {
             _id: Some(host_id),
             device_id: "mock_pubkey".to_string(),
             inventory: initial_inventory.clone(),
@@ -111,7 +117,7 @@ mod tests {
         let payload = InventoryPayloadType::Unauthenticated(new_inventory.clone());
         let msg_payload = serde_json::to_vec(&payload).unwrap();
         let msg = Arc::new(
-            TestMessage::new(
+            NatsMessage::new(
                 format!("INVENTORY.unauthenticated.{}.update", host.device_id),
                 msg_payload,
             )
@@ -151,7 +157,7 @@ mod tests {
         let host_id = ObjectId::new();
 
         // Create workload with specific requirements
-        let workload = create_mock_workload(
+        let workload = create_test_workload(
             None,
             Some(vec![host_id]),
             Some(1),
@@ -170,7 +176,7 @@ mod tests {
 
         // Create initial host with reference to workload (id) created above
         let initial_inventory = create_mock_inventory(Some(1000), Some(3), Some(20));
-        let host = schemas::Host {
+        let host = Host {
             _id: Some(host_id),
             device_id: "mock_pubkey".to_string(),
             assigned_workloads: vec![workload_id],
@@ -184,7 +190,7 @@ mod tests {
         let payload = InventoryPayloadType::Authenticated(insufficient_inventory);
         let msg_payload = serde_json::to_vec(&payload).unwrap();
         let msg = Arc::new(
-            TestMessage::new(
+            NatsMessage::new(
                 format!("INVENTORY.authenticated.{}.update", host.device_id),
                 msg_payload,
             )

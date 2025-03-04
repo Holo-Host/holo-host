@@ -18,11 +18,11 @@ use inventory::{
     INVENTORY_UPDATE_SUBJECT,
 };
 use mongodb::Client as MongoDBClient;
-use std::sync::Arc;
-use util_libs::nats::{
+use nats_utils::{
     jetstream_client::JsClient,
     types::{ConsumerBuilder, EndpointType, JsServiceBuilder},
 };
+use std::sync::Arc;
 
 pub async fn run(
     mut nats_client: JsClient,

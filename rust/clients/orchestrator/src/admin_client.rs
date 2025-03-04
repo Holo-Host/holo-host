@@ -1,10 +1,10 @@
-use std::path::PathBuf;
-use std::time::Duration;
-use std::vec;
-use util_libs::nats::{
+use nats_utils::{
     jetstream_client::{get_event_listeners, get_nats_url, with_event_listeners, JsClient},
     types::JsClientBuilder,
 };
+use std::path::PathBuf;
+use std::time::Duration;
+use std::vec;
 
 const ORCHESTRATOR_ADMIN_CLIENT_NAME: &str = "Orchestrator Admin Client";
 const ORCHESTRATOR_ADMIN_CLIENT_INBOX_PREFIX: &str = "ORCHESTRATOR._ADMIN_INBOX";
