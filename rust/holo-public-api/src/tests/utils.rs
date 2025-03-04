@@ -114,6 +114,6 @@ pub fn create_credentials(secret: &str, user_id: bson::oid::ObjectId) -> (String
         sub: user_id.to_string(),
         exp: 900000000000,
         version: 0,
-    }, secret).unwrap();
+    }, secret).expect(&format!("signing {secret} for {user_id:#?}"));
     (access_token, refresh_token)
 }
