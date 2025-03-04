@@ -9,6 +9,7 @@ pub struct AppConfig {
     pub redis_url: String,
     pub jwt_secret: String,
     pub enable_swagger: bool,
+    pub enable_scheduler: bool,
 }
 
 pub fn load_config() -> Result<AppConfig, config::ConfigError> {

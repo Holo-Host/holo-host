@@ -5,3 +5,4 @@ pub mod permissions;
 pub mod pagination;
 pub mod error_response;
 pub mod limiter;
+pub mod cache;
