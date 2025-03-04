@@ -57,7 +57,9 @@ impl TestNatsServer {
 
         while attempts < max_attempts {
             port = generate_random_port();
+            println!("Attempting to start NATS server on port: {port}");
             if check_port_availability(&port).await.is_ok() {
+                println!("Port {port} is available. Attempting to start NATS server...");
                 let spawn_result = tokio::process::Command::new("nats-server")
                     .args([
                         "--jetstream",
@@ -108,7 +110,10 @@ impl TestNatsServer {
                 }
             }
             attempts += 1;
-            sleep(Duration::from_secs(1)).await;
+            println!(
+                "Port {port} is not available. Will re-attempt to start NATS server in 3 seconds..."
+            );
+            sleep(Duration::from_secs(3)).await;
         }
 
         let process = process.ok_or_else(|| anyhow::anyhow!("Failed to start NATS server"))?;
@@ -146,7 +151,7 @@ impl TestNatsServer {
             let _ = child.kill().await;
             let _ = tokio::time::timeout(Duration::from_secs(5), child.wait()).await;
         }
-
+        println!("NATS server successfully shut down...");
         Ok(())
     }
 }
@@ -195,10 +200,7 @@ pub async fn wait_for_port_release(port: &str) -> Result<()> {
 pub fn check_nats_server() -> bool {
     match Command::new("nats-server").arg("--version").output() {
         Ok(_) => true,
-        Err(e) => {
-            println!("Skipping test: nats-server not available: {}", e);
-            false
-        }
+        Err(_) => false,
     }
 }
 
