@@ -31,7 +31,7 @@ tempfile = "3.15.0"
 machineid-rs = "1.2.4"
 netdiag = { path = "../../netdiag" }
 hpos-hal = { path = "../../hpos-hal" }
-util_libs = { path = "../../util_libs" }
+nats_utils = { path = "../../util_libs/nats" }
 workload = { path = "../../services/workload" }
 inventory = { path = "../../services/inventory" }
 authentication = { path = "../../services/authentication" }

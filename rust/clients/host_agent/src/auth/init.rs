@@ -27,11 +27,10 @@ use authentication::{
     AUTH_SRV_SUBJ, VALIDATE_AUTH_SUBJECT,
 };
 use hpos_hal::inventory::HoloInventory;
-use inventory::HOST_AUTHENTICATED_SUBJECT;
+use nats_utils::jetstream_client;
 use std::str::FromStr;
 use std::time::Duration;
 use textnonce::TextNonce;
-use util_libs::nats::jetstream_client;
 
 pub const HOST_AUTH_CLIENT_NAME: &str = "Host Auth";
 pub const HOST_AUTH_CLIENT_INBOX_PREFIX: &str = "_AUTH_INBOX";
@@ -166,7 +165,7 @@ pub async fn run(
 
                 // Send host inventory to orchestrator to add to mongodb (allows for host matching to start)
                 let authenticated_user_inventory_subject =
-                    format!("INVENTORY.{HOST_AUTHENTICATED_SUBJECT}.{pubkey_lowercase}.update");
+                    format!("INVENTORY.{pubkey_lowercase}.update");
                 let inventory = HoloInventory::from_host();
                 let payload_bytes = serde_json::to_vec(&inventory)?;
 

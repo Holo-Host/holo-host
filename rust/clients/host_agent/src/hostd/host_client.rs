@@ -1,9 +1,9 @@
 use anyhow::anyhow;
-use std::{path::PathBuf, time::Duration};
-use util_libs::nats::{
+use nats_utils::{
     jetstream_client::{get_event_listeners, get_nats_url, with_event_listeners, JsClient},
     types::{Credentials, JsClientBuilder},
 };
+use std::{path::PathBuf, time::Duration};
 
 const HOST_AGENT_CLIENT_NAME: &str = "Host Agent";
 const HOST_AGENT_INBOX_PREFIX: &str = "_HPOS_INBOX";

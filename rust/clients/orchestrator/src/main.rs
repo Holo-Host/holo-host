@@ -6,10 +6,10 @@ mod utils;
 mod workloads;
 use anyhow::Result;
 use async_nats::Client;
+use db_utils::mongodb::get_mongodb_url;
 use dotenv::dotenv;
 use mongodb::{options::ClientOptions, Client as MongoDBClient};
 use tokio::task::spawn;
-use util_libs::db::mongodb::get_mongodb_url;
 
 #[tokio::main]
 async fn main() -> Result<(), async_nats::Error> {

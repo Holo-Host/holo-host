@@ -90,7 +90,33 @@ async fn daemonize(args: &DaemonzeArgs) -> Result<(), async_nats::Error> {
     )
     .await?;
 
-    hostd::inventory::run(host_client.clone(), &host_agent_keys.host_pubkey).await?;
+    // Get Host Agent inventory check duration env var..
+    // If none exists, default to 1 hour
+    let host_inventory_check_interval_sec =
+        &args.host_inventory_check_interval_sec.unwrap_or_else(|| {
+            std::env::var("HOST_INVENTORY_CHECK_DURATION")
+                .unwrap_or_else(|_| "3600".to_string())
+                .parse::<u64>()
+                .unwrap_or(3600) // 3600 seconds = 1 hour
+        });
+
+    // Get Host Agent inventory storage file path
+    // If none exists, default to "/var/lib/holo_inventory.json"
+    let inventory_file_path = args.host_inventory_file_path.as_ref().map_or_else(
+        || {
+            std::env::var("HOST_INVENTORY_FILE_PATH")
+                .unwrap_or("/var/lib/holo_inventory.json".to_string())
+        },
+        |s| s.to_owned(),
+    );
+
+    hostd::inventory::run(
+        host_client.clone(),
+        &host_agent_keys.host_pubkey,
+        &inventory_file_path,
+        host_inventory_check_interval_sec.to_owned(),
+    )
+    .await?;
 
     hostd::workload::run(host_client.clone(), &host_agent_keys.host_pubkey).await?;
 

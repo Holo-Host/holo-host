@@ -205,7 +205,7 @@ pub struct WorkloadStatus {
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct Capacity {
-    pub drive: u64, // ssd; GiB
+    pub drive: i64, // ssd; GiB
     pub cores: i64,
     // pub memory: i64, // GiB
 }

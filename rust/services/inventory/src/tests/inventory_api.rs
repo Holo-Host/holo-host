@@ -1,16 +1,20 @@
-#![allow(dead_code)]
 #![allow(unused_imports)]
-
-use super::*;
-use crate::{types::InventoryPayloadType, InventoryServiceApi, HOST_AUTHENTICATED_SUBJECT};
+use crate::InventoryServiceApi;
+use anyhow::Result;
 use bson::doc;
+use db_utils::mongodb::MongoDbAPI;
+use mock_utils::{
+    host::create_mock_inventory, mongodb_runner::MongodRunner, nats_message::NatsMessage,
+    workload::create_test_workload,
+};
 use std::sync::Arc;
-use util_libs::db::mongodb::MongoDbAPI;
 
 #[cfg(not(target_arch = "aarch64"))]
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bson::oid::ObjectId;
+    use db_utils::schemas::{Capacity, Host};
 
     #[tokio::test]
     async fn test_handle_authenticated_inventory_update() -> Result<()> {
@@ -22,7 +26,7 @@ mod tests {
         let host_id = ObjectId::new();
 
         // Create workload with specific requirements
-        let workload = create_mock_workload(
+        let workload = create_test_workload(
             None,
             Some(vec![host_id]),
             Some(1),
@@ -41,7 +45,7 @@ mod tests {
 
         // Create initial host with reference to workload (id) created above
         let initial_inventory = create_mock_inventory(Some(1000), Some(3), Some(20));
-        let host = schemas::Host {
+        let host = Host {
             _id: Some(host_id),
             device_id: "mock_pubkey".to_string(),
             inventory: initial_inventory.clone(),
@@ -55,17 +59,10 @@ mod tests {
 
         // Test that inventory update still meets workload requirements
         let inventory_update = create_mock_inventory(Some(2000), Some(3), Some(20));
-        let payload = InventoryPayloadType::Authenticated(inventory_update);
-        let msg_payload = serde_json::to_vec(&payload).unwrap();
+        let msg_payload = serde_json::to_vec(&inventory_update).unwrap();
         let msg = Arc::new(
-            TestMessage::new(
-                format!(
-                    "INVENTORY.{HOST_AUTHENTICATED_SUBJECT}.{}.update",
-                    host.device_id
-                ),
-                msg_payload,
-            )
-            .into_message(),
+            NatsMessage::new(format!("INVENTORY.{}.update", host.device_id), msg_payload)
+                .into_message(),
         );
 
         let result = api.handle_host_inventory_update(msg).await?;
@@ -87,96 +84,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_handle_unauthenticated_inventory_update() -> Result<()> {
-        let mongod = MongodRunner::run().expect("Failed to run mongod");
-        let db_client = mongod.client().expect("Failed to create db client");
-        let api = InventoryServiceApi::new(&db_client)
-            .await
-            .expect("Failed to create api");
-
-        let host_id = ObjectId::new();
-
-        // Create initial host
-        let initial_inventory = create_mock_inventory(Some(1000), Some(3), Some(20));
-        let host = schemas::Host {
-            _id: Some(host_id),
-            device_id: "mock_pubkey".to_string(),
-            inventory: initial_inventory.clone(),
-            ..Default::default()
-        };
-        api.host_collection
-            .insert_one_into(host.clone())
-            .await
-            .expect("Failed to insert host");
-
-        // Test unauthenticated inventory update
-        let new_inventory = create_mock_inventory(Some(2000), Some(4), Some(24));
-        let payload = InventoryPayloadType::Unauthenticated(new_inventory.clone());
-        let msg_payload = serde_json::to_vec(&payload).unwrap();
-        let msg = Arc::new(
-            TestMessage::new(
-                format!("INVENTORY.unauthenticated.{}.update", host.device_id),
-                msg_payload,
-            )
-            .into_message(),
-        );
-
-        let result = api.handle_host_inventory_update(msg).await?;
-        assert!(matches!(
-            result.status,
-            crate::types::InventoryUpdateStatus::Ok
-        ));
-
-        // Verify host inventory was updated
-        let updated_host = api
-            .host_collection
-            .get_one_from(doc! { "_id": host_id })
-            .await?
-            .unwrap();
-        assert_eq!(
-            updated_host.inventory.drives.len(),
-            new_inventory.drives.len()
-        );
-        assert_eq!(updated_host.inventory.cpus.len(), new_inventory.cpus.len());
-
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn test_verify_host_meets_workload_criteria() -> Result<()> {
-        let mongod = MongodRunner::run()?;
-        let db_client = mongod.client()?;
-        let api = InventoryServiceApi::new(&db_client).await?;
-
-        // Create mock workload
-        let workload = create_mock_workload(
-            None,
-            None,
-            Some(1),
-            Some(Capacity {
-                drive: 500,
-                cores: 16,
-            }),
-            Some(100),
-            Some(0.9),
-        );
-
-        // Test case: host meets criteria
-        let valid_inventory = create_mock_inventory(Some(1000), Some(3), Some(20));
-        assert!(api.verify_host_meets_workload_criteria(&valid_inventory, &workload));
-
-        // Test case: host doesn't meet drive capacity
-        let inventory_insufficient_drives = create_mock_inventory(Some(100), Some(3), Some(20));
-        assert!(!api.verify_host_meets_workload_criteria(&inventory_insufficient_drives, &workload));
-
-        // Test case: host doesn't meet CPU requirements
-        let inventory_insufficient_cpus = create_mock_inventory(Some(1000), Some(3), Some(8));
-        assert!(!api.verify_host_meets_workload_criteria(&inventory_insufficient_cpus, &workload));
-
-        Ok(())
-    }
-
-    #[tokio::test]
     async fn test_handle_inventory_update_with_insufficient_resources() -> Result<()> {
         let mongod = MongodRunner::run().expect("Failed to run mongod");
         let db_client = mongod.client().expect("Failed to create db client");
@@ -188,7 +95,7 @@ mod tests {
         let host_id = ObjectId::new();
 
         // Create workload with specific requirements
-        let workload = create_mock_workload(
+        let workload = create_test_workload(
             None,
             Some(vec![host_id]),
             Some(1),
@@ -207,7 +114,7 @@ mod tests {
 
         // Create initial host with reference to workload (id) created above
         let initial_inventory = create_mock_inventory(Some(1000), Some(3), Some(20));
-        let host = schemas::Host {
+        let host = Host {
             _id: Some(host_id),
             device_id: "mock_pubkey".to_string(),
             assigned_workloads: vec![workload_id],
@@ -218,17 +125,10 @@ mod tests {
 
         // Test inventory update with insufficient resources
         let insufficient_inventory = create_mock_inventory(Some(100), Some(1), Some(4));
-        let payload = InventoryPayloadType::Authenticated(insufficient_inventory);
-        let msg_payload = serde_json::to_vec(&payload).unwrap();
+        let msg_payload = serde_json::to_vec(&insufficient_inventory).unwrap();
         let msg = Arc::new(
-            TestMessage::new(
-                format!(
-                    "INVENTORY.{HOST_AUTHENTICATED_SUBJECT}.{}.update",
-                    host.device_id
-                ),
-                msg_payload,
-            )
-            .into_message(),
+            NatsMessage::new(format!("INVENTORY.{}.update", host.device_id), msg_payload)
+                .into_message(),
         );
 
         let result = api.handle_host_inventory_update(msg).await?;

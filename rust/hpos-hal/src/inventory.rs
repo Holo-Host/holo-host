@@ -10,7 +10,9 @@ use log::{debug, info};
 use procfs::{CpuInfo, FromBufRead};
 use serde_derive::{Deserialize, Serialize};
 use std::fmt::{self, Display};
+use std::fs::OpenOptions;
 use std::io;
+use std::io::Read;
 use std::{fs, fs::File};
 use thiserror::Error;
 use thiserror_context::{impl_context, Context};
@@ -79,6 +81,33 @@ pub struct HoloInventory {
     /// An overall categorisation of this host as a platform. This might include guesses at the
     /// model of hardware, or the hypervisor we're running on.
     pub platform: Option<HoloPlatform>,
+}
+
+impl HoloInventory {
+    /// Saves the HoloInventory struct to a file in JSON format.
+    pub fn save_to_file(&self, path: &str) -> Result<(), InventoryError> {
+        let file = OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(path)
+            .map_err(InventoryError::from)?;
+
+        serde_json::to_writer_pretty(file, self).map_err(InventoryError::from)?;
+
+        Ok(())
+    }
+
+    /// Reads the HoloInventory struct from a file and deserializes it.
+    pub fn load_from_file(path: &str) -> Result<Self, InventoryError> {
+        let mut file = File::open(path).map_err(InventoryError::from)?;
+        let mut content = String::new();
+        file.read_to_string(&mut content)
+            .map_err(InventoryError::from)?;
+
+        let inventory = serde_json::from_str(&content).map_err(InventoryError::from)?;
+        Ok(inventory)
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Default, Clone)]

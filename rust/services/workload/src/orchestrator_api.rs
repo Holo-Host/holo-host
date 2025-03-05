@@ -14,20 +14,18 @@ use anyhow::Result;
 use async_nats::Message;
 use bson::{self, doc, oid::ObjectId, to_document, Bson, DateTime};
 use core::option::Option::None;
+use db_utils::{
+    mongodb::{IntoIndexes, MongoCollection, MongoDbAPI},
+    schemas::{self, Host, Workload, WorkloadState, WorkloadStatus},
+};
 use hpos_hal::inventory::HoloInventory;
 use mongodb::{options::UpdateModifications, Client as MongoDBClient};
+use nats_utils::types::ServiceError;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{HashMap, HashSet},
     fmt::Debug,
     sync::Arc,
-};
-use util_libs::{
-    db::{
-        mongodb::{IntoIndexes, MongoCollection, MongoDbAPI},
-        schemas::{self, Host, Workload, WorkloadState, WorkloadStatus},
-    },
-    nats::types::ServiceError,
 };
 
 #[derive(Debug, Clone)]
@@ -443,7 +441,7 @@ impl OrchestratorWorkloadApi {
     ) -> bool {
         let host_drive_capacity = assigned_host_inventory.drives.iter().fold(0, |mut acc, d| {
             if let Some(capacity) = d.capacity_bytes {
-                acc += capacity;
+                acc += capacity as i64;
             }
             acc
         });
@@ -511,7 +509,7 @@ impl OrchestratorWorkloadApi {
             doc! {
                 "$match": {
                     // verify there are enough system resources
-                    "$expr": { "$gte": [{ "$sum": "$inventory.drive" }, Bson::Int64(workload.system_specs.capacity.drive as i64)]},
+                    "$expr": { "$gte": [{ "$sum": "$inventory.drive" }, Bson::Int64(workload.system_specs.capacity.drive)]},
                     "$expr": { "$gte": [{ "$size": "$inventory.cpus" }, Bson::Int64(workload.system_specs.capacity.cores)]},
                 }
             },

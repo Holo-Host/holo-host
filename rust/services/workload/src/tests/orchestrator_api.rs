@@ -1,23 +1,22 @@
-#![allow(dead_code)]
 #![allow(unused_imports)]
-
-use super::{
-    create_test_host, create_test_workload, create_test_workload_default, gen_mock_processors,
-    MongodRunner, TestMessage,
-};
 use crate::{orchestrator_api::OrchestratorWorkloadApi, types::WorkloadResult};
 use anyhow::Result;
 use bson::doc;
-use hpos_hal::inventory::{HoloDriveInventory, HoloInventory, HoloProcessorInventory};
+use db_utils::schemas::{WorkloadState, WorkloadStatus};
+use hpos_hal::inventory::{HoloDriveInventory, HoloInventory};
+use mock_utils::{
+    host::{create_test_host, gen_mock_processors},
+    mongodb_runner::MongodRunner,
+    nats_message::NatsMessage,
+    workload::{create_test_workload, create_test_workload_default},
+};
 use std::sync::Arc;
-use util_libs::db::schemas::{WorkloadState, WorkloadStatus};
 
 #[cfg(not(target_arch = "aarch64"))]
 #[cfg(test)]
 mod tests {
-    use util_libs::db::{mongodb::MongoDbAPI, schemas::Capacity};
-
     use super::*;
+    use db_utils::{mongodb::MongoDbAPI, schemas::Capacity};
 
     #[tokio::test]
     async fn test_add_workload() -> Result<()> {
@@ -27,7 +26,7 @@ mod tests {
         let api = OrchestratorWorkloadApi::new(&db_client).await?;
         let workload = create_test_workload_default();
         let msg_payload = serde_json::to_vec(&workload).unwrap();
-        let msg = Arc::new(TestMessage::new("WORKLOAD.add", msg_payload).into_message());
+        let msg = Arc::new(NatsMessage::new("WORKLOAD.add", msg_payload).into_message());
         let result = api.add_workload(msg).await?;
 
         assert!(result.result.status.id.is_some());
@@ -59,7 +58,7 @@ mod tests {
 
         // Then update it
         let msg_payload = serde_json::to_vec(&workload).unwrap();
-        let msg = Arc::new(TestMessage::new("WORKLOAD.update", msg_payload).into_message());
+        let msg = Arc::new(NatsMessage::new("WORKLOAD.update", msg_payload).into_message());
 
         let result = api.update_workload(msg).await?;
 
@@ -89,7 +88,7 @@ mod tests {
         // Then remove it
         let msg_payload =
             serde_json::to_vec(&workload_id).expect("Failed to serialize workload id");
-        let msg = Arc::new(TestMessage::new("WORKLOAD.remove", msg_payload).into_message());
+        let msg = Arc::new(NatsMessage::new("WORKLOAD.remove", msg_payload).into_message());
 
         let result = api.remove_workload(msg).await?;
 
@@ -231,7 +230,7 @@ mod tests {
         workload._id = Some(workload_id);
 
         let msg_payload = serde_json::to_vec(&workload).unwrap();
-        let msg = Arc::new(TestMessage::new("WORKLOAD.insert", msg_payload).into_message());
+        let msg = Arc::new(NatsMessage::new("WORKLOAD.insert", msg_payload).into_message());
 
         let result = api.handle_db_insertion(msg).await?;
 
@@ -278,7 +277,7 @@ mod tests {
         };
 
         let msg_payload = serde_json::to_vec(&result).unwrap();
-        let msg = Arc::new(TestMessage::new("WORKLOAD.status", msg_payload).into_message());
+        let msg = Arc::new(NatsMessage::new("WORKLOAD.status", msg_payload).into_message());
 
         let update_result = api.handle_status_update(msg).await?;
 

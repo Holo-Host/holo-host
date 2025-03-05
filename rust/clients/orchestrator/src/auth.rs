@@ -26,16 +26,16 @@ use authentication::{
 };
 use futures::StreamExt;
 use mongodb::Client as MongoDBClient;
+use nats_utils::{
+    jetstream_client::{get_nats_creds_by_nsc, get_nats_url},
+    types::CreateResponse,
+};
 use nkeys::KeyPair;
 use std::fs::File;
 use std::io::Read;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::{sync::Arc, time::Duration};
-use util_libs::nats::{
-    jetstream_client::{get_nats_creds_by_nsc, get_nats_url},
-    types::CreateResponse,
-};
 
 pub const ORCHESTRATOR_AUTH_CLIENT_NAME: &str = "Orchestrator Auth Manager";
 pub const ORCHESTRATOR_AUTH_CLIENT_INBOX_PREFIX: &str = "_AUTH_INBOX.orchestrator";

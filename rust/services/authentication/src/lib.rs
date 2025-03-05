@@ -17,19 +17,16 @@ use async_nats::{AuthError, Message};
 use bson::{self, doc, to_document};
 use core::option::Option::None;
 use data_encoding::BASE64URL_NOPAD;
-use inventory::HOST_AUTHENTICATED_SUBJECT;
+use db_utils::{
+    mongodb::{IntoIndexes, MongoCollection, MongoDbAPI},
+    schemas::{self, Host, Hoster, User},
+};
 use mongodb::{options::UpdateModifications, Client as MongoDBClient};
+use nats_utils::types::ServiceError;
 use nkeys::KeyPair;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, fmt::Debug, sync::Arc};
 use types::{AuthApiResult, DbValidationData};
-use util_libs::{
-    db::{
-        mongodb::{IntoIndexes, MongoCollection, MongoDbAPI},
-        schemas::{self, Host, Hoster, User},
-    },
-    nats::types::ServiceError,
-};
 
 pub const AUTH_SRV_NAME: &str = "AUTH_SERVICE";
 pub const AUTH_SRV_SUBJ: &str = "AUTH";
@@ -129,7 +126,7 @@ impl AuthServiceApi {
             let user_unique_auth_subject = &format!("AUTH.{}.>", pubkey_lowercase);
             let user_unique_inbox = &format!("_AUTH_INBOX.{}.>", pubkey_lowercase);
             let authenticated_user_inventory_subject =
-                &format!("INVENTORY.{HOST_AUTHENTICATED_SUBJECT}.{pubkey_lowercase}.update.>");
+                &format!("INVENTORY.{pubkey_lowercase}.update.>");
 
             types::Permissions {
                 publish: types::PermissionLimits {

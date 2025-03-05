@@ -18,11 +18,11 @@ use super::utils;
 use anyhow::{anyhow, Result};
 use async_nats::Message;
 use mongodb::Client as MongoDBClient;
-use std::sync::Arc;
-use util_libs::nats::{
+use nats_utils::{
     jetstream_client::JsClient,
     types::{ConsumerBuilder, EndpointType, JsServiceBuilder},
 };
+use std::sync::Arc;
 use workload::{
     orchestrator_api::OrchestratorWorkloadApi, types::WorkloadServiceSubjects, WorkloadServiceApi,
     WORKLOAD_SRV_DESC, WORKLOAD_SRV_NAME, WORKLOAD_SRV_SUBJ, WORKLOAD_SRV_VERSION,

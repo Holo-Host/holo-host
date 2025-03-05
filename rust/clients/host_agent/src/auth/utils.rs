@@ -1,8 +1,6 @@
 use crate::{auth, keys};
 use anyhow::Result;
 use data_encoding::BASE64URL_NOPAD;
-use hpos_hal::inventory::HoloInventory;
-use inventory::HOST_UNAUTHENTICATED_SUBJECT;
 
 /// Encode a json string into a b64 string
 pub fn json_to_base64(json_data: &str) -> Result<String, serde_json::Error> {
@@ -14,7 +12,6 @@ pub fn json_to_base64(json_data: &str) -> Result<String, serde_json::Error> {
 
 pub async fn run_auth_loop(mut keys: keys::Keys) -> Result<keys::Keys, async_nats::Error> {
     let mut start = chrono::Utc::now();
-    let pubkey_lowercase = keys.host_pubkey.to_string().to_lowercase();
 
     loop {
         log::debug!("About to run the Hosting Agent Authentication Service");
@@ -28,26 +25,13 @@ pub async fn run_auth_loop(mut keys: keys::Keys) -> Result<keys::Keys, async_nat
             break;
         }
 
-        // Otherwise, send diagonostics and wait 24hrs, then exit while loop and retry auth.
+        // Otherwise, wait 24hrs then exit while loop and retry auth.
         // TODO: Discuss interval for sending diagnostic reports and wait duration before retrying auth with team.
         let now = chrono::Utc::now();
         let max_time_interval = chrono::TimeDelta::hours(24);
 
         while max_time_interval > now.signed_duration_since(start) {
-            let unauthenticated_user_inventory_subject =
-                format!("INVENTORY.{HOST_UNAUTHENTICATED_SUBJECT}.{pubkey_lowercase}.update");
-            let inventory = HoloInventory::from_host();
-            let payload_bytes = serde_json::to_vec(&inventory)?;
-
-            if let Err(e) = auth_guard_client
-                .publish(unauthenticated_user_inventory_subject, payload_bytes.into())
-                .await
-            {
-                log::error!(
-                    "Encountered error when sending inventory as unauthenticated user. Err={:#?}",
-                    e
-                );
-            };
+            log::warn!("Failed to authenticate user. Will retry in {max_time_interval:#?}");
             tokio::time::sleep(chrono::TimeDelta::hours(24).to_std()?).await;
         }
 

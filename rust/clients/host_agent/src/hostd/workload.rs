@@ -12,11 +12,11 @@ This client is responsible for subscribing to workload streams that handle:
 
 use anyhow::{anyhow, Result};
 use async_nats::Message;
-use std::sync::Arc;
-use util_libs::nats::{
+use nats_utils::{
     jetstream_client::JsClient,
     types::{ConsumerBuilder, EndpointType, JsServiceBuilder},
 };
+use std::sync::Arc;
 use workload::{
     host_api::HostWorkloadApi, types::WorkloadServiceSubjects, WorkloadServiceApi,
     WORKLOAD_SRV_DESC, WORKLOAD_SRV_NAME, WORKLOAD_SRV_SUBJ, WORKLOAD_SRV_VERSION,

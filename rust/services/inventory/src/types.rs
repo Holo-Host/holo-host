@@ -1,13 +1,6 @@
-use hpos_hal::inventory::HoloInventory;
+use nats_utils::types::{CreateResponse, CreateTag, EndpointTraits};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use util_libs::nats::types::{CreateResponse, CreateTag, EndpointTraits};
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum InventoryPayloadType {
-    Authenticated(HoloInventory),
-    Unauthenticated(HoloInventory),
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum InventoryUpdateStatus {
