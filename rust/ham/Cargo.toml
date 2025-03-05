@@ -6,17 +6,21 @@ authors = ["zo-el <joelulahanna@gmaail.com>"]
 description = "Holochain App Manager - Simple app installation utility"
 
 [dependencies]
-anyhow = { workspace = true}
+anyhow = { workspace = true }
 holochain_types = "0.4.1"
 holochain_conductor_api = "0.4.1"
-holochain_client = "0.6.0"
+holochain_client = "0.6.2"
 tokio = { workspace = true }
 tracing = "0.1"
 clap = { workspace = true }
 tracing-subscriber = "0.3"
-reqwest = { version = "0.11", features = ["blocking"] }
+reqwest = { version = "0.12", features = ["blocking"] }
 tempfile = "3.1"
 url = "2.5"
+serde = { workspace = true }
+serde_json = { workspace = true }
+base64 = "0.22.1"
+derive_builder = "0.20.2"
 
 # [dev-dependencies]
 # holochain_env_setup = { path = "../holochain_env_setup" }

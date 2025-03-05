@@ -18,7 +18,6 @@ craneLib.devShell {
       (
         [
           flake.packages.${system}.rust-workspace
-
         ]
         ++ (builtins.attrValues flake.packages.${system}.rust-workspace.passthru.tests)
       )
