@@ -1,28 +1,58 @@
 //! Ham (Holochain App Manager) provides utilities for managing Holochain applications.
 //!
-//! # Example
-//! ```no_run
-//! use ham::Ham;
-//!
-//! #[tokio::main]
-//! async fn main() -> anyhow::Result<()> {
-//!     let mut manager = Ham::connect(45678).await?;
-//!     let app_info = manager.install_and_enable_with_default_agent("path/to/app.happ", None).await?;
-//!     println!("Installed app: {:?}", app_info.installed_app_id);
-//!     Ok(())
-//! }
+//! For an example look at the `main.rs` file.
 //! ```
 
 use anyhow::{Context, Result};
+use derive_builder::Builder;
 use holochain_client::AdminWebsocket;
 use holochain_conductor_api::AppInfo;
-use holochain_types::{app::InstallAppPayload, prelude::NetworkSeed};
+use holochain_types::{
+    app::{AppBundleSource, InstallAppPayload},
+    dna::{hash_type::Agent, HoloHash},
+    prelude::NetworkSeed,
+};
+use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use url::Url;
 
 /// Manages Holochain application installation and lifecycle
 pub struct Ham {
-    admin: AdminWebsocket,
+    pub admin_ws: AdminWebsocket,
+}
+
+#[derive(Debug, Serialize, Deserialize, Builder)]
+// because not all field types impl Clone
+#[builder(pattern = "owned")]
+pub struct HamState {
+    pub agent_key: HoloHash<Agent>,
+    pub app_ws_port: u16,
+    // pub app_authentication_token_payload: AppAuthenticationToken,
+    pub app_info: AppInfo,
+}
+
+impl HamState {
+    pub fn persist(&self, path: &Path) -> anyhow::Result<()> {
+        let file = std::fs::File::create(path).context(format!("opening {path:?}"))?;
+
+        serde_json::to_writer_pretty(&file, self)
+            .context(format!("serializing HamSate from {path:?}"))?;
+
+        Ok(())
+    }
+
+    pub fn from_state_file(path: &Path) -> anyhow::Result<Option<Self>> {
+        if !std::fs::exists(path).context(format!("checking for existence of {path:?}"))? {
+            return Ok(None);
+        }
+
+        let file = std::fs::File::open(path).context(format!("opening {path:?}"))?;
+
+        let new_self = serde_json::from_reader(&file)
+            .context(format!("deserializing HamSate from {path:?}"))?;
+
+        Ok(Some(new_self))
+    }
 }
 
 impl Ham {
@@ -33,7 +63,7 @@ impl Ham {
             .await
             .context("Failed to connect to admin interface")?;
 
-        Ok(Self { admin })
+        Ok(Self { admin_ws: admin })
     }
 
     /// Download a .happ file from a URL to a temporary location
@@ -85,48 +115,56 @@ impl Ham {
         Ok(file_path)
     }
 
-    /// Install a .happ file from either a local path or URL with optional configuration
-    pub async fn install_and_enable_with_default_agent<P: AsRef<Path>>(
-        &mut self,
-        happ_source: P,
-        network_seed: Option<NetworkSeed>,
-    ) -> Result<AppInfo> {
+    pub async fn get_happ_bytes<P: AsRef<Path>>(happ_source: P) -> Result<Box<[u8]>> {
         let happ_path = if let Ok(url) = Url::parse(happ_source.as_ref().to_str().unwrap_or("")) {
             Self::download_happ(&url).await?
         } else {
             happ_source.as_ref().to_path_buf()
         };
 
+        let bytes = std::fs::read(happ_path)?;
+
+        Ok(bytes.into_boxed_slice())
+    }
+
+    /// Install a .happ file from either a local path or URL with optional configuration
+    pub async fn install_and_enable_happ(
+        &mut self,
+        happ_bytes: &[u8],
+        maybe_network_seed: Option<NetworkSeed>,
+    ) -> Result<(AppInfo, HoloHash<holochain_types::dna::hash_type::Agent>)> {
         // Generate a new agent key
-        let agent_key = self
-            .admin
-            .generate_agent_pub_key()
-            .await
-            .expect("Failed to generate agent key");
+        let agent_key = self.admin_ws.generate_agent_pub_key().await?;
 
         // Prepare installation payload
-        let payload = InstallAppPayload {
-            agent_key: Some(agent_key),
-            installed_app_id: None,
-            source: holochain_types::app::AppBundleSource::Path(happ_path),
-            network_seed,
-            roles_settings: None,
-            ignore_genesis_failure: false,
-            allow_throwaway_random_agent_key: false,
+        let payload = {
+            let bundle = holochain_types::app::AppBundle::decode(happ_bytes)
+                .context("decoding happ_bytes into an AppBundle".to_string())?;
+
+            let source = AppBundleSource::Bundle(bundle);
+            InstallAppPayload {
+                agent_key: Some(agent_key.clone()),
+                installed_app_id: None,
+                source,
+                network_seed: maybe_network_seed,
+                roles_settings: None,
+                ignore_genesis_failure: false,
+                allow_throwaway_random_agent_key: false,
+            }
         };
 
         // Install and enable the app
         let app_info = self
-            .admin
+            .admin_ws
             .install_app(payload)
             .await
             .expect("Failed to install app");
-        self.admin
+        self.admin_ws
             .enable_app(app_info.installed_app_id.clone())
             .await
-            .expect("Failed to enable app");
+            .context("Failed to enable app")?;
 
-        Ok(app_info)
+        Ok((app_info, agent_key))
     }
 }
 
