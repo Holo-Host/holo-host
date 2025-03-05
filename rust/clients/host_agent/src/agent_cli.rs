@@ -1,8 +1,8 @@
 use std::path::PathBuf;
 
-use clap::{Args, Parser, Subcommand};
-/// MOdule containing all of the Clap Derive structs/definitions that make up the agent's
+/// Module containing all of the Clap Derive structs/definitions that make up the agent's
 /// command line. To start the agent daemon (usually from systemd), use `host_agent daemonize`.
+use clap::{Args, Parser, Subcommand};
 use netdiag::IPVersion;
 
 #[derive(Parser)]
@@ -68,6 +68,12 @@ pub struct DaemonzeArgs {
         default_value = "30"
     )]
     pub(crate) nats_connect_timeout_secs: u64,
+
+    #[arg(long, short, help = "host agent inventory check interval (in seconds)")]
+    pub(crate) host_inventory_check_interval_sec: Option<u64>,
+
+    #[arg(long, help = "host agent inventory file path")]
+    pub(crate) host_inventory_file_path: Option<String>,
 }
 
 /// A set of commands for being able to manage the local host. We may (later) want to gate some

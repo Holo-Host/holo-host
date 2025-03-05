@@ -1,5 +1,10 @@
 use crate::inventory::HoloInventory;
+use crate::leds::{HoloDiagnosticState, HoloLed, LedState};
+use std::fs::File;
+use std::io::BufReader;
+use std::path::Path;
 use std::process::Command;
+use tempfile::TempDir;
 
 #[test]
 fn from_host() {
@@ -260,4 +265,34 @@ fn smbios_chassis() {
         None => "".to_string(),
     };
     assert.stdout(format!("{}\n", chassis_version));
+}
+
+/// Test that we persist the LED state to a state file correctly.
+#[test]
+fn test_led_local_state() {
+    let l = HoloLed::new();
+    // Create a temporary state directory for the implementation to use instead of the
+    // LSB-compliant and system-wide default. Call the test-only wrapper to pass this path in.
+    let temp_dir = TempDir::new().unwrap();
+    let path = &temp_dir.path().to_string_lossy();
+    let state_path = format!("{}/{}", path, HoloLed::LED_STATE_FILE);
+    // ensure that the path doesn't already exist for some reason.
+    assert!(!Path::new(&state_path).exists());
+
+    l.set_state_for_test(path, HoloDiagnosticState::StatusOk)
+        .unwrap();
+    let state_file = File::open(&state_path).unwrap();
+    let reader = BufReader::new(state_file);
+    let state: LedState = serde_json::from_reader(reader).unwrap();
+    // Check that we persisted the right value.
+    assert_eq!(state.state, HoloDiagnosticState::StatusOk);
+
+    // Check another variant.
+    l.set_state_for_test(path, HoloDiagnosticState::StatusBad9)
+        .unwrap();
+    let state_file = File::open(&state_path).unwrap();
+    let reader = BufReader::new(state_file);
+    let state: LedState = serde_json::from_reader(reader).unwrap();
+    // Check that we persisted the right value.
+    assert_eq!(state.state, HoloDiagnosticState::StatusBad9);
 }

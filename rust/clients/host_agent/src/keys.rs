@@ -1,12 +1,12 @@
 use anyhow::{anyhow, Context, Result};
 use data_encoding::BASE64URL_NOPAD;
+use nats_utils::jetstream_client::{get_local_creds_path, get_nats_creds_by_nsc};
 use nkeys::KeyPair;
 use std::fs::File;
 use std::io::{Read, Write};
 use std::path::PathBuf;
 use std::process::Command;
 use std::str::FromStr;
-use util_libs::nats::jetstream_client::{get_local_creds_path, get_nats_creds_by_nsc};
 
 impl std::fmt::Debug for Keys {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

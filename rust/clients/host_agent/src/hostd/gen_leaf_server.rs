@@ -1,8 +1,7 @@
 use std::{path::PathBuf, time::Duration};
 
 use anyhow::Context;
-use tempfile::tempdir;
-use util_libs::nats::{
+use nats_utils::{
     jetstream_client,
     leaf_server::{
         JetStreamConfig, LeafNodeRemote, LeafNodeRemoteTlsConfig, LeafServer, LoggingOptions,
@@ -10,6 +9,7 @@ use util_libs::nats::{
     },
     types::JsClientBuilder,
 };
+use tempfile::tempdir;
 
 pub async fn run(
     maybe_server_name: &Option<String>,

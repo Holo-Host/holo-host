@@ -4,13 +4,16 @@ package.version = "0.1.0"
 metadata.crane.name = "holo-host-workspace"
 
 members = [
-    "rust/hpos-hal",
-    "rust/clients/host_agent",
-    "rust/clients/orchestrator",
-    "rust/services/authentication",
-    "rust/services/workload",
-    "rust/util_libs",
-    "rust/netdiag",
+  "rust/hpos-hal",
+  "rust/clients/host_agent",
+  "rust/clients/orchestrator",
+  "rust/services/authentication",
+  "rust/services/inventory",
+  "rust/services/workload",
+  "rust/util_libs/nats",
+  "rust/util_libs/db",
+  "rust/util_libs/mocks",
+  "rust/netdiag",
 ]
 
 [workspace.dependencies]

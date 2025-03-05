@@ -18,14 +18,12 @@ use async_nats::jetstream::ErrorCode;
 use async_nats::Message;
 use async_trait::async_trait;
 use core::option::Option::None;
+use db_utils::schemas::{WorkloadState, WorkloadStatus};
+use nats_utils::types::{AsyncEndpointHandler, JsServiceResponse, ServiceError};
 use serde::Deserialize;
 use std::future::Future;
 use std::{fmt::Debug, sync::Arc};
 use types::{WorkloadApiResult, WorkloadResult};
-use util_libs::{
-    db::schemas::{WorkloadState, WorkloadStatus},
-    nats::types::{AsyncEndpointHandler, JsServiceResponse, ServiceError},
-};
 
 pub const WORKLOAD_SRV_NAME: &str = "WORKLOAD_SERVICE";
 pub const WORKLOAD_SRV_SUBJ: &str = "WORKLOAD";

@@ -41,6 +41,16 @@ Reusable Pulumi modules with examples
 
 The CI system is driven by [buildbot-nix](https://github.com/nix-community/buildbot-nix/).
 
+## Development and Conventions
+
+### Formatting
+
+This repo is configured with `treefmt-nix` which can be invoked via:
+
+```
+nix fmt
+```
+
 ## Licenses
 
 Even when this repository is made publicly available, original code in this repository is explicitly stated to be unlicenced.

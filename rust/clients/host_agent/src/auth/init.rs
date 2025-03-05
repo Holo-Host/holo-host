@@ -27,10 +27,10 @@ use authentication::{
     AUTH_SRV_SUBJ, VALIDATE_AUTH_SUBJECT,
 };
 use hpos_hal::inventory::HoloInventory;
+use nats_utils::jetstream_client;
 use std::str::FromStr;
 use std::time::Duration;
 use textnonce::TextNonce;
-use util_libs::nats::jetstream_client;
 
 pub const HOST_AUTH_CLIENT_NAME: &str = "Host Auth";
 pub const HOST_AUTH_CLIENT_INBOX_PREFIX: &str = "_AUTH_INBOX";
@@ -73,11 +73,9 @@ pub async fn run(
             "Failed to locate Auth Guard credentials",
         ));
     };
-    let user_unique_inbox = &format!(
-        "{}.{}",
-        HOST_AUTH_CLIENT_INBOX_PREFIX,
-        host_agent_keys.host_pubkey.to_lowercase()
-    );
+
+    let pubkey_lowercase = host_agent_keys.host_pubkey.to_string().to_lowercase();
+    let user_unique_inbox = &format!("{HOST_AUTH_CLIENT_INBOX_PREFIX}.{pubkey_lowercase}");
 
     // Connect to Nats server as auth guard and call NATS AuthCallout
     let nats_url = jetstream_client::get_nats_url();
@@ -132,15 +130,13 @@ pub async fn run(
         Err(e) => {
             log::error!("{:#?}", e);
             if let RequestErrorKind::TimedOut = e.kind() {
-                let unauthenticated_user_diagnostics_subject = format!(
-                    "DIAGNOSTICS.{}.unauthenticated",
-                    host_agent_keys.host_pubkey
-                );
+                let unauthenticated_user_inventory_subject =
+                    format!("INVENTORY.unauthenticated.{}.update", pubkey_lowercase);
                 let diganostics = HoloInventory::from_host();
                 let payload_bytes = serde_json::to_vec(&diganostics)?;
                 if (auth_guard_client
                     .publish(
-                        unauthenticated_user_diagnostics_subject.to_string(),
+                        unauthenticated_user_inventory_subject.to_string(),
                         payload_bytes.into(),
                     )
                     .await)
@@ -156,18 +152,36 @@ pub async fn run(
     println!(
         "Received AUTH response: {:#?}",
         serde_json::from_slice::<AuthJWTResult>(&response_msg.payload)
-            .expect("failed to serde_json deserialize msg response")
+            .expect("Failed to serde_json deserialize msg response")
     );
 
     if let Ok(auth_response) = serde_json::from_slice::<AuthJWTResult>(&response_msg.payload) {
         match auth_response.status {
             AuthState::Authorized => {
+                // Update host keys with authenticated host and sys user keys
                 host_agent_keys = host_agent_keys
                     .save_host_creds(auth_response.host_jwt, auth_response.sys_jwt)
                     .await?;
+
+                // Send host inventory to orchestrator to add to mongodb (allows for host matching to start)
+                let authenticated_user_inventory_subject =
+                    format!("INVENTORY.{pubkey_lowercase}.update");
+                let inventory = HoloInventory::from_host();
+                let payload_bytes = serde_json::to_vec(&inventory)?;
+
+                if let Err(e) = auth_guard_client
+                    .publish(authenticated_user_inventory_subject, payload_bytes.into())
+                    .await
+                {
+                    log::error!(
+                        "Encountered error when sending inventory as authenticated user. Err={:#?}",
+                        e
+                    );
+                };
             }
             _ => {
-                log::error!("got unexpected AUTH State : {:?}", auth_response);
+                // Log out error and return to outer loop, which will re-attempt authentication at next interval (currently set to a day)
+                log::error!("Got unexpected AUTH State : {:?}", auth_response);
             }
         }
     };

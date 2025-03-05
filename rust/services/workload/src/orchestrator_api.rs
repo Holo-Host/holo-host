@@ -12,21 +12,20 @@ use super::{types::WorkloadApiResult, WorkloadServiceApi};
 use crate::types::{ObjectIdJSON, WorkloadResult};
 use anyhow::Result;
 use async_nats::Message;
-use bson::{self, doc, oid::ObjectId, to_document, DateTime};
+use bson::{self, doc, oid::ObjectId, to_document, Bson, DateTime};
 use core::option::Option::None;
+use db_utils::{
+    mongodb::{IntoIndexes, MongoCollection, MongoDbAPI},
+    schemas::{self, Host, Workload, WorkloadState, WorkloadStatus},
+};
+use hpos_hal::inventory::HoloInventory;
 use mongodb::{options::UpdateModifications, Client as MongoDBClient};
+use nats_utils::types::ServiceError;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{HashMap, HashSet},
     fmt::Debug,
     sync::Arc,
-};
-use util_libs::{
-    db::{
-        mongodb::{IntoIndexes, MongoCollection, MongoDbAPI},
-        schemas::{self, Host, Workload, WorkloadState, WorkloadStatus},
-    },
-    nats::types::ServiceError,
 };
 
 #[derive(Debug, Clone)]
@@ -437,19 +436,21 @@ impl OrchestratorWorkloadApi {
     // Verifies that a host meets the workload criteria
     pub fn verify_host_meets_workload_criteria(
         &self,
-        assigned_host: &Host,
+        assigned_host_inventory: &HoloInventory,
         workload: &Workload,
     ) -> bool {
-        if assigned_host.remaining_capacity.disk < workload.system_specs.capacity.disk {
+        let host_drive_capacity = assigned_host_inventory.drives.iter().fold(0, |mut acc, d| {
+            if let Some(capacity) = d.capacity_bytes {
+                acc += capacity as i64;
+            }
+            acc
+        });
+        if host_drive_capacity < workload.system_specs.capacity.drive {
             return false;
         }
-        if assigned_host.remaining_capacity.memory < workload.system_specs.capacity.memory {
+        if assigned_host_inventory.cpus.len() < workload.system_specs.capacity.cores as usize {
             return false;
         }
-        if assigned_host.remaining_capacity.cores < workload.system_specs.capacity.cores {
-            return false;
-        }
-
         true
     }
 
@@ -489,7 +490,7 @@ impl OrchestratorWorkloadApi {
         if let Some(hosts) = maybe_existing_hosts {
             still_eligible_host_ids = hosts.into_iter()
                 .filter_map(|h| {
-                    if self.verify_host_meets_workload_criteria(&h, &workload) {
+                    if self.verify_host_meets_workload_criteria(&h.inventory, &workload) {
                         h._id.ok_or_else(|| {
                             ServiceError::Internal(format!(
                                 "No `_id` found for workload. Unable to proceed verifying host eligibility. Workload={:?}",
@@ -508,9 +509,8 @@ impl OrchestratorWorkloadApi {
             doc! {
                 "$match": {
                     // verify there are enough system resources
-                    "remaining_capacity.disk": { "$gte": workload.system_specs.capacity.disk },
-                    "remaining_capacity.memory": { "$gte": workload.system_specs.capacity.memory },
-                    "remaining_capacity.cores": { "$gte": workload.system_specs.capacity.cores },
+                    "$expr": { "$gte": [{ "$sum": "$inventory.drive" }, Bson::Int64(workload.system_specs.capacity.drive)]},
+                    "$expr": { "$gte": [{ "$size": "$inventory.cpus" }, Bson::Int64(workload.system_specs.capacity.cores)]},
                 }
             },
             doc! {

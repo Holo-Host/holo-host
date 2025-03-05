@@ -113,7 +113,7 @@ nsc edit account --name $ADMIN_ACCOUNT --js-streams -1 --js-consumer -1 --js-mem
 
 ADMIN_SK="$(echo "$(nsc edit account -n $ADMIN_ACCOUNT --sk generate 2>&1)" | grep -oP "signing key\s*\K\S+")"
 ADMIN_ROLE_NAME="admin_role"
-nsc edit signing-key --sk $ADMIN_SK --role $ADMIN_ROLE_NAME --allow-pub "ADMIN.>","AUTH.>","WORKLOAD.>","\$JS.>","\$SYS.>","\$G.>","_INBOX.>","_ADMIN_INBOX.>","_AUTH_INBOX.>" --allow-sub "ADMIN.>","AUTH.>","WORKLOAD.>","\$JS.>","\$SYS.>","\$G.>","_INBOX.>","_ADMIN_INBOX.orchestrator.>","_AUTH_INBOX.orchestrator.>" --allow-pub-response
+nsc edit signing-key --sk $ADMIN_SK --role $ADMIN_ROLE_NAME --allow-pub "\$JS.>","\$SYS.>","\$G.>","ADMIN.>","AUTH.>","WORKLOAD.>","_INBOX.>","_HPOS_INBOX.>","_ADMIN_INBOX.>","_AUTH_INBOX.>","INVENTORY.>" --allow-sub "\$JS.>","\$SYS.>","\$G.>","ADMIN.>","AUTH.>","WORKLOAD.>","INVENTORY.>","_ADMIN_INBOX.orchestrator.>","_AUTH_INBOX.orchestrator.>" --allow-pub-response
 
 # Step 3: Create AUTH with JetStream with non-scoped signing key
 nsc add account --name $AUTH_ACCOUNT
@@ -126,7 +126,7 @@ nsc add account --name $HPOS_ACCOUNT
 nsc edit account --name $HPOS_ACCOUNT --js-streams -1 --js-consumer -1 --js-mem-storage 1G --js-disk-storage 5G --conns -1 --leaf-conns -1
 HPOS_WORKLOAD_SK="$(echo "$(nsc edit account -n $HPOS_ACCOUNT --sk generate 2>&1)" | grep -oP "signing key\s*\K\S+")"
 WORKLOAD_ROLE_NAME="workload_role"
-nsc edit signing-key --sk $HPOS_WORKLOAD_SK --role $WORKLOAD_ROLE_NAME --allow-pub "_ADMIN_INBOX.orchestrator.>","WORKLOAD.orchestrator.>","\$JS.API.>","WORKLOAD.{{tag(pubkey)}}.>","_HPOS_INBOX.{{tag(pubkey)}}.>" --allow-sub "WORKLOAD.{{tag(pubkey)}}.>","_HPOS_INBOX.{{tag(pubkey)}}.>","\$JS.API.>" --allow-pub-response
+nsc edit signing-key --sk $HPOS_WORKLOAD_SK --role $WORKLOAD_ROLE_NAME --allow-pub "WORKLOAD.orchestrator.>","WORKLOAD.{{tag(pubkey)}}.>","INVENTORY.*.{{tag(pubkey)}}.update.>","\$JS.API.>","_HPOS_INBOX.{{tag(pubkey)}}.>","_ADMIN_INBOX.orchestrator.>" --allow-sub "WORKLOAD.{{tag(pubkey)}}.>","INVENTORY.*.{{tag(pubkey)}}.>","\$JS.API.>","_HPOS_INBOX.{{tag(pubkey)}}.>" --allow-pub-response
 
 # Step 5: Export/Import WORKLOAD Service Stream between ADMIN and HPOS accounts
 # Share orchestrator (as admin user) workload streams with host

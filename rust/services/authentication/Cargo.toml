@@ -26,4 +26,6 @@ data-encoding = "2.7.0"
 jsonwebtoken = "9.3.0"
 bytes = "1.8.0"
 chrono = "0.4.0"
-util_libs = { path = "../../util_libs" }
+nats_utils = { path = "../../util_libs/nats" }
+db_utils = { path = "../../util_libs/db" }
+inventory = { path = "../../services/inventory" }

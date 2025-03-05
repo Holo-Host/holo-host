@@ -1,5 +1,5 @@
 [toolchain]
 channel = "1.83.0"
-components = [ "cargo","llvm-tools", "rustc", "clippy", "rust-src" ]
-targets = [  ]
+components = ["cargo", "llvm-tools", "rustc", "clippy", "rust-src"]
+targets = []
 profile = "minimal"
