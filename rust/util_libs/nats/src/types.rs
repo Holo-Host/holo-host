@@ -147,7 +147,7 @@ where
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum Credentials {
     Path(std::path::PathBuf), // String = pathbuf as string
     Password(String, String),

@@ -2,6 +2,7 @@ use super::mongodb::IntoIndexes;
 use anyhow::Result;
 use bson::oid::ObjectId;
 use bson::{self, doc, DateTime, Document};
+use hpos_hal::inventory::HoloInventory;
 use mongodb::options::IndexOptions;
 use semver::{BuildMetadata, Prerelease};
 use serde::{Deserialize, Serialize};
@@ -150,20 +151,13 @@ impl IntoIndexes for Hoster {
 
 // ==================== Host Schema ====================
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
-pub struct Capacity {
-    pub memory: i64, // GiB
-    pub disk: i64,   // ssd; GiB
-    pub cores: i64,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct Host {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub _id: Option<ObjectId>,
     pub metadata: Metadata,
     pub device_id: PubKey, // *INDEXED*
     pub ip_address: String,
-    pub remaining_capacity: Capacity,
+    pub inventory: HoloInventory,
     pub avg_uptime: f64,
     pub avg_network_speed: i64,
     pub avg_latency: i64,
@@ -209,6 +203,13 @@ pub struct WorkloadStatus {
     pub id: Option<ObjectId>,
     pub desired: WorkloadState,
     pub actual: WorkloadState,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+pub struct Capacity {
+    pub drive: i64, // ssd; GiB
+    pub cores: i64,
+    // pub memory: i64, // GiB
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -258,8 +259,7 @@ impl Default for Workload {
             min_hosts: 1,
             system_specs: SystemSpecs {
                 capacity: Capacity {
-                    memory: 64,
-                    disk: 400,
+                    drive: 512,
                     cores: 20,
                 },
                 avg_network_speed: 200,

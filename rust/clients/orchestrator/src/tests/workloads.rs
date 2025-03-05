@@ -1,27 +1,28 @@
 use super::*;
-use serial_test::serial;
-use std::time::Duration;
-use util_libs::nats::{
+use nats_utils::{
     jetstream_client::{get_event_listeners, with_event_listeners, JsClient},
     types::{JsClientBuilder, PublishInfo},
 };
+use serial_test::serial;
+use std::time::Duration;
 use workload::{
     types::WorkloadServiceSubjects, WORKLOAD_SRV_DESC, WORKLOAD_SRV_NAME, WORKLOAD_SRV_SUBJ,
     WORKLOAD_SRV_VERSION,
 };
 
-// #[cfg(feature = "tests_integration_orchestrator")]
 #[cfg(test)]
 mod tests {
     use super::*;
+    use anyhow::anyhow;
     use bson::doc;
     use bson::oid::ObjectId;
-    use futures::StreamExt;
-    use mongodb::Client as MongoDBClient;
-    use util_libs::db::{
+    use db_utils::{
         mongodb::MongoCollection,
         schemas::{self, Workload, WorkloadState, WorkloadStatus},
     };
+    use futures::StreamExt;
+    use mongodb::Client as MongoDBClient;
+    use nats_utils::{jetstream_client, types::Credentials};
     use workload::types::WorkloadResult;
 
     const TEST_ADMIN_CLIENT_NAME: &str = "Test Admin Client";
@@ -41,7 +42,7 @@ mod tests {
 
     async fn init_workload_service(
         nats_server: &TestNatsServer,
-    ) -> util_libs::nats::jetstream_service::JsStreamService {
+    ) -> nats_utils::jetstream_service::JsStreamService {
         let mut client = JsClient::new(JsClientBuilder {
             nats_url: nats_server.get_url(),
             name: TEST_ADMIN_CLIENT_NAME.to_string(),
@@ -55,7 +56,7 @@ mod tests {
         .expect("Failed to spin up Jetstream Client");
 
         // Register workload service
-        let workload_stream_service = util_libs::nats::types::JsServiceBuilder {
+        let workload_stream_service = nats_utils::types::JsServiceBuilder {
             name: WORKLOAD_SRV_NAME.to_string(),
             description: WORKLOAD_SRV_DESC.to_string(),
             version: WORKLOAD_SRV_VERSION.to_string(),
@@ -92,15 +93,18 @@ mod tests {
     #[serial]
     async fn test_workload_consumer_registration() -> Result<()> {
         let (nats_server, mongo_client) = setup_test_environment().await?;
-        let default_nats_connect_timeout_secs = 30;
-        let client = crate::workloads::run(
-            &nats_server.get_url(),
-            None,
-            default_nats_connect_timeout_secs,
-            mongo_client,
-        )
-        .await
-        .expect("Failed to run workload service");
+        let admin_creds_path = PathBuf::from_str(&jetstream_client::get_nats_creds_by_nsc(
+            "HOLO", "ADMIN", "admin",
+        ))
+        .map(Credentials::Path)
+        .map_err(|e| anyhow!("Failed to locate admin credential path. Err={:?}", e))?;
+
+        let orchestrator_client =
+            crate::admin_client::run(&admin_creds_path, nats_server.get_url()).await?;
+
+        let client = crate::workloads::run(orchestrator_client, mongo_client)
+            .await
+            .expect("Failed to run workload service");
 
         // Verify each consumer subject is properly registered
         let subjects = [
@@ -143,15 +147,18 @@ mod tests {
     #[serial]
     async fn test_add_workload_request() -> Result<()> {
         let (nats_server, mongo_client) = setup_test_environment().await?;
-        let default_nats_connect_timeout_secs = 30;
-        let client = crate::workloads::run(
-            &nats_server.get_url(),
-            None,
-            default_nats_connect_timeout_secs,
-            mongo_client.clone(),
-        )
-        .await
-        .expect("Failed to run workload service");
+        let admin_creds_path = PathBuf::from_str(&jetstream_client::get_nats_creds_by_nsc(
+            "HOLO", "ADMIN", "admin",
+        ))
+        .map(Credentials::Path)
+        .map_err(|e| anyhow!("Failed to locate admin credential path. Err={:?}", e))?;
+
+        let orchestrator_client =
+            crate::admin_client::run(&admin_creds_path, nats_server.get_url()).await?;
+
+        let client = crate::workloads::run(orchestrator_client, mongo_client.clone())
+            .await
+            .expect("Failed to run workload service");
 
         let mut mock_workload = Workload::default();
         let mock_developer_id = ObjectId::new();
@@ -195,15 +202,13 @@ mod tests {
     #[serial]
     async fn test_update_workload_request() -> Result<()> {
         let (nats_server, mongo_client) = setup_test_environment().await?;
-        let default_nats_connect_timeout_secs = 30;
-        let client = crate::workloads::run(
-            &nats_server.get_url(),
-            None,
-            default_nats_connect_timeout_secs,
-            mongo_client.clone(),
-        )
-        .await
-        .expect("Failed to run workload service");
+        let admin_creds_path = PathBuf::from_str(&jetstream_client::get_nats_creds_by_nsc(
+            "HOLO", "ADMIN", "admin",
+        ))
+        .map(Credentials::Path)
+        .map_err(|e| anyhow!("Failed to locate admin credential path. Err={:?}", e))?;
+
+        let client = crate::admin_client::run(&admin_creds_path, nats_server.get_url()).await?;
 
         // Generate a mock workload to be inserted into the database
         let mut mock_workload = Workload::default();
@@ -257,15 +262,13 @@ mod tests {
     #[serial]
     async fn test_delete_workload_request() -> Result<()> {
         let (nats_server, mongo_client) = setup_test_environment().await?;
-        let default_nats_connect_timeout_secs = 30;
-        let client = crate::workloads::run(
-            &nats_server.get_url(),
-            None,
-            default_nats_connect_timeout_secs,
-            mongo_client.clone(),
-        )
-        .await
-        .expect("Failed to run workload service");
+        let admin_creds_path = PathBuf::from_str(&jetstream_client::get_nats_creds_by_nsc(
+            "HOLO", "ADMIN", "admin",
+        ))
+        .map(Credentials::Path)
+        .map_err(|e| anyhow!("Failed to locate admin credential path. Err={:?}", e))?;
+
+        let client = crate::admin_client::run(&admin_creds_path, nats_server.get_url()).await?;
 
         let mut mock_workload = Workload::default();
         let mock_developer_id = ObjectId::new();
@@ -308,16 +311,14 @@ mod tests {
     #[tokio::test]
     #[serial]
     async fn test_handling_workload_insertion() -> Result<()> {
-        let (nats_server, mongo_client) = setup_test_environment().await?;
-        let default_nats_connect_timeout_secs = 30;
-        let _client = crate::workloads::run(
-            &nats_server.get_url(),
-            None,
-            default_nats_connect_timeout_secs,
-            mongo_client,
-        )
-        .await
-        .expect("Failed to run workload service");
+        let (nats_server, _) = setup_test_environment().await?;
+        let admin_creds_path = PathBuf::from_str(&jetstream_client::get_nats_creds_by_nsc(
+            "HOLO", "ADMIN", "admin",
+        ))
+        .map(Credentials::Path)
+        .map_err(|e| anyhow!("Failed to locate admin credential path. Err={:?}", e))?;
+
+        let _client = crate::admin_client::run(&admin_creds_path, nats_server.get_url()).await?;
 
         // Generate a mock workload to be inserted into the database
         let mut mock_inserted_workload = Workload::default();
@@ -376,15 +377,13 @@ mod tests {
     #[serial]
     async fn test_handling_workload_modification() -> Result<()> {
         let (nats_server, mongo_client) = setup_test_environment().await?;
-        let default_nats_connect_timeout_secs = 30;
-        let _client = crate::workloads::run(
-            &nats_server.get_url(),
-            None,
-            default_nats_connect_timeout_secs,
-            mongo_client.clone(),
-        )
-        .await
-        .expect("Failed to run workload service");
+        let admin_creds_path = PathBuf::from_str(&jetstream_client::get_nats_creds_by_nsc(
+            "HOLO", "ADMIN", "admin",
+        ))
+        .map(Credentials::Path)
+        .map_err(|e| anyhow!("Failed to locate admin credential path. Err={:?}", e))?;
+
+        let _client = crate::admin_client::run(&admin_creds_path, nats_server.get_url()).await?;
 
         // Generate a new workload to later mod
         let mut mock_modified_workload = Workload::default();
@@ -461,15 +460,13 @@ mod tests {
     #[serial]
     async fn test_handling_workload_delete_modification() -> Result<()> {
         let (nats_server, mongo_client) = setup_test_environment().await?;
-        let default_nats_connect_timeout_secs = 30;
-        let _client = crate::workloads::run(
-            &nats_server.get_url(),
-            None,
-            default_nats_connect_timeout_secs,
-            mongo_client.clone(),
-        )
-        .await
-        .expect("Failed to run workload service");
+        let admin_creds_path = PathBuf::from_str(&jetstream_client::get_nats_creds_by_nsc(
+            "HOLO", "ADMIN", "admin",
+        ))
+        .map(Credentials::Path)
+        .map_err(|e| anyhow!("Failed to locate admin credential path. Err={:?}", e))?;
+
+        let _client = crate::admin_client::run(&admin_creds_path, nats_server.get_url()).await?;
 
         // Generate a new workload to later mod
         let mut mock_modified_workload = Workload::default();
@@ -546,15 +543,13 @@ mod tests {
     #[serial]
     async fn test_handling_status_update() -> Result<()> {
         let (nats_server, mongo_client) = setup_test_environment().await?;
-        let default_nats_connect_timeout_secs = 30;
-        let client = crate::workloads::run(
-            &nats_server.get_url(),
-            None,
-            default_nats_connect_timeout_secs,
-            mongo_client.clone(),
-        )
-        .await
-        .expect("Failed to run workload service");
+        let admin_creds_path = PathBuf::from_str(&jetstream_client::get_nats_creds_by_nsc(
+            "HOLO", "ADMIN", "admin",
+        ))
+        .map(Credentials::Path)
+        .map_err(|e| anyhow!("Failed to locate admin credential path. Err={:?}", e))?;
+
+        let client = crate::admin_client::run(&admin_creds_path, nats_server.get_url()).await?;
 
         // Generate a mock workload to be inserted into the database
         let mut mock_workload = Workload::default();
@@ -618,17 +613,15 @@ mod tests {
     #[tokio::test]
     #[serial]
     async fn test_workload_service_shutdown() -> Result<()> {
-        let (nats_server, mongo_client) = setup_test_environment().await?;
+        let (nats_server, _) = setup_test_environment().await?;
 
-        let default_nats_connect_timeout_secs = 30;
-        let client = crate::workloads::run(
-            &nats_server.get_url(),
-            None,
-            default_nats_connect_timeout_secs,
-            mongo_client,
-        )
-        .await
-        .expect("Failed to run workload service");
+        let admin_creds_path = PathBuf::from_str(&jetstream_client::get_nats_creds_by_nsc(
+            "HOLO", "ADMIN", "admin",
+        ))
+        .map(Credentials::Path)
+        .map_err(|e| anyhow!("Failed to locate admin credential path. Err={:?}", e))?;
+
+        let client = crate::admin_client::run(&admin_creds_path, nats_server.get_url()).await?;
 
         // Test graceful shutdown
         let result = client.close().await;

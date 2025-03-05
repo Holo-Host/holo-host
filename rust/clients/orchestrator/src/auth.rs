@@ -27,13 +27,13 @@ use authentication::{
 };
 use futures::StreamExt;
 use mongodb::Client as MongoDBClient;
-use std::path::PathBuf;
-use std::str::FromStr;
-use std::{sync::Arc, time::Duration};
-use util_libs::nats::{
+use nats_utils::{
     jetstream_client::{get_nats_creds_by_nsc, get_nats_url},
     types::CreateResponse,
 };
+use std::path::PathBuf;
+use std::str::FromStr;
+use std::{sync::Arc, time::Duration};
 
 pub const ORCHESTRATOR_AUTH_CLIENT_NAME: &str = "Orchestrator Auth Manager";
 pub const ORCHESTRATOR_AUTH_CLIENT_INBOX_PREFIX: &str = "_AUTH_INBOX.orchestrator";
@@ -265,16 +265,6 @@ pub async fn run(db_client: MongoDBClient) -> Result<Client, async_nats::Error> 
     });
 
     log::debug!("Orchestrator Auth Service is running. Waiting for requests...");
-
-    // ==================== Close and Clean Client ====================
-    // Only exit program when explicitly requested
-    tokio::signal::ctrl_c().await?;
-
-    log::debug!("Closing orchestrator auth service...");
-
-    // Close client and drain internal buffer before exiting to make sure all messages are sent
-    orchestrator_auth_client.drain().await?;
-    log::debug!("Closed orchestrator auth service");
 
     Ok(orchestrator_auth_client)
 }

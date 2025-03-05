@@ -1,5 +1,5 @@
+use nats_utils::types::ResponseSubjectsGenerator;
 use std::{collections::HashMap, sync::Arc};
-use util_libs::nats::types::ResponseSubjectsGenerator;
 
 pub fn create_callback_subject_to_orchestrator(
     sub_subject_name: String,

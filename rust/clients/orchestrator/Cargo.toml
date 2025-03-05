@@ -23,24 +23,18 @@ bytes = "1.8.0"
 nkeys = "=0.4.4"
 actix-web = "4"
 utoipa-swagger-ui = { version = "9", features = [
-    "actix-web",
-    # Enables vendored Swagger UI via utoipa-swagger-ui-vendored crate.
-    "vendored"
-]}
+  "actix-web",
+  # Enables vendored Swagger UI via utoipa-swagger-ui-vendored crate.
+  "vendored",
+] }
 utoipa = { version = "5", features = ["actix_extras"] }
-util_libs = { path = "../../util_libs" }
+nats_utils = { path = "../../util_libs/nats" }
+db_utils = { path = "../../util_libs/db" }
 workload = { path = "../../services/workload" }
+inventory = { path = "../../services/inventory" }
 authentication = { path = "../../services/authentication" }
 
 [dev-dependencies]
 tempfile = "3.14"
 serial_test = "2.0"
 rand = "0.9.0"
-
-[features]
-default = []
-tests_integration_orchestrator = [
-    "util_libs/tests_integration_mongodb",
-    "util_libs/tests_integration_nats",
-    "workload/tests_integration_workload_service"
-]

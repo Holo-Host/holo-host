@@ -12,11 +12,9 @@ use super::{types::WorkloadApiResult, WorkloadServiceApi};
 use anyhow::Result;
 use async_nats::Message;
 use core::option::Option::None;
+use db_utils::schemas::{WorkloadState, WorkloadStatus};
+use nats_utils::types::ServiceError;
 use std::{fmt::Debug, sync::Arc};
-use util_libs::{
-    db::schemas::{WorkloadState, WorkloadStatus},
-    nats::types::ServiceError,
-};
 
 #[derive(Debug, Clone, Default)]
 pub struct HostWorkloadApi {}

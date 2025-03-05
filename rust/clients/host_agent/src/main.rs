@@ -80,20 +80,53 @@ async fn daemonize(args: &DaemonzeArgs) -> Result<(), async_nats::Error> {
         args.nats_connect_timeout_secs,
     )
     .await?;
+
     // TODO: would it be a good idea to reuse this client in the workload_manager and elsewhere later on?
     bare_client.close().await?;
 
-    let host_workload_client = hostd::workload::run(
+    let host_client = hostd::host_client::run(
         &host_agent_keys.host_pubkey,
         &host_agent_keys.get_host_creds_path(),
     )
     .await?;
 
+    // Get Host Agent inventory check duration env var..
+    // If none exists, default to 1 hour
+    let host_inventory_check_interval_sec =
+        &args.host_inventory_check_interval_sec.unwrap_or_else(|| {
+            std::env::var("HOST_INVENTORY_CHECK_DURATION")
+                .unwrap_or_else(|_| "3600".to_string())
+                .parse::<u64>()
+                .unwrap_or(3600) // 3600 seconds = 1 hour
+        });
+
+    // Get Host Agent inventory storage file path
+    // If none exists, default to "/var/lib/holo_inventory.json"
+    let inventory_file_path = args.host_inventory_file_path.as_ref().map_or_else(
+        || {
+            std::env::var("HOST_INVENTORY_FILE_PATH")
+                .unwrap_or("/var/lib/holo_inventory.json".to_string())
+        },
+        |s| s.to_owned(),
+    );
+
+    hostd::inventory::run(
+        host_client.clone(),
+        &host_agent_keys.host_pubkey,
+        &inventory_file_path,
+        host_inventory_check_interval_sec.to_owned(),
+    )
+    .await?;
+
+    hostd::workload::run(host_client.clone(), &host_agent_keys.host_pubkey).await?;
+
     // Only exit program when explicitly requested
     tokio::signal::ctrl_c().await?;
 
-    // Close client and drain internal buffer before exiting to make sure all messages are sent
-    host_workload_client.close().await?;
+    // Close host client connection and drain internal buffer before exiting to make sure all messages are sent
+    // NB: Calling drain/close on any one of the Client instances will close the underlying connection.
+    // This affects all instances that share the same connection (including clones) because they are all references to the same resource.
+    host_client.close().await?;
 
     Ok(())
 }

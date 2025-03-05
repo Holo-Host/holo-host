@@ -1,12 +1,12 @@
 use anyhow::{anyhow, Context, Result};
+use nats_utils::types::{
+    AsyncEndpointHandler, ConsumerBuilder, EndpointType, ResponseSubjectsGenerator,
+};
 use nkeys::KeyPair;
 use std::fs::File;
 use std::io::Read;
 use std::path::PathBuf;
 use std::{collections::HashMap, sync::Arc};
-use util_libs::nats::types::{
-    AsyncEndpointHandler, ConsumerBuilder, EndpointType, ResponseSubjectsGenerator,
-};
 use workload::types::{WorkloadApiResult, WorkloadServiceSubjects};
 
 #[derive(Clone)]
@@ -31,13 +31,13 @@ macro_rules! generate_call_method {
     ($api:expr, $method_name:ident) => {{
         let api = $api.clone();
         Arc::new(
-            move |msg: Arc<Message>| -> util_libs::nats::types::JsServiceResponse<
-                workload::types::WorkloadApiResult,
-            > {
-                let api_clone = api.clone();
-                Box::pin(async move { api_clone.$method_name(msg).await })
-            },
-        )
+                    move |msg: Arc<Message>| -> nats_utils::types::JsServiceResponse<
+                        workload::types::WorkloadApiResult,
+                    > {
+                        let api_clone = api.clone();
+                        Box::pin(async move { api_clone.$method_name(msg).await })
+                    },
+                )
     }};
 }
 

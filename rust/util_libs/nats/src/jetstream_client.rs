@@ -31,10 +31,10 @@ pub struct JsClient {
     pub name: String,
     on_msg_published_event: Option<EventHandler>,
     on_msg_failed_event: Option<EventHandler>,
-    client: async_nats::Client, // inner_client
-    pub js_context: jetstream::Context,
     pub js_services: Option<Vec<JsStreamService>>,
+    pub js_context: jetstream::Context,
     service_log_prefix: String,
+    client: async_nats::Client, // Built-in Nats Client which manages the cloned clients within jetstream contexts
 }
 
 impl JsClient {

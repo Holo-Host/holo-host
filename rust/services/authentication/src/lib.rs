@@ -17,18 +17,16 @@ use async_nats::{AuthError, Message};
 use bson::{self, doc, to_document};
 use core::option::Option::None;
 use data_encoding::BASE64URL_NOPAD;
+use db_utils::{
+    mongodb::{IntoIndexes, MongoCollection, MongoDbAPI},
+    schemas::{self, Host, Hoster, User},
+};
 use mongodb::{options::UpdateModifications, Client as MongoDBClient};
+use nats_utils::types::ServiceError;
 use nkeys::KeyPair;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, fmt::Debug, sync::Arc};
 use types::{AuthApiResult, DbValidationData};
-use util_libs::{
-    db::{
-        mongodb::{IntoIndexes, MongoCollection, MongoDbAPI},
-        schemas::{self, Host, Hoster, User},
-    },
-    nats::types::ServiceError,
-};
 
 pub const AUTH_SRV_NAME: &str = "AUTH_SERVICE";
 pub const AUTH_SRV_SUBJ: &str = "AUTH";
@@ -94,7 +92,9 @@ impl AuthServiceApi {
             &auth_request_claim.auth_request.connect_opts.user_auth_token,
         )
         .map_err(|e| ServiceError::Authentication(AuthError::new(e)))?;
-        let host_pubkey = user_data.host_pubkey.as_ref();
+        let host_pubkey: &str = user_data.host_pubkey.as_ref();
+        let pubkey_lowercase = host_pubkey.to_lowercase();
+
         let host_signature = user_data.get_host_signature();
         let decoded_sig = BASE64URL_NOPAD
             .decode(&host_signature)
@@ -121,13 +121,12 @@ impl AuthServiceApi {
             .map_err(|e| ServiceError::Internal(e.to_string()))?;
 
         // 4. Assign permissions based on whether the hoster was successfully validated
-        let pubkey_lowercase = host_pubkey.to_lowercase();
         let permissions = if is_hoster_valid {
             // If successful, assign personalized inbox and auth permissions
             let user_unique_auth_subject = &format!("AUTH.{}.>", pubkey_lowercase);
             let user_unique_inbox = &format!("_AUTH_INBOX.{}.>", pubkey_lowercase);
-            let authenticated_user_diagnostics_subject =
-                &format!("DIAGNOSTICS.{}.>", pubkey_lowercase);
+            let authenticated_user_inventory_subject =
+                &format!("INVENTORY.{pubkey_lowercase}.update.>");
 
             types::Permissions {
                 publish: types::PermissionLimits {
@@ -135,7 +134,7 @@ impl AuthServiceApi {
                         "AUTH.validate".to_string(),
                         user_unique_auth_subject.to_string(),
                         user_unique_inbox.to_string(),
-                        authenticated_user_diagnostics_subject.to_string(),
+                        authenticated_user_inventory_subject.to_string(),
                     ]),
                     deny: None,
                 },
@@ -143,19 +142,19 @@ impl AuthServiceApi {
                     allow: Some(vec![
                         user_unique_auth_subject.to_string(),
                         user_unique_inbox.to_string(),
-                        authenticated_user_diagnostics_subject.to_string(),
+                        authenticated_user_inventory_subject.to_string(),
                     ]),
                     deny: None,
                 },
             }
         } else {
-            // Otherwise, exclusively grant publication permissions for the unauthenticated diagnostics subj
+            // Otherwise, exclusively grant publication permissions for the unauthenticated inventory subj
             // ...to allow the host device to still send diganostic reports
-            let unauthenticated_user_diagnostics_subject =
-                format!("DIAGNOSTICS.{}.unauthenticated.>", pubkey_lowercase);
+            let unauthenticated_user_inventory_subject =
+                format!("INVENTORY.unauthenticated.{}.update.>", pubkey_lowercase);
             types::Permissions {
                 publish: types::PermissionLimits {
-                    allow: Some(vec![unauthenticated_user_diagnostics_subject]),
+                    allow: Some(vec![unauthenticated_user_inventory_subject]),
                     deny: None,
                 },
                 subscribe: types::PermissionLimits {
