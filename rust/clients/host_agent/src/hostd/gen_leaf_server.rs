@@ -107,7 +107,7 @@ pub async fn run(
                     nats_url:nats_url.clone(),
                     name:HOST_AGENT_CLIENT_NAME.to_string(),
                     inbox_prefix: Default::default(),
-                    credentials_path: Default::default(),
+                    credentials: Default::default(),
                     ping_interval:Some(Duration::from_secs(10)),
                     request_timeout:Some(Duration::from_secs(29)),
                     listeners: Default::default(),

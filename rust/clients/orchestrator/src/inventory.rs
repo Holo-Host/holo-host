@@ -50,7 +50,7 @@ pub async fn run(
     inventory_service
         .add_consumer(ConsumerBuilder {
             name: "update_host_inventory".to_string(),
-            endpoint_subject: format!("*.{INVENTORY_UPDATE_SUBJECT}"),
+            subject: format!("*.{INVENTORY_UPDATE_SUBJECT}"),
             handler: EndpointType::Async(inventory_api.call(
                 |api: InventoryServiceApi, msg: Arc<Message>| async move {
                     api.handle_host_inventory_update(msg).await

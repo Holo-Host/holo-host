@@ -10,6 +10,7 @@ This client is responsible for subscribing to workload streams that handle:
     - sending out active periodic workload reports
 */
 
+use super::utils::create_callback_subject_to_orchestrator;
 use anyhow::{anyhow, Result};
 use async_nats::Message;
 use nats_utils::{
@@ -32,7 +33,7 @@ pub async fn run(
 
     // Instantiate the Workload API
     let workload_api = HostWorkloadApi::default();
-    let pubkey_lowercase = host_pubkey.to_string().to_lowercase();
+    let pubkey_lowercase = host_pubkey.to_lowercase();
 
     // Register Workload Streams for Host Agent to consume
     // NB: Subjects are published by orchestrator or nats-db-connector
@@ -54,7 +55,7 @@ pub async fn run(
     workload_service
         .add_consumer(ConsumerBuilder {
             name: "install_workload".to_string(),
-            endpoint_subject: format!(
+            subject: format!(
                 "{}.{}",
                 pubkey_lowercase,
                 WorkloadServiceSubjects::Install.as_ref()
@@ -71,7 +72,7 @@ pub async fn run(
     workload_service
         .add_consumer(ConsumerBuilder {
             name: "update_installed_workload".to_string(),
-            endpoint_subject: format!(
+            subject: format!(
                 "{}.{}",
                 pubkey_lowercase,
                 WorkloadServiceSubjects::UpdateInstalled.as_ref()
@@ -88,7 +89,7 @@ pub async fn run(
     workload_service
         .add_consumer(ConsumerBuilder {
             name: "uninstall_workload".to_string(),
-            endpoint_subject: format!(
+            subject: format!(
                 "{}.{}",
                 pubkey_lowercase,
                 WorkloadServiceSubjects::Uninstall.as_ref()
@@ -102,20 +103,25 @@ pub async fn run(
         })
         .await?;
 
+    let update_workload_status_response = create_callback_subject_to_orchestrator(
+        WorkloadServiceSubjects::HandleStatusUpdate
+            .as_ref()
+            .to_string(),
+    );
     workload_service
         .add_consumer(ConsumerBuilder {
-            name: "send_workload_status".to_string(),
-            endpoint_subject: format!(
+            name: "fetch_workload_status".to_string(),
+            subject: format!(
                 "{}.{}",
                 pubkey_lowercase,
                 WorkloadServiceSubjects::SendStatus.as_ref()
             ),
             handler: EndpointType::Async(workload_api.call(
                 |api: HostWorkloadApi, msg: Arc<Message>| async move {
-                    api.send_workload_status(msg).await
+                    api.fetch_workload_status(msg).await
                 },
             )),
-            response_subject_fn: None,
+            response_subject_fn: Some(update_workload_status_response),
         })
         .await?;
 

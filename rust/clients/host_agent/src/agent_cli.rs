@@ -1,8 +1,8 @@
 use std::path::PathBuf;
 
-use clap::{Args, Parser, Subcommand};
-/// MOdule containing all of the Clap Derive structs/definitions that make up the agent's
+/// Module containing all of the Clap Derive structs/definitions that make up the agent's
 /// command line. To start the agent daemon (usually from systemd), use `host_agent daemonize`.
+use clap::{Args, Parser, Subcommand};
 use netdiag::IPVersion;
 
 #[derive(Parser)]
@@ -37,6 +37,9 @@ pub enum CommandScopes {
 pub struct DaemonzeArgs {
     #[arg(long, help = "directory to contain the NATS persistence")]
     pub(crate) store_dir: Option<PathBuf>,
+
+    #[arg(help = "path to NATS credentials used for the LeafNode SYS user management")]
+    pub(crate) nats_leafnode_client_sys_creds_path: Option<PathBuf>,
 
     #[arg(
         long,

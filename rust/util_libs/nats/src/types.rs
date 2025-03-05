@@ -87,7 +87,7 @@ where
     T: EndpointTraits,
 {
     pub name: String,
-    pub endpoint_subject: String,
+    pub subject: String,
     pub handler: EndpointType<T>,
     #[debug(skip)]
     pub response_subject_fn: Option<ResponseSubjectsGenerator>,
@@ -147,13 +147,20 @@ where
     }
 }
 
+#[derive(Clone, Debug)]
+pub enum Credentials {
+    Path(std::path::PathBuf), // String = pathbuf as string
+    Password(String, String),
+    Token(String),
+}
+
 #[derive(Deserialize, Default)]
 pub struct JsClientBuilder {
     pub nats_url: String,
     pub name: String,
     pub inbox_prefix: String,
-    #[serde(default)]
-    pub credentials_path: Option<String>,
+    #[serde(default, skip_deserializing)]
+    pub credentials: Option<Vec<Credentials>>,
     #[serde(default)]
     pub ping_interval: Option<Duration>,
     #[serde(default)]

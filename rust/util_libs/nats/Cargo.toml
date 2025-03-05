@@ -30,5 +30,7 @@ bson = { version = "2.6.1", features = ["chrono-0_4"] }
 derive_more = { version = "1.0.0", features = ["debug"] }
 hpos-hal = { path = "../../hpos-hal" }
 
-[features]
-tests_integration_nats = []
+[dev-dependencies]
+tempfile = "3.14"
+serial_test = "2.0"
+rand = "0.9.0"

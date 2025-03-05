@@ -5,27 +5,25 @@ This client is associated with the:
 
 This client is responsible for:
     - initalizing connection and handling interface with db
-    - registering with the host worklload service to:
+    - registering with the host workload service to:
         - handling requests to add workloads
         - handling requests to update workloads
-        - handling requests to remove workloads
+        - handling requests to delete workloads
         - handling workload status updates
     - interfacing with mongodb DB
     - keeping service running until explicitly cancelled out
 */
 
-use super::utils;
+use super::utils::{create_callback_subject_to_host, create_consumer, OrchestratorConsumerBuilder};
+use crate::generate_call_method;
 use anyhow::{anyhow, Result};
 use async_nats::Message;
 use mongodb::Client as MongoDBClient;
-use nats_utils::{
-    jetstream_client::JsClient,
-    types::{ConsumerBuilder, EndpointType, JsServiceBuilder},
-};
+use nats_utils::{jetstream_client::JsClient, types::JsServiceBuilder};
 use std::sync::Arc;
 use workload::{
-    orchestrator_api::OrchestratorWorkloadApi, types::WorkloadServiceSubjects, WorkloadServiceApi,
-    WORKLOAD_SRV_DESC, WORKLOAD_SRV_NAME, WORKLOAD_SRV_SUBJ, WORKLOAD_SRV_VERSION,
+    orchestrator_api::OrchestratorWorkloadApi, types::WorkloadServiceSubjects, WORKLOAD_SRV_DESC,
+    WORKLOAD_SRV_NAME, WORKLOAD_SRV_SUBJ, WORKLOAD_SRV_VERSION,
 };
 
 pub async fn run(
@@ -35,6 +33,8 @@ pub async fn run(
     // Instantiate the Workload API (requires access to db client)
     let workload_api = OrchestratorWorkloadApi::new(&db_client).await?;
 
+    // Register Workload Streams for Orchestrator to consume and proceess
+    // NB: These subjects are published by external Developer (via external api), the Nats-DB-Connector, or the Hosting Agent
     let workload_stream_service = JsServiceBuilder {
         name: WORKLOAD_SRV_NAME.to_string(),
         description: WORKLOAD_SRV_DESC.to_string(),
@@ -54,97 +54,73 @@ pub async fn run(
             "Failed to locate Workload Service. Unable to spin up Orchestrator Workload Service."
         ))?;
 
-    // Published by Developer
+    // Subjects published by Developer:
     workload_service
-        .add_consumer(ConsumerBuilder {
+        .add_consumer(create_consumer(OrchestratorConsumerBuilder {
             name: "add_workload".to_string(),
-            endpoint_subject: WorkloadServiceSubjects::Add.as_ref().to_string(),
-            handler: EndpointType::Async(workload_api.call(
-                |api: OrchestratorWorkloadApi, msg: Arc<Message>| async move {
-                    api.add_workload(msg).await
-                },
-            )),
+            subject: WorkloadServiceSubjects::Add,
+            async_handler: generate_call_method!(workload_api, add_workload),
             response_subject_fn: None,
-        })
+        }))
         .await?;
 
     workload_service
-        .add_consumer(ConsumerBuilder {
+        .add_consumer(create_consumer(OrchestratorConsumerBuilder {
             name: "update_workload".to_string(),
-            endpoint_subject: WorkloadServiceSubjects::Update.as_ref().to_string(),
-            handler: EndpointType::Async(workload_api.call(
-                |api: OrchestratorWorkloadApi, msg: Arc<Message>| async move {
-                    api.update_workload(msg).await
-                },
-            )),
+            subject: WorkloadServiceSubjects::Update,
+            async_handler: generate_call_method!(workload_api, update_workload),
             response_subject_fn: None,
-        })
+        }))
         .await?;
 
     workload_service
-        .add_consumer(ConsumerBuilder {
-            name: "remove_workload".to_string(),
-            endpoint_subject: WorkloadServiceSubjects::Remove.as_ref().to_string(),
-            handler: EndpointType::Async(workload_api.call(
-                |api: OrchestratorWorkloadApi, msg: Arc<Message>| async move {
-                    api.remove_workload(msg).await
-                },
-            )),
+        .add_consumer(create_consumer(OrchestratorConsumerBuilder {
+            name: "delete_workload".to_string(),
+            subject: WorkloadServiceSubjects::Delete,
+            async_handler: generate_call_method!(workload_api, delete_workload),
             response_subject_fn: None,
-        })
+        }))
         .await?;
 
-    // Automatically published by the Nats-DB-Connector
+    // Subjects published by the Nats-DB-Connector:
+    let db_insertion_response_handler = create_callback_subject_to_host(
+        true,
+        "assigned_hosts".to_string(),
+        WorkloadServiceSubjects::Install.as_ref().to_string(),
+    );
     workload_service
-        .add_consumer(ConsumerBuilder {
+        .add_consumer(create_consumer(OrchestratorConsumerBuilder {
             name: "handle_db_insertion".to_string(),
-            endpoint_subject: WorkloadServiceSubjects::Insert.as_ref().to_string(),
-            handler: EndpointType::Async(workload_api.call(
-                |api: OrchestratorWorkloadApi, msg: Arc<Message>| async move {
-                    api.handle_db_insertion(msg).await
-                },
-            )),
-            response_subject_fn: Some(utils::create_callback_subject_to_host(
-                true,
-                "assigned_hosts".to_string(),
-                WorkloadServiceSubjects::Install.as_ref().to_string(),
-            )),
-        })
+            subject: WorkloadServiceSubjects::Insert,
+            async_handler: generate_call_method!(workload_api, handle_db_insertion),
+            response_subject_fn: Some(db_insertion_response_handler),
+        }))
         .await?;
 
+    let db_modification_response_handler = create_callback_subject_to_host(
+        true,
+        "assigned_hosts".to_string(),
+        WorkloadServiceSubjects::UpdateInstalled
+            .as_ref()
+            .to_string(),
+    );
     workload_service
-        .add_consumer(ConsumerBuilder {
+        .add_consumer(create_consumer(OrchestratorConsumerBuilder {
             name: "handle_db_modification".to_string(),
-            endpoint_subject: WorkloadServiceSubjects::Modify.as_ref().to_string(),
-            handler: EndpointType::Async(workload_api.call(
-                |api: OrchestratorWorkloadApi, msg: Arc<Message>| async move {
-                    api.handle_db_modification(msg).await
-                },
-            )),
-            response_subject_fn: Some(utils::create_callback_subject_to_host(
-                true,
-                "assigned_hosts".to_string(),
-                WorkloadServiceSubjects::UpdateInstalled
-                    .as_ref()
-                    .to_string(),
-            )),
-        })
+            subject: WorkloadServiceSubjects::Modify,
+            async_handler: generate_call_method!(workload_api, handle_db_modification),
+            response_subject_fn: Some(db_modification_response_handler),
+        }))
         .await?;
 
-    // Published by the Host Agent
+    // Subjects published by the Host Agent:
     workload_service
-        .add_consumer(ConsumerBuilder {
+        .add_consumer(create_consumer(OrchestratorConsumerBuilder {
             name: "handle_status_update".to_string(),
-            endpoint_subject: WorkloadServiceSubjects::HandleStatusUpdate
-                .as_ref()
-                .to_string(),
-            handler: EndpointType::Async(workload_api.call(
-                |api: OrchestratorWorkloadApi, msg: Arc<Message>| async move {
-                    api.handle_status_update(msg).await
-                },
-            )),
+            subject: WorkloadServiceSubjects::HandleStatusUpdate,
+            async_handler: generate_call_method!(workload_api, handle_status_update),
             response_subject_fn: None,
-        })
+        }))
         .await?;
 
     Ok(orchestrator_client)

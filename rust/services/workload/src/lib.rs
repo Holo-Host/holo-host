@@ -66,8 +66,7 @@ where
         })
     }
 
-    // Helper function to streamline the processing of incoming workload messages
-    // NB: Currently used to process requests for MongoDB ops and the subsequent db change streams these db edits create (via the mongodb<>nats connector)
+    // Helper function to standardize the processing of incoming workload messages
     async fn process_request<T, Fut>(
         &self,
         msg: Arc<Message>,

@@ -1,21 +1,19 @@
-#![allow(unused_imports)]
-use crate::{orchestrator_api::OrchestratorWorkloadApi, types::WorkloadResult};
-use anyhow::Result;
-use bson::doc;
-use db_utils::schemas::{WorkloadState, WorkloadStatus};
-use hpos_hal::inventory::{HoloDriveInventory, HoloInventory};
-use mock_utils::{
-    host::{create_test_host, gen_mock_processors},
-    mongodb_runner::MongodRunner,
-    nats_message::NatsMessage,
-    workload::{create_test_workload, create_test_workload_default},
-};
-use std::sync::Arc;
-
 #[cfg(not(target_arch = "aarch64"))]
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::{orchestrator_api::OrchestratorWorkloadApi, types::WorkloadResult};
+    use anyhow::Result;
+    use bson::doc;
+    use db_utils::schemas::{WorkloadState, WorkloadStatus};
+    use hpos_hal::inventory::{HoloDriveInventory, HoloInventory};
+    use mock_utils::{
+        host::{create_test_host, gen_mock_processors},
+        mongodb_runner::MongodRunner,
+        nats_message::NatsMessage,
+        workload::{create_test_workload, create_test_workload_default},
+    };
+    use std::sync::Arc;
+
     use db_utils::{mongodb::MongoDbAPI, schemas::Capacity};
 
     #[tokio::test]
@@ -90,25 +88,25 @@ mod tests {
             serde_json::to_vec(&workload_id).expect("Failed to serialize workload id");
         let msg = Arc::new(NatsMessage::new("WORKLOAD.remove", msg_payload).into_message());
 
-        let result = api.remove_workload(msg).await?;
+        let result = api.delete_workload(msg).await?;
 
         assert!(matches!(
             result.result.status.actual,
-            WorkloadState::Removed
+            WorkloadState::Deleted
         ));
         assert!(matches!(
             result.result.status.desired,
-            WorkloadState::Uninstalled
+            WorkloadState::Removed
         ));
 
         // Verify workload is marked as deleted
-        let removed_workload = api
+        let deleted_workload = api
             .workload_collection
             .get_one_from(doc! { "_id": workload_id })
             .await?
             .unwrap();
-        assert!(removed_workload.metadata.is_deleted);
-        assert!(removed_workload.metadata.deleted_at.is_some());
+        assert!(deleted_workload.metadata.is_deleted);
+        assert!(deleted_workload.metadata.deleted_at.is_some());
 
         Ok(())
     }
