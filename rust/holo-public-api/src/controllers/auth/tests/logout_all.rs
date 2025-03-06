@@ -20,8 +20,8 @@ mod tests {
             USER_COLLECTION_NAME
         ).insert_one(
             User {
-                _id: None,
-                _meta: new_meta(),
+                oid: None,
+                meta: new_meta(),
                 refresh_token_version: 0,
                 permissions: vec![],
                 roles: vec![]

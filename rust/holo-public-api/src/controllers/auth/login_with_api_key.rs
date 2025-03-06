@@ -22,7 +22,6 @@ pub struct ApiKeyLoginRequest {
 
 #[derive(serde::Deserialize)]
 pub struct ApiKeyWithUser {
-    pub _id: bson::oid::ObjectId,
     pub user: schemas::user::User,
 }
 
@@ -96,7 +95,7 @@ pub async fn login_with_api_key(
     }
 
     let api_key = api_key.first().unwrap();
-    let user_id = api_key.user._id.map(|id| id.to_string()).unwrap();
+    let user_id = api_key.user.oid.map(|id| id.to_string()).unwrap();
     let permissions = get_user_permissions(api_key.user.clone());
 
     let access_token_exp = Utc::now() + Duration::minutes(5);

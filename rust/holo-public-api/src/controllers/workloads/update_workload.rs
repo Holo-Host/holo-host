@@ -177,7 +177,7 @@ pub async fn update_workload(
     let result = db.collection::<workload::Workload>(
         workload::WORKLOAD_COLLECTION_NAME
     ).update_one(
-        bson::doc!{ "_id": workload._id },
+        bson::doc!{ "_id": workload.oid },
         update,
         None
     ).await;
@@ -190,7 +190,7 @@ pub async fn update_workload(
 
     let updated_workload = match db.collection::<workload::Workload>(
         workload::WORKLOAD_COLLECTION_NAME
-    ).find_one(bson::doc!{ "_id": workload._id }, None).await {
+    ).find_one(bson::doc!{ "_id": workload.oid }, None).await {
         Ok(workload) => workload,
         Err(e) => {
             tracing::error!("Error fetching workload: {}", e);

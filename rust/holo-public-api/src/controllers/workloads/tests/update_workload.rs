@@ -24,8 +24,8 @@ mod tests {
 
     pub async fn create_test_workload(db: &Database, user_id: &str) -> workload::Workload {
         let mut workload = workload::Workload {
-            _id: None,
-            _meta: new_meta(),
+            oid: None,
+            meta: new_meta(),
             owner_user_id: bson::oid::ObjectId::parse_str(&user_id).unwrap(),
             version: "1.0.0".to_string(),
             nix_pkg: "nix_pkg".to_string(),
@@ -41,7 +41,7 @@ mod tests {
             workload::WORKLOAD_COLLECTION_NAME
         ).insert_one(workload.clone(), None).await.unwrap();
 
-        workload._id = Some(result.inserted_id.as_object_id().unwrap());
+        workload.oid = Some(result.inserted_id.as_object_id().unwrap());
 
         workload
     }
@@ -53,7 +53,7 @@ mod tests {
 
         let user_id = bson::oid::ObjectId::new().to_string();
         let workload = create_test_workload(&db, &user_id).await;
-        let workload_id = workload._id.unwrap().to_string();
+        let workload_id = workload.oid.unwrap().to_string();
 
         let update_workload_request = update_workload::UpdateWorkloadRequest {
             version: Some("1.0.1".to_string()),
@@ -99,7 +99,7 @@ mod tests {
         let workload = create_test_workload(
             &db, &bson::oid::ObjectId::new().to_string()
         ).await;
-        let workload_id = workload._id.unwrap().to_string();
+        let workload_id = workload.oid.unwrap().to_string();
 
         let update_workload_request = update_workload::UpdateWorkloadRequest {
             version: Some("1.0.1".to_string()),
@@ -144,7 +144,7 @@ mod tests {
 
         let user_id = bson::oid::ObjectId::new().to_string();
         let workload = create_test_workload(&db, &user_id).await;
-        let workload_id = workload._id.unwrap().to_string();
+        let workload_id = workload.oid.unwrap().to_string();
 
         let update_workload_request = update_workload::UpdateWorkloadRequest {
             version: Some("1.0.1".to_string()),
@@ -185,7 +185,7 @@ mod tests {
 
         let user_id = bson::oid::ObjectId::new().to_string();
         let workload = create_test_workload(&db, &user_id).await;
-        let workload_id = workload._id.unwrap().to_string();
+        let workload_id = workload.oid.unwrap().to_string();
 
         let update_workload_request = update_workload::UpdateWorkloadRequest {
             version: Some("1.0.1".to_string()),
