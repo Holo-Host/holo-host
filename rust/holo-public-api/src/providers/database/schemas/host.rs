@@ -21,9 +21,10 @@ pub const HOST_COLLECTION_NAME: &str = "hosts";
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Host {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub _id: Option<bson::oid::ObjectId>,
-    pub _meta: Meta,
+    #[serde(skip_serializing_if = "Option::is_none", rename = "_id")]
+    pub oid: Option<bson::oid::ObjectId>,
+    #[serde(rename = "_meta")]
+    pub meta: Meta,
     
     pub owner_user_id: bson::oid::ObjectId,
     pub assigned_workloads: Vec<bson::oid::ObjectId>,
@@ -72,8 +73,8 @@ pub fn host_validator() -> bson::Document {
 
 pub fn host_to_dto(host: Host) -> Result<HostDto, anyhow::Error> {
     Ok(HostDto {
-        id: host._id.map(|id| id.to_hex()),
-        meta: meta_to_dto(host._meta)?,
+        id: host.oid.map(|id| id.to_hex()),
+        meta: meta_to_dto(host.meta)?,
         owner_user_id: host.owner_user_id.to_hex(),
         assigned_workloads: host.assigned_workloads.iter().map(|id| id.to_hex()).collect(),
         system_specs: system_spec_to_dto(host.system_specs)?,
@@ -99,8 +100,8 @@ pub fn host_from_dto(host_dto: HostDto) -> Result<Host, anyhow::Error> {
     let device_id = host_dto.device_id;
 
     Ok(Host {
-        _id: id,
-        _meta: meta,
+        oid: id,
+        meta,
         owner_user_id: owner_user_id,
         assigned_workloads: assigned_workloads,
         system_specs: system_specs,
@@ -143,8 +144,8 @@ mod tests {
     #[test]
     fn test_host_to_dto() {
         let host = Host {
-            _id: Some(bson::oid::ObjectId::new()),
-            _meta: Meta {
+            oid: Some(bson::oid::ObjectId::new()),
+            meta: Meta {
                 is_deleted: false,
                 created_at: bson::DateTime::now(),
                 updated_at: bson::DateTime::now(),
@@ -162,7 +163,7 @@ mod tests {
         };
 
         let host_dto = host_to_dto(host.clone()).unwrap();
-        assert_eq!(host_dto.id, host._id.map(|id| id.to_hex()));
+        assert_eq!(host_dto.id, host.oid.map(|id| id.to_hex()));
         assert_eq!(host_dto.owner_user_id, host.owner_user_id.to_hex());
         assert_eq!(host_dto.assigned_workloads, vec![host.assigned_workloads[0].to_hex()]);
         assert_eq!(host_dto.ip_address, host.ip_address);
@@ -191,7 +192,7 @@ mod tests {
         };
 
         let host = host_from_dto(host_dto.clone()).unwrap();
-        assert_eq!(host._id.map(|id| id.to_hex()), host_dto.id);
+        assert_eq!(host.oid.map(|id| id.to_hex()), host_dto.id);
         assert_eq!(host.owner_user_id, bson::oid::ObjectId::parse_str(&host_dto.owner_user_id).unwrap());
         assert_eq!(host.assigned_workloads, vec![bson::oid::ObjectId::parse_str(&host_dto.assigned_workloads[0]).unwrap()]);
         assert_eq!(host.ip_address, host_dto.ip_address);
