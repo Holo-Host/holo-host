@@ -36,9 +36,7 @@ pub fn generate_api_key() -> String {
     // generate 4 parts of the key
     let part1 = uuid::Uuid::new().to_string();
     let part2 = uuid::Uuid::new().to_string();
-    let part3 = uuid::Uuid::new().to_string();
-    let part4 = uuid::Uuid::new().to_string();
-    let key = format!("{}-{}-{}-{}", part1, part2, part3, part4);
+    let key = format!("{}-{}", part1, part2);
     key
 }
 
