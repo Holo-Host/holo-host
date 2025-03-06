@@ -29,8 +29,8 @@ mod tests {
         ).insert_many(
             vec![
                 Workload{
-                    _id: None,
-                    _meta: new_meta(),
+                    oid: None,
+                    meta: new_meta(),
                     owner_user_id: user_id,
                     version: "1.0.0".to_string(),
                     nix_pkg: "test".to_string(),
@@ -42,8 +42,8 @@ mod tests {
                     },
                 },
                 Workload{
-                    _id: None,
-                    _meta: new_meta(),
+                    oid: None,
+                    meta: new_meta(),
                     owner_user_id: bson::oid::ObjectId::new(),
                     version: "1.0.0".to_string(),
                     nix_pkg: "test".to_string(),
@@ -93,8 +93,8 @@ mod tests {
         ).insert_many(
             vec![
                 Workload{
-                    _id: None,
-                    _meta: new_meta(),
+                    oid: None,
+                    meta: new_meta(),
                     owner_user_id: bson::oid::ObjectId::new(),
                     version: "1.0.0".to_string(),
                     nix_pkg: "test".to_string(),

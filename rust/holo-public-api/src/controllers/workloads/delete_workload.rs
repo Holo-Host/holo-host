@@ -108,7 +108,7 @@ pub async fn delete_workload(
     let result = db.collection::<workload::Workload>(
         workload::WORKLOAD_COLLECTION_NAME
     ).update_one(
-        bson::doc!{ "_id": workload._id },
+        bson::doc!{ "_id": workload.oid },
         update,
         None
     ).await;
