@@ -12,57 +12,27 @@ This client is responsible for subscribing to workload streams that handle:
 
 use anyhow::{anyhow, Result};
 use async_nats::Message;
-use std::{path::PathBuf, sync::Arc, time::Duration};
+use std::sync::Arc;
 use util_libs::nats::{
-    jetstream_client,
-    types::{ConsumerBuilder, EndpointType, JsClientBuilder, JsServiceBuilder},
+    jetstream_client::JsClient,
+    types::{ConsumerBuilder, EndpointType, JsServiceBuilder},
 };
 use workload::{
     host_api::HostWorkloadApi, types::WorkloadServiceSubjects, WorkloadServiceApi,
     WORKLOAD_SRV_DESC, WORKLOAD_SRV_NAME, WORKLOAD_SRV_SUBJ, WORKLOAD_SRV_VERSION,
 };
 
-const HOST_AGENT_CLIENT_NAME: &str = "Host Agent";
-const HOST_AGENT_INBOX_PREFIX: &str = "_WORKLOAD_INBOX";
-
 // TODO: Use _host_creds_path for auth once we add in the more resilient auth pattern.
 pub async fn run(
+    mut host_client: JsClient,
     host_pubkey: &str,
-    host_creds_path: &Option<PathBuf>,
-) -> Result<jetstream_client::JsClient, async_nats::Error> {
-    log::info!("Host Agent Client: Connecting to server...");
-    log::info!("host_creds_path : {:?}", host_creds_path);
+) -> Result<JsClient, async_nats::Error> {
+    log::info!("Host Agent Client: starting workload service...");
     log::info!("host_pubkey : {}", host_pubkey);
 
-    let pubkey_lowercase = host_pubkey.to_string().to_lowercase();
-
-    // ==================== Setup NATS ====================
-    // Connect to Nats server
-    let nats_url = jetstream_client::get_nats_url();
-    log::info!("nats_url : {}", nats_url);
-
-    let event_listeners = jetstream_client::get_event_listeners();
-
-    // Spin up Nats Client and loaded in the Js Stream Service
-    let mut host_workload_client = jetstream_client::JsClient::new(JsClientBuilder {
-        nats_url: nats_url.clone(),
-        name: HOST_AGENT_CLIENT_NAME.to_string(),
-        inbox_prefix: format!("{}.{}", HOST_AGENT_INBOX_PREFIX, pubkey_lowercase),
-        credentials_path: host_creds_path
-            .as_ref()
-            .map(|path| path.to_string_lossy().to_string()),
-        ping_interval: Some(Duration::from_secs(10)),
-        request_timeout: Some(Duration::from_secs(29)),
-        listeners: vec![jetstream_client::with_event_listeners(
-            event_listeners.clone(),
-        )],
-    })
-    .await
-    .map_err(|e| anyhow::anyhow!("connecting to NATS via {nats_url}: {e}"))?;
-
-    // ==================== Setup JS Stream Service ====================
     // Instantiate the Workload API
     let workload_api = HostWorkloadApi::default();
+    let pubkey_lowercase = host_pubkey.to_string().to_lowercase();
 
     // Register Workload Streams for Host Agent to consume
     // NB: Subjects are published by orchestrator or nats-db-connector
@@ -72,11 +42,9 @@ pub async fn run(
         version: WORKLOAD_SRV_VERSION.to_string(),
         service_subject: WORKLOAD_SRV_SUBJ.to_string(),
     };
-    host_workload_client
-        .add_js_service(workload_stream_service)
-        .await?;
+    host_client.add_js_service(workload_stream_service).await?;
 
-    let workload_service = host_workload_client
+    let workload_service = host_client
         .get_js_service(WORKLOAD_SRV_NAME.to_string())
         .await
         .ok_or(anyhow!(
@@ -151,5 +119,5 @@ pub async fn run(
         })
         .await?;
 
-    Ok(host_workload_client)
+    Ok(host_client)
 }

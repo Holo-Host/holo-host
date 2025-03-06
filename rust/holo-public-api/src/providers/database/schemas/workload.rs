@@ -44,9 +44,10 @@ pub const WORKLOAD_COLLECTION_NAME: &str = "workloads";
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Workload {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub _id: Option<bson::oid::ObjectId>,
-    pub _meta: Meta,
+    #[serde(skip_serializing_if = "Option::is_none", rename = "_id")]
+    pub oid: Option<bson::oid::ObjectId>,
+    #[serde(rename = "_meta")]
+    pub meta: Meta,
     pub owner_user_id: bson::oid::ObjectId,
     pub version: String,
     pub nix_pkg: String,
@@ -80,8 +81,8 @@ pub async fn setup_workload_indexes(database: &mongodb::Database) -> Result<(), 
 
 pub fn workload_to_dto(workload: Workload) -> Result<WorkloadDto, anyhow::Error> {
     Ok(WorkloadDto {
-        id: workload._id.map(|id| id.to_hex()),
-        meta: meta_to_dto(workload._meta)?,
+        id: workload.oid.map(|id| id.to_hex()),
+        meta: meta_to_dto(workload.meta)?,
         owner_user_id: workload.owner_user_id.to_hex(),
         version: workload.version,
         nix_pkg: workload.nix_pkg,
@@ -108,8 +109,8 @@ pub fn workload_from_dto(workload_dto: WorkloadDto) -> Result<Workload, anyhow::
     let system_specs = system_spec_from_dto(workload_dto.system_specs);
 
     Ok(Workload {
-        _id: id,
-        _meta: meta,
+        oid: id,
+        meta,
         owner_user_id: owner_user_id,
         version: version,
         nix_pkg: nix_pkg,
@@ -126,8 +127,8 @@ mod tests {
     #[test]
     fn test_workload_to_dto() {
         let workload = Workload {
-            _id: Some(bson::oid::ObjectId::new()),
-            _meta: Meta {
+            oid: Some(bson::oid::ObjectId::new()),
+            meta: Meta {
                 is_deleted: false,
                 created_at: bson::DateTime::now(),
                 updated_at: bson::DateTime::now(),
@@ -145,7 +146,7 @@ mod tests {
         };
 
         let workload_dto = workload_to_dto(workload.clone()).unwrap();
-        assert_eq!(workload_dto.id, workload._id.map(|id| id.to_hex()));
+        assert_eq!(workload_dto.id, workload.oid.map(|id| id.to_hex()));
         assert_eq!(workload_dto.owner_user_id, workload.owner_user_id.to_hex());
         assert_eq!(workload_dto.version, workload.version);
         assert_eq!(workload_dto.nix_pkg, workload.nix_pkg);
@@ -174,7 +175,7 @@ mod tests {
         };
 
         let workload = workload_from_dto(workload_dto.clone()).unwrap();
-        assert_eq!(workload._id.map(|id| id.to_hex()), workload_dto.id);
+        assert_eq!(workload.oid.map(|id| id.to_hex()), workload_dto.id);
         assert_eq!(workload.owner_user_id.to_hex(), workload_dto.owner_user_id);
         assert_eq!(workload.version, workload_dto.version);
         assert_eq!(workload.nix_pkg, workload_dto.nix_pkg);
