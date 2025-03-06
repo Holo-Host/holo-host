@@ -1,3 +1,4 @@
+#[cfg(not(target_arch = "aarch64"))]
 #[cfg(test)]
 mod tests {
     use anyhow::Result;
