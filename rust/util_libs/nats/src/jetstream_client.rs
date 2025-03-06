@@ -66,8 +66,7 @@ impl JsClient {
         let client = connect_options.connect(&p.nats_url).await?;
         let service_log_prefix = format!("NATS-CLIENT-LOG::{}::", p.name);
         log::info!(
-            "{}Connected to NATS server at {}",
-            service_log_prefix,
+            "{service_log_prefix}Connected to NATS server at {}",
             p.nats_url
         );
 
@@ -100,10 +99,8 @@ impl JsClient {
         let stream = &self.js_context.get_stream(stream_name).await?;
         let info = stream.get_info().await?;
         log::debug!(
-            "{}JetStream info: stream:{}, info:{:?}",
+            "{}JetStream info: stream:{stream_name}, info:{info:?}",
             self.service_log_prefix,
-            stream_name,
-            info
         );
         Ok(info)
     }
@@ -240,14 +237,10 @@ pub fn get_nats_url() -> String {
 pub fn get_event_listeners() -> Vec<EventListener> {
     // TODO: Use duration in handlers..
     let published_msg_handler = move |msg: &str, client_name: &str, _duration: Duration| {
-        log::info!(
-            "Successfully published message for {}. Msg: {:?}",
-            client_name,
-            msg
-        );
+        log::info!("Successfully published message for {client_name}. Msg: {msg:?}",);
     };
     let failure_handler = |err: &str, client_name: &str, _duration: Duration| {
-        log::info!("Failed to publish for {}. Err: {:?}", client_name, err);
+        log::info!("Failed to publish for {client_name}. Err: {err:?}");
     };
 
     let event_listeners = vec![

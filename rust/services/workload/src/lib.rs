@@ -47,7 +47,7 @@ where
                 e
             );
             log::error!("{}", err_msg);
-            ServiceError::Request(format!("{} Code={:?}", err_msg, ErrorCode::BAD_REQUEST))
+            ServiceError::Request(format!("{err_msg} Code={:?}", ErrorCode::BAD_REQUEST))
         })
     }
 
@@ -70,8 +70,14 @@ where
         Ok(match cb_fn(payload.clone()).await {
             Ok(r) => r,
             Err(e) => {
-                let err_msg = format!("Failed to process Workload Service Endpoint. Subject={} Payload={:?}, Error={:?}", msg.subject.clone().into_string(), payload, e);
-                log::error!("{}", err_msg);
+                let err_msg = format!(
+                    "Failed to process Workload Service Endpoint. 
+                    Subject={} 
+                    Payload={payload:?},
+                    Error={e:?}",
+                    msg.subject.clone().into_string()
+                );
+                log::error!("{err_msg}");
                 let status = WorkloadStatus {
                     id: None,
                     desired: desired_state,

@@ -61,9 +61,7 @@ impl InventoryServiceApi {
         let msg_subject = msg.subject.clone().into_string();
         let host_inventory = Self::convert_msg_to_type::<HoloInventory>(msg)?;
         log::trace!(
-            "INVENTORY message payload. subject='{}', msg={:?}",
-            msg_subject,
-            host_inventory
+            "INVENTORY message payload. subject='{msg_subject}', payload={host_inventory:?}"
         );
 
         let subject_sections: Vec<&str> = msg_subject.split(".").collect();
@@ -196,12 +194,11 @@ impl InventoryServiceApi {
         let payload_buf = msg.payload.to_vec();
         serde_json::from_slice::<T>(&payload_buf).map_err(|e| {
             let err_msg = format!(
-                "Error: Failed to deserialize payload. Subject='{}' Err={}",
+                "Error: Failed to deserialize payload. Subject='{}' Err={e:?}",
                 msg.subject.clone().into_string(),
-                e
             );
             log::error!("{}", err_msg);
-            ServiceError::Request(format!("{} Code={:?}", err_msg, ErrorCode::BAD_REQUEST))
+            ServiceError::Request(format!("{err_msg:?} Code={:?}", ErrorCode::BAD_REQUEST))
         })
     }
 }

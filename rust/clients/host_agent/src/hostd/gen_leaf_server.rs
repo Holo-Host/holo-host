@@ -85,19 +85,19 @@ pub async fn run(
     log::info!("Spawning Leaf Server");
     tokio::spawn(async move {
         if let Err(e) = leaf_server.run().await {
-            anyhow::bail!("failed to run Leaf Server: {e}")
+            anyhow::bail!("Failed to run Leaf Server: {e:?}")
         };
 
         Ok(())
     })
     .await
-    .context("failed to spawn the Leaf Server in a separate thread")??;
+    .context("Failed to spawn the Leaf Server in a separate thread")??;
 
     // Spin up Nats Client
     // Nats takes a moment to become responsive, so we try to connecti in a loop for a few seconds.
     // TODO: how do we recover from a connection loss to Nats in case it crashes or something else?
     let nats_url = jetstream_client::get_nats_url();
-    log::info!("nats_url : {}", nats_url);
+    log::info!("nats_url : {nats_url}");
 
     const HOST_AGENT_CLIENT_NAME: &str = "Host Agent Bare";
 
@@ -113,13 +113,13 @@ pub async fn run(
                     listeners: Default::default(),
                 })
                 .await
-                .map_err(|e| anyhow::anyhow!("connecting to NATS via {nats_url}: {e}"));
+                .map_err(|e| anyhow::anyhow!("connecting to NATS via {nats_url}: {e:?}"));
 
                 match host_workload_client {
                     Ok(client) => break client,
                     Err(e) => {
                         let duration = tokio::time::Duration::from_millis(100);
-                        log::warn!("{}, retrying in {duration:?}", e);
+                        log::warn!("{e:?}, retrying in {duration:?}");
                         tokio::time::sleep(duration).await;
                     }
                 }
