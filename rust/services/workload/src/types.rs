@@ -1,11 +1,9 @@
 use bson::oid::ObjectId;
+use db_utils::schemas::{self, WorkloadStatus};
+use nats_utils::types::{CreateResponse, CreateTag, EndpointTraits};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use strum_macros::AsRefStr;
-use util_libs::{
-    db::schemas::{self, WorkloadStatus},
-    nats::types::{CreateResponse, CreateTag, EndpointTraits},
-};
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ObjectIdJSON {
@@ -17,7 +15,7 @@ pub struct ObjectIdJSON {
 pub enum WorkloadServiceSubjects {
     Add,
     Update,
-    Remove,
+    Delete,
     Insert, // db change stream trigger
     Modify, // db change stream trigger
     HandleStatusUpdate,

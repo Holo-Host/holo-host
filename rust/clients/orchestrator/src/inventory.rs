@@ -11,16 +11,15 @@ This client is responsible for:
 */
 
 use anyhow::{anyhow, Result};
-use async_nats::Message;
 use inventory::{
     InventoryServiceApi, INVENTORY_SRV_DESC, INVENTORY_SRV_NAME, INVENTORY_SRV_SUBJ,
     INVENTORY_SRV_VERSION, INVENTORY_UPDATE_SUBJECT,
 };
 use mongodb::Client as MongoDBClient;
-use std::sync::Arc;
-use util_libs::nats::{
+use nats_utils::{
+    generate_service_call,
     jetstream_client::JsClient,
-    types::{ConsumerBuilder, EndpointType, JsServiceBuilder},
+    types::{JsServiceBuilder, ServiceConsumerBuilder},
 };
 
 pub async fn run(
@@ -48,16 +47,15 @@ pub async fn run(
 
     // Subjects published by hosting agent:
     inventory_service
-        .add_consumer(ConsumerBuilder {
-            name: "update_host_inventory".to_string(),
-            endpoint_subject: format!("*.{INVENTORY_UPDATE_SUBJECT}"),
-            handler: EndpointType::Async(inventory_api.call(
-                |api: InventoryServiceApi, msg: Arc<Message>| async move {
-                    api.handle_host_inventory_update(msg).await
-                },
-            )),
-            response_subject_fn: None,
-        })
+        .add_consumer(
+            ServiceConsumerBuilder::new(
+                "update_host_inventory".to_string(),
+                INVENTORY_UPDATE_SUBJECT,
+                generate_service_call!(inventory_api, handle_host_inventory_update),
+            )
+            .with_subject_prefix("*".to_string())
+            .into(),
+        )
         .await?;
 
     Ok(())

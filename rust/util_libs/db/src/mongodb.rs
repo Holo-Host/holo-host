@@ -1,4 +1,3 @@
-use crate::nats::types::ServiceError;
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use bson::oid::ObjectId;
@@ -7,8 +6,14 @@ use futures::stream::TryStreamExt;
 use mongodb::options::UpdateModifications;
 use mongodb::results::UpdateResult;
 use mongodb::{options::IndexOptions, Client, Collection, IndexModel};
+use nats_utils::types::ServiceError;
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
+
+// Helper:
+pub fn get_mongodb_url() -> String {
+    std::env::var("MONGO_URI").unwrap_or_else(|_| "mongodb://127.0.0.1:27017".to_string())
+}
 
 #[async_trait]
 pub trait MongoDbAPI<T>
@@ -16,7 +21,6 @@ where
     T: Serialize + for<'de> Deserialize<'de> + Unpin + Send + Sync,
 {
     type Error;
-
     async fn aggregate<R: for<'de> Deserialize<'de>>(
         &self,
         pipeline: Vec<Document>,
@@ -102,7 +106,7 @@ where
     where
         R: for<'de> Deserialize<'de>,
     {
-        log::trace!("Aggregate pipeline {:?}", pipeline);
+        log::trace!("Aggregate pipeline {pipeline:?}");
         let cursor = self.inner.aggregate(pipeline).await?;
 
         let results_doc: Vec<bson::Document> =
@@ -120,7 +124,7 @@ where
     }
 
     async fn get_one_from(&self, filter: Document) -> Result<Option<T>, Self::Error> {
-        log::trace!("Get_one_from filter {:?}", filter);
+        log::trace!("Get_one_from filter {filter:?}");
 
         let item = self
             .inner
@@ -128,7 +132,7 @@ where
             .await
             .map_err(ServiceError::Database)?;
 
-        log::debug!("get_one_from item {:?}", item);
+        log::debug!("get_one_from item {item:?}");
         Ok(item)
     }
 
@@ -149,8 +153,7 @@ where
             .inserted_id
             .as_object_id()
             .ok_or(ServiceError::Internal(format!(
-                "Failed to read the insert id after inserting item. insert_result={:?}.",
-                result
+                "Failed to read the insert id after inserting item. insert_result={result:?}."
             )))?;
 
         Ok(mongo_id)
@@ -177,9 +180,4 @@ where
             .await
             .map_err(ServiceError::Database)
     }
-}
-
-// Helpers:
-pub fn get_mongodb_url() -> String {
-    std::env::var("MONGO_URI").unwrap_or_else(|_| "mongodb://127.0.0.1:27017".to_string())
 }

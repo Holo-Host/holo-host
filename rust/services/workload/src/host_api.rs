@@ -3,7 +3,7 @@ Endpoints & Managed Subjects:
     - `install_workload`: handles the "WORKLOAD.<host_pukey>.install." subject
     - `update_workload`: handles the "WORKLOAD.<host_pukey>.update_installed" subject
     - `uninstall_workload`: handles the "WORKLOAD.<host_pukey>.uninstall." subject
-    - `send_workload_status`: handles the "WORKLOAD.<host_pukey>.send_status" subject
+    - `fetch_workload_status`: handles the "WORKLOAD.<host_pukey>.send_status" subject
 */
 
 use crate::types::WorkloadResult;
@@ -12,11 +12,9 @@ use super::{types::WorkloadApiResult, WorkloadServiceApi};
 use anyhow::Result;
 use async_nats::Message;
 use core::option::Option::None;
+use db_utils::schemas::{WorkloadState, WorkloadStatus};
+use nats_utils::types::ServiceError;
 use std::{fmt::Debug, sync::Arc};
-use util_libs::{
-    db::schemas::{WorkloadState, WorkloadStatus},
-    nats::types::ServiceError,
-};
 
 #[derive(Debug, Clone, Default)]
 pub struct HostWorkloadApi {}
@@ -146,7 +144,7 @@ impl HostWorkloadApi {
 
     // For host agent ? or elsewhere ?
     // TODO: Talk through with Stefan
-    pub async fn send_workload_status(
+    pub async fn fetch_workload_status(
         &self,
         msg: Arc<Message>,
     ) -> Result<WorkloadApiResult, ServiceError> {

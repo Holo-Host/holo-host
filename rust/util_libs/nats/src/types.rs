@@ -87,10 +87,70 @@ where
     T: EndpointTraits,
 {
     pub name: String,
-    pub endpoint_subject: String,
+    pub subject: String,
     pub handler: EndpointType<T>,
     #[debug(skip)]
     pub response_subject_fn: Option<ResponseSubjectsGenerator>,
+}
+
+#[derive(Clone)]
+pub struct ServiceConsumerBuilder<S, R>
+where
+    S: Serialize + Clone + AsRef<str>,
+    R: EndpointTraits,
+{
+    pub name: String,
+    pub subject: S,
+    pub subject_prefix: Option<String>,
+    pub async_handler: AsyncEndpointHandler<R>,
+    pub response_subject_fn: Option<ResponseSubjectsGenerator>,
+}
+
+impl<S, R> ServiceConsumerBuilder<S, R>
+where
+    S: Serialize + Clone + AsRef<str>,
+    R: EndpointTraits,
+{
+    pub fn new(name: String, subject: S, async_handler: AsyncEndpointHandler<R>) -> Self {
+        Self {
+            name,
+            subject,
+            subject_prefix: None,
+            async_handler,
+            response_subject_fn: None,
+        }
+    }
+
+    pub fn with_subject_prefix(mut self, prefix: String) -> Self {
+        self.subject_prefix = Some(prefix);
+        self
+    }
+
+    pub fn with_response_subject_fn(mut self, fn_gen: ResponseSubjectsGenerator) -> Self {
+        self.response_subject_fn = Some(fn_gen);
+        self
+    }
+}
+
+impl<S, R> From<ServiceConsumerBuilder<S, R>> for ConsumerBuilder<R>
+where
+    S: Serialize + Clone + AsRef<str>,
+    R: EndpointTraits,
+{
+    fn from(value: ServiceConsumerBuilder<S, R>) -> Self {
+        let subject = if let Some(prefix) = value.subject_prefix {
+            format!("{prefix}.{}", value.subject.as_ref())
+        } else {
+            value.subject.as_ref().to_string()
+        };
+
+        Self {
+            name: value.name.to_string(),
+            subject,
+            handler: EndpointType::Async(value.async_handler),
+            response_subject_fn: value.response_subject_fn,
+        }
+    }
 }
 
 #[allow(dead_code)]
@@ -147,13 +207,20 @@ where
     }
 }
 
+#[derive(Clone, Debug)]
+pub enum Credentials {
+    Path(std::path::PathBuf), // String = pathbuf as string
+    Password(String, String),
+    Token(String),
+}
+
 #[derive(Deserialize, Default)]
 pub struct JsClientBuilder {
     pub nats_url: String,
     pub name: String,
     pub inbox_prefix: String,
-    #[serde(default)]
-    pub credentials_path: Option<String>,
+    #[serde(default, skip_deserializing)]
+    pub credentials: Option<Vec<Credentials>>,
     #[serde(default)]
     pub ping_interval: Option<Duration>,
     #[serde(default)]
