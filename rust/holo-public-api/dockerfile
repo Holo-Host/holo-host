@@ -1,0 +1,17 @@
+FROM rust:1.85.0 AS builder
+
+WORKDIR /usr/src/holo-public-api
+COPY Cargo.toml .
+COPY Cargo.lock .
+COPY src/ ./src
+
+RUN --mount=type=cache,target=/root/.cargo \
+    --mount=type=cache,target=/usr/src/holo-public-api/target \
+    cargo build --release && \
+    cp /usr/src/holo-public-api/target/release/holo-public-api /usr/src/holo-public-api/build
+
+FROM gcr.io/distroless/cc
+COPY --from=builder /usr/src/holo-public-api/build /holo-public-api
+
+EXPOSE 3000
+CMD ["/holo-public-api"]
