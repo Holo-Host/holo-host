@@ -1,13 +1,12 @@
 /*
- This client is associated with the:
-    - WORKLOAD account
+  This client is associated with the:
+    - HPOS account
     - host user
 
-This client is responsible for subscribing to workload streams that handle:
-    - installing new workloads onto the hosting device
-    - removing workloads from the hosting device
-    - sending workload status upon request
-    - sending out active periodic workload reports
+  This client is responsible for publishing to the inventory suject(s):
+    - `INVENTORY.<agent_pubkey>.update
+
+  This client does not subject to or consume any inventory subjects.
 */
 
 use anyhow::Result;
@@ -40,7 +39,7 @@ pub async fn run(
     let check_interval_duration = chrono::TimeDelta::seconds(one_hour_interval.as_secs() as i64);
     let mut last_check_time = chrono::Utc::now();
 
-    let pubkey_lowercase = host_pubkey.to_string().to_lowercase();
+    let pubkey_lowercase = host_pubkey.to_lowercase();
 
     loop {
         // Periodically check inventory and compare against latest state (in-memory)

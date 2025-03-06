@@ -3,7 +3,7 @@ Endpoints & Managed Subjects:
     - `install_workload`: handles the "WORKLOAD.<host_pukey>.install." subject
     - `update_workload`: handles the "WORKLOAD.<host_pukey>.update_installed" subject
     - `uninstall_workload`: handles the "WORKLOAD.<host_pukey>.uninstall." subject
-    - `send_workload_status`: handles the "WORKLOAD.<host_pukey>.send_status" subject
+    - `fetch_workload_status`: handles the "WORKLOAD.<host_pukey>.send_status" subject
 */
 
 use crate::types::WorkloadResult;
@@ -144,7 +144,7 @@ impl HostWorkloadApi {
 
     // For host agent ? or elsewhere ?
     // TODO: Talk through with Stefan
-    pub async fn send_workload_status(
+    pub async fn fetch_workload_status(
         &self,
         msg: Arc<Message>,
     ) -> Result<WorkloadApiResult, ServiceError> {

@@ -19,7 +19,7 @@ use async_nats::Message;
 use async_trait::async_trait;
 use core::option::Option::None;
 use db_utils::schemas::{WorkloadState, WorkloadStatus};
-use nats_utils::types::{AsyncEndpointHandler, JsServiceResponse, ServiceError};
+use nats_utils::types::ServiceError;
 use serde::Deserialize;
 use std::future::Future;
 use std::{fmt::Debug, sync::Arc};
@@ -35,21 +35,6 @@ pub trait WorkloadServiceApi
 where
     Self: std::fmt::Debug + Clone + 'static,
 {
-    fn call<F, Fut>(&self, handler: F) -> AsyncEndpointHandler<WorkloadApiResult>
-    where
-        F: Fn(Self, Arc<Message>) -> Fut + Send + Sync + 'static,
-        Fut: Future<Output = Result<WorkloadApiResult, ServiceError>> + Send + 'static,
-        Self: Send + Sync,
-    {
-        let api = self.to_owned();
-        Arc::new(
-            move |msg: Arc<Message>| -> JsServiceResponse<WorkloadApiResult> {
-                let api_clone = api.clone();
-                Box::pin(handler(api_clone, msg))
-            },
-        )
-    }
-
     fn convert_msg_to_type<T>(msg: Arc<Message>) -> Result<T, ServiceError>
     where
         T: for<'de> Deserialize<'de> + Send + Sync,
@@ -62,12 +47,11 @@ where
                 e
             );
             log::error!("{}", err_msg);
-            ServiceError::Request(format!("{} Code={:?}", err_msg, ErrorCode::BAD_REQUEST))
+            ServiceError::Request(format!("{err_msg} Code={:?}", ErrorCode::BAD_REQUEST))
         })
     }
 
-    // Helper function to streamline the processing of incoming workload messages
-    // NB: Currently used to process requests for MongoDB ops and the subsequent db change streams these db edits create (via the mongodb<>nats connector)
+    // Helper function to standardize the processing of incoming workload messages
     async fn process_request<T, Fut>(
         &self,
         msg: Arc<Message>,
@@ -86,8 +70,14 @@ where
         Ok(match cb_fn(payload.clone()).await {
             Ok(r) => r,
             Err(e) => {
-                let err_msg = format!("Failed to process Workload Service Endpoint. Subject={} Payload={:?}, Error={:?}", msg.subject.clone().into_string(), payload, e);
-                log::error!("{}", err_msg);
+                let err_msg = format!(
+                    "Failed to process Workload Service Endpoint. 
+                    Subject={} 
+                    Payload={payload:?},
+                    Error={e:?}",
+                    msg.subject.clone().into_string()
+                );
+                log::error!("{err_msg}");
                 let status = WorkloadStatus {
                     id: None,
                     desired: desired_state,
