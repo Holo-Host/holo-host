@@ -59,10 +59,6 @@ impl JsClient {
                     Credentials::Token(t) => {
                         connect_options = connect_options.token(t);
                     }
-                    Credentials::None => {
-                        log::warn!("Connecting to client without any user credentials.");
-                        ()
-                    }
                 }
             }
         };

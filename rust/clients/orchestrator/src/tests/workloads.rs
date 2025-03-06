@@ -167,7 +167,6 @@ mod tests {
             .publish(publish_info)
             .await
             .expect("Failed to publish insert workload message on Jetstream Service");
-        println!("Published insert workload message on Jetstream Service");
 
         // Wait a sec for message processing
         sleep(Duration::from_secs(1)).await;

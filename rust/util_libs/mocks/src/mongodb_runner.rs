@@ -52,24 +52,24 @@ impl MongodRunner {
             tempdir,
         };
 
-        println!(
-            "MongoDB Server is running at {:?}",
-            new_self.socket_pathbuf()
-        );
-
         std::fs::exists(Self::socket_path(&new_self.tempdir)?)
             .context("mongod socket should exist")?;
+
+        println!(
+            "MongoDB Server is running at {:?}",
+            new_self.get_socket_pathbuf()
+        );
 
         Ok(new_self)
     }
 
-    fn socket_pathbuf(&self) -> anyhow::Result<PathBuf> {
+    pub fn get_socket_pathbuf(&self) -> anyhow::Result<PathBuf> {
         Ok(PathBuf::from_str(&Self::socket_path(&self.tempdir)?)?)
     }
 
     pub fn client(&self) -> anyhow::Result<MongoDBClient> {
         let server_address = mongodb::options::ServerAddress::Unix {
-            path: self.socket_pathbuf()?,
+            path: self.get_socket_pathbuf()?,
         };
         let client_options = ClientOptions::builder().hosts(vec![server_address]).build();
         Ok(MongoDBClient::with_options(client_options)?)
