@@ -7,7 +7,6 @@ use netdiag::IPVersion;
 
 #[derive(Parser)]
 #[command(
-    version,
     about,
     author,
     long_about = "Command line interface for hosting workloads on the Holo Hosting Network"
@@ -31,6 +30,7 @@ pub enum CommandScopes {
         #[command(subcommand)]
         command: SupportCommands,
     },
+    Version,
 }
 
 #[derive(Args, Clone, Debug)]
