@@ -22,14 +22,11 @@ The code is grouped by language or framework name.
 /Cargo.toml
 /Cargo.lock
 /rust/ # all rust code lives here
-/rust/common/Cargo.toml
-/rust/common/src/lib.rs
-/rust/holo-agentctl/Cargo.toml
-/rust/holo-agentctl/src/main.rs
-/rust/holo-agentd/Cargo.toml
-/rust/holo-agentd/src/main.rs
-/rust/holo-hqd/Cargo.toml
-/rust/holo-hqd/src/main.rs
+/rust/clients/
+/rust/services/
+/rust/hpos-hal/
+/rust/netdiag/
+/rust/util_libs/
 ```
 
 ### Pulumi for Infrastructure-as-Code
@@ -43,6 +40,16 @@ Reusable Pulumi modules with examples
 ## Continous Integration
 
 The CI system is driven by [buildbot-nix](https://github.com/nix-community/buildbot-nix/).
+
+## Development and Conventions
+
+### Formatting
+
+This repo is configured with `treefmt-nix` which can be invoked via:
+
+```
+nix fmt
+```
 
 ## Licenses
 
