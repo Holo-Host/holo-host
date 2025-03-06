@@ -11,7 +11,7 @@ mod tests {
     use futures::StreamExt;
     use mock_utils::{
         mongodb_runner::MongodRunner,
-        test_nats_server::{check_nats_server, TestClientResponse, TestNatsServer},
+        test_nats_server::{TestClientResponse, TestNatsServer},
     };
     use mongodb::Client as MongoDBClient;
     use nats_utils::{
@@ -31,11 +31,10 @@ mod tests {
     const TEST_ADMIN_INBOX_PREFIX: &str = "_TEST_ADMIN_INBOX";
 
     async fn setup_test_environment() -> Result<(TestNatsServer, MongoDBClient)> {
-        let nats_server = TestNatsServer::new().await?;
-        let mongod = MongodRunner::run()?;
-        println!("ran mongodb runner");
-        let mongo_client = mongod.client()?;
-
+        let nats_server = TestNatsServer::new().await.unwrap();
+        println!("Nats Server is running at: {:?}", nats_server.get_url());
+        let mongod = MongodRunner::run().unwrap();
+        let mongo_client = mongod.client().unwrap();
         Ok((nats_server, mongo_client))
     }
 
@@ -74,8 +73,8 @@ mod tests {
 
     #[tokio::test]
     #[serial]
-    async fn test_workload_service_initialization() -> Result<()> {
-        let (nats_server, _) = setup_test_environment().await?;
+    async fn test_workload_service_initialization() {
+        let (nats_server, _) = setup_test_environment().await.unwrap();
 
         let service = init_workload_service(&nats_server).await;
 
@@ -85,15 +84,16 @@ mod tests {
         assert_eq!(stream_info.service_subject, WORKLOAD_SRV_SUBJ);
 
         let _ = nats_server.shutdown().await;
-        Ok(())
     }
 
     #[tokio::test]
     #[serial]
-    async fn test_workload_consumer_registration() -> Result<()> {
-        let (nats_server, mongo_client) = setup_test_environment().await?;
+    async fn test_workload_consumer_registration() {
+        let (nats_server, mongo_client) = setup_test_environment().await.unwrap();
 
-        let orchestrator_client = crate::admin_client::run(&None, nats_server.get_url()).await?;
+        let orchestrator_client = crate::admin_client::run(&None, nats_server.get_url())
+            .await
+            .unwrap();
 
         let client = crate::workloads::run(orchestrator_client, mongo_client)
             .await
@@ -118,7 +118,10 @@ mod tests {
             .expect("Failed to locate Workload Service");
 
         for (consumer_name, subject) in subjects.iter() {
-            let consumer_info = service.get_consumer_stream_info(consumer_name).await?;
+            let consumer_info = service
+                .get_consumer_stream_info(consumer_name)
+                .await
+                .unwrap();
             assert!(
                 consumer_info.is_some(),
                 "Consumer {} not found",
@@ -133,18 +136,16 @@ mod tests {
         }
 
         let _ = nats_server.shutdown().await;
-        Ok(())
     }
 
     #[tokio::test]
     #[serial]
-    async fn test_add_workload_request() -> Result<()> {
-        let (nats_server, mongo_client) = setup_test_environment().await?;
-        println!("mongo_client: {:?}", mongo_client);
-        println!("nats_server: {:?}", nats_server);
-        println!("got nats url: {:?}", nats_server.get_url());
+    async fn test_add_workload_request() {
+        let (nats_server, mongo_client) = setup_test_environment().await.unwrap();
 
-        let orchestrator_client = crate::admin_client::run(&None, nats_server.get_url()).await?;
+        let orchestrator_client = crate::admin_client::run(&None, nats_server.get_url())
+            .await
+            .unwrap();
 
         let client = crate::workloads::run(orchestrator_client, mongo_client.clone())
             .await
@@ -154,15 +155,14 @@ mod tests {
         let mock_developer_id = ObjectId::new();
         mock_workload.assigned_developer = mock_developer_id;
 
-        println!("publish_info mock_workload: {:?}", mock_workload);
-
         // Publish the add workload message
         let publish_info = PublishInfo {
             subject: format!("WORKLOAD.{}", WorkloadServiceSubjects::Add.as_ref()),
             msg_id: "add_workload_id".to_string(),
-            data: serde_json::to_vec(&mock_workload)?.into(),
+            data: serde_json::to_vec(&mock_workload).unwrap().into(),
             headers: None,
         };
+
         client
             .publish(publish_info)
             .await
@@ -171,7 +171,6 @@ mod tests {
 
         // Wait a sec for message processing
         sleep(Duration::from_secs(1)).await;
-        println!("after a second");
 
         // Fetch the workload from the database
         let workload_collection = MongoCollection::<Workload>::new(
@@ -179,9 +178,9 @@ mod tests {
             schemas::DATABASE_NAME,
             schemas::WORKLOAD_COLLECTION_NAME,
         )
-        .await?;
+        .await
+        .unwrap();
 
-        println!("mock_workload: {:#?}", mock_workload);
         let workload = workload_collection
             .inner
             .find_one(doc! { "assigned_developer": mock_workload.assigned_developer })
@@ -196,15 +195,16 @@ mod tests {
         ));
         assert!(matches!(workload.status.desired, WorkloadState::Running));
         assert!(matches!(workload.status.actual, WorkloadState::Reported));
-        Ok(())
     }
 
     #[tokio::test]
     #[serial]
-    async fn test_update_workload_request() -> Result<()> {
-        let (nats_server, mongo_client) = setup_test_environment().await?;
+    async fn test_update_workload_request() {
+        let (nats_server, mongo_client) = setup_test_environment().await.unwrap();
 
-        let client = crate::admin_client::run(&None, nats_server.get_url()).await?;
+        let client = crate::admin_client::run(&None, nats_server.get_url())
+            .await
+            .unwrap();
 
         // Generate a mock workload to be inserted into the database
         let mut mock_workload = Workload::default();
@@ -217,14 +217,19 @@ mod tests {
             schemas::DATABASE_NAME,
             schemas::WORKLOAD_COLLECTION_NAME,
         )
-        .await?;
-        workload_collection.inner.insert_one(mock_workload).await?;
+        .await
+        .unwrap();
+        workload_collection
+            .inner
+            .insert_one(mock_workload)
+            .await
+            .unwrap();
 
         // Publish the add workload message
         let publish_info = PublishInfo {
             subject: format!("WORKLOAD.{}", WorkloadServiceSubjects::Update.as_ref()),
             msg_id: "update_workload_id".to_string(),
-            data: serde_json::to_vec(&mock_workload_id)?.into(),
+            data: serde_json::to_vec(&mock_workload_id).unwrap().into(),
             headers: None,
         };
         client
@@ -233,7 +238,7 @@ mod tests {
             .expect("Failed to publish insert workload message on Jetstream Service");
 
         // Wait a sec for message processing
-        sleep(Duration::from_secs(3)).await;
+        sleep(Duration::from_secs(1)).await;
 
         // Fetch the workload from the database
         let workload_collection = MongoCollection::<Workload>::new(
@@ -241,25 +246,28 @@ mod tests {
             schemas::DATABASE_NAME,
             schemas::WORKLOAD_COLLECTION_NAME,
         )
-        .await?;
+        .await
+        .unwrap();
         let workload = workload_collection
             .inner
             .find_one(doc! { "_id": mock_workload_id })
-            .await?;
+            .await
+            .unwrap();
         assert!(workload.is_some());
 
         let workload = workload.unwrap();
         assert!(matches!(workload.status.desired, WorkloadState::Updated));
         assert!(matches!(workload.status.actual, WorkloadState::Updating));
-        Ok(())
     }
 
     #[tokio::test]
     #[serial]
-    async fn test_delete_workload_request() -> Result<()> {
-        let (nats_server, mongo_client) = setup_test_environment().await?;
+    async fn test_delete_workload_request() {
+        let (nats_server, mongo_client) = setup_test_environment().await.unwrap();
 
-        let client = crate::admin_client::run(&None, nats_server.get_url()).await?;
+        let client = crate::admin_client::run(&None, nats_server.get_url())
+            .await
+            .unwrap();
 
         let mut mock_workload = Workload::default();
         let mock_developer_id = ObjectId::new();
@@ -269,7 +277,7 @@ mod tests {
         let publish_info = PublishInfo {
             subject: format!("WORKLOAD.{}", WorkloadServiceSubjects::Delete.as_ref()),
             msg_id: "delete_workload_id".to_string(),
-            data: serde_json::to_vec(&mock_workload)?.into(),
+            data: serde_json::to_vec(&mock_workload).unwrap().into(),
             headers: None,
         };
         client
@@ -278,7 +286,7 @@ mod tests {
             .expect("Failed to publish insert workload message on Jetstream Service");
 
         // Wait a sec for message processing
-        sleep(Duration::from_secs(3)).await;
+        sleep(Duration::from_secs(1)).await;
 
         // Fetch the workload from the database
         let workload_collection = MongoCollection::<Workload>::new(
@@ -286,25 +294,28 @@ mod tests {
             schemas::DATABASE_NAME,
             schemas::WORKLOAD_COLLECTION_NAME,
         )
-        .await?;
+        .await
+        .unwrap();
         let workload = workload_collection
             .inner
             .find_one(doc! { "assigned_developer": mock_workload.assigned_developer })
-            .await?;
+            .await
+            .unwrap();
         assert!(workload.is_some());
 
         let workload = workload.unwrap();
         assert!(matches!(workload.status.desired, WorkloadState::Removed));
         assert!(matches!(workload.status.actual, WorkloadState::Deleted));
-        Ok(())
     }
 
     #[tokio::test]
     #[serial]
-    async fn test_handling_workload_insertion() -> Result<()> {
-        let (nats_server, _) = setup_test_environment().await?;
+    async fn test_handling_workload_insertion() {
+        let (nats_server, _) = setup_test_environment().await.unwrap();
 
-        let _client = crate::admin_client::run(&None, nats_server.get_url()).await?;
+        let _client = crate::admin_client::run(&None, nats_server.get_url())
+            .await
+            .unwrap();
 
         // Generate a mock workload to be inserted into the database
         let mut mock_inserted_workload = Workload::default();
@@ -312,13 +323,14 @@ mod tests {
         mock_inserted_workload._id = Some(mock_inserted_workload_id);
 
         // Spawn the subcription to the consumer's response subject
-        let TestClientResponse { client, js: _ } = nats_server.connect(&nats_server.port).await?;
+        let TestClientResponse { client, js: _ } =
+            nats_server.connect(&nats_server.port).await.unwrap();
         let s = client
             .subscribe(WorkloadServiceSubjects::Install.as_ref().to_string())
             .await;
         assert!(s.is_ok());
         let mut subscriber = s.expect("Failed to create subscriber.");
-        subscriber.unsubscribe_after(1).await?;
+        subscriber.unsubscribe_after(1).await.unwrap();
 
         tokio::spawn(async move {
             let msg_option_result = subscriber.next().await;
@@ -349,22 +361,23 @@ mod tests {
         client
             .publish(
                 WorkloadServiceSubjects::Insert.as_ref().to_string(),
-                serde_json::to_vec(&mock_inserted_workload)?.into(),
+                serde_json::to_vec(&mock_inserted_workload).unwrap().into(),
             )
             .await
             .expect("Failed to publish insert workload message on Jetstream Service");
 
         // Wait a sec for message processing
         sleep(Duration::from_secs(1)).await;
-        Ok(())
     }
 
     #[tokio::test]
     #[serial]
-    async fn test_handling_workload_modification() -> Result<()> {
-        let (nats_server, mongo_client) = setup_test_environment().await?;
+    async fn test_handling_workload_modification() {
+        let (nats_server, mongo_client) = setup_test_environment().await.unwrap();
 
-        let _client = crate::admin_client::run(&None, nats_server.get_url()).await?;
+        let _client = crate::admin_client::run(&None, nats_server.get_url())
+            .await
+            .unwrap();
 
         // Generate a new workload to later mod
         let mut mock_modified_workload = Workload::default();
@@ -379,14 +392,17 @@ mod tests {
             schemas::DATABASE_NAME,
             schemas::WORKLOAD_COLLECTION_NAME,
         )
-        .await?;
+        .await
+        .unwrap();
         workload_collection
             .inner
             .insert_one(mock_modified_workload.clone())
-            .await?;
+            .await
+            .unwrap();
 
         // Spawn the subcription to the consumer's response subject
-        let TestClientResponse { client, js: _ } = nats_server.connect(&nats_server.port).await?;
+        let TestClientResponse { client, js: _ } =
+            nats_server.connect(&nats_server.port).await.unwrap();
         let s = client
             .subscribe(
                 WorkloadServiceSubjects::UpdateInstalled
@@ -396,7 +412,7 @@ mod tests {
             .await;
         assert!(s.is_ok());
         let mut subscriber = s.expect("Failed to create subscriber.");
-        subscriber.unsubscribe_after(1).await?;
+        subscriber.unsubscribe_after(1).await.unwrap();
 
         tokio::spawn(async move {
             let msg_option_result = subscriber.next().await;
@@ -427,22 +443,23 @@ mod tests {
         client
             .publish(
                 WorkloadServiceSubjects::Modify.as_ref().to_string(),
-                serde_json::to_vec(&mock_modified_workload)?.into(),
+                serde_json::to_vec(&mock_modified_workload).unwrap().into(),
             )
             .await
             .expect("Failed to publish insert workload message on Jetstream Service");
 
         // Wait a sec for message processing
         sleep(Duration::from_secs(1)).await;
-        Ok(())
     }
 
     #[tokio::test]
     #[serial]
-    async fn test_handling_workload_delete_modification() -> Result<()> {
-        let (nats_server, mongo_client) = setup_test_environment().await?;
+    async fn test_handling_workload_delete_modification() {
+        let (nats_server, mongo_client) = setup_test_environment().await.unwrap();
 
-        let _client = crate::admin_client::run(&None, nats_server.get_url()).await?;
+        let _client = crate::admin_client::run(&None, nats_server.get_url())
+            .await
+            .unwrap();
 
         // Generate a new workload to later mod
         let mut mock_modified_workload = Workload::default();
@@ -457,14 +474,17 @@ mod tests {
             schemas::DATABASE_NAME,
             schemas::WORKLOAD_COLLECTION_NAME,
         )
-        .await?;
+        .await
+        .unwrap();
         workload_collection
             .inner
             .insert_one(mock_modified_workload.clone())
-            .await?;
+            .await
+            .unwrap();
 
         // Spawn the subcription to the consumer's response subject
-        let TestClientResponse { client, js: _ } = nats_server.connect(&nats_server.port).await?;
+        let TestClientResponse { client, js: _ } =
+            nats_server.connect(&nats_server.port).await.unwrap();
         let s = client
             .subscribe(
                 WorkloadServiceSubjects::UpdateInstalled
@@ -474,7 +494,7 @@ mod tests {
             .await;
         assert!(s.is_ok());
         let mut subscriber = s.expect("Failed to create subscriber.");
-        subscriber.unsubscribe_after(1).await?;
+        subscriber.unsubscribe_after(1).await.unwrap();
 
         tokio::spawn(async move {
             let msg_option_result = subscriber.next().await;
@@ -505,22 +525,23 @@ mod tests {
         client
             .publish(
                 WorkloadServiceSubjects::Modify.as_ref().to_string(),
-                serde_json::to_vec(&mock_modified_workload)?.into(),
+                serde_json::to_vec(&mock_modified_workload).unwrap().into(),
             )
             .await
             .expect("Failed to publish insert workload message on Jetstream Service");
 
         // Wait a sec for message processing
         sleep(Duration::from_secs(1)).await;
-        Ok(())
     }
 
     #[tokio::test]
     #[serial]
-    async fn test_handling_status_update() -> Result<()> {
-        let (nats_server, mongo_client) = setup_test_environment().await?;
+    async fn test_handling_status_update() {
+        let (nats_server, mongo_client) = setup_test_environment().await.unwrap();
 
-        let client = crate::admin_client::run(&None, nats_server.get_url()).await?;
+        let client = crate::admin_client::run(&None, nats_server.get_url())
+            .await
+            .unwrap();
 
         // Generate a mock workload to be inserted into the database
         let mut mock_workload = Workload::default();
@@ -535,8 +556,13 @@ mod tests {
             schemas::DATABASE_NAME,
             schemas::WORKLOAD_COLLECTION_NAME,
         )
-        .await?;
-        workload_collection.inner.insert_one(mock_workload).await?;
+        .await
+        .unwrap();
+        workload_collection
+            .inner
+            .insert_one(mock_workload)
+            .await
+            .unwrap();
 
         // Publish the add workload message
         let mock_workload_status = WorkloadStatus {
@@ -550,7 +576,7 @@ mod tests {
                 WorkloadServiceSubjects::HandleStatusUpdate.as_ref()
             ),
             msg_id: "update_workload_status_id".to_string(),
-            data: serde_json::to_vec(&mock_workload_status)?.into(),
+            data: serde_json::to_vec(&mock_workload_status).unwrap().into(),
             headers: None,
         };
         client
@@ -559,7 +585,7 @@ mod tests {
             .expect("Failed to publish insert workload message on Jetstream Service");
 
         // Wait a sec for message processing
-        sleep(Duration::from_secs(3)).await;
+        sleep(Duration::from_secs(1)).await;
 
         // Fetch the workload from the database
         let workload_collection = MongoCollection::<Workload>::new(
@@ -567,11 +593,13 @@ mod tests {
             schemas::DATABASE_NAME,
             schemas::WORKLOAD_COLLECTION_NAME,
         )
-        .await?;
+        .await
+        .unwrap();
         let workload = workload_collection
             .inner
             .find_one(doc! { "_id": mock_workload_id })
-            .await?;
+            .await
+            .unwrap();
         assert!(workload.is_some());
 
         let workload = workload.unwrap();
@@ -579,26 +607,26 @@ mod tests {
         assert!(matches!(workload.status.actual, WorkloadState::Running));
 
         let _ = nats_server.shutdown().await;
-        Ok(())
     }
 
     #[tokio::test]
     #[serial]
-    async fn test_workload_service_shutdown() -> Result<()> {
-        let (nats_server, _) = setup_test_environment().await?;
+    async fn test_workload_service_shutdown() {
+        let (nats_server, _) = setup_test_environment().await.unwrap();
         // let admin_creds_path = PathBuf::from_str(&jetstream_client::get_nats_creds_by_nsc(
         //     "HOLO", "ADMIN", "admin",
         // ))
         // .map(Credentials::Path)
-        // .map_err(|e| anyhow!("Failed to locate admin credential path. Err={:?}", e))?;
+        // .map_err(|e| anyhow!("Failed to locate admin credential path. Err={:?}", e)).unwrap();
 
-        let client = crate::admin_client::run(&None, nats_server.get_url()).await?;
+        let client = crate::admin_client::run(&None, nats_server.get_url())
+            .await
+            .unwrap();
 
         // Test graceful shutdown
         let result = client.close().await;
         assert!(result.is_ok());
 
         let _ = nats_server.shutdown().await;
-        Ok(())
     }
 }
