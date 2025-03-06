@@ -74,14 +74,14 @@ nsc add account --name $ADMIN_ACCOUNT
 nsc edit account --name $ADMIN_ACCOUNT --js-streams -1 --js-consumer -1 --js-mem-storage 1G --js-disk-storage 5G
 ADMIN_SIGNING_KEY="$(echo "$(nsc edit account -n $ADMIN_ACCOUNT --sk generate 2>&1)" | grep -oP "signing key\s*\K\S+")"
 ADMIN_ROLE_NAME="admin-role"
-nsc edit signing-key --sk $ADMIN_SIGNING_KEY --role $ADMIN_ROLE_NAME --allow-pub "ADMIN.>","WORKLOAD.>","\$JS.>","\$SYS.>","_INBOX.>","_INBOX_*.>","*._WORKLOAD_INBOX.>" --allow-sub "ADMIN.>""WORKLOAD.>","\$JS.>","\$SYS.>","_INBOX.>","_INBOX_*.>","ORCHESTRATOR._WORKLOAD_INBOX.>" --allow-pub-response
+nsc edit signing-key --sk $ADMIN_SIGNING_KEY --role $ADMIN_ROLE_NAME --allow-pub "ADMIN.>","WORKLOAD.>","\$JS.>","\$SYS.>","_INBOX.>","_INBOX_*.>","*._WORKLOAD_INBOX.>","INVENTORY.>" --allow-sub "ADMIN.>""WORKLOAD.>","\$JS.>","\$SYS.>","_INBOX.>","_INBOX_*.>","ORCHESTRATOR._WORKLOAD_INBOX.>","INVENTORY.>" --allow-pub-response
 
 # Step 3: Create HPOS Account with JetStream and scoped signing key
 nsc add account --name $HPOS_ACCOUNT
 nsc edit account --name $HPOS_ACCOUNT --js-streams -1 --js-consumer -1 --js-mem-storage 1G --js-disk-storage 5G
 HPOS_SIGNING_KEY="$(echo "$(nsc edit account -n $HPOS_ACCOUNT --sk generate 2>&1)" | grep -oP "signing key\s*\K\S+")"
 WORKLOAD_ROLE_NAME="workload-role"
-nsc edit signing-key --sk $HPOS_SIGNING_KEY --role $WORKLOAD_ROLE_NAME --allow-pub "WORKLOAD.>","{{tag(pubkey)}}._WORKLOAD_INBOX.>","\$JS.API>" --allow-sub "WORKLOAD.{{tag(pubkey)}}.*","{{tag(pubkey)}}._WORKLOAD_INBOX.>","\$JS.API>" --allow-pub-response
+nsc edit signing-key --sk $HPOS_SIGNING_KEY --role $WORKLOAD_ROLE_NAME --allow-pub "WORKLOAD.>","INVENTORY.{{tag(pubkey)}}.>","\$JS.API>","{{tag(pubkey)}}._WORKLOAD_INBOX.>" --allow-sub "WORKLOAD.{{tag(pubkey)}}.*","INVENTORY.{{tag(pubkey)}}.>","\$JS.API>","{{tag(pubkey)}}._WORKLOAD_INBOX.>" --allow-pub-response
 
 # Step 4: Create User "admin" in ADMIN Account
 nsc add user --name admin --account $ADMIN_ACCOUNT
