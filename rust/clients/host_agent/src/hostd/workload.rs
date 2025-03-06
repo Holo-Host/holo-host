@@ -1,26 +1,27 @@
 /*
- This client is associated with the:
+  This client is associated with the:
     - HPOS account
     - host user
 
-This client is responsible for subscribing to workload streams that handle:
+  This client does not publish to any workload subjects.
+
+  This client is responsible for subscribing to workload streams that handle:
     - installing new workloads onto the hosting device
     - removing workloads from the hosting device
     - sending workload status upon request
     - sending out active periodic workload reports
 */
 
-use super::utils::create_callback_subject_to_orchestrator;
+use super::utils::{add_workload_consumer, create_callback_subject_to_orchestrator};
 use anyhow::{anyhow, Result};
-use async_nats::Message;
 use nats_utils::{
+    generate_service_call,
     jetstream_client::JsClient,
-    types::{ConsumerBuilder, EndpointType, JsServiceBuilder},
+    types::{JsServiceBuilder, ServiceConsumerBuilder},
 };
-use std::sync::Arc;
 use workload::{
-    host_api::HostWorkloadApi, types::WorkloadServiceSubjects, WorkloadServiceApi,
-    WORKLOAD_SRV_DESC, WORKLOAD_SRV_NAME, WORKLOAD_SRV_SUBJ, WORKLOAD_SRV_VERSION,
+    host_api::HostWorkloadApi, types::WorkloadServiceSubjects, WORKLOAD_SRV_DESC,
+    WORKLOAD_SRV_NAME, WORKLOAD_SRV_SUBJ, WORKLOAD_SRV_VERSION,
 };
 
 // TODO: Use _host_creds_path for auth once we add in the more resilient auth pattern.
@@ -33,7 +34,6 @@ pub async fn run(
 
     // Instantiate the Workload API
     let workload_api = HostWorkloadApi::default();
-    let pubkey_lowercase = host_pubkey.to_lowercase();
 
     // Register Workload Streams for Host Agent to consume
     // NB: Subjects are published by orchestrator or nats-db-connector
@@ -52,78 +52,55 @@ pub async fn run(
             "Failed to locate workload service. Unable to run holo agent workload service."
         ))?;
 
-    workload_service
-        .add_consumer(ConsumerBuilder {
-            name: "install_workload".to_string(),
-            subject: format!(
-                "{}.{}",
-                pubkey_lowercase,
-                WorkloadServiceSubjects::Install.as_ref()
-            ),
-            handler: EndpointType::Async(
-                workload_api.call(|api: HostWorkloadApi, msg: Arc<Message>| async move {
-                    api.install_workload(msg).await
-                }),
-            ),
-            response_subject_fn: None,
-        })
-        .await?;
+    add_workload_consumer(
+        ServiceConsumerBuilder::new(
+            "install_workload".to_string(),
+            WorkloadServiceSubjects::Install,
+            generate_service_call!(workload_api, install_workload),
+        )
+        .with_subject_prefix(host_pubkey.to_lowercase()),
+        workload_service,
+    )
+    .await?;
 
-    workload_service
-        .add_consumer(ConsumerBuilder {
-            name: "update_installed_workload".to_string(),
-            subject: format!(
-                "{}.{}",
-                pubkey_lowercase,
-                WorkloadServiceSubjects::UpdateInstalled.as_ref()
-            ),
-            handler: EndpointType::Async(
-                workload_api.call(|api: HostWorkloadApi, msg: Arc<Message>| async move {
-                    api.update_workload(msg).await
-                }),
-            ),
-            response_subject_fn: None,
-        })
-        .await?;
+    add_workload_consumer(
+        ServiceConsumerBuilder::new(
+            "update_installed_workload".to_string(),
+            WorkloadServiceSubjects::UpdateInstalled,
+            generate_service_call!(workload_api, update_workload),
+        )
+        .with_subject_prefix(host_pubkey.to_lowercase()),
+        workload_service,
+    )
+    .await?;
 
-    workload_service
-        .add_consumer(ConsumerBuilder {
-            name: "uninstall_workload".to_string(),
-            subject: format!(
-                "{}.{}",
-                pubkey_lowercase,
-                WorkloadServiceSubjects::Uninstall.as_ref()
-            ),
-            handler: EndpointType::Async(workload_api.call(
-                |api: HostWorkloadApi, msg: Arc<Message>| async move {
-                    api.uninstall_workload(msg).await
-                },
-            )),
-            response_subject_fn: None,
-        })
-        .await?;
+    add_workload_consumer(
+        ServiceConsumerBuilder::new(
+            "uninstall_workload".to_string(),
+            WorkloadServiceSubjects::Uninstall,
+            generate_service_call!(workload_api, uninstall_workload),
+        )
+        .with_subject_prefix(host_pubkey.to_lowercase()),
+        workload_service,
+    )
+    .await?;
 
     let update_workload_status_response = create_callback_subject_to_orchestrator(
         WorkloadServiceSubjects::HandleStatusUpdate
             .as_ref()
             .to_string(),
     );
-    workload_service
-        .add_consumer(ConsumerBuilder {
-            name: "fetch_workload_status".to_string(),
-            subject: format!(
-                "{}.{}",
-                pubkey_lowercase,
-                WorkloadServiceSubjects::SendStatus.as_ref()
-            ),
-            handler: EndpointType::Async(workload_api.call(
-                |api: HostWorkloadApi, msg: Arc<Message>| async move {
-                    api.fetch_workload_status(msg).await
-                },
-            )),
-            response_subject_fn: Some(update_workload_status_response),
-        })
-        .await?;
+    add_workload_consumer(
+        ServiceConsumerBuilder::new(
+            "fetch_workload_status".to_string(),
+            WorkloadServiceSubjects::SendStatus,
+            generate_service_call!(workload_api, fetch_workload_status),
+        )
+        .with_subject_prefix(host_pubkey.to_lowercase())
+        .with_response_subject_fn(update_workload_status_response),
+        workload_service,
+    )
+    .await?;
 
     Ok(host_client)
 }

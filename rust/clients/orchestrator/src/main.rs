@@ -37,20 +37,13 @@ async fn main() -> Result<(), async_nats::Error> {
     };
 
     // Only exit program when explicitly requested
-    tokio::signal::ctrl_c()
-        .await
-        .expect("Failed to close service gracefully");
+    tokio::signal::ctrl_c().await?;
 
     // Close admin client and drain internal buffer before exiting to make sure all messages are sent
     // NB: Calling drain/close on any one of the Client instances closes the underlying connection.
     // This affects all instances that share the same connection (including clones) because they are all references to the same resource.
     log::info!("Closing admin client...");
-    admin_client
-        .close()
-        .await
-        .expect("Failed to close admin client gracefully");
-    // Only exit program when explicitly requested
-    tokio::signal::ctrl_c().await?;
+    admin_client.close().await?;
 
     // Close all mongodb connections
     log::debug!("Closing db connection...");

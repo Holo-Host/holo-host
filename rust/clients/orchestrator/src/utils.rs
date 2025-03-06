@@ -1,34 +1,26 @@
-use nats_utils::types::{
-    AsyncEndpointHandler, ConsumerBuilder, EndpointTraits, EndpointType, ResponseSubjectsGenerator,
+use anyhow::Result;
+use nats_utils::{
+    jetstream_service::JsStreamService,
+    types::{EndpointTraits, ResponseSubjectsGenerator, ServiceConsumerBuilder},
 };
 use serde::Serialize;
 use std::collections::HashMap;
-use std::convert::AsRef;
 use std::sync::Arc;
 
-#[derive(Clone)]
-pub struct OrchestratorConsumerBuilder<S, R>
+pub async fn add_workload_consumer<S, R>(
+    service_builder: ServiceConsumerBuilder<S, R>,
+    workload_service: &JsStreamService,
+) -> Result<()>
 where
     S: Serialize + Clone + AsRef<str>,
     R: EndpointTraits,
 {
-    pub name: String,
-    pub subject: S,
-    pub async_handler: AsyncEndpointHandler<R>,
-    pub response_subject_fn: Option<ResponseSubjectsGenerator>,
-}
+    workload_service
+        .add_consumer(service_builder.into())
+        .await
+        .map_err(|e| anyhow::Error::msg(e.to_string()))?;
 
-pub fn create_consumer<S, R>(w: OrchestratorConsumerBuilder<S, R>) -> ConsumerBuilder<R>
-where
-    S: Serialize + Clone + AsRef<str>,
-    R: EndpointTraits,
-{
-    ConsumerBuilder {
-        name: w.name.to_string(),
-        subject: w.subject.as_ref().to_string(),
-        handler: EndpointType::Async(w.async_handler),
-        response_subject_fn: w.response_subject_fn,
-    }
+    Ok(())
 }
 
 pub fn create_callback_subject_to_host(
@@ -48,7 +40,11 @@ pub fn create_callback_subject_to_host(
         } else if let Some(tag) = tag_map.get(&tag_name) {
             return vec![format!("{}.{}", tag, sub_subject_name)];
         }
-        log::error!("WORKLOAD Error: Failed to find {}. Unable to send orchestrator response to hosting agent for subject {}. Fwding response to `WORKLOAD.ERROR.INBOX`.", tag_name, sub_subject_name);
+        log::error!(
+            "WORKLOAD Error: Failed to find {tag_name}.
+            Unable to send orchestrator response to hosting agent for subject {sub_subject_name}.
+            Fwding response to `WORKLOAD.ERROR.INBOX`."
+        );
         vec!["WORKLOAD.ERROR.INBOX".to_string()]
     })
 }

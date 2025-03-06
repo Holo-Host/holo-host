@@ -1,13 +1,12 @@
 /*
- This client is associated with the:
-    - WORKLOAD account
+  This client is associated with the:
+    - HPOS account
     - host user
 
-This client is responsible for subscribing to workload streams that handle:
-    - installing new workloads onto the hosting device
-    - removing workloads from the hosting device
-    - sending workload status upon request
-    - sending out active periodic workload reports
+  This client is responsible for publishing to the inventory suject(s):
+    - `INVENTORY.<agent_pubkey>.update
+
+  This client does not subject to or consume any inventory subjects.
 */
 
 use anyhow::Result;

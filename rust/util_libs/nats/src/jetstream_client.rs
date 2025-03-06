@@ -98,7 +98,7 @@ impl JsClient {
         stream_name: &str,
     ) -> Result<jetstream::stream::Info, async_nats::Error> {
         let stream = &self.js_context.get_stream(stream_name).await?;
-        let info: jetstream::stream::Info = stream.get_info().await?;
+        let info = stream.get_info().await?;
         log::debug!(
             "{}JetStream info: stream:{}, info:{:?}",
             self.service_log_prefix,

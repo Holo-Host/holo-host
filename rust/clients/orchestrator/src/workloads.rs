@@ -14,13 +14,14 @@ This client is responsible for:
     - keeping service running until explicitly cancelled out
 */
 
-use super::utils::{create_callback_subject_to_host, create_consumer, OrchestratorConsumerBuilder};
-use crate::generate_call_method;
+use super::utils::{add_workload_consumer, create_callback_subject_to_host};
 use anyhow::{anyhow, Result};
-use async_nats::Message;
 use mongodb::Client as MongoDBClient;
-use nats_utils::{jetstream_client::JsClient, types::JsServiceBuilder};
-use std::sync::Arc;
+use nats_utils::{
+    generate_service_call,
+    jetstream_client::JsClient,
+    types::{JsServiceBuilder, ServiceConsumerBuilder},
+};
 use workload::{
     orchestrator_api::OrchestratorWorkloadApi, types::WorkloadServiceSubjects, WORKLOAD_SRV_DESC,
     WORKLOAD_SRV_NAME, WORKLOAD_SRV_SUBJ, WORKLOAD_SRV_VERSION,
@@ -51,36 +52,39 @@ pub async fn run(
         .get_js_service(WORKLOAD_SRV_NAME.to_string())
         .await
         .ok_or(anyhow!(
-            "Failed to locate Workload Service. Unable to spin up Orchestrator Workload Service."
+            "Failed to locate Workload Service. Unable to spin up Orchestrator Workl    oad Service."
         ))?;
 
     // Subjects published by Developer:
-    workload_service
-        .add_consumer(create_consumer(OrchestratorConsumerBuilder {
-            name: "add_workload".to_string(),
-            subject: WorkloadServiceSubjects::Add,
-            async_handler: generate_call_method!(workload_api, add_workload),
-            response_subject_fn: None,
-        }))
-        .await?;
+    add_workload_consumer(
+        ServiceConsumerBuilder::new(
+            "add_workload".to_string(),
+            WorkloadServiceSubjects::Add,
+            generate_service_call!(workload_api, add_workload),
+        ),
+        workload_service,
+    )
+    .await?;
 
-    workload_service
-        .add_consumer(create_consumer(OrchestratorConsumerBuilder {
-            name: "update_workload".to_string(),
-            subject: WorkloadServiceSubjects::Update,
-            async_handler: generate_call_method!(workload_api, update_workload),
-            response_subject_fn: None,
-        }))
-        .await?;
+    add_workload_consumer(
+        ServiceConsumerBuilder::new(
+            "update_workload".to_string(),
+            WorkloadServiceSubjects::Update,
+            generate_service_call!(workload_api, update_workload),
+        ),
+        workload_service,
+    )
+    .await?;
 
-    workload_service
-        .add_consumer(create_consumer(OrchestratorConsumerBuilder {
-            name: "delete_workload".to_string(),
-            subject: WorkloadServiceSubjects::Delete,
-            async_handler: generate_call_method!(workload_api, delete_workload),
-            response_subject_fn: None,
-        }))
-        .await?;
+    add_workload_consumer(
+        ServiceConsumerBuilder::new(
+            "delete_workload".to_string(),
+            WorkloadServiceSubjects::Delete,
+            generate_service_call!(workload_api, delete_workload),
+        ),
+        workload_service,
+    )
+    .await?;
 
     // Subjects published by the Nats-DB-Connector:
     let db_insertion_response_handler = create_callback_subject_to_host(
@@ -88,14 +92,16 @@ pub async fn run(
         "assigned_hosts".to_string(),
         WorkloadServiceSubjects::Install.as_ref().to_string(),
     );
-    workload_service
-        .add_consumer(create_consumer(OrchestratorConsumerBuilder {
-            name: "handle_db_insertion".to_string(),
-            subject: WorkloadServiceSubjects::Insert,
-            async_handler: generate_call_method!(workload_api, handle_db_insertion),
-            response_subject_fn: Some(db_insertion_response_handler),
-        }))
-        .await?;
+    add_workload_consumer(
+        ServiceConsumerBuilder::new(
+            "handle_db_insertion".to_string(),
+            WorkloadServiceSubjects::Insert,
+            generate_service_call!(workload_api, handle_db_insertion),
+        )
+        .with_response_subject_fn(db_insertion_response_handler),
+        workload_service,
+    )
+    .await?;
 
     let db_modification_response_handler = create_callback_subject_to_host(
         true,
@@ -104,24 +110,27 @@ pub async fn run(
             .as_ref()
             .to_string(),
     );
-    workload_service
-        .add_consumer(create_consumer(OrchestratorConsumerBuilder {
-            name: "handle_db_modification".to_string(),
-            subject: WorkloadServiceSubjects::Modify,
-            async_handler: generate_call_method!(workload_api, handle_db_modification),
-            response_subject_fn: Some(db_modification_response_handler),
-        }))
-        .await?;
+    add_workload_consumer(
+        ServiceConsumerBuilder::new(
+            "handle_db_modification".to_string(),
+            WorkloadServiceSubjects::Modify,
+            generate_service_call!(workload_api, handle_db_modification),
+        )
+        .with_response_subject_fn(db_modification_response_handler),
+        workload_service,
+    )
+    .await?;
 
     // Subjects published by the Host Agent:
-    workload_service
-        .add_consumer(create_consumer(OrchestratorConsumerBuilder {
-            name: "handle_status_update".to_string(),
-            subject: WorkloadServiceSubjects::HandleStatusUpdate,
-            async_handler: generate_call_method!(workload_api, handle_status_update),
-            response_subject_fn: None,
-        }))
-        .await?;
+    add_workload_consumer(
+        ServiceConsumerBuilder::new(
+            "handle_status_update".to_string(),
+            WorkloadServiceSubjects::HandleStatusUpdate,
+            generate_service_call!(workload_api, handle_status_update),
+        ),
+        workload_service,
+    )
+    .await?;
 
     Ok(orchestrator_client)
 }

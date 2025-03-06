@@ -19,7 +19,7 @@ use async_nats::Message;
 use async_trait::async_trait;
 use core::option::Option::None;
 use db_utils::schemas::{WorkloadState, WorkloadStatus};
-use nats_utils::types::{AsyncEndpointHandler, JsServiceResponse, ServiceError};
+use nats_utils::types::ServiceError;
 use serde::Deserialize;
 use std::future::Future;
 use std::{fmt::Debug, sync::Arc};
@@ -35,21 +35,6 @@ pub trait WorkloadServiceApi
 where
     Self: std::fmt::Debug + Clone + 'static,
 {
-    fn call<F, Fut>(&self, handler: F) -> AsyncEndpointHandler<WorkloadApiResult>
-    where
-        F: Fn(Self, Arc<Message>) -> Fut + Send + Sync + 'static,
-        Fut: Future<Output = Result<WorkloadApiResult, ServiceError>> + Send + 'static,
-        Self: Send + Sync,
-    {
-        let api = self.to_owned();
-        Arc::new(
-            move |msg: Arc<Message>| -> JsServiceResponse<WorkloadApiResult> {
-                let api_clone = api.clone();
-                Box::pin(handler(api_clone, msg))
-            },
-        )
-    }
-
     fn convert_msg_to_type<T>(msg: Arc<Message>) -> Result<T, ServiceError>
     where
         T: for<'de> Deserialize<'de> + Send + Sync,
