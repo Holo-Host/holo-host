@@ -25,9 +25,15 @@ impl MongodRunner {
     }
 
     pub fn run() -> anyhow::Result<Self> {
-        let tempdir = TempDir::new().unwrap();
+        let tempdir = TempDir::new().context("Failed to create tempdir.")?;
 
-        std::fs::File::create_new(Self::socket_path(&tempdir)?)?;
+        let socket_path = Self::socket_path(&tempdir)?;
+
+        // Ensure socket file does not exist
+        let socket_file = PathBuf::from(&socket_path);
+        if socket_file.exists() {
+            std::fs::remove_file(&socket_file)?;
+        }
 
         let mut cmd = std::process::Command::new("mongod");
         cmd.args([
@@ -40,20 +46,31 @@ impl MongodRunner {
             "--port",
             &0.to_string(),
         ])
-        .stdout(Stdio::null())
-        .stderr(Stdio::null());
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
 
-        let child = cmd
-            .spawn()
-            .unwrap_or_else(|e| panic!("Failed to spawn {cmd:?}: {e}"));
+        let child = cmd.spawn().context("Failed to start mongod")?;
 
         let new_self = Self {
             _child: child,
             tempdir,
         };
 
-        std::fs::exists(Self::socket_path(&new_self.tempdir)?)
-            .context("mongod socket should exist")?;
+        // Wait for db to be ready
+        let retries = 10;
+        for _ in 0..retries {
+            if socket_file.exists() {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_secs(3));
+        }
+
+        if !socket_file.exists() {
+            return Err(anyhow::anyhow!(
+                "MongoDB did not create the socket file in time"
+            ));
+        }
+
         println!(
             "MongoDB Server is running at {:?}",
             new_self.get_socket_pathbuf()

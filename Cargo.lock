@@ -2593,6 +2593,7 @@ dependencies = [
  "dotenv",
  "env_logger",
  "futures",
+ "hpos-hal",
  "inventory",
  "log",
  "mock_utils",
