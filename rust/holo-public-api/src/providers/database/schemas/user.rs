@@ -7,9 +7,10 @@ use super::shared::{
 pub const USER_COLLECTION_NAME: &str = "users";
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct User {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub _id: Option<bson::oid::ObjectId>,
-    pub _meta: Meta,
+    #[serde(skip_serializing_if = "Option::is_none", rename = "_id")]
+    pub oid: Option<bson::oid::ObjectId>,
+    #[serde(rename = "_meta")]
+    pub meta: Meta,
 
     // used for invalidating all refresh tokens for a user
     pub refresh_token_version: i32,

@@ -8,9 +8,10 @@ pub const API_KEY_COLLECTION_NAME: &str = "api_keys";
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ApiKey {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub _id: Option<bson::oid::ObjectId>,
-    pub _meta: Meta,
+    #[serde(skip_serializing_if = "Option::is_none", rename = "_id")]
+    pub oid: Option<bson::oid::ObjectId>,
+    #[serde(rename = "_meta")]
+    pub meta: Meta,
 
     pub user_id: bson::oid::ObjectId,
     pub key: String,
@@ -35,9 +36,7 @@ pub fn generate_api_key() -> String {
     // generate 4 parts of the key
     let part1 = uuid::Uuid::new().to_string();
     let part2 = uuid::Uuid::new().to_string();
-    let part3 = uuid::Uuid::new().to_string();
-    let part4 = uuid::Uuid::new().to_string();
-    let key = format!("{}-{}-{}-{}", part1, part2, part3, part4);
+    let key = format!("{}-{}", part1, part2);
     key
 }
 

@@ -1836,6 +1836,7 @@ dependencies = [
  "env_logger",
  "futures",
  "hpos-hal",
+ "inventory",
  "jsonwebtoken",
  "log",
  "machineid-rs",
@@ -2193,6 +2194,24 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "879f10e63c20629ecabbb64a8010319738c66a5cd0c29b02d63d272b03751d01"
 dependencies = [
  "generic-array",
+]
+
+[[package]]
+name = "inventory"
+version = "0.0.1"
+dependencies = [
+ "anyhow",
+ "async-nats",
+ "bson",
+ "bytes",
+ "hpos-hal",
+ "log",
+ "mongodb 3.2.1",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "util_libs",
 ]
 
 [[package]]
@@ -2844,6 +2863,7 @@ dependencies = [
  "dotenv",
  "env_logger",
  "futures",
+ "inventory",
  "log",
  "mongodb 3.2.1",
  "nkeys",
@@ -4869,6 +4889,7 @@ dependencies = [
  "dotenv",
  "env_logger",
  "futures",
+ "hpos-hal",
  "log",
  "mongodb 3.2.1",
  "nats-jwt",
@@ -5434,6 +5455,7 @@ dependencies = [
  "dotenv",
  "env_logger",
  "futures",
+ "hpos-hal",
  "log",
  "mongodb 3.2.1",
  "nkeys",

@@ -86,14 +86,14 @@ pub async fn login_refresh(
 
     // sign new access token
     let access_token = providers::jwt::sign_access_token(AccessTokenClaims {
-        sub: user._id.map(|id| id.to_string()).unwrap(),
+        sub: user.oid.map(|id| id.to_string()).unwrap(),
         exp: (Utc::now() + Duration::minutes(5)).timestamp() as usize,
         permissions: user.permissions,
     }, &config.jwt_secret).unwrap();
 
     // sign new refresh token
     let refresh_token = providers::jwt::sign_refresh_token(RefreshTokenClaims {
-        sub: user._id.map(|id| id.to_string()).unwrap(),
+        sub: user.oid.map(|id| id.to_string()).unwrap(),
         exp: (Utc::now() + Duration::days(7)).timestamp() as usize,
         version: user.refresh_token_version,
     }, &config.jwt_secret).unwrap();

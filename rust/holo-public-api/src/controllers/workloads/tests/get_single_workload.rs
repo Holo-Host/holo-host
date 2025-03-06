@@ -29,8 +29,8 @@ mod tests {
         let user_id = bson::oid::ObjectId::new();
 
         let mut workload = workload::Workload {
-            _id: None,
-            _meta: new_meta(),
+            oid: None,
+            meta: new_meta(),
             owner_user_id: user_id,
             version: "1.0.0".to_string(),
             nix_pkg: "test".to_string(),
@@ -47,7 +47,7 @@ mod tests {
         ).insert_one(workload.clone(), None).await.unwrap();
 
         let workload_id = result.inserted_id.as_object_id().unwrap();
-        workload._id = Some(workload_id);
+        workload.oid = Some(workload_id);
 
         workload
     }
@@ -59,7 +59,7 @@ mod tests {
         let db = get_db(&app_config).await;
 
         let workload = create_workload(&db).await;
-        let workload_id = workload._id;
+        let workload_id = workload.oid;
         let user_id = workload.owner_user_id;
         
         let req = TestRequest::get()
@@ -96,7 +96,7 @@ mod tests {
         let db = get_db(&app_config).await;
 
         let workload = create_workload(&db).await;
-        let workload_id = workload._id;
+        let workload_id = workload.oid;
         let user_id = workload.owner_user_id;
 
         let req = TestRequest::get()

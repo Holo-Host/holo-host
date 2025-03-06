@@ -28,8 +28,8 @@ mod tests {
 
     pub async fn create_workload(db: &Database) -> workload::Workload {
         let mut workload = workload::Workload{
-            _id: None,
-            _meta: new_meta(),
+            oid: None,
+            meta: new_meta(),
             owner_user_id: ObjectId::new(),
             version: "1.0.0".to_string(),
             nix_pkg: "nixpkgs".to_string(),
@@ -47,7 +47,7 @@ mod tests {
         ).insert_one(workload_doc, None).await.unwrap();
 
         let workload_id = result.inserted_id.as_object_id().unwrap();
-        workload._id = Some(workload_id);
+        workload.oid = Some(workload_id);
 
         workload
     }
@@ -58,7 +58,7 @@ mod tests {
         let db = get_db(&app_config).await;
 
         let workload = create_workload(&db).await;
-        let workload_id = workload._id.map(|id| id.to_hex());
+        let workload_id = workload.oid.map(|id| id.to_hex());
         let user_id = workload.owner_user_id;
 
         let req = TestRequest::delete()
@@ -90,7 +90,7 @@ mod tests {
         let db = get_db(&app_config).await;
 
         let workload = create_workload(&db).await;
-        let workload_id = workload._id.map(|id| id.to_hex());
+        let workload_id = workload.oid.map(|id| id.to_hex());
 
         let req = TestRequest::delete()
             .insert_header(("Content-Type", "application/json"))

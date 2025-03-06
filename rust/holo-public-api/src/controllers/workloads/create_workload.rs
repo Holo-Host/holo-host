@@ -75,8 +75,8 @@ pub async fn create_workload(
 
     let workload_request = workload.into_inner();
     let mut workload = workload::Workload {
-        _id: None,
-        _meta: Meta {
+        oid: None,
+        meta: Meta {
             created_at: bson::DateTime::now(),
             updated_at: bson::DateTime::now(),
             deleted_at: None,
@@ -93,7 +93,7 @@ pub async fn create_workload(
         workload::WORKLOAD_COLLECTION_NAME
     ).insert_one(workload.clone(), None).await {
         Ok(result) => {
-            workload._id = Some(result.inserted_id.as_object_id().unwrap());
+            workload.oid = Some(result.inserted_id.as_object_id().unwrap());
             workload
         },
         Err(e) => {
