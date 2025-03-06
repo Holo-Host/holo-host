@@ -12,24 +12,24 @@ Endpoints & Managed Subjects:
 
 pub mod types;
 
+#[cfg(test)]
+mod tests;
+
 use anyhow::Result;
 use async_nats::jetstream::ErrorCode;
 use async_nats::Message;
 use bson::{self, doc, oid::ObjectId, Bson, DateTime};
+use db_utils::{
+    mongodb::{IntoIndexes, MongoCollection, MongoDbAPI},
+    schemas::{self, Host, Workload},
+};
 use hpos_hal::inventory::HoloInventory;
 use mongodb::results::UpdateResult;
 use mongodb::{options::UpdateModifications, Client as MongoDBClient};
+use nats_utils::types::ServiceError;
 use serde::{Deserialize, Serialize};
-use std::future::Future;
 use std::sync::Arc;
 use types::InventoryApiResult;
-use util_libs::{
-    db::{
-        mongodb::{IntoIndexes, MongoCollection, MongoDbAPI},
-        schemas::{self, Host, Workload},
-    },
-    nats::types::{AsyncEndpointHandler, JsServiceResponse, ServiceError},
-};
 
 pub const INVENTORY_SRV_NAME: &str = "INVENTORY";
 pub const INVENTORY_SRV_SUBJ: &str = "INVENTORY";
@@ -61,9 +61,7 @@ impl InventoryServiceApi {
         let msg_subject = msg.subject.clone().into_string();
         let host_inventory = Self::convert_msg_to_type::<HoloInventory>(msg)?;
         log::trace!(
-            "INVENTORY message payload. subject='{}', msg={:?}",
-            msg_subject,
-            host_inventory
+            "INVENTORY message payload. subject='{msg_subject}', payload={host_inventory:?}"
         );
 
         let subject_sections: Vec<&str> = msg_subject.split(".").collect();
@@ -88,48 +86,6 @@ impl InventoryServiceApi {
         Ok(InventoryApiResult {
             status: types::InventoryUpdateStatus::Ok,
             maybe_response_tags: None,
-        })
-    }
-
-    // Helper function to initialize mongodb collections
-    async fn init_collection<T>(
-        client: &MongoDBClient,
-        collection_name: &str,
-    ) -> Result<MongoCollection<T>>
-    where
-        T: Serialize + for<'de> Deserialize<'de> + Unpin + Send + Sync + Default + IntoIndexes,
-    {
-        Ok(MongoCollection::<T>::new(client, schemas::DATABASE_NAME, collection_name).await?)
-    }
-
-    pub fn call<F, Fut>(&self, handler: F) -> AsyncEndpointHandler<InventoryApiResult>
-    where
-        F: Fn(Self, Arc<Message>) -> Fut + Send + Sync + 'static,
-        Fut: Future<Output = Result<InventoryApiResult, ServiceError>> + Send + 'static,
-        Self: Send + Sync,
-    {
-        let api = self.to_owned();
-        Arc::new(
-            move |msg: Arc<Message>| -> JsServiceResponse<InventoryApiResult> {
-                let api_clone = api.clone();
-                Box::pin(handler(api_clone, msg))
-            },
-        )
-    }
-
-    fn convert_msg_to_type<T>(msg: Arc<Message>) -> Result<T, ServiceError>
-    where
-        T: for<'de> Deserialize<'de> + Send + Sync,
-    {
-        let payload_buf = msg.payload.to_vec();
-        serde_json::from_slice::<T>(&payload_buf).map_err(|e| {
-            let err_msg = format!(
-                "Error: Failed to deserialize payload. Subject='{}' Err={}",
-                msg.subject.clone().into_string(),
-                e
-            );
-            log::error!("{}", err_msg);
-            ServiceError::Request(format!("{} Code={:?}", err_msg, ErrorCode::BAD_REQUEST))
         })
     }
 
@@ -218,5 +174,31 @@ impl InventoryServiceApi {
         }
 
         Ok(())
+    }
+
+    // Helper function to initialize mongodb collections
+    async fn init_collection<T>(
+        client: &MongoDBClient,
+        collection_name: &str,
+    ) -> Result<MongoCollection<T>>
+    where
+        T: Serialize + for<'de> Deserialize<'de> + Unpin + Send + Sync + Default + IntoIndexes,
+    {
+        Ok(MongoCollection::<T>::new(client, schemas::DATABASE_NAME, collection_name).await?)
+    }
+
+    fn convert_msg_to_type<T>(msg: Arc<Message>) -> Result<T, ServiceError>
+    where
+        T: for<'de> Deserialize<'de> + Send + Sync,
+    {
+        let payload_buf = msg.payload.to_vec();
+        serde_json::from_slice::<T>(&payload_buf).map_err(|e| {
+            let err_msg = format!(
+                "Error: Failed to deserialize payload. Subject='{}' Err={e:?}",
+                msg.subject.clone().into_string(),
+            );
+            log::error!("{}", err_msg);
+            ServiceError::Request(format!("{err_msg:?} Code={:?}", ErrorCode::BAD_REQUEST))
+        })
     }
 }
