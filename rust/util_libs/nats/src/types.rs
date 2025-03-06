@@ -207,11 +207,13 @@ where
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub enum Credentials {
     Path(std::path::PathBuf), // String = pathbuf as string
     Password(String, String),
     Token(String),
+    #[default]
+    None,
 }
 
 #[derive(Deserialize, Default)]

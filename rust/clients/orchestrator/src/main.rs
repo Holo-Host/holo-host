@@ -9,6 +9,9 @@ use dotenv::dotenv;
 use mongodb::{options::ClientOptions, Client as MongoDBClient};
 use nats_utils::jetstream_client::get_nats_url;
 
+#[cfg(test)]
+mod tests;
+
 #[tokio::main]
 async fn main() -> Result<(), async_nats::Error> {
     dotenv().ok();

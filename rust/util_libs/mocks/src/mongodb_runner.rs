@@ -52,7 +52,7 @@ impl MongodRunner {
             tempdir,
         };
 
-        log::info!(
+        println!(
             "MongoDB Server is running at {:?}",
             new_self.socket_pathbuf()
         );

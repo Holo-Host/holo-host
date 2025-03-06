@@ -15,6 +15,8 @@ where
     S: Serialize + Clone + AsRef<str>,
     R: EndpointTraits,
 {
+    println!("adding consumer: consumer={:?}", service_builder.name);
+
     workload_service
         .add_consumer(service_builder.into())
         .await
