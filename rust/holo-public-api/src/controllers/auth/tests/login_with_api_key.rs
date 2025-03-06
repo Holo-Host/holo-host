@@ -26,9 +26,9 @@ mod tests {
             USER_COLLECTION_NAME
         ).insert_one(
             User {
-                _id: None,
+                oid: None,
                 permissions: vec![],
-                _meta: new_meta(),
+                meta: new_meta(),
                 refresh_token_version: 0,
                 roles: vec![]
             },
@@ -40,10 +40,10 @@ mod tests {
             API_KEY_COLLECTION_NAME
         ).insert_one(
             ApiKey {
-                _id: None,
+                oid: None,
+                meta: new_meta(),
                 user_id: user_id,
                 key: api_key.clone(),
-                _meta: new_meta(),
             },
             None
         ).await.unwrap();
