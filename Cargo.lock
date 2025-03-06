@@ -1650,6 +1650,7 @@ dependencies = [
  "env_logger",
  "futures",
  "hpos-hal",
+ "inventory",
  "jsonwebtoken",
  "log",
  "machineid-rs",
@@ -1998,6 +1999,24 @@ dependencies = [
  "equivalent",
  "hashbrown 0.15.2",
  "serde",
+]
+
+[[package]]
+name = "inventory"
+version = "0.0.1"
+dependencies = [
+ "anyhow",
+ "async-nats",
+ "bson",
+ "bytes",
+ "hpos-hal",
+ "log",
+ "mongodb",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "util_libs",
 ]
 
 [[package]]
@@ -2633,6 +2652,7 @@ dependencies = [
  "dotenv",
  "env_logger",
  "futures",
+ "inventory",
  "log",
  "mongodb 3.2.1",
  "nkeys",
@@ -4590,6 +4610,7 @@ dependencies = [
  "dotenv",
  "env_logger",
  "futures",
+ "hpos-hal",
  "log",
  "mongodb 3.2.1",
  "nats-jwt",
@@ -5146,6 +5167,7 @@ dependencies = [
  "dotenv",
  "env_logger",
  "futures",
+ "hpos-hal",
  "log",
  "mongodb 3.2.1",
  "nkeys",

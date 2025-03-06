@@ -69,7 +69,7 @@ jobs:
             rust-
 
       - name: Run Tests
-        run: cargo test --verbose
+        run: cd rust/holo-public-api && cargo test --verbose
 
   deployDev:
     name: Deploy to Dev

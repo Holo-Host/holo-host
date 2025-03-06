@@ -9,9 +9,10 @@ pub const USER_INFO_COLLECTION_NAME: &str = "user_infos";
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct UserInfo {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub _id: Option<ObjectId>,
-    pub _meta: Meta,
+    #[serde(skip_serializing_if = "Option::is_none", rename = "_id")]
+    pub oid: Option<ObjectId>,
+    #[serde(rename = "_meta")]
+    pub meta: Meta,
     
     pub user_id: ObjectId,
     pub given_name: String,
@@ -58,8 +59,8 @@ pub fn user_info_validator() -> bson::Document {
 
 pub fn user_info_to_dto(user_info: UserInfo) -> Result<UserInfoDto, anyhow::Error> {
     Ok(UserInfoDto {
-        id: user_info._id.map(|id| id.to_hex()),
-        meta: meta_to_dto(user_info._meta)?,
+        id: user_info.oid.map(|id| id.to_hex()),
+        meta: meta_to_dto(user_info.meta)?,
         user_id: user_info.user_id.to_hex(),
         given_name: user_info.given_name,
         family_name: user_info.family_name,
@@ -82,8 +83,8 @@ pub fn user_info_from_dto(user_info_dto: UserInfoDto) -> Result<UserInfo, anyhow
     let email = user_info_dto.email;
 
     Ok(UserInfo {
-        _id: id,
-        _meta: meta,
+        oid: id,
+        meta,
         user_id: user_id,
         given_name: given_name,
         family_name: family_name,
@@ -119,8 +120,8 @@ mod tests {
     #[test]
     fn test_user_info_to_dto() {
         let user_info = UserInfo {
-            _id: Some(ObjectId::new()),
-            _meta: Meta {
+            oid: Some(ObjectId::new()),
+            meta: Meta {
                 is_deleted: false,
                 created_at: bson::DateTime::now(),
                 updated_at: bson::DateTime::now(),
@@ -134,7 +135,7 @@ mod tests {
         };
 
         let user_info_dto = user_info_to_dto(user_info.clone()).unwrap();
-        assert_eq!(user_info_dto.id, user_info._id.map(|id| id.to_hex()));
+        assert_eq!(user_info_dto.id, user_info.oid.map(|id| id.to_hex()));
         assert_eq!(user_info_dto.user_id, user_info.user_id.to_hex());
         assert_eq!(user_info_dto.given_name, user_info.given_name);
         assert_eq!(user_info_dto.family_name, user_info.family_name);
@@ -160,7 +161,7 @@ mod tests {
         };
 
         let user_info = user_info_from_dto(user_info_dto.clone()).unwrap();
-        assert_eq!(user_info._id.map(|id| id.to_hex()), user_info_dto.id);
+        assert_eq!(user_info.oid.map(|id| id.to_hex()), user_info_dto.id);
         assert_eq!(user_info.user_id.to_hex(), user_info_dto.user_id);
         assert_eq!(user_info.given_name, user_info_dto.given_name);
         assert_eq!(user_info.family_name, user_info_dto.family_name);
