@@ -192,10 +192,7 @@ mod tests {
         println!("workload ? : {:?}", workload);
         assert!(workload.is_some());
 
-        let workload = workload.expect(&format!(
-            "Failed to return workload with assigned developer {:?}",
-            mock_workload.assigned_developer,
-        ));
+        let workload = workload.unwrap();
         assert!(matches!(workload.status.desired, WorkloadState::Running));
         assert!(matches!(workload.status.actual, WorkloadState::Reported));
     }
@@ -579,7 +576,7 @@ mod tests {
                 WorkloadServiceSubjects::HandleStatusUpdate.as_ref()
             ),
             msg_id: "update_workload_status_id".to_string(),
-            data: serde_json::to_vec(&mock_workload_status).unwrap().into(),
+            data: serde_json::to_vec(&mock_workload_status).unwrap(),
             headers: None,
         };
         client
