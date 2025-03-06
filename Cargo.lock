@@ -2011,7 +2011,7 @@ dependencies = [
  "bytes",
  "hpos-hal",
  "log",
- "mongodb",
+ "mongodb 3.2.1",
  "serde",
  "serde_json",
  "tempfile",
