@@ -1,14 +1,13 @@
-#![allow(dead_code)]
-
+/// This module implements running ephemeral Mongod instances.
+/// It disables TCP and relies only unix domain sockets.
 use anyhow::Context;
-use mongodb::{options::ClientOptions, Client as MongoDBClient};
+use mongodb::{options::ClientOptions, Client};
 use std::{path::PathBuf, process::Stdio, str::FromStr};
 use tempfile::TempDir;
 
-/// This module implements running ephemeral Mongod instances.
-/// It disables TCP and relies only unix domain sockets.
 pub struct MongodRunner {
     _child: std::process::Child,
+    // this is stored to prevent premature removing of the tempdir
     tempdir: TempDir,
 }
 
@@ -27,6 +26,7 @@ impl MongodRunner {
 
     pub fn run() -> anyhow::Result<Self> {
         let tempdir = TempDir::new().unwrap();
+
         std::fs::File::create_new(Self::socket_path(&tempdir)?)?;
 
         let mut cmd = std::process::Command::new("mongod");
@@ -54,7 +54,6 @@ impl MongodRunner {
 
         std::fs::exists(Self::socket_path(&new_self.tempdir)?)
             .context("mongod socket should exist")?;
-
         println!(
             "MongoDB Server is running at {:?}",
             new_self.get_socket_pathbuf()
@@ -67,11 +66,11 @@ impl MongodRunner {
         Ok(PathBuf::from_str(&Self::socket_path(&self.tempdir)?)?)
     }
 
-    pub fn client(&self) -> anyhow::Result<MongoDBClient> {
+    pub fn client(&self) -> anyhow::Result<Client> {
         let server_address = mongodb::options::ServerAddress::Unix {
             path: self.get_socket_pathbuf()?,
         };
         let client_options = ClientOptions::builder().hosts(vec![server_address]).build();
-        Ok(MongoDBClient::with_options(client_options)?)
+        Ok(Client::with_options(client_options)?)
     }
 }

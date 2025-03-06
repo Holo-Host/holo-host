@@ -31,10 +31,14 @@ mod tests {
     const TEST_ADMIN_INBOX_PREFIX: &str = "_TEST_ADMIN_INBOX";
 
     async fn setup_test_environment() -> Result<(TestNatsServer, MongoDBClient)> {
-        let nats_server = TestNatsServer::new().await.unwrap();
+        let nats_server = TestNatsServer::new()
+            .await
+            .expect("Failed to start test nats server.");
         println!("Nats Server is running at: {:?}", nats_server.get_url());
-        let mongod = MongodRunner::run().unwrap();
-        let mongo_client = mongod.client().unwrap();
+        let mongod = MongodRunner::run().expect("Failed to start test mongodb server.");
+        let mongo_client = mongod
+            .client()
+            .expect("Failed to connect cline to test mongodb server.");
         Ok((nats_server, mongo_client))
     }
 
@@ -159,7 +163,7 @@ mod tests {
         let publish_info = PublishInfo {
             subject: format!("WORKLOAD.{}", WorkloadServiceSubjects::Add.as_ref()),
             msg_id: "add_workload_id".to_string(),
-            data: serde_json::to_vec(&mock_workload).unwrap().into(),
+            data: serde_json::to_vec(&mock_workload).unwrap(),
             headers: None,
         };
 
@@ -228,7 +232,7 @@ mod tests {
         let publish_info = PublishInfo {
             subject: format!("WORKLOAD.{}", WorkloadServiceSubjects::Update.as_ref()),
             msg_id: "update_workload_id".to_string(),
-            data: serde_json::to_vec(&mock_workload_id).unwrap().into(),
+            data: serde_json::to_vec(&mock_workload_id).unwrap(),
             headers: None,
         };
         client
@@ -276,7 +280,7 @@ mod tests {
         let publish_info = PublishInfo {
             subject: format!("WORKLOAD.{}", WorkloadServiceSubjects::Delete.as_ref()),
             msg_id: "delete_workload_id".to_string(),
-            data: serde_json::to_vec(&mock_workload).unwrap().into(),
+            data: serde_json::to_vec(&mock_workload).unwrap(),
             headers: None,
         };
         client
