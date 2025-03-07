@@ -14,10 +14,12 @@
   pkgs,
   nixpkgs ? inputs.nixpkgs-2411,
   privateNetwork ? false,
+  index ? 0,
+  adminWebsocketPort ? 8000 + index,
+  containerName ? "holochain${builtins.toString index}",
 }:
 
 let
-  adminWebsocketPort = 8000;
 
   package = inputs.extra-container.lib.buildContainers {
 
@@ -36,7 +38,7 @@ let
     # addRunner = false;
 
     config = {
-      containers.holochain = {
+      containers."${containerName}" = {
         inherit privateNetwork;
 
         # `specialArgs` is available in nixpkgs > 22.11
@@ -90,8 +92,8 @@ let
           # ensure the port is closed before starting the holochain container
           host.wait_for_closed_port(${builtins.toString adminWebsocketPort}, timeout = 1)
 
-          host.succeed("extra-container start holochain")
-          host.wait_until_succeeds("systemctl -M holochain is-active holochain", timeout = 60)
+          host.succeed("extra-container start ${containerName}")
+          host.wait_until_succeeds("systemctl -M ${containerName} is-active holochain", timeout = 60)
 
           # now the port should be open
           host.wait_for_open_port(${builtins.toString adminWebsocketPort}, timeout = 1)
