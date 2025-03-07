@@ -9,6 +9,9 @@ mod middleware;
 #[allow(dead_code)]
 mod providers;
 
+#[allow(dead_code)]
+mod scheduler;
+
 #[cfg(test)]
 #[allow(dead_code)]
 mod tests;
@@ -31,6 +34,7 @@ async fn main() -> std::io::Result<()> {
         SecurityScheme::ApiKey(ApiKey::Header(ApiKeyValue::new("Authorization")))
     );
     docs.info.title = "Holo Public API".to_string();
+    docs.info.description = Some("Holo Public API has a limit of 10 requests per second for each user.".to_string());
     docs.info.version = "1.0.0".to_string();
     docs.servers = Some(vec![
         utoipa::openapi::Server::new(app_config.host.clone())
@@ -44,56 +48,78 @@ async fn main() -> std::io::Result<()> {
         std::process::exit(1);
     });
 
-    // setup limiter
+    // setup cache
+    let cache = providers::cache::setup_cache(
+        &app_config.redis_url
+    ).await.unwrap_or_else(|err| {
+        tracing::error!("Error setting up cache: {}", err);
+        std::process::exit(1);
+    });
+
+    // setup scheduler
+    if app_config.enable_scheduler {
+        scheduler::setup_scheduler(
+            app_config.clone(),
+            mongodb.clone(),
+            cache.clone()
+        ).await.unwrap();
+    }
+
+    // setup rate limiters
     // limit requests by ip for unauthenticated users
     let limit_by_ip = providers::limiter::limit_requests_by_ip(
         &app_config.redis_url,
-        10,
-        1
+        10, // amount of requests
+        1 // amount of seconds
     );
 
     // limit requests by user for authenticated users
     let limit_by_user = providers::limiter::limit_requests_by_user(
         &app_config.redis_url,
-        10,
-        1
+        10, // amount of requests
+        1 // amount of seconds
     );
 
     // start server
-    println!("Started server on {}/swagger/", app_config.host);
+    println!("Started server on {}", app_config.host);
     let port = app_config.port;
     HttpServer::new(move || {
-            // create app with required app data
-            let mut app = App::new()
+        // create app with required app data
+        let mut app = App::new()
             .app_data(web::Data::new(app_config.clone()))
-            .app_data(web::Data::new(mongodb.clone()));
-    
-            // open api spec and swagger ui
-            if app_config.enable_swagger {
-                app = app.service(
-                    SwaggerUi::new("/swagger/{_:.*}")
-                    .url("/api-docs/openapi.json", docs.clone())
-                );
-            }
-    
-            // public routes
+            .app_data(web::Data::new(mongodb.clone()))
+            .app_data(web::Data::new(cache.clone()))
+            .wrap(from_fn(middleware::logging::logging_middleware));
+
+        // open api spec and swagger ui
+        if app_config.enable_swagger {
+            app = app.route("/", web::get().to(|| async {
+                web::Redirect::to("/swagger/")
+            }));
             app = app.service(
-                web::scope("public")
-                .wrap(RateLimiter::default())
-                .app_data(web::Data::new(limit_by_ip.clone()))
-                .configure(controllers::setup_public_controllers)
+                SwaggerUi::new("/swagger/{_:.*}")
+                .url("/api-docs/openapi.json", docs.clone())
             );
-    
-            // protected routes
-            app = app.service(
-                web::scope("protected")
-                .wrap(from_fn(middleware::auth::auth_middleware))
-                .wrap(RateLimiter::default())
-                .app_data(web::Data::new(limit_by_user.clone()))
-                .configure(controllers::setup_private_controllers)
-            );
-    
-            app
+        }
+
+        // public routes
+        app = app.service(
+            web::scope("public")
+            .wrap(RateLimiter::default())
+            .app_data(web::Data::new(limit_by_ip.clone()))
+            .configure(controllers::setup_public_controllers)
+        );
+
+        // protected routes
+        app = app.service(
+            web::scope("protected")
+            .wrap(from_fn(middleware::auth::auth_middleware))
+            .wrap(RateLimiter::default())
+            .app_data(web::Data::new(limit_by_user.clone()))
+            .configure(controllers::setup_private_controllers)
+        );
+
+        app
     })
     .bind(("0.0.0.0", port))?
     .run()

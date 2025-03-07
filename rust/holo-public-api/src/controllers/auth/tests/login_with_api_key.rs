@@ -60,6 +60,7 @@ mod tests {
                 config: Some(app_config),
                 db: Some(db.clone()),
                 auth: None,
+                cache: None
             },
         ).await.unwrap();
 
@@ -85,7 +86,7 @@ mod tests {
         let resp = perform_integration_test(
             login_with_api_key,
             req,
-            WebData { config: Some(app_config), db: Some(db), auth: None },
+            WebData { config: Some(app_config), db: Some(db), auth: None, cache: None },
         ).await.unwrap();
         assert_eq!(resp.status, StatusCode::UNAUTHORIZED);
     }

@@ -20,3 +20,6 @@ tokio = "1"
 anyhow = "1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+deadpool-redis = "0.14"
+redis = { version = "0.23", features = ["tokio-comp"] }
+cron = "0.15.0"

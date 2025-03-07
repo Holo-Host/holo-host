@@ -45,7 +45,7 @@ mod tests {
         let resp = perform_integration_test(
             login_refresh,
             req,
-            WebData { config: Some(app_config), db: Some(db), auth: None },
+            WebData { config: Some(app_config), db: Some(db), auth: None, cache: None },
         ).await.unwrap();
 
         let body = resp.body.unwrap();
@@ -88,7 +88,7 @@ mod tests {
         let resp = perform_integration_test(
             login_refresh,
             req,
-            WebData { config: Some(app_config), db: Some(db), auth: None },
+            WebData { config: Some(app_config), db: Some(db), auth: None, cache: None },
         ).await.unwrap();
 
         assert_eq!(resp.status, StatusCode::UNAUTHORIZED);
@@ -125,7 +125,7 @@ mod tests {
         let resp = perform_integration_test(
             login_refresh,
             req,
-            WebData { config: Some(app_config), db: Some(db), auth: None },
+            WebData { config: Some(app_config), db: Some(db), auth: None, cache: None },
         ).await.unwrap();
 
         assert_eq!(resp.status, StatusCode::UNAUTHORIZED);
@@ -147,7 +147,7 @@ mod tests {
         let resp = perform_integration_test(
             login_refresh,
             req,
-            WebData { config: Some(app_config), db: Some(db), auth: None },
+            WebData { config: Some(app_config), db: Some(db), auth: None, cache: None },
         ).await.unwrap();
 
         let body = resp.body.unwrap();

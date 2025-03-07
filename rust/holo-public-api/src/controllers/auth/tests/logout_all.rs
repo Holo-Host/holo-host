@@ -40,6 +40,7 @@ mod tests {
             WebData {
                 config: Some(app_config),
                 db: Some(db.clone()),
+                cache: None,
                 auth: Some(AccessTokenClaims {
                     sub: user_id.to_string(),
                     exp: 0,
