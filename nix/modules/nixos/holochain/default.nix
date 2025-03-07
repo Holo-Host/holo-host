@@ -44,6 +44,12 @@ in
       };
     };
 
+    wasmLog = lib.mkOption {
+      type = lib.types.str;
+      default = "info";
+      description = "configure wasm log level (zomes)";
+    };
+
     passphraseFile = lib.mkOption {
       type = lib.types.str;
       default = "./passphrase.txt";
@@ -155,6 +161,7 @@ in
       environment = {
         RUST_LOG = "${cfg.rust.log},wasmer_compiler_cranelift=warn";
         RUST_BACKTRACE = cfg.rust.backtrace;
+        WASM_LOG = cfg.wasmLog;
       };
 
       preStart = ''

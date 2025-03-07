@@ -14,3 +14,16 @@ fn validate(op: Op) -> ExternResult<ValidateCallbackResult> {
 
     Ok(ValidateCallbackResult::Valid)
 }
+
+pub mod types {
+    use hdi::prelude::*;
+
+    #[hdk_link_types]
+    pub enum LinkTypes {
+        ParticipantRegistration,
+    }
+}
+
+pub fn get_participant_registration_anchor_hash() -> ExternResult<EntryHash> {
+    Path(vec!["_participants_".into()]).path_entry_hash()
+}
