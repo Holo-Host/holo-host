@@ -173,15 +173,6 @@ async fn main() -> Result<()> {
                         .authorize_signing_credentials(AuthorizeSigningCredentialsPayload {
                             cell_id: cell_id.clone(),
                             functions: Some(GrantedFunctions::All),
-                            // functions: Some(GrantedFunctions::Listed(
-                            //     [(
-                            //         install_and_init_happ_cmd_args.zome_name.clone(),
-                            //         install_and_init_happ_cmd_args.zome_fn_name.clone(),
-                            //     )]
-                            //     .into_iter()
-                            //     .map(|(zn, funcname)| (zn.into(), funcname.into()))
-                            //     .collect::<BTreeSet<(ZomeName, FunctionName)>>(),
-                            // )),
                         })
                         .await
                         .context(format!(
@@ -189,13 +180,6 @@ async fn main() -> Result<()> {
                             &cell_id,
                         ))?;
                     signer.add_credentials(cell_id.clone(), credentials);
-
-                    // let all_functions = app_ws
-                    //     .list_wasm_host_functions()
-                    //     .await?
-                    //     .into_iter()
-                    //     .collect::<BTreeSet<_>>();
-                    // println!("all functions: {all_functions:#?}");
 
                     'given_zome_calls: for (zome_name, (zome_fn_name, maybe_zome_fn_payload)) in
                         zome_calls_args.zome_calls.iter()
@@ -234,16 +218,11 @@ async fn main() -> Result<()> {
                                 payload,
                             )
                             .await
+                            .map(|io| -> Result<Vec<String>, _> { io.decode() })
                         {
-                            Ok(io) => {
-                                let response: Result<String, _> = io.decode();
-                                println!(
-                                    "success. got response with {} bytes:\n{response:#?}",
-                                    io.as_bytes().len()
-                                )
-                            }
-
-                            Err(e) => eprintln!("error: {e}",),
+                            Ok(Ok(data)) => println!("success, got data:\n{data:#?}"),
+                            Ok(Err(e)) => eprintln!("error: {e}"),
+                            Err(e) => eprintln!("error: {e}"),
                         };
                     }
                 }
