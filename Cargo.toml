@@ -4,6 +4,7 @@ package.version = "0.1.0"
 metadata.crane.name = "holo-host-workspace"
 
 members = [
+  "rust/ham",
   "rust/hpos-hal",
   "rust/clients/host_agent",
   "rust/clients/orchestrator",
@@ -13,6 +14,9 @@ members = [
   "rust/util_libs/db",
   "rust/util_libs/mocks",
   "rust/netdiag",
+
+  "rust/holochain_zome_testing_0",
+  "rust/holochain_zome_testing_0_integrity",
 ]
 
 [workspace.dependencies]
@@ -23,8 +27,8 @@ thiserror = "2.0"
 thiserror-context = "0.1"
 futures = "0.3.31"
 anyhow = "1.0"
-serde = "1.0.215"
-serde_derive = "1.0.215"
+serde = "1.0.203"
+serde_derive = "1.0.203"
 serde_json = "1.0.133"
 dotenv = "0.15.0"
 env_logger = "0.11.0"
