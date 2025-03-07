@@ -25,4 +25,4 @@ leaf_server.conf
 rust/*/*/*/tmp/
 rust/*/*/*/*/tmp/
 
-ham.state
+ham.state*
