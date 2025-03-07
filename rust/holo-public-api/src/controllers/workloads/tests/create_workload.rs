@@ -43,6 +43,7 @@ mod tests {
             WebData {
                 config: Some(app_config),
                 db: Some(db),
+                cache: None,
                 auth: Some(AccessTokenClaims {
                     sub: user_id.to_string(),
                     exp: 1000000000,
@@ -76,6 +77,7 @@ mod tests {
             WebData {
                 config: Some(app_config),
                 db: Some(db),
+                cache: None,
                 auth: Some(AccessTokenClaims {
                     sub: user_id.to_string(),
                     exp: 1000000000,

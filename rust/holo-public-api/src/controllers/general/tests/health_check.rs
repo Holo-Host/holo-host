@@ -19,6 +19,7 @@ mod tests {
             config: None,
             db: None,
             auth: None,
+            cache: None,
         }).await.unwrap();
 
         assert_eq!(resp.status, StatusCode::OK);

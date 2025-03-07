@@ -8,8 +8,7 @@ use actix_web::{
 };
 use mongodb::Database;
 use crate::providers::{
-    config::AppConfig,
-    database, jwt::{
+    cache, config::AppConfig, database, jwt::{
         sign_access_token,
         sign_refresh_token,
         AccessTokenClaims,
@@ -17,10 +16,11 @@ use crate::providers::{
     }
 };
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct WebData {
     pub config: Option<AppConfig>,
     pub db: Option<Database>,
+    pub cache: Option<deadpool_redis::Pool>,
     pub auth: Option<AccessTokenClaims>
 }
 
@@ -56,6 +56,10 @@ pub async fn perform_integration_test<C: HttpServiceFactory + 'static>(
 
     if let Some(db) = web_data.db {
         app_builder = app_builder.app_data(web::Data::new(db));
+    }
+
+    if let Some(cache) = web_data.cache {
+        app_builder = app_builder.app_data(web::Data::new(cache));
     }
 
     if let Some(auth) = web_data.auth {
@@ -105,6 +109,12 @@ pub async fn get_db(app_config: &AppConfig) -> Database {
     database::setup_database(
         &app_config.mongo_url, "holo"
     ).await.expect(&format!("test database with config {app_config:#?}"))
+}
+
+pub async fn get_cache(app_config: &AppConfig) -> deadpool_redis::Pool {
+    cache::setup_cache(
+        &app_config.redis_url
+    ).await.expect(&format!("test cache with config {app_config:#?}"))
 }
 
 pub fn create_credentials(secret: &str, user_id: bson::oid::ObjectId) -> (String, String) {

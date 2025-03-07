@@ -6,6 +6,7 @@ use mongodb::Database;
 use crate::providers::config::AppConfig;
 
 mod push_logs;
+mod tests;
 
 pub async fn setup_scheduler(
     _: AppConfig,

@@ -9,8 +9,8 @@ pub const LOG_COLLECTION_NAME: &str = "logs";
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Log {
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub _id: Option<bson::oid::ObjectId>,
-    pub _meta: Meta,
+    pub oid: Option<bson::oid::ObjectId>,
+    pub meta: Meta,
 
     pub id: String,
     pub timestamp: bson::DateTime,

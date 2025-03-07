@@ -56,8 +56,8 @@ pub async fn logging_middleware(
     let mut conn = pool.unwrap();
 
     let log = Log {
-        _id: None,
-        _meta: new_meta(),
+        oid: None,
+        meta: new_meta(),
         id: uuid::Uuid::new().to_string(),
         timestamp: bson::DateTime::now(),
         path,

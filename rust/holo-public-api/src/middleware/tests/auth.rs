@@ -4,14 +4,13 @@ mod tests {
     use actix_web::middleware::from_fn;
     use actix_web::test::TestRequest;
     use actix_web::web;
-
+    use crate::controllers::general::health_check;
     use crate::middleware;
     use crate::providers::config::AppConfig;
     use crate::providers::jwt::{sign_access_token, AccessTokenClaims};
     use crate::tests::utils::{get_app_config, perform_integration_test, IntegrationTestResponse, WebData};
-    use crate::controllers::general::health_check;
 
-    async fn build_test_request(app_config: AppConfig, req: TestRequest) -> IntegrationTestResponse {
+    pub async fn build_test_request(app_config: AppConfig, req: TestRequest) -> IntegrationTestResponse {
         let controller = web::scope("")
             .wrap(from_fn(middleware::auth::auth_middleware))
             .service(health_check::health_check);
@@ -22,6 +21,7 @@ mod tests {
             WebData {
                 config: Some(app_config),
                 db: None,
+                cache: None,
                 auth: None,
             }
         ).await.unwrap();
