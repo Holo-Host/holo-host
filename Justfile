@@ -43,3 +43,16 @@ ham-cycle i:
     just holochain-container-destroy {{i}}
     just holochain-container {{i}}
     just ham-install {{i}}
+
+
+devhost-cycle:
+    #!/usr/bin/env bash
+    set -xeE
+    nix build .\#extra-container-devhost
+    extra-container destroy dev-hub
+    extra-container destroy dev-host
+    ./result/bin/container build
+    ./result/bin/container create
+    ./result/bin/container start dev-hub
+    ./result/bin/container start dev-host
+
