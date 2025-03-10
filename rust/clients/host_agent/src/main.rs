@@ -41,6 +41,7 @@ async fn main() -> Result<(), AgentCliError> {
         }
         agent_cli::CommandScopes::Host { command } => host_cmds::host_command(command)?,
         agent_cli::CommandScopes::Support { command } => support_cmds::support_command(command)?,
+        agent_cli::CommandScopes::Version {} => version(),
     }
 
     Ok(())
@@ -104,4 +105,12 @@ async fn daemonize(args: &DaemonzeArgs) -> Result<(), async_nats::Error> {
     // This affects all instances that share the same connection (including clones) because they are all references to the same resource.
     host_client.close().await?;
     Ok(())
+}
+
+/// Simple function to display various version numbers and strings. This includes other info that
+/// the default `-V` implementation within clap implements, such as the git commit hash.
+fn version() {
+    println!("Agent version: {}", env!["CARGO_PKG_VERSION"]);
+    println!("Git commit: {}", env!["GIT_HASH"]);
+    println!("Workspace status: {}", env!["GIT_STATUS"]);
 }
