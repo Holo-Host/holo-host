@@ -8,8 +8,6 @@ pub struct TestResponse {
     pub message: String,
 }
 
-impl EndpointTraits for TestResponse {}
-
 impl CreateTag for TestResponse {
     fn get_tags(&self) -> HashMap<String, String> {
         HashMap::new()
@@ -21,3 +19,5 @@ impl CreateResponse for TestResponse {
         serde_json::to_vec(&self).unwrap().into()
     }
 }
+
+impl EndpointTraits for TestResponse {}

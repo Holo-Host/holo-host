@@ -7,9 +7,9 @@ edition = "2021"
 anyhow = { workspace = true }
 clap = { workspace = true }
 log = { workspace = true }
-rustdns = "0.4.0"
-rustls = { version = "0.23.10", features = ["logging", "ring"] }
 serde = { workspace = true }
+rustls = { version = "0.23.10", features = ["logging", "ring"] }
+rustdns = "0.4.0"
 serde_yaml = "0.9.34"
 thiserror = "2.0.9"
 uuid = { version = "1.10.0", features = ["v4"] }

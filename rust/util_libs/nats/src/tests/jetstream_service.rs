@@ -1,12 +1,14 @@
 use crate::{
     jetstream_service::JsStreamService,
-    tests::test_nats_server::{check_nats_server, TestClientResponse, TestNatsServer},
+    tests::{
+        test_nats_server::{check_nats_server, TestClientResponse, TestNatsServer},
+        LocalTestResponse,
+    },
     types::{ConsumerBuilder, EndpointType, ResponseSubjectsGenerator},
 };
 use anyhow::Result;
 use futures::StreamExt;
 use mock_utils::service_test_response::TestResponse;
-// use super::service_test_response::TestResponse;
 use serial_test::serial;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -65,9 +67,9 @@ async fn test_add_consumer() -> Result<()> {
 
     // Create a sync endpoint handler
     let handler = EndpointType::Sync(Arc::new(|_msg| {
-        Ok(TestResponse {
+        Ok(LocalTestResponse(TestResponse {
             message: "test response".to_string(),
-        })
+        }))
     }));
 
     let consumer_builder = ConsumerBuilder {
@@ -114,9 +116,9 @@ async fn test_adding_async_consumer() -> Result<()> {
     // Create an async endpoint handler
     let handler = EndpointType::Async(Arc::new(|msg| {
         Box::pin(async move {
-            Ok(TestResponse {
+            Ok(LocalTestResponse(TestResponse {
                 message: format!("async response for {:?}", msg),
-            })
+            }))
         })
     }));
 
@@ -173,9 +175,9 @@ async fn test_consumer_message_handling() -> Result<()> {
         let test_payload = serde_json::from_str::<TestResponse>(test_str_payload)
             .expect("Failed to convert str to TestResponse");
         assert_eq!(test_payload.message, "Incoming test message".to_string());
-        Ok(TestResponse {
+        Ok(LocalTestResponse(TestResponse {
             message: "This is my outgoing test response".to_string(),
-        })
+        }))
     }));
 
     fn response_handler() -> ResponseSubjectsGenerator {
