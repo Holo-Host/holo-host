@@ -31,6 +31,8 @@ derive_more = { version = "1.0.0", features = ["debug"] }
 hpos-hal = { path = "../../hpos-hal" }
 
 [dev-dependencies]
+serial_test = "2.0"
+rand = "0.9.0"
 mock_utils = { path = "../../util_libs/mocks" }
 
 [features]

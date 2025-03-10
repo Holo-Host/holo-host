@@ -1,7 +1,7 @@
 use crate::{
     jetstream_client::{get_event_listeners, JsClient},
     tests::test_nats_server::{check_nats_server, TestNatsServer},
-    types::{JsClientBuilder, PublishInfo},
+    types::{JsClientBuilder, JsServiceBuilder, PublishInfo},
 };
 use anyhow::Result;
 use serial_test::serial;
@@ -21,7 +21,7 @@ async fn test_client_initialization() -> Result<()> {
         nats_url: format!("nats://localhost:{}", server.port),
         name: "test_client".to_string(),
         inbox_prefix: "_INBOX".to_string(),
-        credentials_path: None,
+        credentials: None,
         ping_interval: Some(Duration::from_secs(10)),
         request_timeout: Some(Duration::from_secs(5)),
         listeners: get_event_listeners(),
@@ -56,7 +56,7 @@ async fn test_publish_message() -> Result<()> {
         nats_url: format!("nats://localhost:{}", server.port),
         name: "test_client".to_string(),
         inbox_prefix: "_INBOX".to_string(),
-        credentials_path: None,
+        credentials: None,
         ping_interval: Some(Duration::from_secs(10)),
         request_timeout: Some(Duration::from_secs(5)),
         listeners: get_event_listeners(),
@@ -92,7 +92,7 @@ async fn test_add_js_service() -> Result<()> {
         nats_url: format!("nats://localhost:{}", server.port),
         name: "test_client".to_string(),
         inbox_prefix: "_INBOX".to_string(),
-        credentials_path: None,
+        credentials: None,
         ping_interval: Some(Duration::from_secs(10)),
         request_timeout: Some(Duration::from_secs(5)),
         listeners: get_event_listeners(),
@@ -100,7 +100,7 @@ async fn test_add_js_service() -> Result<()> {
     .await
     .expect("Failed to spin up Jetstream Client");
 
-    let service_params = crate::nats::types::JsServiceBuilder {
+    let service_params = JsServiceBuilder {
         name: "test_service".to_string(),
         description: "Test Service".to_string(),
         version: "0.0.1".to_string(),
@@ -131,7 +131,7 @@ async fn test_client_close() -> Result<()> {
         nats_url: format!("nats://localhost:{}", server.port),
         name: "test_client".to_string(),
         inbox_prefix: "_INBOX".to_string(),
-        credentials_path: None,
+        credentials: None,
         ping_interval: Some(Duration::from_secs(10)),
         request_timeout: Some(Duration::from_secs(5)),
         listeners: get_event_listeners(),

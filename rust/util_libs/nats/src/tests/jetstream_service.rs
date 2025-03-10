@@ -1,35 +1,15 @@
 use crate::{
     jetstream_service::JsStreamService,
     tests::test_nats_server::{check_nats_server, TestClientResponse, TestNatsServer},
-    types::{ConsumerBuilder, EndpointTraits, EndpointType, ResponseSubjectsGenerator},
+    types::{ConsumerBuilder, EndpointType, ResponseSubjectsGenerator},
 };
 use anyhow::Result;
 use futures::StreamExt;
-use serde::{Deserialize, Serialize};
+use mock_utils::test_service_response::TestResponse;
 use serial_test::serial;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::time::{sleep, Duration};
-
-// Test response type
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct TestResponse {
-    message: String,
-}
-
-impl EndpointTraits for TestResponse {}
-
-impl crate::nats::types::CreateTag for TestResponse {
-    fn get_tags(&self) -> HashMap<String, String> {
-        HashMap::new()
-    }
-}
-
-impl crate::nats::types::CreateResponse for TestResponse {
-    fn get_response(&self) -> bytes::Bytes {
-        serde_json::to_vec(&self).unwrap().into()
-    }
-}
 
 #[tokio::test]
 #[serial]
@@ -91,7 +71,7 @@ async fn test_add_consumer() -> Result<()> {
 
     let consumer_builder = ConsumerBuilder {
         name: "test_consumer".to_string(),
-        endpoint_subject: "endpoint".to_string(),
+        subject: "endpoint".to_string(),
         handler,
         response_subject_fn: None,
     };
@@ -141,7 +121,7 @@ async fn test_adding_async_consumer() -> Result<()> {
 
     let consumer_builder = ConsumerBuilder {
         name: "async_consumer".to_string(),
-        endpoint_subject: "async_endpoint".to_string(),
+        subject: "async_endpoint".to_string(),
         handler,
         response_subject_fn: None,
     };
@@ -203,7 +183,7 @@ async fn test_consumer_message_handling() -> Result<()> {
 
     let consumer_builder = ConsumerBuilder {
         name: "test_consumer".to_string(),
-        endpoint_subject: "endpoint".to_string(),
+        subject: "endpoint".to_string(),
         handler,
         response_subject_fn: Some(response_handler()),
     };
