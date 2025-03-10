@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use crate::db::{
+    use crate::{
         mongodb::{MongoCollection, MongoDbAPI},
         schemas::{self, Capacity, Metadata},
         tests::mongo_runner::MongodRunner,
@@ -8,6 +8,7 @@ mod tests {
     use anyhow::Result;
     use bson::{self, doc, oid, DateTime};
     use dotenv::dotenv;
+    use hpos_hal::inventory::HoloInventory;
 
     #[tokio::test]
     async fn test_indexing_and_api() -> Result<()> {
@@ -36,10 +37,8 @@ mod tests {
                 },
                 device_id: "placeholder_pubkey_host".to_string(),
                 ip_address: "127.0.0.1".to_string(),
-                remaining_capacity: Capacity {
-                    memory: 16,
-                    disk: 200,
-                    cores: 16,
+                inventory: HoloInventory {
+                    ..Default::default()
                 },
                 avg_uptime: 0.95,
                 avg_network_speed: 500,

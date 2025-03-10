@@ -119,10 +119,7 @@ impl JsStreamService {
         T: EndpointTraits,
     {
         // Add the Service Subject prefix
-        let consumer_subject = format!(
-            "{}.{}",
-            self.service_subject, builder_params.endpoint_subject
-        );
+        let consumer_subject = format!("{}.{}", self.service_subject, builder_params.subject);
 
         // Register JS Subject Consumer
         let consumer_config = consumer::pull::Config {
@@ -185,6 +182,8 @@ impl JsStreamService {
             let messages = consumer
                 .stream()
                 .heartbeat(std::time::Duration::from_secs(10))
+                .max_messages_per_batch(100)
+                .expires(std::time::Duration::from_secs(30))
                 .messages()
                 .await?;
 

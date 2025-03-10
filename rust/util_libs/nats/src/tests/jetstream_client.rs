@@ -1,4 +1,4 @@
-use crate::nats::{
+use crate::{
     jetstream_client::{get_event_listeners, JsClient},
     tests::test_nats_server::{check_nats_server, TestNatsServer},
     types::{JsClientBuilder, PublishInfo},

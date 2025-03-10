@@ -1,4 +1,4 @@
-use crate::nats::{
+use crate::{
     jetstream_service::JsStreamService,
     tests::test_nats_server::{check_nats_server, TestClientResponse, TestNatsServer},
     types::{ConsumerBuilder, EndpointTraits, EndpointType, ResponseSubjectsGenerator},

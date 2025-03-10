@@ -143,7 +143,7 @@ impl LeafServer {
             .stdout(Stdio::inherit())
             .stderr(Stdio::inherit())
             .spawn()
-            .context("Failed to start NATS leaf server")?;
+            .context("Failed to start NATS server")?;
 
         // TODO: wait for a readiness indicator
         std::thread::sleep(std::time::Duration::from_millis(100));

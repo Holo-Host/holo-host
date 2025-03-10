@@ -1,5 +1,5 @@
 use super::*;
-use crate::nats::leaf_server::{JetStreamConfig, LeafNodeRemote, LeafServer, LoggingOptions};
+use crate::nats_utils::leaf_server::{JetStreamConfig, LeafNodeRemote, LeafServer, LoggingOptions};
 use dotenv::dotenv;
 use futures::StreamExt;
 use serial_test::serial;
