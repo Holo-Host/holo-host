@@ -1,0 +1,12 @@
+[package]
+name = "nixos-contain-rs"
+edition = "2024"
+version.workspace = true
+
+[lib]
+
+[[bin]]
+name = "nixos-contain-rs"
+
+[dependencies]
+anyhow = { workspace = true }
