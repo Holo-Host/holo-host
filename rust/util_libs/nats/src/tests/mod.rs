@@ -1,5 +1,6 @@
 pub mod jetstream_client;
 pub mod jetstream_service;
+pub mod service_test_response;
 pub mod test_nats_server;
 
 #[cfg(feature = "tests_integration_nats")]

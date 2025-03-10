@@ -2,7 +2,7 @@ use nats_utils::types::{CreateResponse, CreateTag, EndpointTraits};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-// Test response type
+// Test response for a jetstream service
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TestResponse {
     pub message: String,
