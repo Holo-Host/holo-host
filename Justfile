@@ -56,3 +56,11 @@ devhost-cycle:
     ./result/bin/container start dev-hub
     ./result/bin/container start dev-host
 
+devhost-host-agent-remote +args="ping":
+    #!/usr/bin/env bash
+    set -xeE
+
+    export RUST_BACKTRACE=1
+    export RUST_LOG=trace
+    export HOST_AGENT_NATS_URL="nats://admin:admin@192.168.42.45"
+    cargo run --bin host_agent -- remote {{args}}
