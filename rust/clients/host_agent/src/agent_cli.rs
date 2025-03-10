@@ -1,6 +1,7 @@
 use clap::{Args, Parser, Subcommand};
 use netdiag::IPVersion;
 use std::path::PathBuf;
+use url::Url;
 
 /// Module containing all of the Clap Derive structs/definitions that make up the agent's
 /// command line. To start the agent daemon (usually from systemd), use `host_agent daemonize`.
@@ -30,6 +31,16 @@ pub enum CommandScopes {
     Support {
         #[command(subcommand)]
         command: SupportCommands,
+    },
+
+    /// Interact with a remote host-agent (via NATS).
+    Remote {
+        /// Url for the NATS connection. Can contain credentials.
+        #[clap(long, env = "HOST_AGENT_NATS_URL")]
+        nats_url: Url,
+
+        #[command(subcommand)]
+        command: RemoteCommands,
     },
 }
 
@@ -110,4 +121,14 @@ pub enum SupportCommands {
         #[arg(long)]
         enable: bool,
     },
+}
+
+/// A set of commands for remotely interacting with a running host-agent instance, by exchanging NATS messages.
+#[derive(Subcommand, Clone)]
+pub enum RemoteCommands {
+    /// Status
+    Ping {},
+
+    /// Manage workloads.
+    WorkloadsManage {},
 }

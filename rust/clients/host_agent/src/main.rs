@@ -41,6 +41,37 @@ async fn main() -> Result<(), AgentCliError> {
         }
         agent_cli::CommandScopes::Host { command } => host_cmds::host_command(command)?,
         agent_cli::CommandScopes::Support { command } => support_cmds::support_command(command)?,
+        agent_cli::CommandScopes::Remote { nats_url, command } => {
+            log::info!("Trying to connect to {nats_url}...");
+
+            let nats_client =
+                nats_utils::jetstream_client::JsClient::new(nats_utils::types::JsClientBuilder {
+                    nats_url: nats_url.to_string(),
+                    name: "host-agent-remote-client".to_string(),
+                    inbox_prefix: Default::default(),
+                    credentials: Default::default(),
+                    ping_interval: Some(std::time::Duration::from_secs(10)),
+                    request_timeout: Some(std::time::Duration::from_secs(29)),
+                    listeners: Default::default(),
+                })
+                .await
+                .map_err(|e| {
+                    AgentCliError::AsyncNats(
+                        format!("connecting to NATS via {nats_url}: {e:?}").into(),
+                    )
+                })?;
+
+            match command {
+                agent_cli::RemoteCommands::Ping {} => {
+                    let check = nats_client.check_connection().await?;
+
+                    log::info!("Connection check result: {check}");
+                }
+                agent_cli::RemoteCommands::WorkloadsManage {} => {
+                    unimplemented!();
+                }
+            }
+        }
     }
 
     Ok(())
