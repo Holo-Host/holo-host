@@ -33,15 +33,29 @@ impl HostWorkloadApi {
         log::debug!("Message payload '{}' : {:?}", msg_subject, message_payload);
 
         let status = if let Some(workload) = message_payload.workload {
-            // TODO: Talk through with Stefan
-            // 1. Connect to interface for Nix and instruct systemd to install workload...
-            // eg: nix_install_with(workload)
+            let result = match &workload.status.desired {
+                WorkloadState::Installed => {
+                    bash(&format!("extra-container create {}", workload.nix_pkg)).await
+                }
+                WorkloadState::Running => {
+                    bash(&format!(
+                        "extra-container create {} --start --restart-changed",
+                        workload.nix_pkg
+                    ))
+                    .await
+                }
+                other => Err(ServiceError::Workload(format!(
+                    "unsupported desired state: {other:?}"
+                ))),
+            };
 
-            // 2. Respond to endpoint request
             WorkloadStatus {
                 id: workload._id,
-                desired: WorkloadState::Running,
-                actual: WorkloadState::Unknown("..".to_string()),
+                desired: workload.status.desired.clone(),
+                actual: match result {
+                    Ok(_) => workload.status.desired,
+                    Err(e) => WorkloadState::Error(e.to_string()),
+                },
             }
         } else {
             let err_msg = format!("Failed to process Workload Service Endpoint. Subject={} Error=No workload found in message.", msg_subject);
@@ -81,7 +95,7 @@ impl HostWorkloadApi {
             WorkloadStatus {
                 id: workload._id,
                 desired: WorkloadState::Updating,
-                actual: WorkloadState::Unknown("..".to_string()),
+                actual: WorkloadState::Error("unimplemented".to_string()),
             }
         } else {
             let err_msg = format!("Failed to process Workload Service Endpoint. Subject={} Error=No workload found in message.", msg_subject);
@@ -113,15 +127,25 @@ impl HostWorkloadApi {
         log::debug!("Message payload '{}' : {:?}", msg_subject, message_payload);
 
         let status = if let Some(workload) = message_payload.workload {
-            // TODO: Talk through with Stefan
-            // 1. Connect to interface for Nix and instruct systemd to UNinstall workload...
-            // nix_uninstall_with(workload_id)
+            let result = match &workload.status.desired {
+                WorkloadState::Uninstalled => {
+                    bash(&format!("extra-container destroy {}", workload.nix_pkg)).await
+                }
+                other => Err(ServiceError::Workload(format!(
+                    "unsupported desired state: {other:?}"
+                ))),
+            };
 
-            // 2. Respond to endpoint request
             WorkloadStatus {
                 id: workload._id,
-                desired: WorkloadState::Uninstalled,
-                actual: WorkloadState::Unknown("..".to_string()),
+                desired: workload.status.desired.clone(),
+                actual: match result {
+                    Ok(_) => workload.status.desired,
+                    Err(e) => {
+                        log::error!("error uninstalling workload: {e}");
+                        WorkloadState::Error(e.to_string())
+                    }
+                },
             }
         } else {
             let err_msg = format!("Failed to process Workload Service Endpoint. Subject={} Error=No workload found in message.", msg_subject);
@@ -164,4 +188,24 @@ impl HostWorkloadApi {
             maybe_response_tags: None,
         })
     }
+}
+
+async fn bash(cmd: &str) -> Result<(), ServiceError> {
+    let mut workload_cmd = tokio::process::Command::new("/usr/bin/env");
+    workload_cmd.args(["bash", "-c", cmd]);
+
+    let output = workload_cmd
+        .output()
+        .await
+        .map_err(|e| ServiceError::Workload(format!("error running {workload_cmd:?}: {e}")))?;
+
+    if !output.status.success() {
+        return Err(ServiceError::Workload(format!(
+            "error running {workload_cmd:?} yielded non-success status:\n{output:?}",
+        )));
+    }
+
+    log::info!("workload creation result:\n{output:#?}");
+
+    Ok(())
 }

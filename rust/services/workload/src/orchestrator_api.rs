@@ -228,7 +228,7 @@ impl OrchestratorWorkloadApi {
                 };
                 self.assign_hosts_to_workload(assigned_host_ids.clone(), workload_id, new_status).await.map_err(|e| ServiceError::Internal(e.to_string()))?;
 
-                // 5. Create tag map with host ids to inform nats to publish message to these hosts with workload install status                
+                // 5. Create tag map with host ids to inform nats to publish message to these hosts with workload install status
                 let mut tag_map: HashMap<String, String> = HashMap::new();
                 for (index, host_pubkey) in assigned_host_ids.iter().cloned().enumerate() {
                     tag_map.insert(format!("assigned_host_{}", index), host_pubkey.to_hex());

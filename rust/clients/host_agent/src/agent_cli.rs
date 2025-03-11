@@ -77,6 +77,15 @@ pub struct DaemonzeArgs {
     )]
     pub(crate) nats_connect_timeout_secs: u64,
 
+    #[arg(
+        long,
+        short,
+        help = "disable host agent inventory functionality",
+        // TODO: i suspect there's a bug where the inventory prevents the workload messages from being processed
+        default_value_t =true
+    )]
+    pub(crate) host_inventory_disable: bool,
+
     #[arg(long, short, help = "host agent inventory check interval (in seconds)")]
     pub(crate) host_inventory_check_interval_sec: Option<u64>,
 
@@ -130,5 +139,11 @@ pub enum RemoteCommands {
     Ping {},
 
     /// Manage workloads.
-    WorkloadsManage {},
+    Workload {
+        #[arg(long)]
+        operation: String,
+
+        #[arg(long)]
+        data: String,
+    },
 }

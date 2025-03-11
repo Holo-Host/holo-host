@@ -32,7 +32,6 @@ pub mod nixos_contain {
     pub struct DestroyResult {}
 }
 
-///
 pub mod extra_container {
 
     use crate::nixos_contain::*;

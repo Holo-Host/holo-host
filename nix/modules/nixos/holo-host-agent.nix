@@ -33,7 +33,7 @@ in
 
     package = lib.mkOption {
       type = lib.types.package;
-      default = inputs.self.packages.${pkgs.stdenv.system}.rust-workspace;
+      default = inputs.self.packages.${pkgs.stdenv.system}.rust-workspace.passthru.individual.host_agent;
     };
 
     rust = {
@@ -109,7 +109,7 @@ in
           NATS_URL = cfg.nats.url;
         };
 
-      path = [
+      path = config.environment.systemPackages ++ [
         pkgs.nats-server
       ];
 

@@ -264,4 +264,6 @@ pub enum ServiceError {
     NATS(String),
     #[error("Internal Error: {0}")]
     Internal(String),
+    #[error("Workload Error: {0}")]
+    Workload(String),
 }

@@ -106,6 +106,19 @@ impl LeafServer {
             logging,
             leaf_node_remotes,
             server_handle: Arc::new(Mutex::new(None)),
+            /*
+               accounts = {
+                 SYS = {
+                   users = [
+                     {
+                       user = "admin";
+                       password = "admin";
+                     }
+                   ];
+                 };
+               };
+               system_account = "SYS";
+            */
         }
     }
 

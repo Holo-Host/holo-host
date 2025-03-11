@@ -71,8 +71,8 @@ where
             Ok(r) => r,
             Err(e) => {
                 let err_msg = format!(
-                    "Failed to process Workload Service Endpoint. 
-                    Subject={} 
+                    "Failed to process Workload Service Endpoint.
+                    Subject={}
                     Payload={payload:?},
                     Error={e:?}",
                     msg.subject.clone().into_string()

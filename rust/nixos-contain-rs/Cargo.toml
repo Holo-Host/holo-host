@@ -7,6 +7,7 @@ version.workspace = true
 
 [[bin]]
 name = "nixos-contain-rs"
+path = "src/bin/nixos-contain.rs"
 
 [dependencies]
 anyhow = { workspace = true }

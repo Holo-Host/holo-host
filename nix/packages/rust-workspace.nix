@@ -49,6 +49,41 @@ craneLib.buildPackage (
     # NB: we disable tests since we'll run them all via cargo-nextest
     doCheck = false;
 
+    passthru.individual =
+      let
+        fileSetForCrate =
+          crate:
+          pkgs.lib.fileset.toSource {
+            root = ../../.;
+            fileset = pkgs.lib.fileset.unions [
+              ../../Cargo.toml
+              ../../Cargo.lock
+              (craneLib.fileset.commonCargoSources crate)
+              (craneLib.fileset.commonCargoSources ../../rust)
+            ];
+          };
+
+        individualCrateArgs = commonArgs // {
+          inherit (craneLib.crateNameFromCargoToml { inherit src; }) version;
+          # NB: we disable tests since we'll run them all via cargo-nextest
+          doCheck = false;
+
+          pname = "host_agent";
+          cargoExtraArgs = "-p host_agent";
+          src = fileSetForCrate ../../rust/clients/host_agent;
+        };
+
+        individualCrateAargoArtifacts = craneLib.buildDepsOnly individualCrateArgs;
+      in
+      {
+        host_agent = craneLib.buildPackage (
+          individualCrateArgs
+          // {
+            cargoArtifacts = individualCrateAargoArtifacts;
+          }
+        );
+      };
+
     passthru.tests = {
       clippy = craneLib.cargoClippy (
         commonArgs
