@@ -17,18 +17,16 @@ use async_nats::{AuthError, Message};
 use bson::{self, doc, to_document};
 use core::option::Option::None;
 use data_encoding::BASE64URL_NOPAD;
+use db_utils::{
+    mongodb::{IntoIndexes, MongoCollection, MongoDbAPI},
+    schemas::{self, Host, Hoster, User},
+};
 use mongodb::{options::UpdateModifications, Client as MongoDBClient};
+use nats_utils::types::ServiceError;
 use nkeys::KeyPair;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, fmt::Debug, sync::Arc};
 use types::{AuthApiResult, DbValidationData};
-use util_libs::{
-    db::{
-        mongodb::{IntoIndexes, MongoCollection, MongoDbAPI},
-        schemas::{self, Host, Hoster, User},
-    },
-    nats::types::ServiceError,
-};
 
 pub const AUTH_SRV_NAME: &str = "AUTH_SERVICE";
 pub const AUTH_SRV_SUBJ: &str = "AUTH";

@@ -15,11 +15,14 @@
       }
     }
   },
+  "rust-analyzer.check.command": "clippy",
+  "rust-analyzer.check.allTargets": true,
+  "rust-analyzer.check.extraArgs": ["--", "--deny=warnings"],
   "[rust]": {
-    "editor.defaultFormatter": "rust-lang.rust-analyzer",
+    "editor.defaultFormatter": "rust-lang.rust-analyzer"
   },
   "files.readonlyInclude": {
     "**/.cargo/registry/src/**/*.rs": true,
-    "**/lib/rustlib/src/rust/library/**/*.rs": true,
-  },
+    "**/lib/rustlib/src/rust/library/**/*.rs": true
+  }
 }

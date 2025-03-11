@@ -1,21 +1,20 @@
-#![allow(dead_code)]
-#![allow(unused_imports)]
-
-use super::{
-    create_test_host, create_test_workload, create_test_workload_default, MongodRunner, TestMessage,
-};
-use crate::{orchestrator_api::OrchestratorWorkloadApi, types::WorkloadResult};
-use anyhow::Result;
-use bson::doc;
-use std::sync::Arc;
-use util_libs::db::schemas::{WorkloadState, WorkloadStatus};
-
 #[cfg(not(target_arch = "aarch64"))]
 #[cfg(test)]
 mod tests {
-    use util_libs::db::{mongodb::MongoDbAPI, schemas::Capacity};
+    use crate::{orchestrator_api::OrchestratorWorkloadApi, types::WorkloadResult};
+    use anyhow::Result;
+    use bson::doc;
+    use db_utils::schemas::{WorkloadState, WorkloadStatus};
+    use hpos_hal::inventory::{HoloDriveInventory, HoloInventory};
+    use mock_utils::{
+        host::{create_test_host, gen_mock_processors},
+        mongodb_runner::MongodRunner,
+        nats_message::NatsMessage,
+        workload::{create_test_workload, create_test_workload_default},
+    };
+    use std::sync::Arc;
 
-    use super::*;
+    use db_utils::{mongodb::MongoDbAPI, schemas::Capacity};
 
     #[tokio::test]
     async fn test_add_workload() -> Result<()> {
@@ -25,7 +24,7 @@ mod tests {
         let api = OrchestratorWorkloadApi::new(&db_client).await?;
         let workload = create_test_workload_default();
         let msg_payload = serde_json::to_vec(&workload).unwrap();
-        let msg = Arc::new(TestMessage::new("WORKLOAD.add", msg_payload).into_message());
+        let msg = Arc::new(NatsMessage::new("WORKLOAD.add", msg_payload).into_message());
         let result = api.add_workload(msg).await?;
 
         assert!(result.result.status.id.is_some());
@@ -57,7 +56,7 @@ mod tests {
 
         // Then update it
         let msg_payload = serde_json::to_vec(&workload).unwrap();
-        let msg = Arc::new(TestMessage::new("WORKLOAD.update", msg_payload).into_message());
+        let msg = Arc::new(NatsMessage::new("WORKLOAD.update", msg_payload).into_message());
 
         let result = api.update_workload(msg).await?;
 
@@ -75,8 +74,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_remove_workload() -> Result<()> {
-        let mongod = MongodRunner::run().unwrap();
-        let db_client = mongod.client().unwrap();
+        let mongod = MongodRunner::run().expect("Failed to run mongod");
+        let db_client = mongod.client().expect("Failed to create db client");
 
         let api = OrchestratorWorkloadApi::new(&db_client).await?;
 
@@ -85,28 +84,29 @@ mod tests {
         let workload_id = api.workload_collection.insert_one_into(workload).await?;
 
         // Then remove it
-        let msg_payload = serde_json::to_vec(&workload_id).unwrap();
-        let msg = Arc::new(TestMessage::new("WORKLOAD.remove", msg_payload).into_message());
+        let msg_payload =
+            serde_json::to_vec(&workload_id).expect("Failed to serialize workload id");
+        let msg = Arc::new(NatsMessage::new("WORKLOAD.remove", msg_payload).into_message());
 
-        let result = api.remove_workload(msg).await?;
+        let result = api.delete_workload(msg).await?;
 
         assert!(matches!(
             result.result.status.actual,
-            WorkloadState::Removed
+            WorkloadState::Deleted
         ));
         assert!(matches!(
             result.result.status.desired,
-            WorkloadState::Uninstalled
+            WorkloadState::Removed
         ));
 
         // Verify workload is marked as deleted
-        let removed_workload = api
+        let deleted_workload = api
             .workload_collection
             .get_one_from(doc! { "_id": workload_id })
             .await?
             .unwrap();
-        assert!(removed_workload.metadata.is_deleted);
-        assert!(removed_workload.metadata.deleted_at.is_some());
+        assert!(deleted_workload.metadata.is_deleted);
+        assert!(deleted_workload.metadata.deleted_at.is_some());
 
         Ok(())
     }
@@ -120,15 +120,21 @@ mod tests {
         let required_avg_network_speed = 100;
         let required_avg_uptime = 0.85;
         let required_capacity = Capacity {
-            memory: 8,
-            disk: 100,
-            cores: 4,
+            drive: 200,
+            cores: 18,
         };
-        let valid_host_remaining_capacity = Capacity {
-            memory: 8,
-            disk: 100,
-            cores: 4,
+        #[allow(clippy::field_reassign_with_default)]
+        let mut valid_host_remaining_capacity = HoloInventory::default();
+        let mut mock_holo_drive = HoloDriveInventory {
+            capacity_bytes: Some(100),
+            ..Default::default()
         };
+        valid_host_remaining_capacity.drives = vec![
+            mock_holo_drive.clone(),
+            mock_holo_drive.clone(),
+            mock_holo_drive.clone(),
+        ];
+        valid_host_remaining_capacity.cpus = gen_mock_processors(20);
 
         let workload = create_test_workload(
             None,
@@ -148,22 +154,23 @@ mod tests {
         );
 
         // Test when host meets criteria
-        assert!(api.verify_host_meets_workload_criteria(&host, &workload));
+        assert!(api.verify_host_meets_workload_criteria(&host.inventory, &workload));
 
-        // Test when host memorydoesn't meet memory criteria
+        // Test when host drive space doesn't meet disk criteria
         let mut ineligible_host = host.clone();
-        ineligible_host.remaining_capacity.memory = 4; // Less than workload requirement
-        assert!(!api.verify_host_meets_workload_criteria(&ineligible_host, &workload));
-
-        // Test when host disk space doesn't meet disk criteria
-        let mut ineligible_host = host.clone();
-        ineligible_host.remaining_capacity.disk = 50; // Less than workload requirement
-        assert!(!api.verify_host_meets_workload_criteria(&ineligible_host, &workload));
+        // Create new holo drive with available capacity less than workload requirement
+        mock_holo_drive.capacity_bytes = Some(0);
+        ineligible_host.inventory.drives = vec![
+            mock_holo_drive.clone(),
+            mock_holo_drive.clone(),
+            mock_holo_drive,
+        ];
+        assert!(!api.verify_host_meets_workload_criteria(&ineligible_host.inventory, &workload));
 
         // Test when host cores count doesn't meet cores criteria
         let mut ineligible_host = host.clone();
-        ineligible_host.remaining_capacity.cores = 2; // Less than workload requirement
-        assert!(!api.verify_host_meets_workload_criteria(&ineligible_host, &workload));
+        ineligible_host.inventory.cpus = gen_mock_processors(14); // Less than workload requirement
+        assert!(!api.verify_host_meets_workload_criteria(&ineligible_host.inventory, &workload));
 
         Ok(())
     }
@@ -177,15 +184,21 @@ mod tests {
         let required_avg_network_speed = 500;
         let required_avg_uptime = 0.90;
         let required_capacity = Capacity {
-            memory: 800,
-            disk: 1000,
+            drive: 1000,
             cores: 20,
         };
-        let valid_host_remaining_capacity = Capacity {
-            memory: 800,
-            disk: 1000,
-            cores: 20,
+        #[allow(clippy::field_reassign_with_default)]
+        let mut valid_host_remaining_capacity = HoloInventory::default();
+        let mock_holo_drive = HoloDriveInventory {
+            capacity_bytes: Some(100),
+            ..Default::default()
         };
+        valid_host_remaining_capacity.drives = vec![
+            mock_holo_drive.clone(),
+            mock_holo_drive.clone(),
+            mock_holo_drive,
+        ];
+        valid_host_remaining_capacity.cpus = gen_mock_processors(20);
 
         // Create and add a host first
         let host = create_test_host(
@@ -215,7 +228,7 @@ mod tests {
         workload._id = Some(workload_id);
 
         let msg_payload = serde_json::to_vec(&workload).unwrap();
-        let msg = Arc::new(TestMessage::new("WORKLOAD.insert", msg_payload).into_message());
+        let msg = Arc::new(NatsMessage::new("WORKLOAD.insert", msg_payload).into_message());
 
         let result = api.handle_db_insertion(msg).await?;
 
@@ -262,7 +275,7 @@ mod tests {
         };
 
         let msg_payload = serde_json::to_vec(&result).unwrap();
-        let msg = Arc::new(TestMessage::new("WORKLOAD.status", msg_payload).into_message());
+        let msg = Arc::new(NatsMessage::new("WORKLOAD.status", msg_payload).into_message());
 
         let update_result = api.handle_status_update(msg).await?;
 
