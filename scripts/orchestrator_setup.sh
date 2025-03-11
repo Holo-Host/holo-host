@@ -63,8 +63,11 @@ done
 # Variables
 NATS_SERVER_HOST=$1
 NATS_PORT="4222"
+SHARED_CREDS_DIR="shared_creds"
+LOCAL_CREDS_DIR="local_creds"
 OPERATOR_SERVICE_URL="nats://{$NATS_SERVER_HOST}:$NATS_PORT"
 ACCOUNT_JWT_SERVER="nats://{$NATS_SERVER_HOST}:$NATS_PORT"
+RESOLVER_FILE="main-resolver.conf"
 OPERATOR="HOLO"
 SYS_ACCOUNT="SYS"
 ADMIN_ACCOUNT="ADMIN"
@@ -73,9 +76,6 @@ AUTH_ACCOUNT="AUTH"
 ORCHESTRATOR_AUTH_USER="orchestrator_auth"
 AUTH_GUARD_USER="auth_guard"
 HPOS_ACCOUNT="HPOS"
-SHARED_CREDS_DIR="shared_creds"
-LOCAL_CREDS_DIR="local_creds"
-RESOLVER_FILE="main-resolver.conf"
 
 # Create output directory when it doesn't already exist
 if [ ! -d "$SHARED_CREDS_DIR" ]; then
@@ -170,5 +170,5 @@ echo "extracted AUTH root key"
 # Step 11: Generate Resolver Config
 nsc generate config --nats-resolver --sys-account $SYS_ACCOUNT --force --config-file $RESOLVER_FILE
 
-echo "Setup complete. JWTs and resolver file are in the $JWT_OUTPUT_DIR/ directory."
+echo "Setup complete. JWTs and resolver file are in the $SHARED_CREDS_PATH/ directory."
 echo "!! Don't forget to start the NATS server and push the credentials to the server with 'nsc push -A' !!"
