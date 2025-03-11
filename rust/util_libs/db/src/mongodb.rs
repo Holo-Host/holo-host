@@ -322,8 +322,6 @@ where
         should_mark_deleted: bool,
         op_name: &str,
     ) -> Result<UpdateModifications, ServiceError> {
-        println!("should_mark_deleted : {should_mark_deleted}");
-
         let now = DateTime::now();
         let mut metadata_updates = doc! { "metadata.updated_at": now };
 
@@ -522,9 +520,10 @@ where
         mut updated_doc: UpdateModifications,
         should_mark_deleted: bool,
     ) -> Result<UpdateResult, Self::Error> {
-        println!(
+        log::debug!(
             "Updating single document - Query: {:?}, Should mark deleted: {}",
-            query, should_mark_deleted
+            query,
+            should_mark_deleted
         );
 
         updated_doc =
@@ -536,9 +535,10 @@ where
             .await
             .map_err(|e| Self::handle_db_error("update_one_within", e))?;
 
-        println!(
+        log::info!(
             "Updated document (matched: {}, modified: {})",
-            result.matched_count, result.modified_count
+            result.matched_count,
+            result.modified_count
         );
         Ok(result)
     }
