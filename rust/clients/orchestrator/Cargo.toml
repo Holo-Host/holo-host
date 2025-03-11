@@ -3,6 +3,10 @@ name = "orchestrator"
 version = "0.0.1"
 edition = "2021"
 
+[[bin]]
+name = "orchestrator"
+path = "src/main.rs"
+
 [dependencies]
 async-nats = { workspace = true }
 anyhow = { workspace = true }
