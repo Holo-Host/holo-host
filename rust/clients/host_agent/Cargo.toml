@@ -34,4 +34,4 @@ hpos-hal = { path = "../../hpos-hal" }
 nats_utils = { path = "../../util_libs/nats" }
 workload = { path = "../../services/workload" }
 inventory = { path = "../../services/inventory" }
-
+db_utils = { path = "../../util_libs/db" }

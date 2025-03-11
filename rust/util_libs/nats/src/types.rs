@@ -282,6 +282,12 @@ pub enum ServiceError {
         message: String,
         context: Option<String>,
     },
+
+    #[error("Internal error: {message}")]
+    Workload {
+        message: String,
+        context: Option<String>,
+    },
 }
 
 impl ServiceError {
@@ -349,6 +355,7 @@ impl ServiceError {
             Self::Database { source, .. } => source.to_string(),
             Self::NATS { message, .. } => message.clone(),
             Self::Internal { message, .. } => message.clone(),
+            Self::Workload { message, .. } => message.clone(),
         }
     }
 }
