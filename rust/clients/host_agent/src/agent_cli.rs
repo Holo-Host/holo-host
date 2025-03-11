@@ -82,6 +82,15 @@ pub struct DaemonzeArgs {
 
     #[arg(long, help = "host agent inventory file path")]
     pub(crate) host_inventory_file_path: Option<String>,
+
+    #[arg(
+        long,
+        short,
+        help = "disable host agent inventory functionality",
+        // TODO: i suspect there's a bug where the inventory prevents the workload messages from being processed
+        default_value_t =true
+    )]
+    pub(crate) host_inventory_disable: bool,
 }
 
 /// A set of commands for being able to manage the local host. We may (later) want to gate some
@@ -130,5 +139,11 @@ pub enum RemoteCommands {
     Ping {},
 
     /// Manage workloads.
-    WorkloadsManage {},
+    Workload {
+        #[arg(long)]
+        operation: String,
+
+        #[arg(long)]
+        data: String,
+    },
 }

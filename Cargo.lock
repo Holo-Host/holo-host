@@ -2505,6 +2505,7 @@ dependencies = [
  "chrono",
  "clap 4.5.31",
  "data-encoding",
+ "db_utils",
  "dotenv",
  "ed25519-dalek",
  "env_logger",

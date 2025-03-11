@@ -72,7 +72,7 @@ let
                     users = [
                       {
                         user = "admin";
-                        "password" = "admin";
+                        password = "admin";
                       }
                     ];
                   };
