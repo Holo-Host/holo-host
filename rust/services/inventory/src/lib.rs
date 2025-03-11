@@ -28,7 +28,7 @@ use mongodb::results::UpdateResult;
 use mongodb::{options::UpdateModifications, Client as MongoDBClient};
 use nats_utils::types::ServiceError;
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
+use std::{fmt::Debug, sync::Arc};
 use types::InventoryApiResult;
 
 pub const INVENTORY_SRV_NAME: &str = "INVENTORY";
@@ -182,7 +182,14 @@ impl InventoryServiceApi {
         collection_name: &str,
     ) -> Result<MongoCollection<T>>
     where
-        T: Serialize + for<'de> Deserialize<'de> + Unpin + Send + Sync + Default + IntoIndexes,
+        T: Serialize
+            + for<'de> Deserialize<'de>
+            + Unpin
+            + Send
+            + Sync
+            + Default
+            + IntoIndexes
+            + Debug,
     {
         Ok(MongoCollection::<T>::new(client, schemas::DATABASE_NAME, collection_name).await?)
     }

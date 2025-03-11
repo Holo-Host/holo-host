@@ -655,7 +655,14 @@ impl OrchestratorWorkloadApi {
         collection_name: &str,
     ) -> Result<MongoCollection<T>>
     where
-        T: Serialize + for<'de> Deserialize<'de> + Unpin + Send + Sync + Default + IntoIndexes,
+        T: Serialize
+            + for<'de> Deserialize<'de>
+            + Unpin
+            + Send
+            + Sync
+            + Default
+            + IntoIndexes
+            + Debug,
     {
         Ok(MongoCollection::<T>::new(client, schemas::DATABASE_NAME, collection_name).await?)
     }

@@ -7,7 +7,7 @@
 /// # Examples
 ///
 /// ```rust,no_run
-/// use db::schemas::{User, Workload, DATABASE_NAME};
+/// use db_utils::schemas::{User, Workload, DATABASE_NAME};
 /// use mongodb::Client;
 ///
 /// // Work with collections using the defined schemas
@@ -15,7 +15,7 @@
 ///     let client = Client::with_uri_str("mongodb://localhost:27017").await?;
 ///
 ///     // Set up db and collections with the MongoCollection interface
-///     use db::mongodb::MongoCollection;
+///     use db_utils::mongodb::MongoCollection;
 ///     let users = MongoCollection::<User>::new(&client, DATABASE_NAME, "user").await?;
 ///     let workloads = MongoCollection::<Workload>::new(&client, DATABASE_NAME, "workload").await?;
 ///     

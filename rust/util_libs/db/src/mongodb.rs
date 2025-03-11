@@ -7,14 +7,17 @@
 /// # Examples
 ///
 /// ```rust,no_run
+/// use anyhow::Result;
 /// use mongodb::Client;
-/// use my_crate::Model;
+/// use db_utils::mongodb::MongoCollection;
+/// use db_utils::schemas::{Host, DATABASE_NAME};
 ///
-/// async fn example() -> Result<(), ServiceError> {
+/// async fn example() -> Result<()> {
 ///     let client = Client::with_uri_str("mongodb://localhost:27017").await?;
-///     let collection = MongoCollection::<Model>::new(&client, "db_name", "collection_name").await?;
+///     let mut collection = MongoCollection::<Host>::new(&client, DATABASE_NAME, "host").await?;
 ///     
-///     // Apply indices defined in the collection model
+///     // Optionally apply indices for the collection model
+///     // (Indicies defined on a schema prior to calling `MongoCollection::new(..)` are applied automatically)
 ///     collection.apply_indexing().await?;
 ///     
 ///     Ok(())
@@ -174,7 +177,7 @@ where
 
 impl<T> MongoCollection<T>
 where
-    T: Serialize + for<'de> Deserialize<'de> + Unpin + Send + Sync + Default + IntoIndexes,
+    T: Serialize + for<'de> Deserialize<'de> + Unpin + Send + Sync + Default + Debug + IntoIndexes,
 {
     /// Creates a new `MongoCollection` instance and applies the defined indices.
     ///
@@ -221,6 +224,7 @@ where
     /// A reference to self for method chaining
     pub async fn apply_indexing(&mut self) -> Result<&mut Self> {
         let schema_indices = T::default().into_indices()?;
+
         let mut indices = self.indices.to_owned();
 
         for (indexed_field, opts) in schema_indices.into_iter() {
@@ -233,10 +237,12 @@ where
             indices.push(index);
         }
 
-        self.indices = indices.clone();
+        if !indices.is_empty() {
+            self.indices = indices.clone();
+            // Apply the indices to the mongodb collection schema
+            self.inner.create_indexes(indices.clone()).await?;
+        }
 
-        // Apply the indices to the mongodb collection schema
-        self.inner.create_indexes(indices).await?;
         Ok(self)
     }
 }
@@ -252,7 +258,6 @@ where
     where
         R: for<'de> Deserialize<'de>,
     {
-        log::trace!("Aggregate pipeline {pipeline:?}");
         let cursor = self.inner.aggregate(pipeline).await?;
 
         let results_doc: Vec<bson::Document> =
