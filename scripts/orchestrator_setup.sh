@@ -170,5 +170,5 @@ echo "extracted AUTH root key"
 # Step 11: Generate Resolver Config
 nsc generate config --nats-resolver --sys-account $SYS_ACCOUNT --force --config-file $RESOLVER_FILE
 
-echo "Setup complete. JWTs and resolver file are in the $JWT_OUTPUT_DIR/ directory."
+echo "Setup complete. Shared JWTs and resolver file are in the $SHARED_CREDS_PATH/ directory. Private creds are in the $LOCAL_CREDS_PATH/ directory."
 echo "!! Don't forget to start the NATS server and push the credentials to the server with 'nsc push -A' !!"
