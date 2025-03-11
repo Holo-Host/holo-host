@@ -3,7 +3,7 @@ mod extern_api;
 mod inventory;
 mod utils;
 mod workloads;
-use anyhow::Result;
+use anyhow::{Context, Result};
 use db_utils::mongodb::get_mongodb_url;
 use dotenv::dotenv;
 use mongodb::{options::ClientOptions, Client as MongoDBClient};
@@ -17,7 +17,9 @@ async fn main() -> Result<(), async_nats::Error> {
 
     // Setup MongoDB Client
     let mongo_uri: String = get_mongodb_url();
-    let db_client_options = ClientOptions::parse(mongo_uri).await?;
+    let db_client_options = ClientOptions::parse(&mongo_uri)
+        .await
+        .context(format!("mongo db client: connecting to {mongo_uri}"))?;
     let db_client = MongoDBClient::with_options(db_client_options)?;
 
     // TODO: Start Nats Auth Service (once ready)
