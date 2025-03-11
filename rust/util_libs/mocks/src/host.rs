@@ -26,7 +26,6 @@ pub fn create_mock_inventory(
         capacity_bytes: Some(drive_capacity),
         ..Default::default()
     };
-
     let num_drives = num_drives.unwrap_or_default();
     inventory.drives = vec![mock_drive; num_drives];
 

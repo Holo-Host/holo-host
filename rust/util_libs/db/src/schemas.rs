@@ -1,3 +1,5 @@
+use crate::mongodb::MutMetadata;
+
 /// Database schemas and types for the Holo Hosting system.
 ///
 /// This module defines the schema structures and their MongoDB index configurations
@@ -98,7 +100,6 @@ pub struct User {
     /// Hoster role information if user is a hoster
     pub hoster: Option<RoleInfo>,
 }
-
 impl IntoIndexes for User {
     /// Defines MongoDB indices for the User collection
     ///
@@ -140,6 +141,12 @@ impl IntoIndexes for User {
     }
 }
 
+impl MutMetadata for User {
+    fn mut_metadata(&mut self) -> &mut Metadata {
+        &mut self.metadata
+    }
+}
+
 /// Additional user information schema
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct UserInfo {
@@ -177,6 +184,12 @@ impl IntoIndexes for UserInfo {
     }
 }
 
+impl MutMetadata for UserInfo {
+    fn mut_metadata(&mut self) -> &mut Metadata {
+        &mut self.metadata
+    }
+}
+
 /// Developer document schema representing a developer in the system
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct Developer {
@@ -198,6 +211,12 @@ impl IntoIndexes for Developer {
     }
 }
 
+impl MutMetadata for Developer {
+    fn mut_metadata(&mut self) -> &mut Metadata {
+        &mut self.metadata
+    }
+}
+
 /// Hoster document schema representing a hoster in the system
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct Hoster {
@@ -216,6 +235,12 @@ impl IntoIndexes for Hoster {
     /// No additional indices defined for Hoster collection
     fn into_indices(self) -> Result<Vec<(Document, Option<IndexOptions>)>> {
         Ok(vec![])
+    }
+}
+
+impl MutMetadata for Hoster {
+    fn mut_metadata(&mut self) -> &mut Metadata {
+        &mut self.metadata
     }
 }
 
@@ -261,6 +286,12 @@ impl IntoIndexes for Host {
         );
         indices.push((pubkey_index_doc, pubkey_index_opts));
         Ok(indices)
+    }
+}
+
+impl MutMetadata for Host {
+    fn mut_metadata(&mut self) -> &mut Metadata {
+        &mut self.metadata
     }
 }
 
@@ -416,5 +447,11 @@ impl IntoIndexes for Workload {
         indices.push((developer_index_doc, developer_index_opts));
 
         Ok(indices)
+    }
+}
+
+impl MutMetadata for Workload {
+    fn mut_metadata(&mut self) -> &mut Metadata {
+        &mut self.metadata
     }
 }
