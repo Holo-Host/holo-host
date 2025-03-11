@@ -77,14 +77,15 @@ in
         type = lib.types.nullOr lib.types.path;
         default = null;
       };
+    };
 
-      extraDaemonizeArgs = lib.mkOption {
-        # forcing everything to be a string because the bool -> str conversion is strange (true -> "1" and false -> "")
-        type = lib.types.attrs;
-        default = {
-        };
+    extraDaemonizeArgs = lib.mkOption {
+      # forcing everything to be a string because the bool -> str conversion is strange (true -> "1" and false -> "")
+      type = lib.types.attrs;
+      default = {
       };
     };
+
   };
 
   config = lib.mkIf cfg.enable {
@@ -117,18 +118,15 @@ in
         let
           extraDaemonizeArgsList = lib.attrsets.mapAttrsToList (
             name: value:
-            let
-              type = lib.typeOf value;
-            in
-            if type == lib.types.str then
-              "--${name}=${value}"
-            else if (type == lib.types.int || type == lib.types.path) then
+            if lib.types.bool.check value then
+              (lib.optionalString value "--${name}")
+            else if (value == lib.types.int.check value || lib.types.path.check value) then
               "--${name}=${builtins.toString value}"
-            else if type == lib.types.bool then
-              (lib.optionalString value name)
+            else if (lib.types.str.check value) then
+              "--${name}=${value}"
             else
-              throw "don't know how to handle type ${type}"
-          ) cfg.nats.extraDaemonizeArgs;
+              throw "${name}: don't know how to handle type ${value}"
+          ) cfg.extraDaemonizeArgs;
         in
         builtins.toString (
           pkgs.writeShellScript "holo-host-agent" ''
