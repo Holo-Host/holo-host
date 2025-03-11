@@ -87,8 +87,7 @@ pub struct DaemonzeArgs {
         long,
         short,
         help = "disable host agent inventory functionality",
-        // TODO: i suspect there's a bug where the inventory prevents the workload messages from being processed
-        default_value_t =true
+        default_value_t = false
     )]
     pub(crate) host_inventory_disable: bool,
 }
