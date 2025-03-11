@@ -65,11 +65,11 @@ where
         T: for<'de> Deserialize<'de> + Clone + Send + Sync + Debug + 'static,
         Fut: Future<Output = Result<WorkloadApiResult, ServiceError>> + Send,
     {
-        // 1. Deserialize payload into the expected type
+        // Deserialize payload into the expected type
         let payload: T = Self::convert_msg_to_type::<T>(msg.clone())?;
         let subject = msg.subject.clone().into_string();
 
-        // 2. Call callback handler
+        // Call callback handler
         match cb_fn(payload.clone()).await {
             Ok(r) => Ok(r),
             Err(e) => {
@@ -79,7 +79,7 @@ where
                 );
                 log::error!("{}: {}", err_msg, e);
 
-                // 3. return response for stream with error state
+                // Return response for stream with error state
                 Ok(WorkloadApiResult {
                     result: WorkloadResult {
                         status: WorkloadStatus {

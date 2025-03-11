@@ -29,12 +29,12 @@ mod tests {
 
         assert!(result.result.status.id.is_some());
         assert!(matches!(
-            result.result.status.desired,
-            WorkloadState::Running
-        ));
-        assert!(matches!(
             result.result.status.actual,
             WorkloadState::Reported
+        ));
+        assert!(matches!(
+            result.result.status.desired,
+            WorkloadState::Running
         ));
         Ok(())
     }
@@ -59,15 +59,14 @@ mod tests {
         let msg = Arc::new(NatsMessage::new("WORKLOAD.update", msg_payload).into_message());
 
         let result = api.update_workload(msg).await?;
-        println!(" result: {result:#?}");
 
-        assert!(matches!(
-            result.result.status.desired,
-            WorkloadState::Updated
-        ));
         assert!(matches!(
             result.result.status.actual,
             WorkloadState::Updating
+        ));
+        assert!(matches!(
+            result.result.status.desired,
+            WorkloadState::Updated
         ));
 
         Ok(())
@@ -92,12 +91,12 @@ mod tests {
         let result = api.delete_workload(msg).await?;
 
         assert!(matches!(
-            result.result.status.desired,
-            WorkloadState::Removed
-        ));
-        assert!(matches!(
             result.result.status.actual,
             WorkloadState::Deleted
+        ));
+        assert!(matches!(
+            result.result.status.desired,
+            WorkloadState::Removed
         ));
 
         // Verify workload is marked as deleted
@@ -234,12 +233,12 @@ mod tests {
         let result = api.handle_db_insertion(msg).await?;
 
         assert!(matches!(
-            result.result.status.desired,
-            WorkloadState::Running
-        ));
-        assert!(matches!(
             result.result.status.actual,
             WorkloadState::Assigned
+        ));
+        assert!(matches!(
+            result.result.status.desired,
+            WorkloadState::Running
         ));
 
         // Verify host assignment
@@ -281,11 +280,11 @@ mod tests {
         let update_result = api.handle_status_update(msg).await?;
 
         assert!(matches!(
-            update_result.result.status.desired,
+            update_result.result.status.actual,
             WorkloadState::Running
         ));
         assert!(matches!(
-            update_result.result.status.actual,
+            update_result.result.status.desired,
             WorkloadState::Running
         ));
 

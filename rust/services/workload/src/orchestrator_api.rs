@@ -211,7 +211,7 @@ impl OrchestratorWorkloadApi {
                     actual: WorkloadState::Assigned,
                 };
 
-                // 1. Perform sanity check to ensure workload is not already assigned to a host and if so, exit fn
+                // Perform sanity check to ensure workload is not already assigned to a host and if so, exit fn
                 if !workload.assigned_hosts.is_empty() {
                     log::warn!("Attempted to assign host for new workload, but host already exists.");
                     return Ok(WorkloadApiResult {
@@ -232,7 +232,7 @@ impl OrchestratorWorkloadApi {
                     eligible_host_ids
                 );
 
-                // 3. Update the selected host records with the assigned Workload ID
+                // Update the selected host records with the assigned Workload ID
                 let assigned_host_ids = self
                     .assign_workload_to_hosts(workload_id, eligible_host_ids, workload.min_hosts)
                     .await
@@ -243,7 +243,7 @@ impl OrchestratorWorkloadApi {
                         )
                     })?;
 
-                // 4. Update the Workload Collection with the assigned Host ID
+                // Update the Workload Collection with the assigned Host ID
                 let new_status = WorkloadStatus {
                     id: None,
                     ..status.clone()
@@ -257,7 +257,7 @@ impl OrchestratorWorkloadApi {
                         )
                     })?;
 
-                // 5. Create tag map with host ids to inform nats to publish message to these hosts with workload install status                
+                // Create tag map with host ids to inform nats to publish message to these hosts with workload install status                
                 let mut tag_map: HashMap<String, String> = HashMap::new();
                 for (index, host_pubkey) in assigned_host_ids.iter().cloned().enumerate() {
                     tag_map.insert(format!("assigned_host_{}", index), host_pubkey.to_hex());

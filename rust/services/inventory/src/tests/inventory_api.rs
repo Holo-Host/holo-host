@@ -105,7 +105,7 @@ mod tests {
         );
         let workload_id = api
             .workload_collection
-            .insert_one_into(workload.clone())
+            .insert_one_into(workload)
             .await
             .expect("Failed to insert workload");
 
@@ -123,8 +123,7 @@ mod tests {
         // Test inventory update with insufficient resources
         let insufficient_inventory = create_mock_inventory(Some(100), Some(1), Some(4));
 
-        let msg_payload = serde_json::to_vec(&insufficient_inventory)
-            .expect("Failed to serialize inventory into nats msg payload");
+        let msg_payload = serde_json::to_vec(&insufficient_inventory).unwrap();
 
         let msg = Arc::new(
             NatsMessage::new(format!("INVENTORY.{}.update", host.device_id), msg_payload)
