@@ -1,3 +1,27 @@
+/// Database schemas and types for the Holo Hosting system.
+///
+/// This module defines the schema structures and their MongoDB index configurations
+/// for the Holo Hosting database. It includes schemas for users, developers, hosters,
+/// hosts, and workloads, along with their associated types and relationships.
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// use db::schemas::{User, Workload, DATABASE_NAME};
+/// use mongodb::Client;
+///
+/// // Work with collections using the defined schemas
+/// async fn example() -> Result<(), anyhow::Error> {   
+///     let client = Client::with_uri_str("mongodb://localhost:27017").await?;
+///
+///     // Set up db and collections with the MongoCollection interface
+///     use db::mongodb::MongoCollection;
+///     let users = MongoCollection::<User>::new(&client, DATABASE_NAME, "user").await?;
+///     let workloads = MongoCollection::<Workload>::new(&client, DATABASE_NAME, "workload").await?;
+///     
+///     Ok(())
+/// }
+/// ```
 use super::mongodb::IntoIndexes;
 use anyhow::Result;
 use bson::oid::ObjectId;
@@ -8,53 +32,80 @@ use semver::{BuildMetadata, Prerelease};
 use serde::{Deserialize, Serialize};
 use strum_macros::AsRefStr;
 
+/// Name of the main database for the Holo Hosting system
 pub const DATABASE_NAME: &str = "holo-hosting";
+/// Collection name for user documents
 pub const USER_COLLECTION_NAME: &str = "user";
+/// Collection name for developer documents
 pub const DEVELOPER_COLLECTION_NAME: &str = "developer";
+/// Collection name for hoster documents
 pub const HOSTER_COLLECTION_NAME: &str = "hoster";
+/// Collection name for host documents
 pub const HOST_COLLECTION_NAME: &str = "host";
+/// Collection name for workload documents
 pub const WORKLOAD_COLLECTION_NAME: &str = "workload";
 
-// Provide type Alias for HosterPubKey
+/// Type alias for public keys used in the system
 pub use String as PubKey;
-
-// Provide type Alias for SemVer (semantic versioning)
+/// Type alias for semantic version strings
 pub use String as SemVer;
 
-// ==================== User Schema ====================
+/// Information about a user's role (hoster or developer) in the system
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct RoleInfo {
-    pub collection_id: ObjectId, // Hoster/Developer colleciton Mongodb ID ref
-    pub pubkey: PubKey,          //  Hoster/Developer Pubkey *INDEXED*
+    /// MongoDB ObjectId reference to the role collection (hoster/developer)
+    pub collection_id: ObjectId,
+    /// Public key associated with the role
+    pub pubkey: PubKey,
 }
 
+/// Enumeration of possible user permission levels
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum UserPermission {
+    /// Administrator level permissions
     Admin,
 }
 
+/// Common metadata fields for database documents
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct Metadata {
+    /// Flag indicating if the document has been marked as deleted
     pub is_deleted: bool,
+    /// Timestamp when the document was deleted
     pub deleted_at: Option<DateTime>,
+    /// Timestamp of the last update
     pub updated_at: Option<DateTime>,
+    /// Timestamp when the document was created
     pub created_at: Option<DateTime>,
 }
 
+/// User document schema representing a user in the system
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct User {
+    /// MongoDB ObjectId of the user document
     #[serde(skip_serializing_if = "Option::is_none")]
     pub _id: Option<ObjectId>,
+    /// Common metadata fields
     pub metadata: Metadata,
+    /// User's jurisdiction
     pub jurisdiction: String,
+    /// List of user permissions
     pub permissions: Vec<UserPermission>,
-    pub user_info_id: Option<ObjectId>, // *INDEXED*
-    pub developer: Option<RoleInfo>,    // *INDEXED*
-    pub hoster: Option<RoleInfo>,       // *INDEXED*
+    /// Reference to additional user information
+    pub user_info_id: Option<ObjectId>,
+    /// Developer role information if user is a developer
+    pub developer: Option<RoleInfo>,
+    /// Hoster role information if user is a hoster
+    pub hoster: Option<RoleInfo>,
 }
 
-// Indexing for User
 impl IntoIndexes for User {
+    /// Defines MongoDB indices for the User collection
+    ///
+    /// Creates indices for:
+    /// - user_info_id
+    /// - developer role
+    /// - hoster role
     fn into_indices(self) -> Result<Vec<(Document, Option<IndexOptions>)>> {
         let mut indices = vec![];
 
@@ -89,18 +140,29 @@ impl IntoIndexes for User {
     }
 }
 
+/// Additional user information schema
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct UserInfo {
+    /// MongoDB ObjectId of the user info document
     #[serde(skip_serializing_if = "Option::is_none")]
     pub _id: Option<ObjectId>,
+    /// Common metadata fields
     pub metadata: Metadata,
+    /// Reference to the associated user
     pub user_id: ObjectId,
-    pub email: String, // *INDEXED*
+    /// User's email address
+    pub email: String,
+    /// User's given names
     pub given_names: String,
+    /// User's family name
     pub family_name: String,
 }
 
 impl IntoIndexes for UserInfo {
+    /// Defines MongoDB indices for the UserInfo collection
+    ///
+    /// Creates an index for:
+    /// - email address
     fn into_indices(self) -> Result<Vec<(Document, Option<IndexOptions>)>> {
         let mut indices = vec![];
         // add email index
@@ -115,57 +177,79 @@ impl IntoIndexes for UserInfo {
     }
 }
 
-// ==================== Developer Schema ====================
+/// Developer document schema representing a developer in the system
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct Developer {
+    /// MongoDB ObjectId of the developer document
     #[serde(skip_serializing_if = "Option::is_none")]
     pub _id: Option<ObjectId>,
+    /// Common metadata fields
     pub metadata: Metadata,
+    /// Reference to the associated user
     pub user_id: ObjectId,
+    /// List of workloads created by this developer
     pub active_workloads: Vec<ObjectId>,
 }
 
-// No Additional Indexing for Developer
 impl IntoIndexes for Developer {
+    /// No additional indices defined for Developer collection
     fn into_indices(self) -> Result<Vec<(Document, Option<IndexOptions>)>> {
         Ok(vec![])
     }
 }
 
-// ==================== Hoster Schema ====================
+/// Hoster document schema representing a hoster in the system
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct Hoster {
+    /// MongoDB ObjectId of the hoster document
     #[serde(skip_serializing_if = "Option::is_none")]
     pub _id: Option<ObjectId>,
+    /// Common metadata fields
     pub metadata: Metadata,
+    /// Reference to the associated user
     pub user_id: ObjectId,
+    /// List of hosts managed by this hoster
     pub assigned_hosts: Vec<ObjectId>,
 }
 
-// No Additional Indexing for Hoster
 impl IntoIndexes for Hoster {
+    /// No additional indices defined for Hoster collection
     fn into_indices(self) -> Result<Vec<(Document, Option<IndexOptions>)>> {
         Ok(vec![])
     }
 }
 
-// ==================== Host Schema ====================
+/// Host document schema representing a hosting device in the system
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct Host {
+    /// MongoDB ObjectId of the host document
     #[serde(skip_serializing_if = "Option::is_none")]
     pub _id: Option<ObjectId>,
+    /// Common metadata fields
     pub metadata: Metadata,
-    pub device_id: PubKey, // *INDEXED*
+    /// Unique identifier for the device
+    pub device_id: PubKey,
+    /// IP address of the host
     pub ip_address: String,
+    /// Hardware inventory information
     pub inventory: HoloInventory,
+    /// Average uptime as a percentage
     pub avg_uptime: f64,
+    /// Average network speed in Mbps
     pub avg_network_speed: i64,
+    /// Average latency in milliseconds
     pub avg_latency: i64,
+    /// Reference to the assigned hoster
     pub assigned_hoster: ObjectId,
+    /// List of workloads running on this host
     pub assigned_workloads: Vec<ObjectId>,
 }
 
 impl IntoIndexes for Host {
+    /// Defines MongoDB indices for the Host collection
+    ///
+    /// Creates an index for:
+    /// - device_id
     fn into_indices(self) -> Result<Vec<(Document, Option<IndexOptions>)>> {
         let mut indices = vec![];
         //  Add Device ID Index
@@ -180,60 +264,99 @@ impl IntoIndexes for Host {
     }
 }
 
-// ==================== Workload Schema ====================
+/// Enumeration of possible workload states
 #[derive(Debug, Clone, Serialize, Deserialize, AsRefStr)]
 pub enum WorkloadState {
-    Reported,        // workload reported by developer
-    Assigned,        // workload assigned to host
-    Pending,         // workload installation pending on host device
-    Installed,       // workload installed on host device
-    Running,         // workload running on host device
-    Updating,        // workload modified to have "updating" state and time series tag
-    Updated,         // bi-directional workload<>host links added
-    Deleted,         // workload modified to have "deleted" state and time series tag
-    Removed,         // bi-directional workload<>host links removed
-    Uninstalled,     // workload installed on host device
-    Error(String),   // nb: String = error message
-    Unknown(String), // nb: String = context message
+    /// Workload reported by developer
+    Reported,
+    /// Workload assigned to host
+    Assigned,
+    /// Workload installation pending on host device
+    Pending,
+    /// Workload installed on host device
+    Installed,
+    /// Workload running on host device
+    Running,
+    /// Workload is being updated
+    Updating,
+    /// Workload update completed
+    Updated,
+    /// Workload marked for deletion
+    Deleted,
+    /// Workload links removed
+    Removed,
+    /// Workload uninstalled from host device
+    Uninstalled,
+    /// Error state with message
+    Error(String),
+    /// Unknown state with context
+    Unknown(String),
 }
 
+/// Status information for a workload
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorkloadStatus {
+    /// Optional MongoDB ObjectId for the status
     #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<ObjectId>,
+    /// Desired state of the workload
     pub desired: WorkloadState,
+    /// Actual current state of the workload
     pub actual: WorkloadState,
 }
 
+/// Resource capacity requirements for a workload
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct Capacity {
-    pub drive: i64, // ssd; GiB
+    /// Required drive space in GiB
+    pub drive: i64,
+    /// Required CPU cores
     pub cores: i64,
-    // pub memory: i64, // GiB
 }
 
+/// System specifications for a workload
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct SystemSpecs {
+    /// Resource capacity requirements
     pub capacity: Capacity,
-    pub avg_network_speed: i64, // Mbps
-    pub avg_uptime: f64, //  decimal value between 0-1 representing avg uptime over past month
+    /// Required network speed in Mbps
+    pub avg_network_speed: i64,
+    /// Required uptime as a decimal between 0-1
+    pub avg_uptime: f64,
 }
 
+/// Workload document schema representing a deployable application
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Workload {
+    /// MongoDB ObjectId of the workload document
     #[serde(skip_serializing_if = "Option::is_none")]
     pub _id: Option<ObjectId>,
+    /// Common metadata fields
     pub metadata: Metadata,
-    pub assigned_developer: ObjectId, // *INDEXED*
+    /// Reference to the developer who created this workload
+    pub assigned_developer: ObjectId,
+    /// Semantic version of the workload
     pub version: SemVer,
-    pub nix_pkg: String, // (Includes everthing needed to deploy workload - ie: binary & env pkg & deps, etc)
+    /// Nix package name containing the workload
+    pub nix_pkg: String,
+    /// Minimum number of hosts required
     pub min_hosts: i32,
+    /// System requirements for the workload
     pub system_specs: SystemSpecs,
+    /// List of hosts running this workload
     pub assigned_hosts: Vec<ObjectId>,
+    /// Current status of the workload
     pub status: WorkloadStatus,
 }
 
 impl Default for Workload {
+    /// Creates a default workload configuration with:
+    /// - Version 0.0.0
+    /// - Minimum 1 host
+    /// - 512 GiB drive space
+    /// - 20 cores
+    /// - 200 Mbps network speed
+    /// - 80% uptime requirement
     fn default() -> Self {
         let version = semver::Version {
             major: 0,
@@ -267,7 +390,7 @@ impl Default for Workload {
             },
             assigned_hosts: Vec::new(),
             status: WorkloadStatus {
-                id: None, // skips serialization when `None`
+                id: None,
                 desired: WorkloadState::Unknown("default state".to_string()),
                 actual: WorkloadState::Unknown("default state".to_string()),
             },
@@ -276,10 +399,14 @@ impl Default for Workload {
 }
 
 impl IntoIndexes for Workload {
+    /// Defines MongoDB indices for the Workload collection
+    ///
+    /// Creates an index for:
+    /// - assigned_developer
     fn into_indices(self) -> Result<Vec<(Document, Option<IndexOptions>)>> {
         let mut indices = vec![];
 
-        //  Add Developer Index
+        //  Add Assigned Developer Index
         let developer_index_doc = doc! { "assigned_developer": 1 };
         let developer_index_opts = Some(
             IndexOptions::builder()

@@ -1,3 +1,25 @@
+/// MongoDB interface module providing a high-level API for MongoDB operations.
+///
+/// This module provides traits and implementations for interacting with MongoDB collections
+/// in a type-safe manner. It includes support for common database operations, indexing,
+/// and error handling integrated with the service architecture.
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// use mongodb::Client;
+/// use my_crate::Model;
+///
+/// async fn example() -> Result<(), ServiceError> {
+///     let client = Client::with_uri_str("mongodb://localhost:27017").await?;
+///     let collection = MongoCollection::<Model>::new(&client, "db_name", "collection_name").await?;
+///     
+///     // Apply indices defined in the collection model
+///     collection.apply_indexing().await?;
+///     
+///     Ok(())
+/// }
+/// ```
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use bson::oid::ObjectId;
@@ -10,29 +32,106 @@ use nats_utils::types::ServiceError;
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 
-// Helper:
+/// Returns the MongoDB connection URL from environment variables.
+///
+/// # Returns
+///
+/// - If `MONGO_URI` environment variable is set, returns its value
+/// - Otherwise, returns the default local MongoDB URL: "mongodb://127.0.0.1:27017"
 pub fn get_mongodb_url() -> String {
     std::env::var("MONGO_URI").unwrap_or_else(|_| "mongodb://127.0.0.1:27017".to_string())
 }
 
+/// Core trait defining MongoDB operations for a collection of type `T`.
+///
+/// This trait provides a standardized interface for common MongoDB operations
+/// including aggregation, querying, insertion, and updates.
+///
+/// # Type Parameters
+///
+/// * `T` - The type representing documents in the collection. Must be serializable,
+///         deserializable, and thread-safe.
 #[async_trait]
 pub trait MongoDbAPI<T>
 where
     T: Serialize + for<'de> Deserialize<'de> + Unpin + Send + Sync,
 {
+    /// The error type returned by operations in this trait.
     type Error;
+
+    /// Executes an aggregation pipeline and returns the results.
+    ///
+    /// # Arguments
+    ///
+    /// * `pipeline` - Vector of aggregation pipeline stages as BSON documents
+    ///
+    /// # Returns
+    ///
+    /// A vector of documents of type `R` representing the aggregation results
     async fn aggregate<R: for<'de> Deserialize<'de>>(
         &self,
         pipeline: Vec<Document>,
     ) -> Result<Vec<R>, Self::Error>;
+
+    /// Retrieves a single document matching the filter criteria.
+    ///
+    /// # Arguments
+    ///
+    /// * `filter` - Query filter as a BSON document
+    ///
+    /// # Returns
+    ///
+    /// An optional document of type `T` if found
     async fn get_one_from(&self, filter: Document) -> Result<Option<T>, Self::Error>;
+
+    /// Retrieves multiple documents matching the filter criteria.
+    ///
+    /// # Arguments
+    ///
+    /// * `filter` - Query filter as a BSON document
+    ///
+    /// # Returns
+    ///
+    /// A vector of documents of type `T`
     async fn get_many_from(&self, filter: Document) -> Result<Vec<T>, Self::Error>;
+
+    /// Inserts a single document into the collection.
+    ///
+    /// # Arguments
+    ///
+    /// * `item` - Document of type `T` to insert
+    ///
+    /// # Returns
+    ///
+    /// The ObjectId of the inserted document
     async fn insert_one_into(&self, item: T) -> Result<ObjectId, Self::Error>;
+
+    /// Updates multiple documents matching the query criteria.
+    ///
+    /// # Arguments
+    ///
+    /// * `query` - Query filter as a BSON document
+    /// * `updated_doc` - Update modifications to apply
+    ///
+    /// # Returns
+    ///
+    /// Result of the update operation
     async fn update_many_within(
         &self,
         query: Document,
         updated_doc: UpdateModifications,
     ) -> Result<UpdateResult, Self::Error>;
+
+    /// Updates a single document matching the query criteria.
+    ///
+    /// # Arguments
+    ///
+    /// * `query` - Query filter as a BSON document
+    /// * `updated_doc` - Update modifications to apply
+    ///
+    /// # Returns
+    ///
+    /// Result of the update operation
     async fn update_one_within(
         &self,
         query: Document,
@@ -40,16 +139,36 @@ where
     ) -> Result<UpdateResult, Self::Error>;
 }
 
+/// Trait for defining MongoDB indices for a collection.
+///
+/// Implementors of this trait can define the indices that should be created
+/// for their corresponding MongoDB collection.
 pub trait IntoIndexes {
+    /// Converts the implementation into a vector of index definitions.
+    ///
+    /// # Returns
+    ///
+    /// A vector of tuples containing the index specification document and optional index options
     fn into_indices(self) -> Result<Vec<(Document, Option<IndexOptions>)>>;
 }
 
+/// Wrapper type for MongoDB collections providing additional functionality.
+///
+/// This struct wraps a MongoDB collection and provides methods for managing
+/// indices and implementing the `MongoDbAPI` trait.
+///
+/// # Type Parameters
+///
+/// * `T` - The type representing documents in the collection. Must implement
+///         necessary traits for serialization, deserialization, and indexing.
 #[derive(Debug, Clone)]
 pub struct MongoCollection<T>
 where
     T: Serialize + for<'de> Deserialize<'de> + Unpin + Send + Sync + Default + IntoIndexes,
 {
+    /// The underlying MongoDB collection
     pub inner: Collection<T>,
+    /// Collection indices
     indices: Vec<IndexModel>,
 }
 
@@ -57,7 +176,18 @@ impl<T> MongoCollection<T>
 where
     T: Serialize + for<'de> Deserialize<'de> + Unpin + Send + Sync + Default + IntoIndexes,
 {
-    // Initialize database and return in form of an MongoDbAPI
+    /// Creates a new `MongoCollection` instance and applies the defined indices.
+    ///
+    /// # Arguments
+    ///
+    /// * `client` - MongoDB client instance
+    /// * `db_name` - Name of the database
+    /// * `collection_name` - Name of the collection
+    ///
+    /// # Returns
+    ///
+    /// A new `MongoCollection` instance with indices applied, wrapped in a Result
+    ///
     // NB: Each `mongodb::Client` clone is an alias of an Arc type and allows for multiple references of the same connection pool.
     pub async fn new(
         client: &Client,
@@ -67,12 +197,28 @@ where
         let collection = client.database(db_name).collection::<T>(collection_name);
         let indices = vec![];
 
-        Ok(MongoCollection {
+        let mut mongo_collection = MongoCollection {
             inner: collection,
             indices,
-        })
+        };
+
+        // Apply indices during initialization
+        mongo_collection
+            .apply_indexing()
+            .await
+            .map_err(|e| ServiceError::Internal(e.to_string()))?;
+
+        Ok(mongo_collection)
     }
 
+    /// Applies the defined indices to the MongoDB collection.
+    ///
+    /// This method creates the indices defined by the collection's type `T`
+    /// through its implementation of `IntoIndexes`.
+    ///
+    /// # Returns
+    ///
+    /// A reference to self for method chaining
     pub async fn apply_indexing(&mut self) -> Result<&mut Self> {
         let schema_indices = T::default().into_indices()?;
         let mut indices = self.indices.to_owned();
