@@ -51,10 +51,12 @@ devhost-cycle:
     nix build .\#extra-container-devhost
     extra-container destroy dev-hub
     extra-container destroy dev-host
+    extra-container destroy dev-orch
     ./result/bin/container build
     ./result/bin/container create
     ./result/bin/container start dev-hub
     ./result/bin/container start dev-host
+    ./result/bin/container start dev-orch
 
 devhost-host-agent-remote op data:
     #!/usr/bin/env bash

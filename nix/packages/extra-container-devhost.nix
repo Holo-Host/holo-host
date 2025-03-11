@@ -36,6 +36,8 @@ let
         hubLocalAddress = "192.168.42.43";
         hostHostAddress = "192.168.42.44";
         hostLocalAddress = "192.168.42.45";
+        orchestratorHostAddress = "192.168.42.46";
+        orchestratorLocalAddress = "192.168.42.47";
 
         devHubFqdn = config.containers.dev-hub.config.networking.fqdn;
         hosts = {
@@ -128,9 +130,46 @@ let
                   backtrace = "trace";
                 };
 
+                # TODO: i suspect there's a bug where the inventory prevents the workload messages from being processed
+                extraDaemonizeArgs.host-inventory-disable = true;
+
                 nats.hub.url = "wss://${devHubFqdn}:${builtins.toString config.containers.dev-hub.config.holo.nats-server.websocket.externalPort}";
                 nats.hub.tlsInsecure = true;
                 nats.store_dir = "/var/lib/holo-host-agent/store_dir";
+              };
+            };
+        };
+
+        containers.dev-orch = {
+          inherit privateNetwork;
+          hostAddress = orchestratorHostAddress;
+          localAddress = orchestratorLocalAddress;
+
+          # `specialArgs` is available in nixpkgs > 22.11
+          # This is useful for importing flakes from modules (see nixpkgs/lib/modules.nix).
+          # specialArgs = { inherit inputs; };
+
+          config =
+            { lib, ... }:
+            {
+              # in case the container shares the host network, don't mess with the firewall rules.
+              networking.firewall.enable = lib.mkForce false;
+
+              imports = [
+                flake.nixosModules.holo-orchestrator
+              ];
+
+              networking.hosts = hosts;
+
+              holo.orchestrator = {
+                enable = true;
+                rust = {
+                  log = "trace";
+                  backtrace = "trace";
+                };
+
+                nats.hub.url = "wss://${devHubFqdn}:${builtins.toString config.containers.dev-hub.config.holo.nats-server.websocket.externalPort}";
+                nats.hub.tlsInsecure = true;
               };
             };
         };
