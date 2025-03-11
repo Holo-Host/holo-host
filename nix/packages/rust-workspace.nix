@@ -9,6 +9,7 @@
   flake,
   pkgs,
   system,
+  perSystem,
   ...
 }:
 let
@@ -17,6 +18,11 @@ let
   commonArgs = {
     inherit src;
     strictDeps = true;
+
+    nativeBuildInputs = [
+      # perl needed for openssl on all platforms
+      pkgs.perl
+    ];
 
     buildInputs = pkgs.lib.optionals pkgs.stdenv.isDarwin [
       # Additional darwin specific inputs can be set here
@@ -88,10 +94,18 @@ craneLib.buildPackage (
               ## NATS/mongodb integration tests
               pkgs.nats-server
               pkgs.nsc
+
+              # link only the `hc` binaries into the devshell
+              (pkgs.runCommand "hc" { } ''
+                mkdir -p $out/bin
+                for bin in ${perSystem.holonix.holochain}/bin/hc*; do
+                  ln -s $bin $out/bin/
+                done
+              '')
             ]
             ++ (pkgs.lib.lists.optionals (!pkgs.stdenv.isAarch64) [
               # TODO: get mongodb built for aarch64
-              pkgs.mongodb
+              # pkgs.mongodb
             ]);
           partitions = 1;
           partitionType = "count";

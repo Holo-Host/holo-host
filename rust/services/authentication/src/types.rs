@@ -1,10 +1,8 @@
 use anyhow::Result;
+use db_utils::schemas::Hoster;
+use nats_utils::types::{CreateResponse, CreateTag, EndpointTraits};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use util_libs::{
-    db::schemas::Hoster,
-    nats::types::{CreateResponse, CreateTag, EndpointTraits},
-};
 
 // The workload_sk_role is assigned when the host agent is created during the auth flow.
 // NB: This role name *must* match the `ROLE_NAME_WORKLOAD` in the `hub_auth_setup.sh` script file.

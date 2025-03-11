@@ -27,10 +27,10 @@ use authentication::{
     AUTH_SRV_SUBJ, VALIDATE_AUTH_SUBJECT,
 };
 use hpos_hal::inventory::HoloInventory;
+use nats_utils::jetstream_client;
 use std::str::FromStr;
 use std::time::Duration;
 use textnonce::TextNonce;
-use util_libs::nats::jetstream_client;
 
 pub const HOST_AUTH_CLIENT_NAME: &str = "Host Auth";
 pub const HOST_AUTH_CLIENT_INBOX_PREFIX: &str = "_AUTH_INBOX";

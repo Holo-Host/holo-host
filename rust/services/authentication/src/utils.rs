@@ -4,6 +4,7 @@ use base32::decode as base32Decode;
 use base32::Alphabet;
 use data_encoding::{BASE32HEX_NOPAD, BASE64URL_NOPAD};
 use jsonwebtoken::{decode, Algorithm, DecodingKey, Validation};
+use nats_utils::{jetstream_client, types::ServiceError};
 use nkeys::KeyPair;
 use serde::Deserialize;
 use serde_json::Value;
@@ -13,7 +14,6 @@ use std::process::Command;
 use std::sync::Arc;
 use std::time::SystemTime;
 use types::WORKLOAD_SK_ROLE;
-use util_libs::nats::{jetstream_client, types::ServiceError};
 
 pub fn handle_internal_err(err_msg: &str) -> ServiceError {
     log::error!("{}", err_msg);
