@@ -817,15 +817,19 @@ fn ssh_host_keys() -> Vec<SSHPubKey> {
 const MACHINE_ID_PATH: &str = "/etc/machine-id";
 
 fn systemd_machine_id() -> String {
-    let ret = match fs::read_to_string(MACHINE_ID_PATH) {
-        Ok(id) => id.strip_suffix("\n").unwrap_or_default().to_string(),
+    match fs::read_to_string(MACHINE_ID_PATH).and_then(|content| {
+        content
+            .lines()
+            .next()
+            .ok_or_else(|| std::io::Error::new(io::ErrorKind::InvalidData, "no lines found"))
+            .map(ToString::to_string)
+    }) {
+        Ok(id) => id,
         Err(e) => {
             info!("No systemd machine ID found at {}: {}", MACHINE_ID_PATH, e);
-            return "".to_string(); // most inventory attributes are best-effort
+            "".to_string() // most inventory attributes are best-effort
         }
-    };
-
-    ret
+    }
 }
 
 /// Path to kernel version string
