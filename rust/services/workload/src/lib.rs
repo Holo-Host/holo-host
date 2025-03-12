@@ -40,14 +40,16 @@ where
         T: for<'de> Deserialize<'de> + Send + Sync,
     {
         let payload_buf = msg.payload.to_vec();
+        let subject = msg.subject.clone().into_string();
+
         serde_json::from_slice::<T>(&payload_buf).map_err(|e| {
-            let err_msg = format!(
-                "Error: Failed to deserialize payload. Subject='{}' Err={}",
-                msg.subject.clone().into_string(),
-                e
+            let err_msg = format!("Failed to deserialize payload: {}", e);
+            log::error!(
+                "Deserialization error for subject '{}': {}",
+                subject,
+                err_msg
             );
-            log::error!("{}", err_msg);
-            ServiceError::Request(format!("{err_msg} Code={:?}", ErrorCode::BAD_REQUEST))
+            ServiceError::request(err_msg, Some(ErrorCode::BAD_REQUEST))
         })
     }
 
@@ -63,36 +65,33 @@ where
         T: for<'de> Deserialize<'de> + Clone + Send + Sync + Debug + 'static,
         Fut: Future<Output = Result<WorkloadApiResult, ServiceError>> + Send,
     {
-        // 1. Deserialize payload into the expected type
+        // Deserialize payload into the expected type
         let payload: T = Self::convert_msg_to_type::<T>(msg.clone())?;
+        let subject = msg.subject.clone().into_string();
 
-        // 2. Call callback handler
-        Ok(match cb_fn(payload.clone()).await {
-            Ok(r) => r,
+        // Call callback handler
+        match cb_fn(payload.clone()).await {
+            Ok(r) => Ok(r),
             Err(e) => {
                 let err_msg = format!(
-                    "Failed to process Workload Service Endpoint. 
-                    Subject={} 
-                    Payload={payload:?},
-                    Error={e:?}",
-                    msg.subject.clone().into_string()
+                    "Failed to process workload request. Subject={}, Payload={:?}",
+                    subject, payload
                 );
-                log::error!("{err_msg}");
-                let status = WorkloadStatus {
-                    id: None,
-                    desired: desired_state,
-                    actual: error_state(err_msg),
-                };
+                log::error!("{}: {}", err_msg, e);
 
-                // 3. return response for stream
-                WorkloadApiResult {
+                // Return response for stream with error state
+                Ok(WorkloadApiResult {
                     result: WorkloadResult {
-                        status,
+                        status: WorkloadStatus {
+                            id: None,
+                            desired: desired_state,
+                            actual: error_state(format!("{}: {}", err_msg, e)),
+                        },
                         workload: None,
                     },
                     maybe_response_tags: None,
-                }
+                })
             }
-        })
+        }
     }
 }
