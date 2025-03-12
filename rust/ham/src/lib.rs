@@ -67,7 +67,7 @@ impl Ham {
     }
 
     /// Download a .happ file from a URL to a temporary location
-    async fn download_happ(url: &Url) -> Result<PathBuf> {
+    pub async fn download_happ(url: &Url) -> Result<PathBuf> {
         // Create a temporary directory that won't be deleted when the TempDir is dropped
         let temp_dir = tempfile::Builder::new()
             .prefix("ham-download-")
