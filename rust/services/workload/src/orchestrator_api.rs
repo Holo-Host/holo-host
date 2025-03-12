@@ -9,7 +9,7 @@ Endpoints & Managed Subjects:
 */
 
 use super::{types::WorkloadApiResult, WorkloadServiceApi};
-use crate::types::{ObjectIdJSON, WorkloadResult};
+use crate::types::{HostIdJSON, WorkloadResult};
 use anyhow::Result;
 use async_nats::Message;
 use bson::{self, doc, oid::ObjectId, to_document, Bson, DateTime};
@@ -215,10 +215,11 @@ impl OrchestratorWorkloadApi {
 
                 // 2. Otherwise call mongodb to get host collection to get hosts that meet the capacity requirements
                 // & randomly choose host(s)
-                let eligible_host_ids = self.find_hosts_meeting_workload_criteria(workload.clone(), None).await?;
-                log::debug!("Eligible hosts for new workload. MongodDB Host IDs={:?}", eligible_host_ids);
+                let eligible_hosts = self.find_hosts_meeting_workload_criteria(workload.clone(), None).await?;
+                log::debug!("Eligible hosts for new workload. MongodDB Hosts={:?}", eligible_hosts);
 
                 // 3. Update the selected host records with the assigned Workload ID
+                let eligible_host_ids: Vec<ObjectId> = eligible_hosts.iter().map(|h| h._id).collect();
                 let assigned_host_ids = self.assign_workload_to_hosts(workload_id, eligible_host_ids, workload.min_hosts).await.map_err(|e| ServiceError::Internal(e.to_string()))?;
 
                 // 4. Update the Workload Collection with the assigned Host ID
@@ -230,8 +231,10 @@ impl OrchestratorWorkloadApi {
 
                 // 5. Create tag map with host ids to inform nats to publish message to these hosts with workload install status
                 let mut tag_map: HashMap<String, String> = HashMap::new();
-                for (index, host_pubkey) in assigned_host_ids.iter().cloned().enumerate() {
-                    tag_map.insert(format!("assigned_host_{}", index), host_pubkey.to_hex());
+                for (index, host_id) in assigned_host_ids.iter().cloned().enumerate() {
+                    let assigned_host = eligible_hosts.iter().find(|h| h._id == host_id).ok_or_else(|| ServiceError::Internal("Error: Unable to forward workload to Host. Failed to locate host device id from assigned host ids.".to_string()))?;
+
+                    tag_map.insert(format!("assigned_host_{}", index), assigned_host.device_id.to_string());
                 }
 
                 Ok(WorkloadApiResult {
@@ -287,15 +290,16 @@ impl OrchestratorWorkloadApi {
                     .map_err(|e| ServiceError::Internal(e.to_string()))?;
 
                 // 3. Find eligible hosts
-                let eligible_host_ids = self
+                let eligible_hosts = self
                     .find_hosts_meeting_workload_criteria(workload.clone(), Some(hosts))
                     .await?;
                 log::debug!(
-                    "Eligible hosts for new workload. MongodDB Host IDs={:?}",
-                    eligible_host_ids
+                    "Eligible hosts for new workload. MongodDB Hosts={:?}",
+                    eligible_hosts
                 );
 
                 // 4. Update the selected host records with the assigned Workload ID
+                let eligible_host_ids: Vec<ObjectId> = eligible_hosts.iter().map(|h| h._id).collect();
                 let assigned_host_ids = self
                     .assign_workload_to_hosts(workload_id, eligible_host_ids, workload.min_hosts)
                     .await
@@ -318,8 +322,12 @@ impl OrchestratorWorkloadApi {
                 .map_err(|e| ServiceError::Internal(e.to_string()))?;
 
                 // 6. Create tag map with host ids to inform nats to publish message to these hosts with workload install status
-                for (index, host_pubkey) in assigned_host_ids.iter().enumerate() {
-                    tag_map.insert(format!("assigned_host_{}", index), host_pubkey.to_hex());
+                for (index, host_id) in assigned_host_ids.iter().enumerate() {
+                    let assigned_host = eligible_hosts
+                    .iter()
+                    .find(|h| &h._id == host_id)
+                    .ok_or_else(|| ServiceError::Internal("Error: Unable to forward workload to Host. Failed to locate host device id from assigned host ids.".to_string()))?;
+                    tag_map.insert(format!("assigned_host_{}", index), assigned_host.device_id.to_string());
                 }
 
                 log::info!("Added workload to new hosts. Workload={:#?}", workload_id);
@@ -483,20 +491,23 @@ impl OrchestratorWorkloadApi {
         &self,
         workload: Workload,
         maybe_existing_hosts: Option<Vec<Host>>,
-    ) -> Result<Vec<ObjectId>, ServiceError> {
+    ) -> Result<Vec<HostIdJSON>, ServiceError> {
         let mut needed_host_count = workload.min_hosts;
-        let mut still_eligible_host_ids: Vec<ObjectId> = vec![];
+        let mut still_eligible_host_ids: Vec<HostIdJSON> = vec![];
 
         if let Some(hosts) = maybe_existing_hosts {
             still_eligible_host_ids = hosts.into_iter()
                 .filter_map(|h| {
                     if self.verify_host_meets_workload_criteria(&h.inventory, &workload) {
-                        h._id.ok_or_else(|| {
-                            ServiceError::Internal(format!(
-                                "No `_id` found for workload. Unable to proceed verifying host eligibility. Workload={:?}",
-                                workload
-                            ))
-                        }).ok()
+                        let _id = h._id.ok_or_else(|| ServiceError::Internal(format!(
+                            "No `_id` found for workload. Unable to proceed verifying host eligibility. Workload={:?}",
+                            workload
+                        ))).ok()?;
+                        
+                        Some(HostIdJSON {
+                            _id,
+                            device_id: h.device_id,
+                        })
                     } else {
                         None
                     }
@@ -519,13 +530,13 @@ impl OrchestratorWorkloadApi {
                 "$sample": { "size": std::cmp::max(needed_host_count, 1) }
             },
             doc! {
-                // only return the `host._id` field
-                "$project": { "_id": 1 }
+                // only return the `host._id` and `host.device_id` fields
+                "$project": { "_id": 1, "device_id": 1 }
             },
         ];
-        let host_ids = self
+        let mut host_ids = self
             .host_collection
-            .aggregate::<ObjectIdJSON>(pipeline)
+            .aggregate::<HostIdJSON>(pipeline)
             .await?;
         if host_ids.is_empty() {
             let err_msg = format!(
@@ -540,12 +551,12 @@ impl OrchestratorWorkloadApi {
             );
         }
 
-        let mut eligible_host_ids: Vec<ObjectId> = host_ids.into_iter().map(|h| h._id).collect();
-        eligible_host_ids.extend(still_eligible_host_ids);
+        host_ids.extend(still_eligible_host_ids);
 
-        Ok(eligible_host_ids)
+        Ok(host_ids)
     }
 
+    // let mut eligible_host_ids: Vec<HostIdJSON> = host_ids.into_iter().map(|h| h._id).collect();
     async fn assign_workload_to_hosts(
         &self,
         workload_id: ObjectId,

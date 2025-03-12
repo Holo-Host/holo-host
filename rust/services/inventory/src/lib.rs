@@ -7,7 +7,7 @@ Users: admin user & host user (the authenticated host user) & auth guard user (t
 (NB: Orchestrator admin user can listen to ALL "Inventory.>" subjects)
 
 Endpoints & Managed Subjects:
-    - handle_inventory_update: INVENTORY.{{host_pubkey}}
+    - handle_inventory_update: INVENTORY.{{host_id}}
 */
 
 pub mod types;
@@ -24,7 +24,6 @@ use db_utils::{
     schemas::{self, Host, Workload},
 };
 use hpos_hal::inventory::HoloInventory;
-use mongodb::results::UpdateResult;
 use mongodb::{options::UpdateModifications, Client as MongoDBClient};
 use nats_utils::types::ServiceError;
 use serde::{Deserialize, Serialize};
@@ -65,20 +64,20 @@ impl InventoryServiceApi {
         );
 
         let subject_sections: Vec<&str> = msg_subject.split(".").collect();
-        let host_pubkey_index = 1;
-        let host_pubkey: schemas::PubKey = subject_sections[host_pubkey_index].into();
+        let host_id_index = 1;
+        let host_id: schemas::PubKey = subject_sections[host_id_index].into();
 
-        log::debug!("Incoming message for 'INVENTORY.{{host_pubkey}}.update'");
-        self.update_host_inventory(&host_pubkey, &host_inventory)
+        log::debug!("Incoming message for 'INVENTORY.{{host_id}}.update'");
+        self.update_host_inventory(&host_id, &host_inventory)
             .await?;
 
         // Fetch Host collection
         let host = self
             .host_collection
-            .get_one_from(doc! { "device_id": &host_pubkey })
+            .get_one_from(doc! { "device_id": &host_id })
             .await?
             .ok_or_else(|| {
-                ServiceError::Internal(format!("Failed to fetch Host. host_pubkey={}", host_pubkey))
+                ServiceError::Internal(format!("Failed to fetch Host. host_id={}", host_id))
             })?;
 
         self.handle_ineligible_host_workloads(host).await?;
@@ -89,24 +88,41 @@ impl InventoryServiceApi {
         })
     }
 
-    // Add updated Holo Inventory to Host collection
+    // Update Host's Holo Inventory in Host collection,
+    // creating a new Host entry if one doesn't already exist for the provided host_id
     async fn update_host_inventory(
         &self,
-        host_pubkey: &schemas::PubKey,
+        host_id: &str,
         inventory: &HoloInventory,
-    ) -> Result<UpdateResult, ServiceError> {
+    ) -> Result<(), ServiceError> {
+        let filter = doc! { "device_id": host_id };
+
+        let update = doc! {
+            "$set": {
+                "inventory": bson::to_bson(inventory)
+                    .map_err(|e| ServiceError::Internal(e.to_string()))?,
+                "metadata.updated_at": DateTime::now()
+            },
+            // If the document doesn't exist, also set the device_id (host_id)
+            "$setOnInsert": {
+                "metadata.created_at": DateTime::now(),
+                "device_id": host_id,
+                "avg_uptime": 100.00,
+                "assigned_workloads": [],
+                "assigned_hoster": bson::Bson::Null,
+                // todo: ip_address
+            }
+        };
+
+        // Use upsert to either insert or update the document
         self.host_collection
-            .update_one_within(
-                doc! { "device_id": host_pubkey },
-                UpdateModifications::Document(doc! {
-                    "$set": {
-                        "inventory": bson::to_bson(inventory)
-                            .map_err(|e| ServiceError::Internal(e.to_string()))?,
-                        "metadata.updated_at": DateTime::now()
-                    }
-                }),
-            )
+            .inner
+            .find_one_and_update(filter, UpdateModifications::Document(update))
+            .upsert(true)
             .await
+            .map_err(ServiceError::Database)?;
+
+        Ok(())
     }
 
     fn calculate_host_drive_capacity(&self, host_inventory: &HoloInventory) -> i64 {
@@ -121,7 +137,7 @@ impl InventoryServiceApi {
     async fn handle_ineligible_host_workloads(&self, host: Host) -> Result<(), ServiceError> {
         let host_id = host._id.ok_or_else(|| {
             ServiceError::Internal(format!(
-                "Host is missing '_id' field. host_pubkey={}",
+                "Host is missing '_id' field. host_id={}",
                 host.device_id
             ))
         })?;
@@ -143,7 +159,7 @@ impl InventoryServiceApi {
             .map(|workload| {
                 workload._id.ok_or_else(|| {
                     ServiceError::Internal(format!(
-                        "Host is missing '_id' field. host_pubkey={}",
+                        "Host is missing '_id' field. host_id={}",
                         host.device_id
                     ))
                 })

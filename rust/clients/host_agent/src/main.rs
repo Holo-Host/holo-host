@@ -20,6 +20,7 @@ use agent_cli::DaemonzeArgs;
 use anyhow::Result;
 use clap::Parser;
 use dotenv::dotenv;
+use hpos_hal::inventory::HoloInventory;
 use thiserror::Error;
 
 pub const HOST_PUBKEY_PLACEHOLDER: &str = "host_pubkey_placeholder";
@@ -57,7 +58,11 @@ async fn main() -> Result<(), AgentCliError> {
 
 async fn daemonize(args: &DaemonzeArgs) -> Result<(), async_nats::Error> {
     // let host_pubkey = auth::init_agent::run().await?;
+    let host_inventory = HoloInventory::from_host();
+    let host_id = host_inventory.system.machine_id;
+
     let bare_client = hostd::gen_leaf_server::run(
+        &host_id,
         &args.nats_leafnode_server_name,
         &args.nats_leafnode_client_creds_path,
         &args.store_dir,
@@ -69,11 +74,8 @@ async fn daemonize(args: &DaemonzeArgs) -> Result<(), async_nats::Error> {
     // TODO: would it be a good idea to reuse this client in the workload_manager and elsewhere later on?
     bare_client.close().await?;
 
-    let host_client = hostd::host_client::run(
-        HOST_PUBKEY_PLACEHOLDER,
-        &args.nats_leafnode_client_creds_path,
-    )
-    .await?;
+    let host_client =
+        hostd::host_client::run(&host_id, &args.nats_leafnode_client_creds_path).await?;
 
     if !args.host_inventory_disable {
         // Get Host Agent inventory check duration env var..
@@ -98,14 +100,14 @@ async fn daemonize(args: &DaemonzeArgs) -> Result<(), async_nats::Error> {
 
         hostd::inventory::run(
             host_client.clone(),
-            HOST_PUBKEY_PLACEHOLDER,
+            &host_id,
             &inventory_file_path,
             host_inventory_check_interval_sec.to_owned(),
         )
         .await?;
     }
 
-    hostd::workload::run(host_client.clone(), HOST_PUBKEY_PLACEHOLDER).await?;
+    hostd::workload::run(host_client.clone(), &host_id).await?;
 
     // Only exit program when explicitly requested
     tokio::signal::ctrl_c().await?;
