@@ -17,7 +17,7 @@ use types::WORKLOAD_SK_ROLE;
 
 pub fn handle_internal_err(err_msg: &str) -> ServiceError {
     log::error!("{}", err_msg);
-    ServiceError::Internal(err_msg.to_string())
+    ServiceError::internal(err_msg.to_string(), None)
 }
 
 pub async fn write_file(data: Vec<u8>, output_dir: &str, file_name: &str) -> Result<String> {
@@ -223,12 +223,12 @@ pub fn add_user_keys_to_resolver(
         ])
         .output()
         .context("Failed to add host user with provided keys")
-        .map_err(|e| ServiceError::Internal(e.to_string()))
+        .map_err(|e| ServiceError::internal(e.to_string(), None))
     {
         Ok(r) => {
             let stderr = String::from_utf8_lossy(&r.stderr);
             if !r.stderr.is_empty() && !stderr.contains("already exists") {
-                return Err(ServiceError::Internal(stderr.to_string()));
+                return Err(ServiceError::internal(stderr.to_string(), None));
             }
         }
         Err(e) => {
@@ -250,12 +250,12 @@ pub fn add_user_keys_to_resolver(
             ])
             .output()
             .context("Failed to add host sys user with provided keys")
-            .map_err(|e| ServiceError::Internal(e.to_string()))
+            .map_err(|e| ServiceError::internal(e.to_string(), None))
         {
             Ok(r) => {
                 let stderr = String::from_utf8_lossy(&r.stderr);
                 if !r.stderr.is_empty() && !stderr.contains("already exists") {
-                    return Err(ServiceError::Internal(stderr.to_string()));
+                    return Err(ServiceError::internal(stderr.to_string(), None));
                 }
             }
             Err(e) => {
@@ -276,7 +276,7 @@ pub fn create_user_jwt_files(
         "WORKLOAD",
         &format!("host_user_{}.jwt", host_pubkey),
     ))
-    .map_err(|e| ServiceError::Internal(e.to_string()))?;
+    .map_err(|e| ServiceError::internal(e.to_string(), None))?;
 
     let sys_jwt = if maybe_sys_pubkey.is_some() {
         std::fs::read_to_string(jetstream_client::get_nats_jwt_by_nsc(
@@ -284,7 +284,7 @@ pub fn create_user_jwt_files(
             "SYS",
             &format!("sys_user_{}.jwt", host_pubkey),
         ))
-        .map_err(|e| ServiceError::Internal(e.to_string()))?
+        .map_err(|e| ServiceError::internal(e.to_string(), None))?
     } else {
         String::new()
     };
@@ -294,7 +294,7 @@ pub fn create_user_jwt_files(
         .arg("push -A")
         .output()
         .context("Failed to update resolver config file")
-        .map_err(|e| ServiceError::Internal(e.to_string()))?;
+        .map_err(|e| ServiceError::internal(e.to_string(), None))?;
     log::trace!("\nPushed new jwts to resolver server");
 
     Ok((host_jwt, sys_jwt))
