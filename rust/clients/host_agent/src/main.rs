@@ -1,7 +1,7 @@
 /*
 This client is associated with the:
-  - WORKLOAD account
-  - hpos user
+  - HPOS account
+  - host user
 
 This client is responsible for subscribing the host agent to workload stream endpoints:
   - installing new workloads
@@ -10,16 +10,14 @@ This client is responsible for subscribing the host agent to workload stream end
   - sending workload status upon request
 */
 
-mod workload_manager;
+pub mod agent_cli;
+pub mod host_cmds;
+mod hostd;
+pub mod support_cmds;
 use agent_cli::DaemonzeArgs;
 use anyhow::Result;
 use clap::Parser;
 use dotenv::dotenv;
-pub mod agent_cli;
-pub mod gen_leaf_server;
-pub mod host_client;
-pub mod host_cmds;
-pub mod support_cmds;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -49,8 +47,8 @@ async fn main() -> Result<(), AgentCliError> {
 }
 
 async fn daemonize(args: &DaemonzeArgs) -> Result<(), async_nats::Error> {
-    // let (host_pubkey, host_creds_path) = auth::initializer::run().await?;
-    gen_leaf_server::run(
+    // let host_pubkey = auth::init_agent::run().await?;
+    hostd::gen_leaf_server::run(
         &args.nats_leafnode_server_name,
         &args.nats_leafnode_client_creds_path,
         &args.store_dir,
@@ -59,21 +57,48 @@ async fn daemonize(args: &DaemonzeArgs) -> Result<(), async_nats::Error> {
     )
     .await?;
 
-    let host_client = host_client::run(
-        "host_id_placeholder>",
+    let host_client = hostd::host_client::run(
+        "host_pubkey_placeholder>",
         &args.nats_leafnode_client_creds_path,
-        args.nats_connect_timeout_secs,
     )
     .await?;
 
-    workload_manager::run(host_client.clone()).await?;
+    // Get Host Agent inventory check duration env var..
+    // If none exists, default to 1 hour
+    let host_inventory_check_interval_sec =
+        &args.host_inventory_check_interval_sec.unwrap_or_else(|| {
+            std::env::var("HOST_INVENTORY_CHECK_DURATION")
+                .unwrap_or_else(|_| "3600".to_string())
+                .parse::<u64>()
+                .unwrap_or(3600) // 3600 seconds = 1 hour
+        });
+
+    // Get Host Agent inventory storage file path
+    // If none exists, default to "/var/lib/holo_inventory.json"
+    let inventory_file_path = args.host_inventory_file_path.as_ref().map_or_else(
+        || {
+            std::env::var("HOST_INVENTORY_FILE_PATH")
+                .unwrap_or("/var/lib/holo_inventory.json".to_string())
+        },
+        |s| s.to_owned(),
+    );
+
+    hostd::inventory::run(
+        host_client.clone(),
+        "host_pubkey_placeholder>",
+        &inventory_file_path,
+        host_inventory_check_interval_sec.to_owned(),
+    )
+    .await?;
+
+    hostd::workload::run(host_client.clone(), "host_pubkey_placeholder>").await?;
 
     // Only exit program when explicitly requested
     tokio::signal::ctrl_c().await?;
 
-    // Close the host client connection
-    // NB: Calling drain/close on any one of the Client clones will closes the underlying connection.
-    // This affects all clones that share the same connection (including clones) because they are effectively just references to the same resource.
+    // Close host client connection and drain internal buffer before exiting to make sure all messages are sent
+    // NB: Calling drain/close on any one of the Client instances will close the underlying connection.
+    // This affects all instances that share the same connection (including clones) because they are all references to the same resource.
     host_client.close().await?;
 
     Ok(())

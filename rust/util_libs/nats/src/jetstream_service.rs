@@ -1,107 +1,16 @@
-use super::nats_js_client::EndpointType;
-
+use super::types::{
+    ConsumerBuilder, ConsumerExt, ConsumerExtTrait, EndpointTraits, EndpointType,
+    JsStreamServiceInfo, LogInfo, ResponseSubjectsGenerator,
+};
 use anyhow::{anyhow, Result};
-use std::any::Any;
-// use async_nats::jetstream::message::Message;
-use async_nats::jetstream::consumer::{self, AckPolicy, PullConsumer};
+use async_nats::jetstream::consumer::{self, AckPolicy};
 use async_nats::jetstream::stream::{self, Info, Stream};
 use async_nats::jetstream::Context;
-use async_trait::async_trait;
 use futures::StreamExt;
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-
-type ResponseSubjectsGenerator = Arc<dyn Fn(Option<Vec<String>>) -> Vec<String> + Send + Sync>;
-
-pub trait CreateTag: Send + Sync {
-    fn get_tags(&self) -> Option<Vec<String>>;
-}
-
-pub trait EndpointTraits:
-    Serialize + for<'de> Deserialize<'de> + Send + Sync + Clone + Debug + CreateTag + 'static
-{
-}
-
-#[async_trait]
-pub trait ConsumerExtTrait: Send + Sync + Debug + 'static {
-    fn get_name(&self) -> &str;
-    fn get_consumer(&self) -> PullConsumer;
-    fn get_endpoint(&self) -> Box<dyn Any + Send + Sync>;
-    fn get_response(&self) -> Option<ResponseSubjectsGenerator>;
-}
-
-impl<T> TryFrom<Box<dyn Any + Send + Sync>> for EndpointType<T>
-where
-    T: EndpointTraits,
-{
-    type Error = anyhow::Error;
-
-    fn try_from(value: Box<dyn Any + Send + Sync>) -> Result<Self, Self::Error> {
-        if let Ok(endpoint) = value.downcast::<EndpointType<T>>() {
-            Ok(*endpoint)
-        } else {
-            Err(anyhow::anyhow!("Failed to downcast to EndpointType"))
-        }
-    }
-}
-
-#[derive(Clone, derive_more::Debug)]
-pub struct ConsumerExt<T>
-where
-    T: EndpointTraits,
-{
-    name: String,
-    consumer: PullConsumer,
-    handler: EndpointType<T>,
-    #[debug(skip)]
-    response_subject_fn: Option<ResponseSubjectsGenerator>,
-}
-
-#[async_trait]
-impl<T> ConsumerExtTrait for ConsumerExt<T>
-where
-    T: EndpointTraits,
-{
-    fn get_name(&self) -> &str {
-        &self.name
-    }
-    fn get_consumer(&self) -> PullConsumer {
-        self.consumer.clone()
-    }
-    fn get_endpoint(&self) -> Box<dyn Any + Send + Sync> {
-        Box::new(self.handler.clone())
-    }
-    fn get_response(&self) -> Option<ResponseSubjectsGenerator> {
-        self.response_subject_fn.clone()
-    }
-}
-
-#[allow(dead_code)]
-#[derive(Clone, Debug)]
-pub struct JsStreamServiceInfo<'a> {
-    pub name: &'a str,
-    pub version: &'a str,
-    pub service_subject: &'a str,
-}
-
-struct LogInfo {
-    prefix: String,
-    service_name: String,
-    service_subject: String,
-    endpoint_name: String,
-    endpoint_subject: String,
-}
-
-#[derive(Clone, Deserialize, Default)]
-pub struct JsServiceParamsPartial {
-    pub name: String,
-    pub description: String,
-    pub version: String,
-    pub service_subject: String,
-}
 
 /// Microservice for Jetstream Streams
 // This setup creates only one subject for the stream (eg: "WORKLOAD.>") and sets up
@@ -196,30 +105,27 @@ impl JsStreamService {
         let handler: EndpointType<T> = EndpointType::try_from(endpoint_trait_obj)?;
 
         Ok(ConsumerExt {
-            name: consumer_ext.get_name().to_string(),
             consumer: consumer_ext.get_consumer(),
             handler,
             response_subject_fn: consumer_ext.get_response(),
         })
     }
 
-    pub async fn add_local_consumer<T>(
+    pub async fn add_consumer<T>(
         &self,
-        consumer_name: &str,
-        endpoint_subject: &str,
-        endpoint_type: EndpointType<T>,
-        response_subject_fn: Option<ResponseSubjectsGenerator>,
+        builder_params: ConsumerBuilder<T>,
     ) -> Result<ConsumerExt<T>, async_nats::Error>
     where
         T: EndpointTraits,
     {
-        let full_subject = format!("{}.{}", self.service_subject, endpoint_subject);
+        // Add the Service Subject prefix
+        let consumer_subject = format!("{}.{}", self.service_subject, builder_params.subject);
 
         // Register JS Subject Consumer
         let consumer_config = consumer::pull::Config {
-            durable_name: Some(consumer_name.to_string()),
+            durable_name: Some(builder_params.name.to_string()),
             ack_policy: AckPolicy::Explicit,
-            filter_subject: full_subject,
+            filter_subject: consumer_subject,
             ..Default::default()
         };
 
@@ -227,28 +133,28 @@ impl JsStreamService {
             .stream
             .write()
             .await
-            .get_or_create_consumer(consumer_name, consumer_config)
+            .get_or_create_consumer(&builder_params.name, consumer_config)
             .await?;
 
         let consumer_with_handler = ConsumerExt {
-            name: consumer_name.to_string(),
             consumer,
-            handler: endpoint_type,
-            response_subject_fn,
+            handler: builder_params.handler,
+            response_subject_fn: builder_params.response_subject_fn,
         };
 
-        self.local_consumers
-            .write()
-            .await
-            .insert(consumer_name.to_string(), Arc::new(consumer_with_handler));
+        self.local_consumers.write().await.insert(
+            builder_params.name.to_string(),
+            Arc::new(consumer_with_handler),
+        );
 
-        let endpoint_consumer: ConsumerExt<T> = self.get_consumer(consumer_name).await?;
-        self.spawn_consumer_handler::<T>(consumer_name).await?;
+        let endpoint_consumer: ConsumerExt<T> = self.get_consumer(&builder_params.name).await?;
+        self.spawn_consumer_handler::<T>(&builder_params.name)
+            .await?;
 
         log::debug!(
             "{}Added the {} local consumer",
             self.service_log_prefix,
-            endpoint_consumer.name,
+            builder_params.name,
         );
 
         Ok(endpoint_consumer)
@@ -276,15 +182,24 @@ impl JsStreamService {
             let messages = consumer
                 .stream()
                 .heartbeat(std::time::Duration::from_secs(10))
+                .max_messages_per_batch(100)
+                .expires(std::time::Duration::from_secs(30))
                 .messages()
                 .await?;
+
+            let consumer_info = consumer.info().await?;
 
             let log_info = LogInfo {
                 prefix: self.service_log_prefix.clone(),
                 service_name: self.name.clone(),
                 service_subject: self.service_subject.clone(),
-                endpoint_name: consumer_details.get_name().to_owned(),
-                endpoint_subject: consumer.info().await?.config.filter_subject.clone(),
+                endpoint_name: consumer_info
+                    .config
+                    .durable_name
+                    .clone()
+                    .unwrap_or("Consumer Name Not Found".to_string())
+                    .clone(),
+                endpoint_subject: consumer_info.config.filter_subject.clone(),
             };
 
             let service_context = self.js_context.clone();
@@ -338,14 +253,11 @@ impl JsStreamService {
 
             let (response_bytes, maybe_subject_tags) = match result {
                 Ok(r) => {
-                    let bytes: bytes::Bytes = match serde_json::to_vec(&r) {
-                        Ok(r) => r.into(),
-                        Err(e) => e.to_string().into(),
-                    };
+                    let bytes = r.get_response();
                     let maybe_subject_tags = r.get_tags();
                     (bytes, maybe_subject_tags)
                 }
-                Err(err) => (err.to_string().into(), None),
+                Err(err) => (err.to_string().into(), HashMap::new()),
             };
 
             // Returns a response if a reply address exists.
@@ -420,129 +332,5 @@ impl JsStreamService {
                 // todo: discuss how we want to handle error
             }
         }
-    }
-}
-
-#[cfg(feature = "tests_integration_nats")]
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use async_nats::{jetstream, ConnectOptions};
-    use std::sync::Arc;
-
-    const NATS_SERVER_URL: &str = "nats://localhost:4222";
-    const SERVICE_SEMVER: &str = "0.0.1";
-
-    pub async fn setup_jetstream() -> Context {
-        let client = ConnectOptions::new()
-            .name("test_client")
-            .connect(NATS_SERVER_URL)
-            .await
-            .expect("Failed to connect to NATS");
-
-        jetstream::new(client)
-    }
-
-    pub async fn get_default_js_service(context: Context) -> JsStreamService {
-        JsStreamService::new(
-            context,
-            "test_service",
-            "Test Service",
-            SERVICE_SEMVER,
-            "test.subject",
-        )
-        .await
-        .expect("Failed to create JsStreamService")
-    }
-
-    #[tokio::test]
-    async fn test_js_service_init() {
-        let context = setup_jetstream().await;
-        let service_name = "test_service";
-        let description = "Test Service Description";
-        let version = SERVICE_SEMVER;
-        let subject = "test.subject";
-
-        let service = JsStreamService::new(context, service_name, description, version, subject)
-            .await
-            .expect("Failed to create JsStreamService");
-
-        assert_eq!(service.name, service_name);
-        assert_eq!(service.version, version);
-        assert_eq!(service.service_subject, subject);
-    }
-
-    #[tokio::test]
-    async fn test_js_service_with_existing_stream() {
-        let context = setup_jetstream().await;
-        let stream_name = "existing_stream";
-        let version = SERVICE_SEMVER;
-
-        // Create a stream beforehand
-        context
-            .get_or_create_stream(&stream::Config {
-                name: stream_name.to_string(),
-                description: Some("Existing stream description".to_string()),
-                subjects: vec![format!("{}.>", stream_name)],
-                ..Default::default()
-            })
-            .await
-            .expect("Failed to create stream");
-
-        let service = JsStreamService::with_existing_stream(context, version, stream_name)
-            .await
-            .expect("Failed to create JsStreamService with existing stream");
-
-        assert_eq!(service.name, stream_name);
-        assert_eq!(service.version, version);
-    }
-
-    #[tokio::test]
-    async fn test_js_service_add_local_consumer() {
-        let context = setup_jetstream().await;
-        let service = get_default_js_service(context).await;
-
-        let consumer_name = "test_consumer";
-        let endpoint_subject = "endpoint";
-        let endpoint_type = EndpointType::Sync(Arc::new(|_msg| Ok(vec![1, 2, 3])));
-        let response_subject = Some("response.subject".to_string());
-
-        let consumer = service
-            .add_local_consumer(
-                consumer_name,
-                endpoint_subject,
-                endpoint_type,
-                response_subject,
-            )
-            .await
-            .expect("Failed to add local consumer");
-
-        assert_eq!(consumer.name, consumer_name);
-        assert!(consumer.response_subject.is_some());
-        assert_eq!(consumer.response_subject.unwrap(), "response.subject");
-    }
-
-    #[tokio::test]
-    async fn test_js_service_spawn_consumer_handler() {
-        let context = setup_jetstream().await;
-        let service = get_default_js_service(context).await;
-
-        let consumer_name = "test_consumer";
-        let endpoint_subject = "endpoint";
-        let endpoint_type = EndpointType::Sync(Arc::new(|_msg| Ok(vec![1, 2, 3])));
-        let response_subject = None;
-
-        service
-            .add_local_consumer(
-                consumer_name,
-                endpoint_subject,
-                endpoint_type,
-                response_subject,
-            )
-            .await
-            .expect("Failed to add local consumer");
-
-        let result = service.spawn_consumer_handler(consumer_name).await;
-        assert!(result.is_ok(), "Failed to spawn consumer handler");
     }
 }

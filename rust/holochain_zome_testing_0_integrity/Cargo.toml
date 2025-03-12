@@ -1,0 +1,14 @@
+[package]
+name = "holochain_zome_testing_0_integrity"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+name = "holochain_zome_testing_0_integrity"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+serde = { workspace = true }
+
+hdi = "0.5.1"
+hdk = "0.4.1"

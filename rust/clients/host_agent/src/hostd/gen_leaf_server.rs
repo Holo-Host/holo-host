@@ -1,10 +1,10 @@
 use anyhow::Context;
-use std::path::PathBuf;
-use tempfile::tempdir;
-use util_libs::nats_server::{
+use nats_utils::leaf_server::{
     JetStreamConfig, LeafNodeRemote, LeafNodeRemoteTlsConfig, LeafServer, LoggingOptions,
     LEAF_SERVER_CONFIG_PATH, LEAF_SERVER_DEFAULT_LISTEN_PORT,
 };
+use std::path::PathBuf;
+use tempfile::tempdir;
 
 pub async fn run(
     maybe_server_name: &Option<String>,
@@ -79,13 +79,13 @@ pub async fn run(
     log::info!("Spawning Leaf Server");
     tokio::spawn(async move {
         if let Err(e) = leaf_server.run().await {
-            anyhow::bail!("failed to run Leaf Server: {e}")
+            anyhow::bail!("Failed to run Leaf Server: {e:?}")
         };
 
         Ok(())
     })
     .await
-    .context("failed to spawn the Leaf Server in a separate thread")??;
+    .context("Failed to spawn the Leaf Server in a separate thread")??;
 
     Ok(())
 }
