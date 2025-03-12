@@ -1,14 +1,12 @@
 use crate::{
     jetstream_service::JsStreamService,
-    tests::{
-        test_nats_server::{check_nats_server, TestClientResponse, TestNatsServer},
-        LocalTestResponse,
-    },
+    tests::LocalTestResponse,
     types::{ConsumerBuilder, EndpointType, ResponseSubjectsGenerator},
 };
 use anyhow::Result;
 use futures::StreamExt;
 use mock_utils::service_test_response::TestResponse;
+use mock_utils::test_nats_server::{check_nats_server, TestClientResponse, TestNatsServer};
 use serial_test::serial;
 use std::collections::HashMap;
 use std::sync::Arc;

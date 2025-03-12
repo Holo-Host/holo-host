@@ -2,6 +2,7 @@ use super::*;
 use crate::nats_utils::leaf_server::{JetStreamConfig, LeafNodeRemote, LeafServer, LoggingOptions};
 use dotenv::dotenv;
 use futures::StreamExt;
+use mock_utils::gen_leaf_agents::gen_test_agents_for_leaf;
 use serial_test::serial;
 use std::path::PathBuf;
 use std::str::FromStr;

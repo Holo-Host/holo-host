@@ -1,9 +1,9 @@
 use crate::{
     jetstream_client::{get_event_listeners, JsClient},
-    tests::test_nats_server::{check_nats_server, TestNatsServer},
     types::{JsClientBuilder, JsServiceBuilder, PublishInfo},
 };
 use anyhow::Result;
+use mock_utils::test_nats_server::{check_nats_server, TestNatsServer};
 use serial_test::serial;
 use std::time::Duration;
 

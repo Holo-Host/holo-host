@@ -12,7 +12,7 @@ pub const USER_ACCOUNT_NAME: &str = "host-account";
 pub const USER_NAME: &str = "host-user";
 pub const NSC_CREDS_PATH: &str = ".local/share/nats/nsc/keys/creds";
 
-// TODO: Clean up this function to abstract away redundacy and improve readability
+// TODO: Clean up this function to abstract away redundancy and improve readability
 // Generates Operator, SYS account with user, and holo-account Account with user,
 // then instantiates the nats resolver and generates the jwt and creds needed
 // for the Leaf server to connect to Hub with JWT Chain-Of-Trust auth
