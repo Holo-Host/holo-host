@@ -1,4 +1,3 @@
-use anyhow::anyhow;
 use nats_utils::{
     jetstream_client::{get_event_listeners, with_event_listeners, JsClient},
     types::{Credentials, JsClientBuilder},
@@ -14,9 +13,8 @@ pub async fn run(admin_creds_path: &Option<PathBuf>, nats_url: String) -> anyhow
 
     let credentials = admin_creds_path
         .to_owned()
-        .map(|creds| vec![Credentials::Path(creds)]);
-
-    // .ok_or(anyhow!("Failed to locate admin credential path."))?;
+        .map(|p| vec![Credentials::Path(p)])
+        .filter(|c| !c.is_empty());
 
     let admin_client = JsClient::new(JsClientBuilder {
         nats_url: nats_url.clone(),

@@ -12,6 +12,7 @@ use nats_utils::{
 use tempfile::tempdir;
 
 pub async fn run(
+    host_id: &str,
     maybe_server_name: &Option<String>,
     user_creds_path: &Option<PathBuf>,
     maybe_store_dir: &Option<PathBuf>,
@@ -62,13 +63,11 @@ pub async fn run(
         },
     }];
 
+    // The hub needs a unique name for each server to distinguish the leaf node connection
     let server_name = if let Some(server_name) = maybe_server_name {
         server_name.clone()
     } else {
-        // the hub needs a unique name for each server to distinguish the leaf node connection
-        machineid_rs::IdBuilder::new(machineid_rs::Encryption::SHA256)
-            .add_component(machineid_rs::HWIDComponent::SystemID)
-            .build("host-agent")?
+        host_id.to_string()
     };
 
     // Create a new Leaf Server instance
