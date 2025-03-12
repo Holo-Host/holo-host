@@ -65,6 +65,7 @@ craneLib.buildPackage (
                 (craneLib.fileset.commonCargoSources ../../rust/hpos-hal)
                 (craneLib.fileset.commonCargoSources ../../rust/services/workload)
                 (craneLib.fileset.commonCargoSources ../../rust/services/inventory)
+                (craneLib.fileset.commonCargoSources ../../rust/ham)
               ]
               ++ paths
             );

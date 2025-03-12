@@ -61,6 +61,10 @@ async fn daemonize(args: &DaemonzeArgs) -> anyhow::Result<()> {
     let host_inventory = HoloInventory::from_host();
     let host_id = host_inventory.system.machine_id.clone();
 
+    if host_id.is_empty() {
+        anyhow::bail!("host_id is empty")
+    }
+
     let (bare_client, mut leaf_server) = hostd::gen_leaf_server::run(
         &host_id,
         &args.nats_leafnode_server_name,

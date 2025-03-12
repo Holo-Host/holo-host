@@ -38,6 +38,7 @@ let
         hostLocalAddress = "192.168.42.45";
         orchestratorHostAddress = "192.168.42.46";
         orchestratorLocalAddress = "192.168.42.47";
+        hostMachineId = "f0b9a2b7a95848389fdb43eda8139569";
 
         devHubFqdn = config.containers.dev-hub.config.networking.fqdn;
         hosts = {
@@ -55,9 +56,9 @@ let
           # specialArgs = { inherit inputs; };
 
           config =
-            { lib, ... }:
+            { ... }:
             {
-              networking.firewall.enable = lib.mkForce false;
+              networking.firewall.enable = false;
 
               imports = [
                 flake.nixosModules.holo-nats-server
@@ -112,16 +113,21 @@ let
           # specialArgs = { inherit inputs; };
 
           config =
-            { lib, ... }:
+            { ... }:
             {
               # in case the container shares the host network, don't mess with the firewall rules.
-              networking.firewall.enable = lib.mkForce false;
+              networking.firewall.enable = false;
 
               imports = [
                 flake.nixosModules.holo-host-agent
               ];
 
               networking.hosts = hosts;
+
+              environment.etc."machine-id" = {
+                mode = "0644";
+                text = hostMachineId;
+              };
 
               holo.host-agent = {
                 enable = true;
@@ -150,10 +156,10 @@ let
           # specialArgs = { inherit inputs; };
 
           config =
-            { lib, ... }:
+            { ... }:
             {
               # in case the container shares the host network, don't mess with the firewall rules.
-              networking.firewall.enable = lib.mkForce false;
+              networking.firewall.enable = false;
 
               imports = [
                 flake.nixosModules.holo-orchestrator
@@ -165,7 +171,7 @@ let
                 enable = true;
                 rust = {
                   log = "trace";
-                  backtrace = "trace";
+                  backtrace = "full";
                 };
 
                 nats.hub.url = "wss://${devHubFqdn}:${builtins.toString config.containers.dev-hub.config.holo.nats-server.websocket.externalPort}";

@@ -1,5 +1,3 @@
-use crate::mongodb::MutMetadata;
-
 /// Database schemas and types for the Holo Hosting system.
 ///
 /// This module defines the schema structures and their MongoDB index configurations
@@ -13,18 +11,20 @@ use crate::mongodb::MutMetadata;
 /// use mongodb::Client;
 ///
 /// // Work with collections using the defined schemas
-/// async fn example() -> Result<(), anyhow::Error> {   
+/// async fn example() -> Result<(), anyhow::Error> {
 ///     let client = Client::with_uri_str("mongodb://localhost:27017").await?;
 ///
 ///     // Set up db and collections with the MongoCollection interface
 ///     use db_utils::mongodb::MongoCollection;
 ///     let users = MongoCollection::<User>::new(&client, DATABASE_NAME, "user").await?;
 ///     let workloads = MongoCollection::<Workload>::new(&client, DATABASE_NAME, "workload").await?;
-///     
+///
 ///     Ok(())
 /// }
 /// ```
+///
 use super::mongodb::IntoIndexes;
+use crate::mongodb::MutMetadata;
 use anyhow::Result;
 use bson::oid::ObjectId;
 use bson::{self, doc, DateTime, Document};
@@ -32,7 +32,9 @@ use hpos_hal::inventory::HoloInventory;
 use mongodb::options::IndexOptions;
 use semver::{BuildMetadata, Prerelease};
 use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 use strum_macros::AsRefStr;
+use url::Url;
 
 /// Name of the main database for the Holo Hosting system
 pub const DATABASE_NAME: &str = "holo-hosting";
@@ -368,8 +370,6 @@ pub struct Workload {
     pub assigned_developer: ObjectId,
     /// Semantic version of the workload
     pub version: SemVer,
-    /// Nix package name containing the workload
-    pub nix_pkg: String,
     /// Minimum number of hosts required
     pub min_hosts: i32,
     /// System requirements for the workload
@@ -378,6 +378,33 @@ pub struct Workload {
     pub assigned_hosts: Vec<ObjectId>,
     /// Current status of the workload
     pub status: WorkloadStatus,
+    pub deployable: WorkloadDeployable, // (Includes information about everthing needed to deploy workload - ie: binary & env pkg & deps, etc)
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub enum WorkloadDeployable {
+    None,
+    ExtraContainerPath { path: PathBuf },
+    ExtraContainerBuildCmd { nix_args: Box<[String]> },
+    HolochainDhtV1(Box<WorkloadDeployableHolochainDhtV1>),
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, clap::Args)]
+pub struct WorkloadDeployableHolochainDhtV1 {
+    #[arg(long, value_delimiter = ',')]
+    pub happ_binary_url: Url,
+    #[arg(long, value_delimiter = ',')]
+    pub network_seed: String,
+    #[arg(long, value_delimiter = ',')]
+    pub memproof: Option<String>,
+    #[arg(long, value_delimiter = ',')]
+    pub bootstrap_server_urls: Option<Vec<Url>>,
+    #[arg(long, value_delimiter = ',')]
+    pub sbd_server_urls: Option<Vec<Url>>,
+    #[arg(long, value_delimiter = ',')]
+    pub holochain_feature_flags: Option<Vec<String>>,
+    #[arg(long, value_delimiter = ',')]
+    pub holochain_version: Option<String>,
 }
 
 impl Default for Workload {
@@ -408,7 +435,6 @@ impl Default for Workload {
                 deleted_at: None,
             },
             version: semver,
-            nix_pkg: String::new(),
             assigned_developer: ObjectId::new(),
             min_hosts: 1,
             system_specs: SystemSpecs {
@@ -425,6 +451,7 @@ impl Default for Workload {
                 desired: WorkloadState::Unknown("default state".to_string()),
                 actual: WorkloadState::Unknown("default state".to_string()),
             },
+            deployable: WorkloadDeployable::None,
         }
     }
 }
