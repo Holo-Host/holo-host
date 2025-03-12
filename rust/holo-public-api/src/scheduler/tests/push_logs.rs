@@ -37,10 +37,8 @@ mod tests {
 
         let _: () = conn.lpush(LOG_COLLECTION_NAME, log_json).await.unwrap();
 
-        let mut now = chrono::Utc::now();
-        push_logs::push_logs(now, cache.clone(), mongodb.clone()).await.unwrap();
-        now = now + chrono::Duration::seconds(30);
-        push_logs::push_logs(now, cache.clone(), mongodb.clone()).await.unwrap();
+        let now = chrono::Utc::now() + chrono::Duration::seconds(1);
+        push_logs::push_logs_trigger(mongodb.clone(), cache.clone()).await.unwrap();
 
         let collection = mongodb.collection::<Log>(LOG_COLLECTION_NAME);
         let cursor = collection.aggregate(

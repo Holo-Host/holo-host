@@ -1,6 +1,3 @@
-use std::time::Duration;
-
-use chrono::Utc;
 use deadpool_redis::Pool;
 use mongodb::Database;
 use crate::providers::config::AppConfig;
@@ -14,11 +11,7 @@ pub async fn setup_scheduler(
     cache: Pool
 ) -> Result<(), anyhow::Error> {
     tokio::spawn(async move {
-        loop {
-            let now = Utc::now();
-            tokio::spawn(push_logs::push_logs(now, cache.clone(), mongodb.clone()));
-            tokio::time::sleep(Duration::from_secs(1)).await;
-        }
+        tokio::spawn(push_logs::push_logs_cronjob(cache.clone(), mongodb.clone()));
     });
 
     Ok(())
