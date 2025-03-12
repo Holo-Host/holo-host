@@ -171,9 +171,7 @@ pub async fn upload_happ(
             });
         }
     };
-    
 
-    // Optionally, you can extract information from complete_resp if needed.
     HttpResponse::Ok().json(UploadHappResponse {
         happ_public_url: format!("https://{}", complete_resp.location.unwrap_or_default()),
     })
