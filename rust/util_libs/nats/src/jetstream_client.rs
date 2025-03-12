@@ -28,7 +28,7 @@ impl std::fmt::Debug for JsClient {
 #[derive(Clone)]
 pub struct JsClient {
     url: String,
-    name: String,
+    pub name: String,
     on_msg_published_event: Option<EventHandler>,
     on_msg_failed_event: Option<EventHandler>,
     pub js_services: Option<Vec<JsStreamService>>,
@@ -66,8 +66,7 @@ impl JsClient {
         let client = connect_options.connect(&p.nats_url).await?;
         let service_log_prefix = format!("NATS-CLIENT-LOG::{}::", p.name);
         log::info!(
-            "{}Connected to NATS server at {}",
-            service_log_prefix,
+            "{service_log_prefix}Connected to NATS server at {}",
             p.nats_url
         );
 
@@ -93,16 +92,17 @@ impl JsClient {
         self.client.server_info()
     }
 
-    pub async fn get_stream_info(&self, stream_name: &str) -> Result<(), async_nats::Error> {
+    pub async fn get_stream_info(
+        &self,
+        stream_name: &str,
+    ) -> Result<jetstream::stream::Info, async_nats::Error> {
         let stream = &self.js_context.get_stream(stream_name).await?;
         let info = stream.get_info().await?;
         log::debug!(
-            "{}JetStream info: stream:{}, info:{:?}",
+            "{}JetStream info: stream:{stream_name}, info:{info:?}",
             self.service_log_prefix,
-            stream_name,
-            info
         );
-        Ok(())
+        Ok(info)
     }
 
     pub async fn check_connection(
@@ -228,7 +228,7 @@ where
 // TODO: there's overlap with the NATS_LISTEN_PORT. refactor this to e.g. read NATS_LISTEN_HOST and NATS_LISTEN_PORT
 pub fn get_nats_url() -> String {
     std::env::var("NATS_URL").unwrap_or_else(|_| {
-        let default = format!("127.0.0.1:{}", LEAF_SERVER_DEFAULT_LISTEN_PORT); // Shouldn't this be the 'NATS_LISTEN_PORT'?
+        let default = format!("127.0.0.1:{LEAF_SERVER_DEFAULT_LISTEN_PORT}"); // Shouldn't this be the 'NATS_LISTEN_PORT'?
         log::debug!("using default for NATS_URL: {default}");
         default
     })
@@ -266,14 +266,10 @@ pub fn get_nats_jwt_by_nsc(operator: &str, account: &str, user: &str) -> String 
 pub fn get_event_listeners() -> Vec<EventListener> {
     // TODO: Use duration in handlers..
     let published_msg_handler = move |msg: &str, client_name: &str, _duration: Duration| {
-        log::info!(
-            "Successfully published message for {}. Msg: {:?}",
-            client_name,
-            msg
-        );
+        log::info!("Successfully published message for {client_name}. Msg: {msg:?}",);
     };
     let failure_handler = |err: &str, client_name: &str, _duration: Duration| {
-        log::info!("Failed to publish for {}. Err: {:?}", client_name, err);
+        log::info!("Failed to publish for {client_name}. Err: {err:?}");
     };
 
     let event_listeners = vec![

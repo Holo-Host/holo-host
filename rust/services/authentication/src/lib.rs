@@ -17,6 +17,7 @@ use async_nats::{AuthError, Message};
 use bson::{self, doc, to_document};
 use core::option::Option::None;
 use data_encoding::BASE64URL_NOPAD;
+use db_utils::mongodb::MutMetadata;
 use db_utils::{
     mongodb::{IntoIndexes, MongoCollection, MongoDbAPI},
     schemas::{self, Host, Hoster, User},
@@ -73,37 +74,36 @@ impl AuthServiceApi {
             &auth_request_token,
             &auth_signing_account_pubkey,
         )
-        .map_err(|e| ServiceError::Authentication(AuthError::new(e)))?;
+        .map_err(|e| ServiceError::auth(AuthError::new(e), None))?;
 
         let auth_request_user_claim = utils::decode_jwt::<types::UserClaim>(
             &auth_request_claim.auth_request.connect_opts.user_jwt,
             &auth_signing_account_pubkey,
         )
-        .map_err(|e| ServiceError::Authentication(AuthError::new(e)))?;
+        .map_err(|e| ServiceError::auth(AuthError::new(e), None))?;
 
         if auth_request_user_claim.generic_claim_data.issuer != auth_signing_account_pubkey {
             let e = "Error: Failed to validate issuer for auth user.";
             log::error!("{} Subject='{}'.", e, msg.subject);
-            return Err(ServiceError::Authentication(AuthError::new(e)));
+            return Err(ServiceError::auth(AuthError::new(e), None));
         };
 
         // 2. Validate Host signature, returning validation error if not successful
         let user_data = utils::base64_to_data::<types::AuthGuardPayload>(
             &auth_request_claim.auth_request.connect_opts.user_auth_token,
         )
-        .map_err(|e| ServiceError::Authentication(AuthError::new(e)))?;
+        .map_err(|e| ServiceError::auth(AuthError::new(e), None))?;
         let host_pubkey: &str = user_data.host_pubkey.as_ref();
         let pubkey_lowercase = host_pubkey.to_lowercase();
-
         let host_signature = user_data.get_host_signature();
         let decoded_sig = BASE64URL_NOPAD
             .decode(&host_signature)
-            .map_err(|e| ServiceError::Internal(e.to_string()))?;
+            .map_err(|e| ServiceError::internal(e.to_string(), None))?;
         let user_verifying_keypair = KeyPair::from_public_key(host_pubkey)
-            .map_err(|e| ServiceError::Internal(e.to_string()))?;
+            .map_err(|e| ServiceError::internal(e.to_string(), None))?;
         let payload_no_sig = &(user_data.clone().without_signature());
         let raw_payload = serde_json::to_vec(payload_no_sig)
-            .map_err(|e| ServiceError::Internal(e.to_string()))?;
+            .map_err(|e| ServiceError::internal(e.to_string(), None))?;
 
         if let Err(e) = user_verifying_keypair.verify(raw_payload.as_ref(), &decoded_sig) {
             log::error!(
@@ -111,14 +111,14 @@ impl AuthServiceApi {
                 msg.subject,
                 e
             );
-            return Err(ServiceError::Authentication(AuthError::new(e)));
+            return Err(ServiceError::auth(AuthError::new(e), None));
         };
 
         // 3. If provided, authenticate the Hoster pubkey and email and assign full permissions if successful
         let is_hoster_valid = self
             .verify_is_valid_in_db(user_data.clone())
             .await
-            .map_err(|e| ServiceError::Internal(e.to_string()))?;
+            .map_err(|e| ServiceError::internal(e.to_string(), None))?;
 
         // 4. Assign permissions based on whether the hoster was successfully validated
         let permissions = if is_hoster_valid {
@@ -171,12 +171,12 @@ impl AuthServiceApi {
             permissions,
             auth_request_claim,
         )
-        .map_err(|e| ServiceError::Internal(e.to_string()))?;
+        .map_err(|e| ServiceError::internal(e.to_string(), None))?;
 
         let claim_str = serde_json::to_string(&auth_response_claim)
-            .map_err(|e| ServiceError::Internal(e.to_string()))?;
+            .map_err(|e| ServiceError::internal(e.to_string(), None))?;
         let token = utils::encode_jwt(&claim_str, &auth_root_account_keypair)
-            .map_err(|e| ServiceError::Internal(e.to_string()))?;
+            .map_err(|e| ServiceError::internal(e.to_string(), None))?;
 
         Ok(types::AuthApiResult {
             result: types::AuthResult::Callout(token),
@@ -194,17 +194,16 @@ impl AuthServiceApi {
         let signature: &[u8] = match &msg.headers {
             Some(h) => {
                 let r = HeaderValue::as_str(h.get("X-Signature").ok_or_else(|| {
-                    log::error!("Error: Missing X-Signature header. Subject='AUTH.authorize'");
-                    ServiceError::Request(format!("{:?}", ErrorCode::BAD_REQUEST))
+                    let err_msg = "Error: Missing X-Signature header. Subject='AUTH.authorize'";
+                    log::error!("{err_msg}");
+                    ServiceError::request(err_msg, Some(ErrorCode::BAD_REQUEST))
                 })?);
                 r.as_bytes()
             }
             None => {
-                log::error!("Error: Missing message headers. Subject='AUTH.authorize'");
-                return Err(ServiceError::Request(format!(
-                    "{:?}",
-                    ErrorCode::BAD_REQUEST
-                )));
+                let err_msg = "Error: Missing message headers. Subject='AUTH.authorize'";
+                log::error!("{err_msg}");
+                return Err(ServiceError::request(err_msg, Some(ErrorCode::BAD_REQUEST)));
             }
         };
 
@@ -217,9 +216,9 @@ impl AuthServiceApi {
         // 2. Validate signature
         let decoded_signature = BASE64URL_NOPAD
             .decode(signature)
-            .map_err(|e| ServiceError::Internal(e.to_string()))?;
+            .map_err(|e| ServiceError::internal(e.to_string(), None))?;
         let user_verifying_keypair = KeyPair::from_public_key(&host_pubkey)
-            .map_err(|e| ServiceError::Internal(e.to_string()))?;
+            .map_err(|e| ServiceError::internal(e.to_string(), None))?;
 
         if let Err(e) = user_verifying_keypair.verify(msg.payload.as_ref(), &decoded_signature) {
             log::error!(
@@ -227,10 +226,7 @@ impl AuthServiceApi {
                 msg.subject,
                 e
             );
-            return Err(ServiceError::Authentication(AuthError::new(format!(
-                "{:?}",
-                e
-            ))));
+            return Err(ServiceError::auth(AuthError::new(format!("{:?}", e)), None));
         };
 
         // 3. Add User keys to nsc resolver (and automatically create account-signed refernce to user key)
@@ -238,7 +234,7 @@ impl AuthServiceApi {
 
         // 4. Create User JWT files (automatically signed with respective account key)
         let (host_jwt, sys_jwt) = utils::create_user_jwt_files(&host_pubkey, &maybe_sys_pubkey)
-            .map_err(|e| ServiceError::Internal(e.to_string()))?;
+            .map_err(|e| ServiceError::internal(e.to_string(), None))?;
 
         let mut tag_map: HashMap<String, String> = HashMap::new();
         tag_map.insert("host_pubkey".to_string(), host_pubkey.clone());
@@ -347,9 +343,10 @@ impl AuthServiceApi {
             new_host.device_id = host_pubkey;
 
             // Assign Hoster to Host
-            new_host.assigned_hoster = hoster._id.ok_or(ServiceError::Internal(
+            new_host.assigned_hoster = hoster._id.ok_or(ServiceError::internal(
                 "Passed DB Authorization, but failed to assign hoster to host. REASON=Failed."
                     .to_string(),
+                None,
             ))?;
             let host_id = self.host_collection.insert_one_into(new_host).await?;
 
@@ -361,8 +358,9 @@ impl AuthServiceApi {
                     "_id": hoster._id
                 },
                 UpdateModifications::Document(doc! {
-                    "$set": to_document(&updated_hoster).map_err(|e| ServiceError::Authentication(AuthError::new(e)))?
+                    "$set": to_document(&updated_hoster).map_err(|e| ServiceError::auth(AuthError::new(e), None))?
                 }),
+                false
             ).await?;
 
             Ok(true)
@@ -376,7 +374,15 @@ impl AuthServiceApi {
         collection_name: &str,
     ) -> Result<MongoCollection<T>>
     where
-        T: Serialize + for<'de> Deserialize<'de> + Unpin + Send + Sync + Default + IntoIndexes,
+        T: Serialize
+            + for<'de> Deserialize<'de>
+            + Unpin
+            + Send
+            + Sync
+            + Default
+            + Debug
+            + IntoIndexes
+            + MutMetadata,
     {
         Ok(MongoCollection::<T>::new(client, schemas::DATABASE_NAME, collection_name).await?)
     }
@@ -393,7 +399,7 @@ impl AuthServiceApi {
                 e
             );
             log::error!("{}", err_msg);
-            ServiceError::Request(format!("{} Code={:?}", err_msg, ErrorCode::BAD_REQUEST))
+            ServiceError::request(err_msg, Some(ErrorCode::BAD_REQUEST))
         })
     }
 }

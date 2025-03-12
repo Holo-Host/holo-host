@@ -9,6 +9,7 @@ use async_nats::Client;
 use db_utils::mongodb::get_mongodb_url;
 use dotenv::dotenv;
 use mongodb::{options::ClientOptions, Client as MongoDBClient};
+use nats_utils::jetstream_client::get_nats_url;
 use tokio::task::spawn;
 
 #[tokio::main]
@@ -31,7 +32,7 @@ async fn main() -> Result<(), async_nats::Error> {
     spawn(async move {
         log::debug!("Spawning admin client...");
 
-        if let Ok(admin_client) = admin_client::run(&None).await {
+        if let Ok(admin_client) = admin_client::run(&None, get_nats_url()).await {
             log::info!("Starting workload service...");
 
             if let Err(e) = workloads::run(admin_client.clone(), thread_db_client.clone()).await {

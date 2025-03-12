@@ -20,6 +20,7 @@ use agent_cli::DaemonzeArgs;
 use anyhow::Result;
 use clap::Parser;
 use dotenv::dotenv;
+use nats_utils::jetstream_client::get_nats_url;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -87,6 +88,7 @@ async fn daemonize(args: &DaemonzeArgs) -> Result<(), async_nats::Error> {
     let host_client = hostd::host_client::run(
         &host_agent_keys.host_pubkey,
         &host_agent_keys.get_host_creds_path(),
+        get_nats_url(),
     )
     .await?;
 

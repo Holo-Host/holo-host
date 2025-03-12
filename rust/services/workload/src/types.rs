@@ -12,10 +12,11 @@ pub struct ObjectIdJSON {
 
 #[derive(Serialize, Deserialize, Clone, Debug, AsRefStr)]
 #[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
 pub enum WorkloadServiceSubjects {
     Add,
     Update,
-    Remove,
+    Delete,
     Insert, // db change stream trigger
     Modify, // db change stream trigger
     HandleStatusUpdate,

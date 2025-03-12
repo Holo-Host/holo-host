@@ -1,20 +1,17 @@
-#![allow(unused_imports)]
-use crate::InventoryServiceApi;
-use anyhow::Result;
-use bson::doc;
-use db_utils::mongodb::MongoDbAPI;
-use mock_utils::{
-    host::create_mock_inventory, mongodb_runner::MongodRunner, nats_message::NatsMessage,
-    workload::create_test_workload,
-};
-use std::sync::Arc;
-
 #[cfg(not(target_arch = "aarch64"))]
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::InventoryServiceApi;
+    use anyhow::Result;
+    use bson::doc;
     use bson::oid::ObjectId;
+    use db_utils::mongodb::MongoDbAPI;
     use db_utils::schemas::{Capacity, Host};
+    use mock_utils::{
+        host::create_mock_inventory, mongodb_runner::MongodRunner, nats_message::NatsMessage,
+        workload::create_test_workload,
+    };
+    use std::sync::Arc;
 
     #[tokio::test]
     async fn test_handle_authenticated_inventory_update() -> Result<()> {

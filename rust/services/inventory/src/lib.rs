@@ -18,18 +18,16 @@ mod tests;
 use anyhow::Result;
 use async_nats::jetstream::ErrorCode;
 use async_nats::Message;
-use bson::{self, doc, oid::ObjectId, Bson, DateTime};
+use bson::{self, doc, oid::ObjectId};
 use db_utils::{
-    mongodb::{IntoIndexes, MongoCollection, MongoDbAPI},
+    mongodb::{IntoIndexes, MongoCollection, MongoDbAPI, MutMetadata},
     schemas::{self, Host, Workload},
 };
 use hpos_hal::inventory::HoloInventory;
-use mongodb::results::UpdateResult;
 use mongodb::{options::UpdateModifications, Client as MongoDBClient};
-use nats_utils::types::{AsyncEndpointHandler, JsServiceResponse, ServiceError};
+use nats_utils::types::ServiceError;
 use serde::{Deserialize, Serialize};
-use std::future::Future;
-use std::sync::Arc;
+use std::{fmt::Debug, sync::Arc};
 use types::InventoryApiResult;
 
 pub const INVENTORY_SRV_NAME: &str = "INVENTORY";
@@ -62,28 +60,38 @@ impl InventoryServiceApi {
         let msg_subject = msg.subject.clone().into_string();
         let host_inventory = Self::convert_msg_to_type::<HoloInventory>(msg)?;
         log::trace!(
-            "INVENTORY message payload. subject='{}', msg={:?}",
-            msg_subject,
-            host_inventory
+            "INVENTORY message payload. subject='{msg_subject}', payload={host_inventory:?}"
         );
 
-        let subject_sections: Vec<&str> = msg_subject.split(".").collect();
-        let host_pubkey_index = 1;
-        let host_pubkey: schemas::PubKey = subject_sections[host_pubkey_index].into();
+        let subject_sections: Vec<&str> = msg_subject.split('.').collect();
+        let host_pubkey: schemas::PubKey = subject_sections
+            .get(1)
+            .ok_or_else(|| {
+                ServiceError::internal(
+                    "Invalid subject format",
+                    Some("Missing host pubkey in subject".to_string()),
+                )
+            })?
+            .to_string();
 
-        log::debug!("Incoming message for 'INVENTORY.{{host_pubkey}}.update'");
+        log::debug!("Processing inventory update for host: {}", host_pubkey);
+
+        // Update host inventory and get the host record
         self.update_host_inventory(&host_pubkey, &host_inventory)
             .await?;
 
-        // Fetch Host collection
         let host = self
             .host_collection
             .get_one_from(doc! { "device_id": &host_pubkey })
             .await?
             .ok_or_else(|| {
-                ServiceError::Internal(format!("Failed to fetch Host. host_pubkey={}", host_pubkey))
+                ServiceError::internal(
+                    format!("Host not found: {}", host_pubkey),
+                    Some("Host lookup failed after inventory update".to_string()),
+                )
             })?;
 
+        // Handle workloads that are no longer compatible with the host
         self.handle_ineligible_host_workloads(host).await?;
 
         Ok(InventoryApiResult {
@@ -92,132 +100,120 @@ impl InventoryServiceApi {
         })
     }
 
-    // Helper function to initialize mongodb collections
-    async fn init_collection<T>(
-        client: &MongoDBClient,
-        collection_name: &str,
-    ) -> Result<MongoCollection<T>>
-    where
-        T: Serialize + for<'de> Deserialize<'de> + Unpin + Send + Sync + Default + IntoIndexes,
-    {
-        Ok(MongoCollection::<T>::new(client, schemas::DATABASE_NAME, collection_name).await?)
-    }
-
-    pub fn call<F, Fut>(&self, handler: F) -> AsyncEndpointHandler<InventoryApiResult>
-    where
-        F: Fn(Self, Arc<Message>) -> Fut + Send + Sync + 'static,
-        Fut: Future<Output = Result<InventoryApiResult, ServiceError>> + Send + 'static,
-        Self: Send + Sync,
-    {
-        let api = self.to_owned();
-        Arc::new(
-            move |msg: Arc<Message>| -> JsServiceResponse<InventoryApiResult> {
-                let api_clone = api.clone();
-                Box::pin(handler(api_clone, msg))
-            },
-        )
-    }
-
-    fn convert_msg_to_type<T>(msg: Arc<Message>) -> Result<T, ServiceError>
-    where
-        T: for<'de> Deserialize<'de> + Send + Sync,
-    {
-        let payload_buf = msg.payload.to_vec();
-        serde_json::from_slice::<T>(&payload_buf).map_err(|e| {
-            let err_msg = format!(
-                "Error: Failed to deserialize payload. Subject='{}' Err={}",
-                msg.subject.clone().into_string(),
-                e
-            );
-            log::error!("{}", err_msg);
-            ServiceError::Request(format!("{} Code={:?}", err_msg, ErrorCode::BAD_REQUEST))
-        })
-    }
-
-    // Add updated Holo Inventory to Host collection
     async fn update_host_inventory(
         &self,
         host_pubkey: &schemas::PubKey,
         inventory: &HoloInventory,
-    ) -> Result<UpdateResult, ServiceError> {
+    ) -> Result<(), ServiceError> {
         self.host_collection
             .update_one_within(
                 doc! { "device_id": host_pubkey },
                 UpdateModifications::Document(doc! {
-                    "$set": {
-                        "inventory": bson::to_bson(inventory)
-                            .map_err(|e| ServiceError::Internal(e.to_string()))?,
-                        "metadata.updated_at": DateTime::now()
-                    }
+                    "$set": { "inventory": bson::to_bson(inventory)? }
                 }),
+                false,
             )
-            .await
+            .await?;
+
+        log::debug!("Updated inventory for host: {}", host_pubkey);
+        Ok(())
     }
 
     fn calculate_host_drive_capacity(&self, host_inventory: &HoloInventory) -> i64 {
-        host_inventory.drives.iter().fold(0_i64, |mut acc, d| {
-            if let Some(capacity) = d.capacity_bytes {
-                acc += capacity as i64;
-            }
-            acc
-        })
+        host_inventory
+            .drives
+            .iter()
+            .fold(0_i64, |acc, d| acc + d.capacity_bytes.unwrap_or(0) as i64)
     }
 
     async fn handle_ineligible_host_workloads(&self, host: Host) -> Result<(), ServiceError> {
         let host_id = host._id.ok_or_else(|| {
-            ServiceError::Internal(format!(
-                "Host is missing '_id' field. host_pubkey={}",
-                host.device_id
-            ))
+            ServiceError::internal(
+                format!("Host missing ID: {}", host.device_id),
+                Some("Database integrity error".to_string()),
+            )
         })?;
 
-        // Fetch all assigned workloads that exceed the host's capcity in a single query
-        let ineligible_assigned_workloads: Vec<ObjectId> = self
+        // Find workloads that exceed host capacity
+        let host_drive_capacity = self.calculate_host_drive_capacity(&host.inventory);
+        let host_cpu_count = host.inventory.cpus.len() as i64;
+
+        let ineligible_workloads = self
             .workload_collection
             .get_many_from(doc! {
                 "_id": { "$in": &host.assigned_workloads },
-                "$expr": {
-                    "$and": [
-                        { "$gt": ["$system_specs.capacity.drive", Bson::Int64(self.calculate_host_drive_capacity(&host.inventory))] },
-                        { "$gt": ["$system_specs.capacity.cores", Bson::Int64( host.inventory.cpus.len() as i64)] }
-                    ]
-                }
+                "$or": [
+                    { "system_specs.capacity.drive": { "$gt": host_drive_capacity } },
+                    { "system_specs.capacity.cores": { "$gt": host_cpu_count } }
+                ]
             })
-            .await?
-            .into_iter()
-            .map(|workload| {
-                workload._id.ok_or_else(|| {
-                    ServiceError::Internal(format!(
-                        "Host is missing '_id' field. host_pubkey={}",
-                        host.device_id
-                    ))
-                })
-            })
-            .collect::<Result<Vec<ObjectId>, _>>()?;
+            .await?;
 
-        // Update database only if there are ineligible workloads
-        if !ineligible_assigned_workloads.is_empty() {
+        let ineligible_workload_ids: Vec<ObjectId> = ineligible_workloads
+            .into_iter()
+            .filter_map(|w| w._id)
+            .collect();
+
+        if !ineligible_workload_ids.is_empty() {
+            log::info!(
+                "Removing {} ineligible workloads from host {}",
+                ineligible_workload_ids.len(),
+                host.device_id
+            );
+
             // Remove ineligible workloads from host
             self.host_collection
                 .update_one_within(
                     doc! { "_id": host_id },
                     UpdateModifications::Document(doc! {
-                        "$pull": { "assigned_workloads": { "$in": &ineligible_assigned_workloads } }
+                        "$pull": { "assigned_workloads": { "$in": &ineligible_workload_ids } }
                     }),
+                    false,
                 )
                 .await?;
 
             // Remove host from ineligible workloads
             self.workload_collection
                 .update_many_within(
-                    doc! { "_id": { "$in": &ineligible_assigned_workloads } },
+                    doc! { "_id": { "$in": &ineligible_workload_ids } },
                     UpdateModifications::Document(doc! {
                         "$pull": { "assigned_hosts": host_id }
                     }),
+                    false,
                 )
                 .await?;
         }
 
         Ok(())
+    }
+
+    async fn init_collection<T>(
+        client: &MongoDBClient,
+        collection_name: &str,
+    ) -> Result<MongoCollection<T>>
+    where
+        T: Serialize
+            + for<'de> Deserialize<'de>
+            + Unpin
+            + Send
+            + Sync
+            + Default
+            + Debug
+            + IntoIndexes
+            + MutMetadata,
+    {
+        Ok(MongoCollection::<T>::new(client, schemas::DATABASE_NAME, collection_name).await?)
+    }
+
+    fn convert_msg_to_type<T>(msg: Arc<Message>) -> Result<T, ServiceError>
+    where
+        T: for<'de> Deserialize<'de> + Send + Sync,
+    {
+        serde_json::from_slice::<T>(&msg.payload).map_err(|e| {
+            ServiceError::request(
+                format!("Failed to deserialize payload: {}", e),
+                Some(ErrorCode::BAD_REQUEST),
+            )
+        })
     }
 }

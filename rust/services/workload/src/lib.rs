@@ -19,7 +19,7 @@ use async_nats::Message;
 use async_trait::async_trait;
 use core::option::Option::None;
 use db_utils::schemas::{WorkloadState, WorkloadStatus};
-use nats_utils::types::{AsyncEndpointHandler, JsServiceResponse, ServiceError};
+use nats_utils::types::ServiceError;
 use serde::Deserialize;
 use std::future::Future;
 use std::{fmt::Debug, sync::Arc};
@@ -35,39 +35,25 @@ pub trait WorkloadServiceApi
 where
     Self: std::fmt::Debug + Clone + 'static,
 {
-    fn call<F, Fut>(&self, handler: F) -> AsyncEndpointHandler<WorkloadApiResult>
-    where
-        F: Fn(Self, Arc<Message>) -> Fut + Send + Sync + 'static,
-        Fut: Future<Output = Result<WorkloadApiResult, ServiceError>> + Send + 'static,
-        Self: Send + Sync,
-    {
-        let api = self.to_owned();
-        Arc::new(
-            move |msg: Arc<Message>| -> JsServiceResponse<WorkloadApiResult> {
-                let api_clone = api.clone();
-                Box::pin(handler(api_clone, msg))
-            },
-        )
-    }
-
     fn convert_msg_to_type<T>(msg: Arc<Message>) -> Result<T, ServiceError>
     where
         T: for<'de> Deserialize<'de> + Send + Sync,
     {
         let payload_buf = msg.payload.to_vec();
+        let subject = msg.subject.clone().into_string();
+
         serde_json::from_slice::<T>(&payload_buf).map_err(|e| {
-            let err_msg = format!(
-                "Error: Failed to deserialize payload. Subject='{}' Err={}",
-                msg.subject.clone().into_string(),
-                e
+            let err_msg = format!("Failed to deserialize payload: {}", e);
+            log::error!(
+                "Deserialization error for subject '{}': {}",
+                subject,
+                err_msg
             );
-            log::error!("{}", err_msg);
-            ServiceError::Request(format!("{} Code={:?}", err_msg, ErrorCode::BAD_REQUEST))
+            ServiceError::request(err_msg, Some(ErrorCode::BAD_REQUEST))
         })
     }
 
-    // Helper function to streamline the processing of incoming workload messages
-    // NB: Currently used to process requests for MongoDB ops and the subsequent db change streams these db edits create (via the mongodb<>nats connector)
+    // Helper function to standardize the processing of incoming workload messages
     async fn process_request<T, Fut>(
         &self,
         msg: Arc<Message>,
@@ -79,30 +65,33 @@ where
         T: for<'de> Deserialize<'de> + Clone + Send + Sync + Debug + 'static,
         Fut: Future<Output = Result<WorkloadApiResult, ServiceError>> + Send,
     {
-        // 1. Deserialize payload into the expected type
+        // Deserialize payload into the expected type
         let payload: T = Self::convert_msg_to_type::<T>(msg.clone())?;
+        let subject = msg.subject.clone().into_string();
 
-        // 2. Call callback handler
-        Ok(match cb_fn(payload.clone()).await {
-            Ok(r) => r,
+        // Call callback handler
+        match cb_fn(payload.clone()).await {
+            Ok(r) => Ok(r),
             Err(e) => {
-                let err_msg = format!("Failed to process Workload Service Endpoint. Subject={} Payload={:?}, Error={:?}", msg.subject.clone().into_string(), payload, e);
-                log::error!("{}", err_msg);
-                let status = WorkloadStatus {
-                    id: None,
-                    desired: desired_state,
-                    actual: error_state(err_msg),
-                };
+                let err_msg = format!(
+                    "Failed to process workload request. Subject={}, Payload={:?}",
+                    subject, payload
+                );
+                log::error!("{}: {}", err_msg, e);
 
-                // 3. return response for stream
-                WorkloadApiResult {
+                // Return response for stream with error state
+                Ok(WorkloadApiResult {
                     result: WorkloadResult {
-                        status,
+                        status: WorkloadStatus {
+                            id: None,
+                            desired: desired_state,
+                            actual: error_state(format!("{}: {}", err_msg, e)),
+                        },
                         workload: None,
                     },
                     maybe_response_tags: None,
-                }
+                })
             }
-        })
+        }
     }
 }
