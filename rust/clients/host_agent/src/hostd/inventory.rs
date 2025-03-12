@@ -9,7 +9,6 @@
   This client does not subject to or consume any inventory subjects.
 */
 
-use anyhow::Result;
 use hpos_hal::inventory::HoloInventory;
 use inventory::INVENTORY_UPDATE_SUBJECT;
 use nats_utils::{
@@ -32,7 +31,7 @@ pub async fn run(
     inventory_file_path: &str,
     host_inventory_check_interval_sec: u64,
     starting_inventory: HoloInventory,
-) -> Result<(), ServiceError> {
+) -> anyhow::Result<()> {
     log::info!("Host Agent Client: starting Inventory job...");
 
     // Store latest inventory record in memory
