@@ -1,4 +1,5 @@
 use clap::{Args, Parser, Subcommand};
+use db_utils::schemas::WorkloadDeployableHolochainDhtV1;
 use netdiag::IPVersion;
 use std::path::PathBuf;
 use url::Url;
@@ -138,11 +139,14 @@ pub enum RemoteCommands {
     Ping {},
 
     /// Manage workloads.
-    Workload {
+    HolochainDhtV1Workload {
+        #[arg(long)]
+        host_id: String,
+
         #[arg(long)]
         operation: String,
 
-        #[arg(long)]
-        data: String,
+        #[command(flatten)]
+        deployable: Box<WorkloadDeployableHolochainDhtV1>,
     },
 }
