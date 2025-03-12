@@ -17,7 +17,6 @@ mod remote_cmds;
 pub mod support_cmds;
 
 use agent_cli::DaemonzeArgs;
-use anyhow::Result;
 use clap::Parser;
 use dotenv::dotenv;
 use hpos_hal::inventory::HoloInventory;
@@ -37,7 +36,7 @@ pub enum AgentCliError {
 }
 
 #[tokio::main]
-async fn main() -> Result<(), AgentCliError> {
+async fn main() -> anyhow::Result<()> {
     dotenv().ok();
     env_logger::init();
 
@@ -57,7 +56,7 @@ async fn main() -> Result<(), AgentCliError> {
     Ok(())
 }
 
-async fn daemonize(args: &DaemonzeArgs) -> Result<(), async_nats::Error> {
+async fn daemonize(args: &DaemonzeArgs) -> anyhow::Result<()> {
     // let host_pubkey = auth::init_agent::run().await?;
     let host_inventory = HoloInventory::from_host();
     let host_id = host_inventory.system.machine_id.clone();
@@ -73,7 +72,8 @@ async fn daemonize(args: &DaemonzeArgs) -> Result<(), async_nats::Error> {
     )
     .await?;
     // TODO: would it be a good idea to reuse this client in the workload_manager and elsewhere later on?
-    bare_client.close().await?;
+
+    bare_client.close().await.map_err(AgentCliError::from)?;
 
     let host_client =
         hostd::host_client::run(&host_id, &args.nats_leafnode_client_creds_path).await?;

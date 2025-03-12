@@ -8,13 +8,11 @@ use crate::{
     AgentCliError,
 };
 
-pub(crate) async fn run(nats_url: Url, command: RemoteCommands) -> Result<(), AgentCliError> {
+pub(crate) async fn run(nats_url: Url, command: RemoteCommands) -> anyhow::Result<()> {
     log::info!("Trying to connect to {nats_url}...");
 
     let vanilla_nats_client =
-        async_nats::connect([nats_url.to_string().parse::<ServerAddr>()?].as_slice())
-            .await
-            .map_err(|e| AgentCliError::AsyncNats(Box::new(e)))?;
+        async_nats::connect([nats_url.to_string().parse::<ServerAddr>()?].as_slice()).await?;
 
     match command {
         agent_cli::RemoteCommands::Ping {} => {
@@ -41,7 +39,7 @@ pub(crate) async fn run(nats_url: Url, command: RemoteCommands) -> Result<(), Ag
                             "install" => WorkloadState::Running,
                             "uninstall" => WorkloadState::Uninstalled,
                             other => {
-                                return Err(AgentCliError::InvalidArguments(format!(
+                                anyhow::bail!(AgentCliError::InvalidArguments(format!(
                                     "unknown operation: {other}"
                                 )))
                             }
@@ -61,8 +59,7 @@ pub(crate) async fn run(nats_url: Url, command: RemoteCommands) -> Result<(), Ag
                         .expect("deserialize works")
                         .into(),
                 )
-                .await
-                .map_err(|e| AgentCliError::AsyncNats(Box::new(e)))?;
+                .await?;
 
             vanilla_nats_client
                 .flush()

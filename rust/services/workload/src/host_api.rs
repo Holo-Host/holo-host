@@ -22,10 +22,7 @@ pub struct HostWorkloadApi {}
 impl WorkloadServiceApi for HostWorkloadApi {}
 
 impl HostWorkloadApi {
-    pub async fn install_workload(
-        &self,
-        msg: Arc<Message>,
-    ) -> Result<WorkloadApiResult, ServiceError> {
+    pub async fn install_workload(&self, msg: Arc<Message>) -> anyhow::Result<WorkloadApiResult> {
         let msg_subject = msg.subject.clone().into_string();
         log::trace!("Incoming message for '{}'", msg_subject);
 
@@ -117,10 +114,7 @@ impl HostWorkloadApi {
         })
     }
 
-    pub async fn uninstall_workload(
-        &self,
-        msg: Arc<Message>,
-    ) -> Result<WorkloadApiResult, ServiceError> {
+    pub async fn uninstall_workload(&self, msg: Arc<Message>) -> anyhow::Result<WorkloadApiResult> {
         let msg_subject = msg.subject.clone().into_string();
         log::trace!("Incoming message for '{}'", msg_subject);
 
