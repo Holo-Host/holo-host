@@ -9,6 +9,7 @@ use tempfile::TempDir;
 /// It disables TCP and relies only unix domain sockets.
 pub struct MongodRunner {
     _child: std::process::Child,
+    // this is stored to prevent premature removing of the tempdir
     tempdir: TempDir,
 }
 
@@ -52,13 +53,13 @@ impl MongodRunner {
             tempdir,
         };
 
+        std::fs::exists(Self::socket_path(&new_self.tempdir)?)
+            .context("mongod socket should exist")?;
+
         log::info!(
             "MongoDB Server is running at {:?}",
             new_self.socket_pathbuf()
         );
-
-        std::fs::exists(Self::socket_path(&new_self.tempdir)?)
-            .context("mongod socket should exist")?;
 
         Ok(new_self)
     }

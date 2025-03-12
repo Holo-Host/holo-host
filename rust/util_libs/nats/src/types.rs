@@ -175,7 +175,7 @@ pub struct LogInfo {
 #[derive(Clone)]
 pub enum EndpointType<T>
 where
-    T: Serialize + for<'de> Deserialize<'de> + Send + Sync + CreateTag,
+    T: EndpointTraits,
 {
     Sync(EndpointHandler<T>),
     Async(AsyncEndpointHandler<T>),
@@ -183,7 +183,7 @@ where
 
 impl<T> std::fmt::Debug for EndpointType<T>
 where
-    T: Serialize + for<'de> Deserialize<'de> + Send + Sync + Clone + Debug + CreateTag + 'static,
+    T: EndpointTraits,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let t = match &self {
