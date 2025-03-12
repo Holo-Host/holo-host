@@ -122,9 +122,7 @@ mod tests {
 
         // Test inventory update with insufficient resources
         let insufficient_inventory = create_mock_inventory(Some(100), Some(1), Some(4));
-
         let msg_payload = serde_json::to_vec(&insufficient_inventory).unwrap();
-
         let msg = Arc::new(
             NatsMessage::new(format!("INVENTORY.{}.update", host.device_id), msg_payload)
                 .into_message(),

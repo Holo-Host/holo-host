@@ -16,7 +16,7 @@ pub async fn run(
     log::info!("host_creds_path (currently omited) : {host_creds_path:?}");
     log::info!("host_pubkey : {host_pubkey}");
 
-    let pubkey_lowercase: String = host_pubkey.to_string().to_lowercase();
+    let pubkey_lowercase: String = host_pubkey.to_lowercase();
 
     let host_creds = host_creds_path
         .to_owned()

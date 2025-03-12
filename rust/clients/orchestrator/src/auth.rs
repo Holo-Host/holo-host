@@ -268,16 +268,6 @@ pub async fn run(db_client: MongoDBClient) -> Result<Client, async_nats::Error> 
 
     log::debug!("Orchestrator Auth Service is running. Waiting for requests...");
 
-    // ==================== Close and Clean Client ====================
-    // Only exit program when explicitly requested
-    tokio::signal::ctrl_c().await?;
-
-    log::debug!("Closing orchestrator auth service...");
-
-    // Close client and drain internal buffer before exiting to make sure all messages are sent
-    orchestrator_auth_client.drain().await?;
-    log::debug!("Closed orchestrator auth service");
-
     Ok(orchestrator_auth_client)
 }
 

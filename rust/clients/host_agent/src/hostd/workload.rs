@@ -24,6 +24,7 @@ use workload::{
     WORKLOAD_SRV_NAME, WORKLOAD_SRV_SUBJ, WORKLOAD_SRV_VERSION,
 };
 
+// TODO: Use _host_creds_path for auth once we add in the more resilient auth pattern.
 pub async fn run(
     mut host_client: JsClient,
     host_pubkey: &str,

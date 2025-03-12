@@ -28,3 +28,4 @@ bytes = "1.8.0"
 chrono = "0.4.0"
 nats_utils = { path = "../../util_libs/nats" }
 db_utils = { path = "../../util_libs/db" }
+inventory = { path = "../../services/inventory" }

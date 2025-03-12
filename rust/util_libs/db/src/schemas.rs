@@ -1,5 +1,3 @@
-use crate::mongodb::MutMetadata;
-
 /// Database schemas and types for the Holo Hosting system.
 ///
 /// This module defines the schema structures and their MongoDB index configurations
@@ -25,6 +23,7 @@ use crate::mongodb::MutMetadata;
 /// }
 /// ```
 use super::mongodb::IntoIndexes;
+use crate::mongodb::MutMetadata;
 use anyhow::Result;
 use bson::oid::ObjectId;
 use bson::{self, doc, DateTime, Document};

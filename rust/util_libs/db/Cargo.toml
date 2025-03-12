@@ -30,3 +30,6 @@ bson = { version = "2.6.1", features = ["chrono-0_4"] }
 derive_more = { version = "1.0.0", features = ["debug"] }
 hpos-hal = { path = "../../hpos-hal" }
 nats_utils = { path = "../../util_libs/nats" }
+
+[features]
+tests_integration_mongodb = []
