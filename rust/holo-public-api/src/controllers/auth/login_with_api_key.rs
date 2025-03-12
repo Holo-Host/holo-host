@@ -15,11 +15,6 @@ use utoipa::OpenApi;
 )]
 pub struct OpenApiSpec;
 
-#[derive(utoipa::ToSchema, serde::Deserialize)]
-pub struct ApiKeyLoginRequest {
-    api_key: String
-}
-
 #[derive(serde::Deserialize)]
 pub struct ApiKeyWithUser {
     pub user: schemas::user::User,
