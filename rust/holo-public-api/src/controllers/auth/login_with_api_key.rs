@@ -1,4 +1,4 @@
-use actix_web::{post, HttpResponse, Responder, web};
+use actix_web::{post, web, HttpRequest, HttpResponse, Responder};
 use bson::doc;
 use chrono::{Duration, Utc};
 use mongodb::Database;
@@ -31,8 +31,8 @@ pub struct ApiKeyWithUser {
     tag = "Auth",
     summary = "Login with API key",
     description = "Login with API key",
-    request_body(
-        content = ApiKeyLoginRequest
+    security(
+        ("ApiKey" = [])
     ),
     responses(
         (status = 200, body = LoginResponse)
@@ -40,11 +40,16 @@ pub struct ApiKeyWithUser {
 )]
 #[post("v1/auth/login-with-api-key")]
 pub async fn login_with_api_key(
-    body: web::Json<ApiKeyLoginRequest>,
+    request: HttpRequest,
     config: web::Data<providers::config::AppConfig>,
     db: web::Data<Database>
 ) -> impl Responder {
-    let api_key = body.api_key.clone();
+    let api_key = match request.headers().get("API-KEY") {
+        Some(api_key) => api_key.to_str().unwrap(),
+        None => {
+            return HttpResponse::BadRequest().json(json!({ "error": "API key is required" }));
+        }
+    };
 
     if api_key.is_empty() {
         return HttpResponse::BadRequest().json(json!({ "error": "API key is required" }));

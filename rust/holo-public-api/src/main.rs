@@ -1,6 +1,6 @@
 use actix_limitation::RateLimiter;
 use actix_web::{middleware::from_fn, web, App, HttpServer};
-use utoipa::openapi::security::{ApiKey, ApiKeyValue, SecurityScheme};
+use utoipa::openapi::security::{ApiKey, ApiKeyValue, OAuth2, SecurityScheme};
 use utoipa_swagger_ui::SwaggerUi;
 
 mod controllers;
@@ -31,7 +31,13 @@ async fn main() -> std::io::Result<()> {
     let mut docs = controllers::setup_docs();
     docs.components.as_mut().unwrap().security_schemes.insert(
         "Bearer".to_string(),
-        SecurityScheme::ApiKey(ApiKey::Header(ApiKeyValue::new("Authorization")))
+        SecurityScheme::Http(utoipa::openapi::security::Http::new(
+            utoipa::openapi::security::HttpAuthScheme::Bearer
+        ))
+    );
+    docs.components.as_mut().unwrap().security_schemes.insert(
+        "ApiKey".to_string(),
+        SecurityScheme::ApiKey(ApiKey::Header(ApiKeyValue::new("API-KEY")))
     );
     docs.info.title = "Holo Public API".to_string();
     docs.info.description = Some("Holo Public API has a limit of 10 requests per second for each user.".to_string());
