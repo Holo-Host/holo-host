@@ -44,9 +44,10 @@ impl HostWorkloadApi {
                     ))
                     .await
                 }
-                other => Err(ServiceError::Workload(format!(
-                    "unsupported desired state: {other:?}"
-                ))),
+                other => Err(ServiceError::workload(
+                    format!("unsupported desired state: {other:?}"),
+                    None,
+                )),
             };
 
             WorkloadStatus {
@@ -131,9 +132,10 @@ impl HostWorkloadApi {
                 WorkloadState::Uninstalled => {
                     bash(&format!("extra-container destroy {}", workload.nix_pkg)).await
                 }
-                other => Err(ServiceError::Workload(format!(
-                    "unsupported desired state: {other:?}"
-                ))),
+                other => Err(ServiceError::workload(
+                    format!("unsupported desired state: {other:?}"),
+                    None,
+                )),
             };
 
             WorkloadStatus {
@@ -194,15 +196,15 @@ async fn bash(cmd: &str) -> Result<(), ServiceError> {
     let mut workload_cmd = tokio::process::Command::new("/usr/bin/env");
     workload_cmd.args(["bash", "-c", cmd]);
 
-    let output = workload_cmd
-        .output()
-        .await
-        .map_err(|e| ServiceError::Workload(format!("error running {workload_cmd:?}: {e}")))?;
+    let output = workload_cmd.output().await.map_err(|e| {
+        ServiceError::workload(format!("error running {workload_cmd:?}: {e}"), None)
+    })?;
 
     if !output.status.success() {
-        return Err(ServiceError::Workload(format!(
-            "error running {workload_cmd:?} yielded non-success status:\n{output:?}",
-        )));
+        return Err(ServiceError::workload(
+            format!("error running {workload_cmd:?} yielded non-success status:\n{output:?}",),
+            None,
+        ));
     }
 
     log::info!("workload creation result:\n{output:#?}");

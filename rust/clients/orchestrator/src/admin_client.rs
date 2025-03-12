@@ -1,4 +1,3 @@
-use anyhow::anyhow;
 use nats_utils::{
     jetstream_client::{get_event_listeners, with_event_listeners, JsClient},
     types::{Credentials, JsClientBuilder},

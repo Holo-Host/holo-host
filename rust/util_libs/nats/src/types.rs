@@ -1,6 +1,7 @@
 use super::jetstream_client::JsClient;
 use anyhow::Result;
 use async_nats::jetstream::consumer::PullConsumer;
+use async_nats::jetstream::ErrorCode;
 use async_nats::{HeaderMap, Message};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
@@ -13,6 +14,7 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
+use thiserror::Error;
 
 pub type EventListener = Arc<Box<dyn Fn(&mut JsClient) + Send + Sync>>;
 pub type EventHandler = Arc<Pin<Box<dyn Fn(&str, &str, Duration) + Send + Sync>>>;
@@ -254,16 +256,154 @@ impl fmt::Display for ErrClientDisconnected {
 }
 impl Error for ErrClientDisconnected {}
 
-#[derive(thiserror::Error, Debug, Clone)]
+#[derive(Error, Debug, Clone)]
 pub enum ServiceError {
-    #[error("Request Error: {0}")]
-    Request(String),
-    #[error(transparent)]
-    Database(#[from] mongodb::error::Error),
-    #[error("Nats Error: {0}")]
-    NATS(String),
-    #[error("Internal Error: {0}")]
-    Internal(String),
-    #[error("Workload Error: {0}")]
-    Workload(String),
+    #[error("Request error: {message}")]
+    Request {
+        message: String,
+        code: Option<ErrorCode>,
+    },
+
+    #[error("Database error: {source}")]
+    Database {
+        source: mongodb::error::Error,
+        collection: Option<String>,
+        operation: Option<String>,
+    },
+
+    #[error("NATS error: {message}")]
+    NATS {
+        message: String,
+        subject: Option<String>,
+    },
+
+    #[error("Internal error: {message}")]
+    Internal {
+        message: String,
+        context: Option<String>,
+    },
+
+    #[error("Workload error: {message}")]
+    Workload {
+        message: String,
+        subject: Option<String>,
+    },
+}
+
+impl ServiceError {
+    /// Creates a new Request error with optional error code
+    pub fn request(message: impl Into<String>, code: Option<ErrorCode>) -> Self {
+        Self::Request {
+            message: message.into(),
+            code,
+        }
+    }
+
+    /// Creates a new Database error with context
+    pub fn database(
+        error: mongodb::error::Error,
+        collection: Option<String>,
+        operation: Option<String>,
+    ) -> Self {
+        Self::Database {
+            source: error,
+            collection,
+            operation,
+        }
+    }
+
+    /// Creates a new NATS error with optional subject
+    pub fn nats(message: impl Into<String>, subject: Option<String>) -> Self {
+        Self::NATS {
+            message: message.into(),
+            subject,
+        }
+    }
+
+    /// Creates a new Internal error with optional context
+    pub fn internal(message: impl Into<String>, context: Option<String>) -> Self {
+        Self::Internal {
+            message: message.into(),
+            context,
+        }
+    }
+
+    /// Creates a new Internal error with optional context
+    pub fn workload(message: impl Into<String>, subject: Option<String>) -> Self {
+        Self::Workload {
+            message: message.into(),
+            subject,
+        }
+    }
+
+    /// Returns true if this is a Request error
+    pub fn is_request(&self) -> bool {
+        matches!(self, Self::Request { .. })
+    }
+
+    /// Returns true if this is a Database error
+    pub fn is_database(&self) -> bool {
+        matches!(self, Self::Database { .. })
+    }
+
+    /// Returns true if this is a NATS error
+    pub fn is_nats(&self) -> bool {
+        matches!(self, Self::NATS { .. })
+    }
+
+    /// Returns true if this is an Internal error
+    pub fn is_internal(&self) -> bool {
+        matches!(self, Self::Internal { .. })
+    }
+
+    /// Returns true if this is an Workload error
+    pub fn is_workload(&self) -> bool {
+        matches!(self, Self::Workload { .. })
+    }
+
+    /// Gets the error message without the error type prefix
+    pub fn message(&self) -> String {
+        match self {
+            Self::Request { message, .. } => message.clone(),
+            Self::Database { source, .. } => source.to_string(),
+            Self::NATS { message, .. } => message.clone(),
+            Self::Internal { message, .. } => message.clone(),
+            Self::Workload { message, .. } => message.clone(),
+        }
+    }
+}
+
+// Manual implementation of From instead of using #[from]
+impl From<mongodb::error::Error> for ServiceError {
+    fn from(error: mongodb::error::Error) -> Self {
+        Self::Database {
+            source: error,
+            collection: None,
+            operation: None,
+        }
+    }
+}
+
+impl From<serde_json::Error> for ServiceError {
+    fn from(error: serde_json::Error) -> Self {
+        Self::request(error.to_string(), Some(ErrorCode::BAD_REQUEST))
+    }
+}
+
+impl From<bson::ser::Error> for ServiceError {
+    fn from(error: bson::ser::Error) -> Self {
+        Self::internal(
+            error.to_string(),
+            Some("BSON serialization failed".to_string()),
+        )
+    }
+}
+
+impl From<bson::de::Error> for ServiceError {
+    fn from(error: bson::de::Error) -> Self {
+        Self::internal(
+            error.to_string(),
+            Some("BSON deserialization failed".to_string()),
+        )
+    }
 }
