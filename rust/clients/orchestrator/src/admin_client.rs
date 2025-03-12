@@ -13,8 +13,7 @@ pub async fn run(admin_creds_path: &Option<PathBuf>, nats_url: String) -> anyhow
 
     let credentials = admin_creds_path
         .to_owned()
-        .map(|p| vec![Credentials::Path(p)])
-        .filter(|c| !c.is_empty());
+        .map(|p| vec![Credentials::Path(p)]);
 
     let admin_client = JsClient::new(JsClientBuilder {
         nats_url: nats_url.clone(),
