@@ -6,8 +6,10 @@ use std::collections::HashMap;
 use strum_macros::AsRefStr;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct ObjectIdJSON {
+pub struct HostIdJSON {
     pub _id: ObjectId,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub device_id: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, AsRefStr)]

@@ -35,9 +35,13 @@ pub enum UserPermission {
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct Metadata {
+    #[serde(default)]
     pub is_deleted: bool,
+    #[serde(default)]
     pub deleted_at: Option<DateTime>,
+    #[serde(default)]
     pub updated_at: Option<DateTime>,
+    #[serde(default)]
     pub created_at: Option<DateTime>,
 }
 
@@ -155,27 +159,52 @@ pub struct Host {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub _id: Option<ObjectId>,
     pub metadata: Metadata,
-    pub device_id: PubKey, // *INDEXED*
+    #[serde(default)]
+    pub device_id: String, // *INDEXED*
+    #[serde(default)]
     pub ip_address: String,
+    #[serde(default)]
     pub inventory: HoloInventory,
+    #[serde(default = "default_avg_uptime")]
     pub avg_uptime: f64,
+    #[serde(default = "default_avg_network_speed")]
     pub avg_network_speed: i64,
+    #[serde(default = "default_avg_latency")]
     pub avg_latency: i64,
+    #[serde(default = "empty_object_id")]
     pub assigned_hoster: ObjectId,
+    #[serde(default)]
     pub assigned_workloads: Vec<ObjectId>,
+}
+
+/// Default value functions
+fn default_avg_uptime() -> f64 {
+    0.0
+}
+
+fn default_avg_network_speed() -> i64 {
+    0
+}
+
+fn default_avg_latency() -> i64 {
+    0
+}
+
+fn empty_object_id() -> ObjectId {
+    ObjectId::from_bytes([0; 12])
 }
 
 impl IntoIndexes for Host {
     fn into_indices(self) -> Result<Vec<(Document, Option<IndexOptions>)>> {
         let mut indices = vec![];
         //  Add Device ID Index
-        let pubkey_index_doc = doc! { "device_id": 1 };
-        let pubkey_index_opts = Some(
+        let device_id_index_doc = doc! { "device_id": 1 };
+        let device_id_index_opts = Some(
             IndexOptions::builder()
                 .name(Some("device_id_index".to_string()))
                 .build(),
         );
-        indices.push((pubkey_index_doc, pubkey_index_opts));
+        indices.push((device_id_index_doc, device_id_index_opts));
         Ok(indices)
     }
 }
