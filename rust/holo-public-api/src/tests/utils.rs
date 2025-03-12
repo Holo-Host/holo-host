@@ -102,6 +102,9 @@ pub fn get_app_config() -> AppConfig {
         enable_scheduler: true,
         host: "http://localhost".to_string(),
         jwt_secret: "jwt_secret".to_string(),
+        object_storage_endpoint: "http://localhost:9000".to_string(),
+        object_storage_access_key: "minio".to_string(),
+        object_storage_secret_key: "minio".to_string(),
     }
 }
 

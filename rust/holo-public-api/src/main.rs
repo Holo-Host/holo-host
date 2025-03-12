@@ -1,6 +1,6 @@
 use actix_limitation::RateLimiter;
 use actix_web::{middleware::from_fn, web, App, HttpServer};
-use utoipa::openapi::security::{ApiKey, ApiKeyValue, OAuth2, SecurityScheme};
+use utoipa::openapi::security::{ApiKey, ApiKeyValue, SecurityScheme};
 use utoipa_swagger_ui::SwaggerUi;
 
 mod controllers;
@@ -86,6 +86,14 @@ async fn main() -> std::io::Result<()> {
         1 // amount of seconds
     );
 
+    // setup object storage
+    let object_storage = providers::object_storage::setup_object_storage(
+        app_config.clone()
+    ).await.unwrap_or_else(|err| {
+        tracing::error!("Error setting up object storage: {}", err);
+        std::process::exit(1);
+    });
+
     // start server
     println!("Started server on {}", app_config.host);
     let port = app_config.port;
@@ -95,6 +103,7 @@ async fn main() -> std::io::Result<()> {
             .app_data(web::Data::new(app_config.clone()))
             .app_data(web::Data::new(mongodb.clone()))
             .app_data(web::Data::new(cache.clone()))
+            .app_data(web::Data::new(object_storage.clone()))
             .wrap(from_fn(middleware::logging::logging_middleware));
 
         // open api spec and swagger ui
