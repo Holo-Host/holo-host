@@ -48,17 +48,14 @@ async fn main() -> Result<(), AgentCliError> {
 
 async fn daemonize(args: &DaemonzeArgs) -> Result<(), async_nats::Error> {
     // let host_pubkey = auth::init_agent::run().await?;
-    let bare_client = hostd::gen_leaf_server::run(
+    hostd::gen_leaf_server::run(
         &args.nats_leafnode_server_name,
         &args.nats_leafnode_client_creds_path,
         &args.store_dir,
         args.hub_url.clone(),
         args.hub_tls_insecure,
-        args.nats_connect_timeout_secs,
     )
     .await?;
-    // TODO: would it be a good idea to reuse this client in the workload_manager and elsewhere later on?
-    bare_client.close().await?;
 
     let host_client = hostd::host_client::run(
         "host_pubkey_placeholder>",
@@ -103,5 +100,6 @@ async fn daemonize(args: &DaemonzeArgs) -> Result<(), async_nats::Error> {
     // NB: Calling drain/close on any one of the Client instances will close the underlying connection.
     // This affects all instances that share the same connection (including clones) because they are all references to the same resource.
     host_client.close().await?;
+
     Ok(())
 }

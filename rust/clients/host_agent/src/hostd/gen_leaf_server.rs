@@ -1,14 +1,9 @@
-use std::{path::PathBuf, time::Duration};
-
 use anyhow::Context;
-use nats_utils::{
-    jetstream_client,
-    leaf_server::{
-        JetStreamConfig, LeafNodeRemote, LeafNodeRemoteTlsConfig, LeafServer, LoggingOptions,
-        LEAF_SERVER_CONFIG_PATH, LEAF_SERVER_DEFAULT_LISTEN_PORT,
-    },
-    types::JsClientBuilder,
+use nats_utils::leaf_server::{
+    JetStreamConfig, LeafNodeRemote, LeafNodeRemoteTlsConfig, LeafServer, LoggingOptions,
+    LEAF_SERVER_CONFIG_PATH, LEAF_SERVER_DEFAULT_LISTEN_PORT,
 };
+use std::path::PathBuf;
 use tempfile::tempdir;
 
 pub async fn run(
@@ -17,8 +12,7 @@ pub async fn run(
     maybe_store_dir: &Option<PathBuf>,
     hub_url: String,
     hub_tls_insecure: bool,
-    nats_connect_timeout_secs: u64,
-) -> anyhow::Result<jetstream_client::JsClient> {
+) -> anyhow::Result<()> {
     let leaf_client_conn_domain = "127.0.0.1";
     let leaf_client_conn_port = std::env::var("NATS_LISTEN_PORT")
         .map(|var| var.parse().expect("can't parse into number"))
@@ -93,44 +87,5 @@ pub async fn run(
     .await
     .context("Failed to spawn the Leaf Server in a separate thread")??;
 
-    // Spin up Nats Client
-    // Nats takes a moment to become responsive, so we try to connecti in a loop for a few seconds.
-    // TODO: how do we recover from a connection loss to Nats in case it crashes or something else?
-    let nats_url = jetstream_client::get_nats_url();
-    log::info!("nats_url : {nats_url}");
-
-    const HOST_AGENT_CLIENT_NAME: &str = "Host Agent Bare";
-
-    let nats_client = tokio::select! {
-        client = async {loop {
-                let host_workload_client = jetstream_client::JsClient::new(JsClientBuilder {
-                    nats_url:nats_url.clone(),
-                    name:HOST_AGENT_CLIENT_NAME.to_string(),
-                    inbox_prefix: Default::default(),
-                    credentials: Default::default(),
-                    ping_interval:Some(Duration::from_secs(10)),
-                    request_timeout:Some(Duration::from_secs(29)),
-                    listeners: Default::default(),
-                })
-                .await
-                .map_err(|e| anyhow::anyhow!("connecting to NATS via {nats_url}: {e:?}"));
-
-                match host_workload_client {
-                    Ok(client) => break client,
-                    Err(e) => {
-                        let duration = tokio::time::Duration::from_millis(100);
-                        log::warn!("{e:?}, retrying in {duration:?}");
-                        tokio::time::sleep(duration).await;
-                    }
-                }
-            }} => client,
-        _ = {
-            log::debug!("will time out waiting for NATS after {nats_connect_timeout_secs:?}");
-            tokio::time::sleep(tokio::time::Duration::from_secs(nats_connect_timeout_secs))
-         } => {
-            anyhow::bail!("timed out waiting for NATS on {nats_url}");
-        }
-    };
-
-    Ok(nats_client)
+    Ok(())
 }
