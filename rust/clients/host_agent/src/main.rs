@@ -19,6 +19,7 @@ use anyhow::Result;
 use clap::Parser;
 use dotenv::dotenv;
 use thiserror::Error;
+use tokio::task::spawn;
 
 #[derive(Error, Debug)]
 pub enum AgentCliError {
@@ -86,15 +87,29 @@ async fn daemonize(args: &DaemonzeArgs) -> Result<(), async_nats::Error> {
         |s| s.to_owned(),
     );
 
-    hostd::inventory::run(
-        host_client.clone(),
-        "host_pubkey_placeholder>",
-        &inventory_file_path,
-        host_inventory_check_interval_sec.to_owned(),
-    )
-    .await?;
+    let host_client_inventory_clone = host_client.clone();
+    let inventory_interval = host_inventory_check_interval_sec.to_owned();
+    spawn(async move {
+        if let Err(e) = hostd::inventory::run(
+            host_client_inventory_clone,
+            "host_pubkey_placeholder>",
+            &inventory_file_path,
+            inventory_interval,
+        )
+        .await
+        {
+            log::error!("Error running host agent workload service. Err={:?}", e)
+        };
+    });
 
-    hostd::workload::run(host_client.clone(), "host_pubkey_placeholder>").await?;
+    let host_client_workload_clone = host_client.clone();
+    spawn(async move {
+        if let Err(e) =
+            hostd::workload::run(host_client_workload_clone, "host_pubkey_placeholder>").await
+        {
+            log::error!("Error running host agent workload service. Err={:?}", e)
+        };
+    });
 
     // Only exit program when explicitly requested
     tokio::signal::ctrl_c().await?;
