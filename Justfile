@@ -75,3 +75,9 @@ devhost-host-agent-remote desired-status +args="":
         --happ-binary-url "https://gist.github.com/steveej/5443d6d15395aa23081f1ee04712b2b3/raw/fdacb9b723ba83743567f2a39a8bfbbffb46b1f0/test-zome.bundle" \
         --network-seed "just-testing" {{args}}
 
+
+devhost-hub-remote subject="WORKLOAD.add":
+    #!/usr/bin/env bash
+    set -xeE
+    export HOST_AGENT_NATS_URL="nats://admin:admin@dev-hub"
+    just devhost-host-agent-remote installed --subject-override {{subject}} --workload-only
