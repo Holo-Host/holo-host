@@ -105,7 +105,7 @@ craneLib.buildPackage (
             ]
             ++ (pkgs.lib.lists.optionals (!pkgs.stdenv.isAarch64) [
               # TODO: get mongodb built for aarch64
-              # pkgs.mongodb
+              pkgs.mongodb
             ]);
           partitions = 1;
           partitionType = "count";
