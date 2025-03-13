@@ -18,7 +18,7 @@ jsonwebtoken = "9.3.1"
 chrono = "0.4.40"
 utoipa = "5.3.1"
 utoipa-swagger-ui = { version = "9", features = ["actix-web"] }
-mongodb = "2.1"
+mongodb = "2.1" # todo: need to update to 3
 bson = { version = "2.13.0", features = ["chrono-0_4"] }
 tokio = { version = "1.44.1", features = ["full"] }
 anyhow = "1.0.97"
