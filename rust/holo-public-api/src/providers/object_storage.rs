@@ -20,7 +20,7 @@ pub async fn setup_object_storage(
     let config = aws_config::load_defaults(BehaviorVersion::latest())
         .await.into_builder()
         .region(Region::new("eu-central-1"))
-        .endpoint_url(config.object_storage_endpoint)
+        .endpoint_url(format!("https://{}", config.object_storage_endpoint))
         .credentials_provider(credentials)
         .build();
     

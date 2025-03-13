@@ -6,7 +6,9 @@ use actix_multipart::Multipart;
 use futures_util::StreamExt;
 use serde::Serialize;
 use utoipa::{OpenApi, ToSchema};
+use blake3;
 
+use crate::providers::config::AppConfig;
 use crate::providers::{error_response::ErrorResponse, jwt::AccessTokenClaims};
 
 #[derive(OpenApi)]
@@ -18,7 +20,9 @@ pub struct OpenApiSpec;
 
 #[derive(Serialize, ToSchema)]
 pub struct UploadHappResponse {
-    pub happ_public_url: String,
+    pub url: String,
+    pub hash: String,
+    pub metadata: String,
 }
 
 #[derive(Serialize, ToSchema)]
@@ -49,6 +53,7 @@ pub async fn upload_happ(
     req: HttpRequest,
     mut payload: Multipart,
     s3_client: web::Data<S3Client>,
+    config: web::Data<AppConfig>,
 ) -> impl Responder {
     let bucket = "holo-public-api-dev-storage";
     let ext = req.extensions_mut();
@@ -59,14 +64,15 @@ pub async fn upload_happ(
         });
     }
     let auth = auth.unwrap();
-    let file_name = bson::uuid::Uuid::new().to_string();
+    let file_identifier = bson::uuid::Uuid::new().to_string();
+    let mut hasher = blake3::Hasher::new();
 
     // Start the multipart upload.
     let upload = match s3_client
         .create_multipart_upload()
         .acl(aws_sdk_s3::types::ObjectCannedAcl::PublicRead)
         .bucket(bucket)
-        .key(format!("{}/{}", auth.sub, file_name))
+        .key(format!("{}/{}/file", auth.sub, file_identifier))
         .send()
         .await
     {
@@ -106,6 +112,8 @@ pub async fn upload_happ(
                 }
             };
 
+            hasher.update(&chunk.clone());
+
             // Convert chunk into a ByteStream.
             let body = ByteStream::from(chunk.to_vec());
 
@@ -113,7 +121,7 @@ pub async fn upload_happ(
             let part_resp = match s3_client
                 .upload_part()
                 .bucket(bucket)
-                .key(format!("{}/{}", auth.sub, file_name))
+                .key(format!("{}/{}/file", auth.sub, file_identifier))
                 .body(body)
                 .part_number(part_number)
                 .upload_id(upload.upload_id().unwrap())
@@ -154,10 +162,10 @@ pub async fn upload_happ(
         .build();
 
     // Complete the multipart upload.
-    let complete_resp = match s3_client
+    let _ = match s3_client
         .complete_multipart_upload()
         .bucket(bucket)
-        .key(format!("{}/{}", auth.sub, file_name))
+        .key(format!("{}/{}/file", auth.sub, file_identifier))
         .upload_id(upload.upload_id().unwrap())
         .multipart_upload(completed_upload)
         .send()
@@ -172,7 +180,43 @@ pub async fn upload_happ(
         }
     };
 
+    let hash_hex = hasher.finalize().to_hex().to_string();
+
+    let metadata_body = ByteStream::from(
+        bson::doc! {
+            "createdAt": bson::DateTime::now(),
+            "updatedAt": bson::DateTime::now(),
+            "fileIdentifier": file_identifier.clone(),
+            "userId": auth.sub.clone(),
+            "hash": hash_hex.clone(),
+        }.to_string().as_bytes().to_vec()
+    );
+
+    // upload metadata
+    let _ = match s3_client.put_object()
+        .acl(aws_sdk_s3::types::ObjectCannedAcl::PublicRead)
+        .bucket(bucket)
+        .key(format!("{}/{}/metadata.json", auth.sub, file_identifier))
+        .body(metadata_body)
+        .send()
+        .await
+    {
+        Ok(resp) => resp,
+        Err(e) => {
+            tracing::error!("Error uploading metadata: {:?}", e);
+            return HttpResponse::InternalServerError().json(ErrorResponse {
+                message: "Internal server error".to_string(),
+            });
+        }
+    };
+
+    let endpoint = config.object_storage_endpoint.clone();
+    let metadata_url = format!("https://{}.{}/{}/{}/metadata.json", bucket, endpoint, auth.sub, file_identifier);
+    let url = format!("https://{}.{}/{}/{}/file", bucket, endpoint, auth.sub, file_identifier);
+    
     HttpResponse::Ok().json(UploadHappResponse {
-        happ_public_url: format!("https://{}", complete_resp.location.unwrap_or_default()),
+        url,
+        metadata: metadata_url,
+        hash: hash_hex,
     })
 }

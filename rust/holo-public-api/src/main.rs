@@ -2,6 +2,7 @@ use actix_limitation::RateLimiter;
 use actix_web::{middleware::from_fn, web, App, HttpServer};
 use utoipa::openapi::security::{ApiKey, ApiKeyValue, SecurityScheme};
 use utoipa_swagger_ui::SwaggerUi;
+use actix_cors::Cors;
 
 mod controllers;
 mod middleware;
@@ -134,7 +135,7 @@ async fn main() -> std::io::Result<()> {
             .configure(controllers::setup_private_controllers)
         );
 
-        app
+        app.wrap(Cors::permissive())
     })
     .bind(("0.0.0.0", port))?
     .run()

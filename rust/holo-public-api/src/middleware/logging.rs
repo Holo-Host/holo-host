@@ -1,5 +1,5 @@
 use actix_web::{
-    body::{BoxBody, MessageBody}, dev::{
+    body::MessageBody, dev::{
         ServiceRequest,
         ServiceResponse
     }, http::StatusCode, middleware::Next, web, Error, HttpMessage
@@ -11,7 +11,7 @@ use crate::providers::{database::schemas::{log::{Log, LOG_COLLECTION_NAME}, shar
 
 pub async fn logging_middleware(
     req: ServiceRequest,
-    next: Next<BoxBody>
+    next: Next<impl MessageBody>,
 ) -> Result<ServiceResponse<impl MessageBody>, Error> {
     let path = req.path().to_owned();
     let method = req.method().clone();

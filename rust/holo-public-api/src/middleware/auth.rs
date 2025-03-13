@@ -9,17 +9,17 @@ use actix_web::{
 pub fn build_unauthorized_response(req: ServiceRequest, message: &str)
 -> Result<ServiceResponse<BoxBody>, Error> {
     let (req_http, _) = req.into_parts();
-    let resp: HttpResponse<BoxBody> = HttpResponse::Unauthorized().json(ErrorResponse {
+    let resp = HttpResponse::Unauthorized()
+    .json(ErrorResponse {
         message: message.to_string(),
-    });
-
+    }).map_into_boxed_body();
     Ok(ServiceResponse::new(req_http, resp))
 }
 
 pub async fn auth_middleware(
     req: ServiceRequest,
-    next: Next<BoxBody>
-) -> Result<ServiceResponse<impl MessageBody>, Error> {
+    next: Next<impl MessageBody + 'static>,
+) -> Result<ServiceResponse<BoxBody>, Error> {
     let auth_header = req.headers().get("authorization");
     if auth_header.is_none() {
         return build_unauthorized_response(req, "No authorization header");
@@ -63,5 +63,6 @@ pub async fn auth_middleware(
     // insert claims as app_data for this request
     req.extensions_mut().insert(claims);
 
-    next.call(req).await
+    let resp = next.call(req).await?;
+    Ok(resp.map_into_boxed_body())
 }
