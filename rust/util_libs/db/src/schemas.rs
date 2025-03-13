@@ -33,6 +33,7 @@ use mongodb::options::IndexOptions;
 use semver::{BuildMetadata, Prerelease};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
+use strum::{EnumDiscriminants, EnumString, FromRepr};
 use strum_macros::AsRefStr;
 use url::Url;
 
@@ -298,7 +299,8 @@ impl MutMetadata for Host {
 }
 
 /// Enumeration of possible workload states
-#[derive(Debug, Clone, Serialize, Deserialize, AsRefStr)]
+#[derive(Debug, Clone, Serialize, Deserialize, AsRefStr, EnumDiscriminants, FromRepr)]
+#[strum_discriminants(derive(EnumString), repr(usize), strum(serialize_all = "snake_case"))]
 pub enum WorkloadState {
     /// Workload reported by developer
     Reported,
@@ -384,7 +386,8 @@ pub struct Workload {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum WorkloadDeployable {
     None,
-    ExtraContainerPath { path: PathBuf },
+    ExtraContainerPath { extra_container_path: String },
+    ExtraContainerStorePath { store_path: PathBuf },
     ExtraContainerBuildCmd { nix_args: Box<[String]> },
     HolochainDhtV1(Box<WorkloadDeployableHolochainDhtV1>),
 }

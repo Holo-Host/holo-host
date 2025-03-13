@@ -105,6 +105,7 @@ in
           RUST_LOG = cfg.rust.log;
           RUST_BACKTRACE = cfg.rust.backtrace;
           NATS_LISTEN_PORT = builtins.toString cfg.nats.listenPort;
+          NIX_REMOTE = "daemon";
         }
         // lib.attrsets.optionalAttrs (cfg.nats.url != null) {
           NATS_URL = cfg.nats.url;

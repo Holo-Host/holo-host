@@ -10,11 +10,13 @@ macro_rules! generate_service_call {
                     .$method_name(msg)
                     .await
                     .map_err(|e| -> ServiceError {
+                        log::error!("{e}");
                         let a = anyhow::Error::from(e);
-                        match a.downcast_ref::<ServiceError>() {
-                            Some(se) => se.clone(),
-                            None => ServiceError::Internal {
-                                message: a.to_string(),
+                        log::error!("{a}");
+                        match a.downcast::<ServiceError>() {
+                            Ok(se) => se.clone(),
+                            Err(e) => ServiceError::Internal {
+                                message: e.to_string(),
                                 context: None,
                             },
                         }
