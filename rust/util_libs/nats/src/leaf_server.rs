@@ -9,8 +9,9 @@ use std::fmt::Debug;
 use std::fs::File;
 use std::io::Write;
 use std::path::PathBuf;
-use std::process::{Child, Command, Stdio};
+use std::process::Stdio; // Child, Command,
 use std::sync::Arc;
+use tokio::process::{Child, Command};
 use tokio::sync::Mutex;
 
 pub const LEAF_SERVER_CONFIG_PATH: &str = "test_leaf_server.conf";
@@ -139,6 +140,7 @@ impl LeafServer {
         let child = Command::new("nats-server")
             .arg("-c")
             .arg(&self.config_path)
+            .kill_on_drop(true)
             // TODO: make this configurable and give options to log it to a seperate log file
             .stdout(Stdio::inherit())
             .stderr(Stdio::inherit())
@@ -163,7 +165,7 @@ impl LeafServer {
 
         if let Some(child) = handle.as_mut() {
             // Wait for the server process to finish
-            let status = child.wait()?;
+            let status = child.wait().await?;
             log::info!("NATS server exited with status: {:?}", status);
         } else {
             log::info!("No running server to shut down.");
