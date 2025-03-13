@@ -15,6 +15,12 @@ in
       default = true;
     };
 
+    host = lib.mkOption {
+      description = "native client listen host";
+      type = lib.types.str;
+      default = "127.0.0.1";
+    };
+
     port = lib.mkOption {
       description = "native client port";
       type = lib.types.int;
@@ -81,6 +87,7 @@ in
         jetstream = lib.mkDefault true;
 
         settings = {
+          host = lib.mkDefault cfg.host;
           port = lib.mkDefault cfg.port;
           leafnodes.port = lib.mkDefault cfg.leafnodePort;
           websocket = {

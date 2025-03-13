@@ -38,7 +38,11 @@ pub enum CommandScopes {
     /// Interact with a remote host-agent (via NATS).
     Remote {
         /// Url for the NATS connection. Can contain credentials.
-        #[clap(long, env = "HOST_AGENT_NATS_URL")]
+        #[clap(
+            long,
+            env = "HOST_AGENT_NATS_URL",
+            default_value = "nats://admin:admin@dev-hub"
+        )]
         nats_url: Url,
 
         #[command(subcommand)]
@@ -152,5 +156,11 @@ pub enum RemoteCommands {
 
         #[command(flatten)]
         deployable: Box<WorkloadDeployableHolochainDhtV1>,
+
+        #[arg(long)]
+        workload_only: bool,
+
+        #[arg(long)]
+        subject_override: Option<String>,
     },
 }

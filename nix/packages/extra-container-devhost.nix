@@ -69,6 +69,7 @@ let
 
               # holo.orchestrator.enable = true;
               holo.nats-server.enable = true;
+              holo.nats-server.host = "0.0.0.0";
               services.nats.settings = {
                 accounts = {
                   SYS = {

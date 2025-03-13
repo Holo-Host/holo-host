@@ -27,6 +27,8 @@ pub(crate) async fn run(nats_url: Url, command: RemoteCommands) -> anyhow::Resul
             host_id,
             desired_status,
             deployable,
+            workload_only,
+            subject_override,
         } => {
             // run the NATS workload service
 
@@ -54,24 +56,31 @@ pub(crate) async fn run(nats_url: Url, command: RemoteCommands) -> anyhow::Resul
                 actual: WorkloadState::Unknown("most uncertain".to_string()),
             };
 
-            let workload = WorkloadResult {
-                status: status.clone(),
-                workload: Some(Workload {
-                    _id: Some(id),
-                    status,
-                    deployable: WorkloadDeployable::HolochainDhtV1(deployable),
+            let workload = Workload {
+                _id: Some(id),
+                status,
+                deployable: WorkloadDeployable::HolochainDhtV1(deployable),
 
-                    metadata: Default::default(),
-                    assigned_developer: Default::default(),
-                    version: Default::default(),
-                    min_hosts: Default::default(),
-                    assigned_hosts: Default::default(),
+                metadata: Default::default(),
+                assigned_developer: Default::default(),
+                version: Default::default(),
+                min_hosts: Default::default(),
+                assigned_hosts: Default::default(),
 
-                    ..Default::default() // ---
-                                         // these don't have defaults on their own
-                                         // system_specs: Default::default(),
-                }),
+                ..Default::default() // ---
+                                     // these don't have defaults on their own
+                                     // system_specs: Default::default(),
             };
+
+            let payload = if workload_only {
+                serde_json::to_string_pretty(&workload)
+            } else {
+                serde_json::to_string_pretty(&WorkloadResult {
+                    status: workload.status.clone(),
+                    workload: Some(workload),
+                })
+            }
+            .expect("deserialize works");
 
             let subject_suffix = {
                 use WorkloadStateDiscriminants::*;
@@ -84,8 +93,9 @@ pub(crate) async fn run(nats_url: Url, command: RemoteCommands) -> anyhow::Resul
                 }
             };
 
-            let subject = format!("WORKLOAD.{host_id}.{subject_suffix}");
-            let payload = serde_json::to_string_pretty(&workload).expect("deserialize works");
+            let subject =
+                subject_override.unwrap_or_else(|| format!("WORKLOAD.{host_id}.{subject_suffix}"));
+            let payload = serde_json::to_string_pretty(&payload).expect("deserialize works");
 
             log::debug!("publishing to {subject}:\n{payload}");
 

@@ -64,7 +64,6 @@ devhost-host-agent-remote desired-status +args="":
 
     export RUST_BACKTRACE=1
     export RUST_LOG=trace
-    export HOST_AGENT_NATS_URL="nats://admin:admin@dev-host"
 
     # TODO(backlog): run a service on the host NATS instance that can be queried for the host-id
     # devhost_machine_id="$(sudo machinectl shell dev-host /bin/sh -c "cat /etc/machine-id" | grep -oE '[a-z0-9]+')"
