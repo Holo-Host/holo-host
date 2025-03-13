@@ -28,6 +28,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 base64 = "0.22.1"
 derive_builder = "0.20.2"
+log = { workspace = true }
 
 # [dev-dependencies]
 # holochain_env_setup = { path = "../holochain_env_setup" }

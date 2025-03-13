@@ -78,6 +78,20 @@ in
       # inherit (cfg.mongo) bind_ip;
     };
 
+    # virtualisation.docker.rootless = {
+    #   enable = true;
+    #   setSocketVariable = true;
+    # };
+
+    # virtualisation.oci-containers.backend = "docker";
+    # virtualisation.oci-containers.containers = {
+    #   container-name = {
+    #     image = "docker.io/library/mongo:latest";
+    #     autoStart = true;
+    #     ports = [ "127.0.0.1:27017:27017" ];
+    #   };
+    # };
+
     systemd.services.holo-orchestrator = {
       enable = true;
 

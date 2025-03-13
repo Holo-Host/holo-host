@@ -9,88 +9,130 @@ Endpoints & Managed Subjects:
 use crate::types::WorkloadResult;
 
 use super::{types::WorkloadApiResult, WorkloadServiceApi};
-use anyhow::{Context, Result};
+use anyhow::Result;
 use async_nats::Message;
 use core::option::Option::None;
-use db_utils::schemas::{WorkloadDeployable, WorkloadState, WorkloadStatus};
+use db_utils::schemas::{Workload, WorkloadState, WorkloadStatus};
 use nats_utils::types::ServiceError;
 use std::{fmt::Debug, sync::Arc};
-use util::{bash, ensure_workload_path, get_workload_id, transform_workload_deployable};
+use util::{
+    bash, ensure_workload_path, get_workload_id, provision_extra_container_closure_path,
+    realize_extra_container_path,
+};
 
 #[derive(Debug, Clone, Default)]
 pub struct HostWorkloadApi {}
 
 impl WorkloadServiceApi for HostWorkloadApi {}
 
+#[derive(thiserror::Error, Debug)]
+#[error("error processing workload {workload_result:?}: {e}")]
+struct WorkloadResultError {
+    e: anyhow::Error,
+    workload_result: WorkloadResult,
+}
+
 impl HostWorkloadApi {
+    async fn handle_update_workload(
+        msg_subject: String,
+        try_message_payload: Result<WorkloadResult, ServiceError>,
+    ) -> anyhow::Result<(WorkloadStatus, Workload)> {
+        let workload_result = try_message_payload?;
+
+        let workload_id = get_workload_id(&workload_result).map_err(|e| WorkloadResultError {
+            e,
+            workload_result: workload_result.clone(),
+        })?;
+
+        let WorkloadResult {
+            workload: maybe_workload,
+            ..
+        } = workload_result;
+
+        let workload = match maybe_workload {
+            Some(workload) => workload,
+            None => anyhow::bail!("Failed to process Workload Service Endpoint. Subject={} Error=No workload found in message.", msg_subject),
+        };
+
+        // TODO: consider status.actual to inform assumptions towards the current state
+
+        let desired_state = &workload.status.desired;
+        let actual_status = match desired_state {
+            WorkloadState::Installed | WorkloadState::Running => {
+                let (workload_path_toplevel, _) =
+                    ensure_workload_path(&workload_id, None, util::EnsureWorkloadPathMode::Create)?;
+                let extra_container_path = realize_extra_container_path(
+                    workload_id,
+                    workload.deployable.clone(),
+                    (&workload_path_toplevel).into(),
+                )
+                .await?;
+
+                // TODO: move this to the workload processing function
+                let start_or_restart_if_desired = if let WorkloadState::Running = desired_state {
+                    "--start --restart-changed"
+                } else {
+                    ""
+                };
+
+                bash(&format!(
+                    "extra-container create {extra_container_path}{start_or_restart_if_desired}",
+                ))
+                .await?;
+
+                desired_state
+            }
+            WorkloadState::Uninstalled | WorkloadState::Removed | WorkloadState::Deleted => {
+                let (workload_path_toplevel, exists) = ensure_workload_path(
+                    &workload_id,
+                    None,
+                    util::EnsureWorkloadPathMode::Observe,
+                )?;
+
+                if exists {
+                    let extra_container_path =
+                        provision_extra_container_closure_path(&workload_path_toplevel.into())?;
+
+                    bash(&format!(
+                        "extra-container destroy {extra_container_path} --all",
+                    ))
+                    .await?;
+                }
+
+                desired_state
+            }
+
+            WorkloadState::Updated
+            | WorkloadState::Reported
+            | WorkloadState::Assigned
+            | WorkloadState::Pending
+            | WorkloadState::Updating
+            | WorkloadState::Error(_)
+            | WorkloadState::Unknown(_) => {
+                anyhow::bail!("unsupported desired state {desired_state:?}")
+            }
+        };
+
+        Ok((
+            WorkloadStatus {
+                id: workload._id,
+                desired: workload.status.desired.clone(),
+                actual: actual_status.clone(),
+            },
+            workload,
+        ))
+    }
+
     pub async fn install_workload(&self, msg: Arc<Message>) -> anyhow::Result<WorkloadApiResult> {
         let msg_subject = msg.subject.clone().into_string();
         log::trace!("Incoming message for '{}'", msg_subject);
 
-        let message_payload = Self::convert_msg_to_type::<WorkloadResult>(msg)?;
-        log::debug!("Message payload '{}' : {:?}", msg_subject, message_payload);
-
-        // TODO(correctness): match on the actual status and only install if appropriate
-        // match message_payload.status.actual {
-        // }
-
-        // TODO: debug why it stops here
-
-        let workload_id = get_workload_id(&message_payload)?;
-
-        let status = if let Some(workload) = message_payload.workload {
-            let workload_path_toplevel =
-                ensure_workload_path(&workload_id, None, util::EnsureWorkloadPathMode::CreateNew)?;
-            let deployable =
-                transform_workload_deployable(workload.deployable, workload_path_toplevel.into())
-                    .await?;
-
-            let result = match (deployable, &workload.status.desired) {
-                (WorkloadDeployable::ExtraContainerPath { path }, WorkloadState::Installed) => {
-                    let workload_path = ensure_workload_path(
-                        &workload_id,
-                        Some("extra-container"),
-                        util::EnsureWorkloadPathMode::CreateNew,
-                    )?;
-
-                    std::os::unix::fs::symlink(&path, &workload_path).context(format!(
-                        "linking workload_path from {path:?} to {workload_path:?}"
-                    ))?;
-
-                    bash(&format!(
-                        "extra-container create {}",
-                        path.to_string_lossy()
-                    ))
-                    .await
-                }
-                (WorkloadDeployable::ExtraContainerPath { path }, WorkloadState::Running) => {
-                    bash(&format!(
-                        "extra-container create {} --start --restart-changed",
-                        path.to_string_lossy(),
-                    ))
-                    .await
-                }
-
-                other => Err(ServiceError::Workload {
-                    message: format!("unsupported deployable/state combination: {other:?}"),
-                    context: None,
-                }),
-            };
-
-            WorkloadStatus {
-                id: workload._id,
-                desired: workload.status.desired.clone(),
-                actual: match result {
-                    Ok(_) => workload.status.desired,
-                    Err(e) => WorkloadState::Error(e.to_string()),
-                },
-            }
-        } else {
-            let err_msg = format!("Failed to process Workload Service Endpoint. Subject={} Error=No workload found in message.", msg_subject);
+        let status = {
+            let err_msg = format!("Failed to process Workload Service Endpoint. Subject={} Error=Call not implemented. Please use 'update_workload' instead..", msg_subject);
             log::error!("{}", err_msg);
             WorkloadStatus {
                 id: None,
-                desired: WorkloadState::Updating,
+                desired: WorkloadState::Unknown(Default::default()),
                 actual: WorkloadState::Error(err_msg),
             }
         };
@@ -111,95 +153,69 @@ impl HostWorkloadApi {
         let msg_subject = msg.subject.clone().into_string();
         log::trace!("Incoming message for '{}'", msg_subject);
 
-        let message_payload = Self::convert_msg_to_type::<WorkloadResult>(msg)?;
-        log::debug!("Message payload '{}' : {:?}", msg_subject, message_payload);
+        let try_message_payload =
+            Self::convert_msg_to_type::<WorkloadResult>(msg).inspect(|message_payload| {
+                log::debug!("Message payload '{}' : {:?}", msg_subject, message_payload)
+            });
 
-        let status = if let Some(workload) = message_payload.workload {
-            // TODO: Talk through with Stefan
-            // 1. Connect to interface for Nix and instruct systemd to install workload...
-            // eg: nix_install_with(workload)
+        // TODO: throwing an actual error from here leads to the request silently skipped with no logs entry in the host-agent.
+        let (workload_status, maybe_workload) =
+            match Self::handle_update_workload(msg_subject, try_message_payload).await {
+                Ok(result) => (result.0, Some(result.1)),
+                Err(err) => {
+                    // let error_result = match err.downcast::<WorkloadResultError>() {
+                    //     Ok(WorkloadResultError { e, workload_result }) => WorkloadApiResult {
+                    //         maybe_response_tags: None,
+                    //         result: WorkloadResult {
+                    //             status: WorkloadStatus {
+                    //                 actual: WorkloadState::Error(e.to_string()),
+                    //                 ..workload_result.status
+                    //             },
+                    //             workload: Default::default(),
+                    //         },
+                    //     },
+                    //     Err(e) => WorkloadApiResult {
+                    //         result: WorkloadResult {
+                    //             status: WorkloadStatus {
+                    //                 id: None,
+                    //                 desired: WorkloadState::Unknown(Default::default()),
+                    //                 actual: WorkloadState::Error(e.to_string()),
+                    //             },
+                    //             workload: Default::default(),
+                    //         },
+                    //         maybe_response_tags: None,
+                    //     },
+                    // };
 
-            // TODO: associate the new workload state locally with workload._id
+                    let (status, maybe_workload) = match err.downcast::<WorkloadResultError>() {
+                        Ok(WorkloadResultError { e, workload_result }) => (
+                            WorkloadStatus {
+                                actual: WorkloadState::Error(e.to_string()),
+                                ..workload_result.status
+                            },
+                            workload_result.workload,
+                        ),
+                        Err(e) => (
+                            WorkloadStatus {
+                                id: None,
+                                desired: WorkloadState::Unknown(Default::default()),
+                                actual: WorkloadState::Error(e.to_string()),
+                            },
+                            None,
+                        ),
+                    };
 
-            // 2. Respond to endpoint request
-            WorkloadStatus {
-                id: workload._id,
-                desired: WorkloadState::Updating,
-                actual: WorkloadState::Error("unimplemented".to_string()),
-            }
-        } else {
-            let err_msg = format!("Failed to process Workload Service Endpoint. Subject={} Error=No workload found in message.", msg_subject);
-            log::error!("{}", err_msg);
-            WorkloadStatus {
-                id: None,
-                desired: WorkloadState::Updating,
-                actual: WorkloadState::Error(err_msg),
-            }
-        };
-
-        Ok(WorkloadApiResult {
-            result: WorkloadResult {
-                status,
-                workload: None,
-            },
-            maybe_response_tags: None,
-        })
-    }
-
-    pub async fn uninstall_workload(&self, msg: Arc<Message>) -> anyhow::Result<WorkloadApiResult> {
-        let msg_subject = msg.subject.clone().into_string();
-        log::trace!("Incoming message for '{}'", msg_subject);
-
-        let message_payload = Self::convert_msg_to_type::<WorkloadResult>(msg)?;
-        log::debug!("Message payload '{}' : {:?}", msg_subject, message_payload);
-
-        let workload_id = get_workload_id(&message_payload)?;
-
-        let status = if let Some(workload) = message_payload.workload {
-            let result = match &workload.status.desired {
-                WorkloadState::Deleted => {
-                    let workload_path = ensure_workload_path(
-                        &workload_id,
-                        Some("extra-container"),
-                        util::EnsureWorkloadPathMode::Exists,
-                    )?;
-
-                    bash(&format!("extra-container destroy {}", workload_path)).await
+                    log::error!("{status:?}");
+                    (status, maybe_workload)
                 }
-
-                other => Err(ServiceError::Workload {
-                    message: format!("unsupported desired state: {other:?}"),
-                    context: None,
-                }),
             };
 
-            WorkloadStatus {
-                id: workload._id,
-                desired: workload.status.desired.clone(),
-                actual: match result {
-                    Ok(_) => workload.status.desired,
-                    Err(e) => {
-                        log::error!("error uninstalling workload: {e}");
-                        WorkloadState::Error(e.to_string())
-                    }
-                },
-            }
-        } else {
-            let err_msg = format!("Failed to process Workload Service Endpoint. Subject={} Error=No workload found in message.", msg_subject);
-            log::error!("{}", err_msg);
-            WorkloadStatus {
-                id: None,
-                desired: WorkloadState::Uninstalled,
-                actual: WorkloadState::Error(err_msg),
-            }
-        };
-
         Ok(WorkloadApiResult {
-            result: WorkloadResult {
-                status,
-                workload: None,
-            },
             maybe_response_tags: None,
+            result: WorkloadResult {
+                status: workload_status,
+                workload: maybe_workload,
+            },
         })
     }
 
@@ -232,40 +248,32 @@ mod util {
     use bson::oid::ObjectId;
     use db_utils::schemas::{WorkloadDeployable, WorkloadDeployableHolochainDhtV1};
     use futures::{AsyncBufReadExt, StreamExt};
-    use nats_utils::types::ServiceError;
-    use std::{path::PathBuf, str::FromStr};
+    use std::{path::PathBuf, process::Stdio, str::FromStr};
     use tokio::process::Command;
 
     use crate::types::WorkloadResult;
 
     pub fn get_workload_id(wr: &WorkloadResult) -> anyhow::Result<ObjectId> {
         wr.workload.as_ref().and_then(|w| w._id).ok_or_else(|| {
-            anyhow::Error::from(ServiceError::Workload {
-                message: "need a workload with an id to process the workload request".to_owned(),
-                context: None,
-            })
+            anyhow::anyhow!("need a workload with an id to process the workload request")
         })
     }
 
-    pub(crate) async fn bash(cmd: &str) -> Result<(), ServiceError> {
+    pub(crate) async fn bash(cmd: &str) -> anyhow::Result<()> {
         let mut workload_cmd = tokio::process::Command::new("/usr/bin/env");
         workload_cmd.args(["bash", "-c", cmd]);
 
         let output = workload_cmd
-            .output()
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .context(format!("spawning {cmd}"))?
+            .wait_with_output()
             .await
-            .map_err(|e| ServiceError::Workload {
-                message: format!("error running {workload_cmd:?}: {e}"),
-                context: None,
-            })?;
+            .context(format!("waiting for spawned command: {cmd}"))?;
 
         if !output.status.success() {
-            return Err(ServiceError::Workload {
-                message: format!(
-                    "error running {workload_cmd:?} yielded non-success status:\n{output:?}",
-                ),
-                context: None,
-            });
+            anyhow::bail!("error running {workload_cmd:?} yielded non-success status:\n{output:?}");
         }
 
         log::info!("workload creation result:\n{output:#?}");
@@ -275,16 +283,16 @@ mod util {
 
     pub(crate) enum EnsureWorkloadPathMode {
         Create,
-        CreateNew,
-        Exists,
+        // Exists,
+        Observe,
     }
 
     pub(crate) fn ensure_workload_path(
         id: &ObjectId,
         maybe_subdir: Option<&str>,
         mode: EnsureWorkloadPathMode,
-    ) -> anyhow::Result<String> {
-        const WORKLOAD_BASE_PATH: &str = "/var/lib/host-agent/workloads";
+    ) -> anyhow::Result<(String, bool)> {
+        const WORKLOAD_BASE_PATH: &str = "/var/lib/holo-host-agent/workloads";
 
         let workload_path = {
             let dir = PathBuf::from_str(WORKLOAD_BASE_PATH)
@@ -298,34 +306,26 @@ mod util {
             }
         };
 
-        match mode {
-            EnsureWorkloadPathMode::Create => std::fs::create_dir_all(&workload_path)?,
-            EnsureWorkloadPathMode::Exists => {
-                if !std::fs::exists(&workload_path)
-                    .context(format!("checking for the existence of {workload_path:?}"))?
-                {
-                    anyhow::bail!("{workload_path:?} doesn't exist");
-                }
+        let exists = match mode {
+            EnsureWorkloadPathMode::Create => {
+                std::fs::create_dir_all(&workload_path).map(|()| true)?
             }
-            EnsureWorkloadPathMode::CreateNew => {
-                if std::fs::exists(&workload_path)
-                    .context(format!("checking for the existence of {workload_path:?}"))?
-                {
-                    anyhow::bail!("{workload_path:?} already exists");
-                }
+            EnsureWorkloadPathMode::Observe => std::fs::exists(&workload_path)?,
+        };
 
-                std::fs::create_dir_all(&workload_path)?
-            }
-        }
+        let path = workload_path.to_str().map(ToString::to_string).ok_or_else(|| anyhow::anyhow!("{workload_path:?} is not a valid string, and we need to use it in string representation"))?;
 
-        workload_path.to_str().map(ToString::to_string).ok_or_else(|| anyhow::anyhow!("{workload_path:?} is not a valid string, and we need to use it in string representation"))
+        Ok((path, exists))
     }
 
     // transform the workload into something that can be executed
-    pub(crate) async fn transform_workload_deployable(
+    pub(crate) async fn realize_extra_container_path(
+        workload_id: ObjectId,
         deployable: WorkloadDeployable,
         workload_path: PathBuf,
-    ) -> anyhow::Result<WorkloadDeployable> {
+    ) -> anyhow::Result<String> {
+        log::debug!("transforming {deployable:?} at {workload_path:?}");
+
         match deployable {
             WorkloadDeployable::None => {
                 anyhow::bail!("cannot install anything without a deployable");
@@ -333,13 +333,24 @@ mod util {
             WorkloadDeployable::ExtraContainerBuildCmd { nix_args } => {
                 let output = {
                     let mut tokio_cmd = Command::new("/usr/bin/env");
-                    tokio_cmd.arg("nix");
+                    tokio_cmd.args(["nix", "build", "--no-link", "--print-out-paths"]);
                     tokio_cmd.args(nix_args);
 
-                    let msg = format!("running build command: {tokio_cmd:?}");
+                    let msg = format!("spawning build command: {tokio_cmd:?}");
                     log::debug!("{}", msg);
-                    tokio_cmd.output().await.context(msg)?
+                    tokio_cmd
+                        .stdout(Stdio::piped())
+                        .stderr(Stdio::piped())
+                        .spawn()
+                        .context(msg.clone())?
+                        .wait_with_output()
+                        .await
+                        .context(msg)?
                 };
+
+                if !output.status.success() {
+                    anyhow::bail!("error running command: {output:?}");
+                }
 
                 let path = output
                     .stdout
@@ -355,17 +366,49 @@ mod util {
                     anyhow::bail!("not a /nix/store path: {path}");
                 }
 
-                Box::pin(transform_workload_deployable(
-                    WorkloadDeployable::ExtraContainerPath { path: path.into() },
+                Box::pin(realize_extra_container_path(
+                    workload_id,
+                    WorkloadDeployable::ExtraContainerStorePath {
+                        store_path: path.into(),
+                    },
                     workload_path,
                 ))
                 .await
             }
+
+            WorkloadDeployable::ExtraContainerStorePath { store_path } => {
+                let container_closure_path =
+                    provision_extra_container_closure_path(&workload_path)?;
+
+                // use a transient name for the symlink to achieve an atomic operation
+                let symlink_transient_name = format!("{container_closure_path}.new");
+                std::os::unix::fs::symlink(&store_path, &symlink_transient_name).context(
+                    format!(
+                        "linking workload_path from {store_path:?} to {container_closure_path:?}"
+                    ),
+                )?;
+                std::fs::rename(&symlink_transient_name, &container_closure_path).context(
+                    format!("renaming {symlink_transient_name} to {container_closure_path}"),
+                )?;
+
+                Box::pin(realize_extra_container_path(
+                    workload_id,
+                    WorkloadDeployable::ExtraContainerPath {
+                        extra_container_path: container_closure_path,
+                    },
+                    workload_path,
+                ))
+                .await
+            }
+
+            WorkloadDeployable::ExtraContainerPath {
+                extra_container_path,
+            } => Ok(extra_container_path),
+
             WorkloadDeployable::HolochainDhtV1(inner) => {
-                const INDEX: i32 = 0;
                 // TODO: construct build cmd
                 let WorkloadDeployableHolochainDhtV1 {
-                    happ_binary_url,
+                    // happ_binary_url,
                     ..
                     // network_seed,
                     // memproof,
@@ -375,41 +418,57 @@ mod util {
                     // holochain_version,
                 } = *inner;
 
-                let happ_binary_path_tmp = ham::Ham::download_happ(&happ_binary_url)
-                    .await
-                    .context(format!("downloading {happ_binary_url:?}"))?;
-                let happ_binary_path = workload_path.join("happ.bundle");
+                // TODO: implement downloading in the container
+                // TODO: save this for later
+                // let happ_binary_path_tmp = ham::Ham::download_happ(&happ_binary_url)
+                //     .await
+                //     .context(format!("downloading {happ_binary_url:?}"))?;
+                // let happ_binary_path = workload_path.join("happ.bundle");
 
-                tokio::fs::rename(&happ_binary_path_tmp, &happ_binary_path)
-                    .await
-                    .context(format!(
-                        "renaming {happ_binary_path_tmp:?} to {happ_binary_path:?}"
-                    ))?;
+                // tokio::fs::rename(&happ_binary_path_tmp, &happ_binary_path)
+                //     .await
+                //     .context(format!(
+                //         "renaming {happ_binary_path_tmp:?} to {happ_binary_path:?}"
+                //     ))?;
 
-                let nix_args= [
-                    "build",
-                    "--no-link",
-                    "--print-out-paths",
+                let nix_build_args= [
+                    "--extra-experimental-features",
+                    "nix-command flakes",
                     "--impure",
                     "--expr",
                     &[
-                        r#"(builtins.getFlake "github:holo-host/holo-host").packages.\${builtins.currentSystem}.extra-container-holochain.override { "#,
-                        // TODO: make index variable based on how many holochain containers the host already has locally
-                        &format!("index = {INDEX};"),
-                        // TODO: add workload arguments
+                        r#"(builtins.getFlake "github:holo-host/holo-host").packages.${builtins.currentSystem}.extra-container-holochain.override {"#,
+                        // TODO: as this is the hostname we're limited to 11 characters. make sure it's unique
+                        &format!(r#"containerName = "{}";"#, &workload_id.to_hex()[0..10]),
+                        // TODO: add the specific workload arguments
                         "}",
                         ].join("")
                     ]
                     .into_iter().map(ToString::to_string).collect();
 
-                Box::pin(transform_workload_deployable(
-                    WorkloadDeployable::ExtraContainerBuildCmd { nix_args },
+                Box::pin(realize_extra_container_path(
+                    workload_id,
+                    WorkloadDeployable::ExtraContainerBuildCmd {
+                        nix_args: nix_build_args,
+                    },
                     workload_path,
                 ))
                 .await
             }
-
-            other => anyhow::bail!("unexpected case: {other:?}"),
         }
+    }
+
+    pub(crate) fn provision_extra_container_closure_path(
+        workload_path: &PathBuf,
+    ) -> anyhow::Result<String> {
+        let joined = [
+            workload_path
+                .to_str()
+                .ok_or_else(|| anyhow::anyhow!("cannot convert {workload_path:?} to string"))?,
+            "extra-container",
+        ]
+        .join("/");
+
+        Ok(joined)
     }
 }

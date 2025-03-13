@@ -84,7 +84,7 @@ impl Ham {
 
         let file_path = temp_path.join(file_name);
 
-        println!("Downloading happ to: {:?}", file_path); // Add debug logging
+        log::debug!("Downloading happ to: {:?}", file_path); // Add debug logging
 
         let response = reqwest::get(url.as_str())
             .await
@@ -103,7 +103,7 @@ impl Ham {
             .await
             .context("Failed to read response body")?;
 
-        println!("Downloaded {} bytes", bytes.len()); // Add debug logging
+        log::debug!("Downloaded {} bytes", bytes.len()); // Add debug logging
 
         std::fs::write(&file_path, bytes).context("Failed to write happ file")?;
 

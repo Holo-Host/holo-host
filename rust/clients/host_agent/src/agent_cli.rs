@@ -1,3 +1,4 @@
+use bson::oid::ObjectId;
 use clap::{Args, Parser, Subcommand};
 use db_utils::schemas::WorkloadDeployableHolochainDhtV1;
 use netdiag::IPVersion;
@@ -141,10 +142,13 @@ pub enum RemoteCommands {
     /// Manage workloads.
     HolochainDhtV1Workload {
         #[arg(long)]
+        workload_id_override: Option<ObjectId>,
+
+        #[arg(long)]
         host_id: String,
 
         #[arg(long)]
-        operation: String,
+        desired_status: String,
 
         #[command(flatten)]
         deployable: Box<WorkloadDeployableHolochainDhtV1>,

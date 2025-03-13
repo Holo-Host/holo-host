@@ -66,6 +66,7 @@ craneLib.buildPackage (
                 (craneLib.fileset.commonCargoSources ../../rust/services/workload)
                 (craneLib.fileset.commonCargoSources ../../rust/services/inventory)
                 (craneLib.fileset.commonCargoSources ../../rust/ham)
+                (craneLib.fileset.commonCargoSources ../../rust/netdiag)
               ]
               ++ paths
             );
@@ -99,7 +100,6 @@ craneLib.buildPackage (
           let
             src = fileSetForCrate [
               (craneLib.fileset.commonCargoSources ../../rust/clients/host_agent)
-              (craneLib.fileset.commonCargoSources ../../rust/netdiag)
             ];
           in
           craneLib.buildPackage (
