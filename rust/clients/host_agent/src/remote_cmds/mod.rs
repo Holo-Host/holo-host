@@ -1,5 +1,6 @@
 use std::str::FromStr;
 
+use anyhow::Context;
 use async_nats::ServerAddr;
 use db_utils::schemas::{
     Workload, WorkloadDeployable, WorkloadState, WorkloadStateDiscriminants, WorkloadStatus,
@@ -80,7 +81,7 @@ pub(crate) async fn run(nats_url: Url, command: RemoteCommands) -> anyhow::Resul
                     workload: Some(workload),
                 })
             }
-            .expect("deserialize works");
+            .context("serializing workload payload")?;
 
             let subject_suffix = {
                 use WorkloadStateDiscriminants::*;
@@ -95,9 +96,8 @@ pub(crate) async fn run(nats_url: Url, command: RemoteCommands) -> anyhow::Resul
 
             let subject =
                 subject_override.unwrap_or_else(|| format!("WORKLOAD.{host_id}.{subject_suffix}"));
-            let payload = serde_json::to_string_pretty(&payload).expect("deserialize works");
 
-            log::debug!("publishing to {subject}:\n{payload}");
+            log::debug!("publishing to {subject}:\n{payload:?}");
 
             vanilla_nats_client
                 // .publish_with_reply(subject, reply_subject, payload.into())
