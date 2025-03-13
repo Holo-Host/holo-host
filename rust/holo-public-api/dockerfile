@@ -2,7 +2,7 @@ FROM rust:1.85.0 AS builder
 
 WORKDIR /usr/src/holo-public-api
 COPY Cargo.toml .
-COPY Cargo.lock .
+COPY Cargo.loc[k] .
 COPY src/ ./src
 
 RUN --mount=type=cache,target=/root/.cargo \
