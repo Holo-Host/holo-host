@@ -72,21 +72,6 @@ async fn main() -> std::io::Result<()> {
         ).await.unwrap();
     }
 
-    // setup rate limiters
-    // limit requests by ip for unauthenticated users
-    let limit_by_ip = providers::limiter::limit_requests_by_ip(
-        &app_config.redis_url,
-        10, // amount of requests
-        1 // amount of seconds
-    );
-
-    // limit requests by user for authenticated users
-    let limit_by_user = providers::limiter::limit_requests_by_user(
-        &app_config.redis_url,
-        10, // amount of requests
-        1 // amount of seconds
-    );
-
     // setup object storage
     let object_storage = providers::object_storage::setup_object_storage(
         app_config.clone()
@@ -121,8 +106,6 @@ async fn main() -> std::io::Result<()> {
         // public routes
         app = app.service(
             web::scope("public")
-            .wrap(RateLimiter::default())
-            .app_data(web::Data::new(limit_by_ip.clone()))
             .configure(controllers::setup_public_controllers)
         );
 
@@ -130,8 +113,6 @@ async fn main() -> std::io::Result<()> {
         app = app.service(
             web::scope("protected")
             .wrap(from_fn(middleware::auth::auth_middleware))
-            .wrap(RateLimiter::default())
-            .app_data(web::Data::new(limit_by_user.clone()))
             .configure(controllers::setup_private_controllers)
         );
 
