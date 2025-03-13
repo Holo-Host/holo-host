@@ -66,6 +66,7 @@ pub struct LeafServer {
     pub logging: LoggingOptions,
     leaf_node_remotes: Vec<LeafNodeRemote>,
     server_handle: Arc<Mutex<Option<Child>>>,
+    server_command: Arc<Mutex<Option<tokio::process::Command>>>,
 }
 
 // TODO: consider merging this with the `LeafServer` struct
@@ -106,12 +107,13 @@ impl LeafServer {
             jetstream_config,
             logging,
             leaf_node_remotes,
-            server_handle: Arc::new(Mutex::new(None)),
+            server_handle: Default::default(),
+            server_command: Default::default(),
         }
     }
 
     /// Generate the config file and run the server
-    pub async fn run(&self) -> Result<(), Box<dyn std::error::Error>> {
+    pub async fn run(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         let mut config_file = File::create(&self.config_path)?;
 
         let config = NatsConfig {
@@ -136,43 +138,64 @@ impl LeafServer {
             .write_all(config_str.as_bytes())
             .context("writing config to config at {config_path}")?;
 
-        // Run the server with the generated config
-        let child = Command::new("nats-server")
-            .arg("-c")
-            .arg(&self.config_path)
-            .kill_on_drop(true)
-            // TODO: make this configurable and give options to log it to a seperate log file
-            .stdout(Stdio::inherit())
-            .stderr(Stdio::inherit())
-            .spawn()
-            .context("Failed to start NATS server")?;
+        {
+            // Run the server with the generated config
+            let mut server_command = Command::new("nats-server");
+            server_command
+                .arg("-c")
+                .arg(&self.config_path)
+                // TODO: make this configurable and give options to log it to a seperate log file
+                .stdout(Stdio::inherit())
+                .stderr(Stdio::inherit());
+            // Store the process command to protect it from being dropped
+            *self.server_command.lock().await = Some(server_command);
+
+            let child = self
+                .server_command
+                .lock()
+                .await
+                .as_mut()
+                .map(|server_command| {
+                    server_command
+                        .kill_on_drop(true)
+                        .spawn()
+                        .context("Failed to start NATS server")
+                })
+                .transpose()?
+                .ok_or_else(|| anyhow::anyhow!("server_command must be there at this point"))?;
+
+            // Store the process handle in the `server_handle`
+            *self.server_handle.lock().await = Some(child);
+        }
 
         // TODO: wait for a readiness indicator
-        std::thread::sleep(std::time::Duration::from_millis(100));
 
         log::info!("NATS Leaf Server is running at {}:{}", self.host, self.port);
-
-        // Store the process handle in the `server_handle`
-        let mut handle = self.server_handle.lock().await;
-        *handle = Some(child);
 
         Ok(())
     }
 
     /// Gracefully shut down the server
-    pub async fn close(&self) -> Result<(), Box<dyn std::error::Error>> {
-        let mut handle = self.server_handle.lock().await;
+    pub async fn close(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        {
+            let mut handle = self.server_handle.lock().await.take();
 
-        if let Some(child) = handle.as_mut() {
-            // Wait for the server process to finish
-            let status = child.wait().await?;
-            log::info!("NATS server exited with status: {:?}", status);
-        } else {
-            log::info!("No running server to shut down.");
+            if let Some(child) = handle.as_mut() {
+                // Wait for the server process to finish
+                let _ = child
+                    .kill()
+                    .await
+                    .map(|e| log::warn!("error terminating the server: {e:?}"));
+                let status = child.wait().await?;
+                log::info!("NATS server exited with status: {:?}", status);
+            } else {
+                log::info!("No running server to shut down.");
+            }
         }
 
-        // Clear the server handle
-        *handle = None;
+        // Clear the server command and handle
+        self.server_handle = Default::default();
+        self.server_command = Default::default();
 
         Ok(())
     }

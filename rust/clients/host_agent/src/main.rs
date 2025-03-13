@@ -53,7 +53,7 @@ async fn daemonize(args: &DaemonzeArgs) -> Result<(), async_nats::Error> {
     let host_inventory = HoloInventory::from_host();
     let host_id = host_inventory.system.machine_id.clone();
 
-    let bare_client = hostd::gen_leaf_server::run(
+    let (bare_client, mut leaf_server) = hostd::gen_leaf_server::run(
         &host_id,
         &args.nats_leafnode_server_name,
         &args.nats_leafnode_client_creds_path,
@@ -119,6 +119,7 @@ async fn daemonize(args: &DaemonzeArgs) -> Result<(), async_nats::Error> {
     // Close host client connection and drain internal buffer before exiting to make sure all messages are sent
     // NB: Calling drain/close on any one of the Client instances will close the underlying connection.
     // This affects all instances that share the same connection (including clones) because they are all references to the same resource.
-    host_client.close().await?;
+    let _ = host_client.close().await;
+    let _ = leaf_server.close().await;
     Ok(())
 }
