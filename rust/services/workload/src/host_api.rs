@@ -34,6 +34,8 @@ impl HostWorkloadApi {
         // match message_payload.status.actual {
         // }
 
+        // TODO: debug why it stops here
+
         let workload_id = get_workload_id(&message_payload)?;
 
         let status = if let Some(workload) = message_payload.workload {
