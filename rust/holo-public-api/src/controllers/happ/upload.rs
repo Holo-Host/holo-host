@@ -11,6 +11,8 @@ use blake3;
 use crate::providers::config::AppConfig;
 use crate::providers::{error_response::ErrorResponse, jwt::AccessTokenClaims};
 
+const MIN_PART_SIZE: usize = 5 * 1024 * 1024; // 5 MB
+
 #[derive(OpenApi)]
 #[openapi(
     paths(upload_happ),
@@ -73,6 +75,7 @@ pub async fn upload_happ(
         .acl(aws_sdk_s3::types::ObjectCannedAcl::PublicRead)
         .bucket(bucket)
         .key(format!("{}/{}/file", auth.sub, file_identifier))
+        .content_type("application/octet-stream")
         .send()
         .await
     {
@@ -88,6 +91,9 @@ pub async fn upload_happ(
     // We'll collect the completed parts (with part number and ETag).
     let mut completed_parts: Vec<CompletedPart> = Vec::new();
     let mut part_number = 1;
+
+    // Accumulator for building parts.
+    let mut part_buffer: Vec<u8> = Vec::new();
 
     while let Some(item) = payload.next().await {
         let mut field = match item {
@@ -112,48 +118,93 @@ pub async fn upload_happ(
                 }
             };
 
-            hasher.update(&chunk.clone());
+            // Update hash and append to our accumulator.
+            hasher.update(&chunk);
+            part_buffer.extend_from_slice(&chunk);
 
-            // Convert chunk into a ByteStream.
-            let body = ByteStream::from(chunk.to_vec());
+            // If the accumulator has reached at least MIN_PART_SIZE, upload it as a part.
+            if part_buffer.len() >= MIN_PART_SIZE {
+                let body = ByteStream::from(part_buffer.clone());
+                let part_resp = match s3_client
+                    .upload_part()
+                    .bucket(bucket)
+                    .key(format!("{}/{}/file", auth.sub, file_identifier))
+                    .body(body)
+                    .part_number(part_number)
+                    .upload_id(upload.upload_id().unwrap())
+                    .send()
+                    .await
+                {
+                    Ok(resp) => resp,
+                    Err(e) => {
+                        tracing::error!("Error uploading part {}: {:?}", part_number, e);
+                        return HttpResponse::InternalServerError().json(ErrorResponse {
+                            message: "Internal server error".to_string(),
+                        });
+                    }
+                };
 
-            // Upload the part.
-            let part_resp = match s3_client
-                .upload_part()
-                .bucket(bucket)
-                .key(format!("{}/{}/file", auth.sub, file_identifier))
-                .body(body)
-                .part_number(part_number)
-                .upload_id(upload.upload_id().unwrap())
-                .send()
-                .await
-            {
-                Ok(resp) => resp,
-                Err(e) => {
-                    tracing::error!("Error uploading part {}: {:?}", part_number, e);
+                if let Some(e_tag) = part_resp.e_tag {
+                    completed_parts.push(
+                        CompletedPart::builder()
+                            .set_part_number(Some(part_number))
+                            .set_e_tag(Some(e_tag))
+                            .build(),
+                    );
+                } else {
+                    tracing::error!("Missing ETag for part {}", part_number);
                     return HttpResponse::InternalServerError().json(ErrorResponse {
                         message: "Internal server error".to_string(),
                     });
                 }
-            };
+                part_number += 1;
+                part_buffer.clear();
+            }
+        }
+    }
 
-            // Collect the ETag and part number.
-            if let Some(e_tag) = part_resp.e_tag {
-                completed_parts.push(
-                    CompletedPart::builder()
-                        .set_part_number(Some(part_number))
-                        .set_e_tag(Some(e_tag))
-                        .build(),
-                );
-            } else {
-                tracing::error!("Missing ETag for part {}", part_number);
+    // Upload any remaining data as the final part.
+    if !part_buffer.is_empty() {
+        let body = ByteStream::from(part_buffer.clone());
+        let part_resp = match s3_client
+            .upload_part()
+            .bucket(bucket)
+            .key(format!("{}/{}/file", auth.sub, file_identifier))
+            .body(body)
+            .part_number(part_number)
+            .upload_id(upload.upload_id().unwrap())
+            .send()
+            .await
+        {
+            Ok(resp) => resp,
+            Err(e) => {
+                tracing::error!("Error uploading final part {}: {:?}", part_number, e);
                 return HttpResponse::InternalServerError().json(ErrorResponse {
                     message: "Internal server error".to_string(),
                 });
             }
+        };
 
-            part_number += 1;
+        if let Some(e_tag) = part_resp.e_tag {
+            completed_parts.push(
+                CompletedPart::builder()
+                    .set_part_number(Some(part_number))
+                    .set_e_tag(Some(e_tag))
+                    .build(),
+            );
+        } else {
+            tracing::error!("Missing ETag for final part {}", part_number);
+            return HttpResponse::InternalServerError().json(ErrorResponse {
+                message: "Internal server error".to_string(),
+            });
         }
+    } else if completed_parts.is_empty() {
+        // If no parts were uploaded, the file might be smaller than the multipart threshold.
+        // You might choose to use a simple put_object in this case.
+        tracing::error!("No file data was received.");
+        return HttpResponse::BadRequest().json(ErrorResponse {
+            message: "No file data provided.".to_string(),
+        });
     }
 
     // Build the completed multipart upload structure.
@@ -189,11 +240,14 @@ pub async fn upload_happ(
             "fileIdentifier": file_identifier.clone(),
             "userId": auth.sub.clone(),
             "hash": hash_hex.clone(),
-        }.to_string().as_bytes().to_vec()
+        }
+        .to_string()
+        .into_bytes(),
     );
 
-    // upload metadata
-    let _ = match s3_client.put_object()
+    // Upload metadata.
+    let _ = match s3_client
+        .put_object()
         .acl(aws_sdk_s3::types::ObjectCannedAcl::PublicRead)
         .bucket(bucket)
         .key(format!("{}/{}/metadata.json", auth.sub, file_identifier))
@@ -211,8 +265,14 @@ pub async fn upload_happ(
     };
 
     let endpoint = config.object_storage_endpoint.clone();
-    let metadata_url = format!("https://{}.{}/{}/{}/metadata.json", bucket, endpoint, auth.sub, file_identifier);
-    let url = format!("https://{}.{}/{}/{}/file", bucket, endpoint, auth.sub, file_identifier);
+    let metadata_url = format!(
+        "https://{}.{}/{}/{}/metadata.json",
+        bucket, endpoint, auth.sub, file_identifier
+    );
+    let url = format!(
+        "https://{}.{}/{}/{}/file",
+        bucket, endpoint, auth.sub, file_identifier
+    );
     
     HttpResponse::Ok().json(UploadHappResponse {
         url,
