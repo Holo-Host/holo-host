@@ -7,7 +7,7 @@ Users: admin user & host user (the authenticated host user) & auth guard user (t
 (NB: Orchestrator admin user can listen to ALL "Inventory.>" subjects)
 
 Endpoints & Managed Subjects:
-    - handle_inventory_update: INVENTORY.{{host_pubkey}}
+    - handle_inventory_update: INVENTORY.{{host_id}}
 */
 
 pub mod types;
@@ -18,7 +18,7 @@ mod tests;
 use anyhow::Result;
 use async_nats::jetstream::ErrorCode;
 use async_nats::Message;
-use bson::{self, doc, oid::ObjectId};
+use bson::{self, doc, oid::ObjectId, DateTime};
 use db_utils::{
     mongodb::{IntoIndexes, MongoCollection, MongoDbAPI, MutMetadata},
     schemas::{self, Host, Workload},
@@ -64,8 +64,9 @@ impl InventoryServiceApi {
         );
 
         let subject_sections: Vec<&str> = msg_subject.split('.').collect();
-        let host_pubkey: schemas::PubKey = subject_sections
-            .get(1)
+        let host_id_index = 1;
+        let host_id: schemas::PubKey = subject_sections
+            .get(host_id_index)
             .ok_or_else(|| {
                 ServiceError::internal(
                     "Invalid subject format",
@@ -74,19 +75,19 @@ impl InventoryServiceApi {
             })?
             .to_string();
 
-        log::debug!("Processing inventory update for host: {}", host_pubkey);
+        log::debug!("Processing inventory update for host: {host_id}");
 
         // Update host inventory and get the host record
-        self.update_host_inventory(&host_pubkey, &host_inventory)
+        self.update_host_inventory(&host_id, &host_inventory)
             .await?;
 
         let host = self
             .host_collection
-            .get_one_from(doc! { "device_id": &host_pubkey })
+            .get_one_from(doc! { "device_id": &host_id })
             .await?
             .ok_or_else(|| {
                 ServiceError::internal(
-                    format!("Host not found: {}", host_pubkey),
+                    format!("Host not found: {}", host_id),
                     Some("Host lookup failed after inventory update".to_string()),
                 )
             })?;
@@ -100,22 +101,46 @@ impl InventoryServiceApi {
         })
     }
 
+    // Update Host's Holo Inventory in Host collection,
+    // creating a new Host entry if one doesn't already exist for the provided host_id
     async fn update_host_inventory(
         &self,
-        host_pubkey: &schemas::PubKey,
+        host_id: &str,
         inventory: &HoloInventory,
     ) -> Result<(), ServiceError> {
-        self.host_collection
-            .update_one_within(
-                doc! { "device_id": host_pubkey },
-                UpdateModifications::Document(doc! {
-                    "$set": { "inventory": bson::to_bson(inventory)? }
-                }),
-                false,
-            )
-            .await?;
+        let filter = doc! { "device_id": host_id };
 
-        log::debug!("Updated inventory for host: {}", host_pubkey);
+        let update = doc! {
+            "$set": {
+                "inventory": bson::to_bson(inventory)
+                    .map_err(|e| ServiceError::internal(e.to_string(), None))?,
+                "metadata.updated_at": DateTime::now()
+            },
+            // If the document doesn't exist, also set the device_id (host_id)
+            "$setOnInsert": {
+                "metadata.created_at": DateTime::now(),
+                "device_id": host_id,
+                "avg_uptime": 100.00,
+                "assigned_workloads": [],
+                "assigned_hoster": bson::Bson::Null,
+                // todo: ip_address
+            }
+        };
+
+        // Use upsert to either insert or update the document
+        self.host_collection
+            .inner
+            .find_one_and_update(filter, UpdateModifications::Document(update))
+            .upsert(true)
+            .await
+            .map_err(|e| {
+                ServiceError::database(
+                    e,
+                    Some("Host Collection".to_string()),
+                    Some("find_one_and_update".to_string()),
+                )
+            })?;
+
         Ok(())
     }
 

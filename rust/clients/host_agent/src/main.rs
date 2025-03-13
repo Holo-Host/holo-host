@@ -18,6 +18,7 @@ use agent_cli::DaemonzeArgs;
 use anyhow::Result;
 use clap::Parser;
 use dotenv::dotenv;
+use hpos_hal::inventory::HoloInventory;
 use thiserror::Error;
 use tokio::task::spawn;
 
@@ -49,7 +50,11 @@ async fn main() -> Result<(), AgentCliError> {
 
 async fn daemonize(args: &DaemonzeArgs) -> Result<(), async_nats::Error> {
     // let host_pubkey = auth::init_agent::run().await?;
+    let host_inventory = HoloInventory::from_host();
+    let host_id = host_inventory.system.machine_id.clone();
+
     let bare_client = hostd::gen_leaf_server::run(
+        &host_id,
         &args.nats_leafnode_server_name,
         &args.nats_leafnode_client_creds_path,
         &args.store_dir,
@@ -61,11 +66,8 @@ async fn daemonize(args: &DaemonzeArgs) -> Result<(), async_nats::Error> {
     // TODO: would it be a good idea to reuse this client in the workload_manager and elsewhere later on?
     bare_client.close().await?;
 
-    let host_client = hostd::host_client::run(
-        "host_pubkey_placeholder>",
-        &args.nats_leafnode_client_creds_path,
-    )
-    .await?;
+    let host_client =
+        hostd::host_client::run(&host_id, &args.nats_leafnode_client_creds_path).await?;
 
     // Get Host Agent inventory check duration env var..
     // If none exists, default to 1 hour
@@ -88,13 +90,15 @@ async fn daemonize(args: &DaemonzeArgs) -> Result<(), async_nats::Error> {
     );
 
     let host_client_inventory_clone = host_client.clone();
+    let host_id_inventory_clone = host_id.clone();
     let inventory_interval = host_inventory_check_interval_sec.to_owned();
     spawn(async move {
         if let Err(e) = hostd::inventory::run(
             host_client_inventory_clone,
-            "host_pubkey_placeholder>",
+            &host_id_inventory_clone,
             &inventory_file_path,
             inventory_interval,
+            host_inventory,
         )
         .await
         {
@@ -104,9 +108,7 @@ async fn daemonize(args: &DaemonzeArgs) -> Result<(), async_nats::Error> {
 
     let host_client_workload_clone = host_client.clone();
     spawn(async move {
-        if let Err(e) =
-            hostd::workload::run(host_client_workload_clone, "host_pubkey_placeholder>").await
-        {
+        if let Err(e) = hostd::workload::run(host_client_workload_clone, &host_id).await {
             log::error!("Error running host agent workload service. Err={:?}", e)
         };
     });
