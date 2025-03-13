@@ -35,7 +35,7 @@ hpos-hal = { path = "../../hpos-hal" }
 ham = { path = "../../ham" }
 
 [dev-dependencies]
-serde_json = "1.0"
+serde_json = { workspace = true }
 mock_utils = { path = "../../util_libs/mocks" }
 
 [features]
