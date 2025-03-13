@@ -1,4 +1,3 @@
-use actix_limitation::RateLimiter;
 use actix_web::{middleware::from_fn, web, App, HttpServer};
 use utoipa::openapi::security::{ApiKey, ApiKeyValue, SecurityScheme};
 use utoipa_swagger_ui::SwaggerUi;
