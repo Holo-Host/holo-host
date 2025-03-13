@@ -235,8 +235,8 @@ pub async fn upload_happ(
 
     let metadata_body = ByteStream::from(
         bson::doc! {
-            "createdAt": bson::DateTime::now(),
-            "updatedAt": bson::DateTime::now(),
+            "createdAt": bson::DateTime::now().to_string(),
+            "updatedAt": bson::DateTime::now().to_string(),
             "fileIdentifier": file_identifier.clone(),
             "userId": auth.sub.clone(),
             "hash": hash_hex.clone(),
