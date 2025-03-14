@@ -16,6 +16,8 @@ mod hostd;
 mod remote_cmds;
 pub mod support_cmds;
 
+use std::time::Duration;
+
 use agent_cli::DaemonzeArgs;
 use clap::Parser;
 use dotenv::dotenv;
@@ -79,6 +81,9 @@ async fn daemonize(args: &DaemonzeArgs) -> anyhow::Result<()> {
     // TODO: would it be a good idea to reuse this client in the workload_manager and elsewhere later on?
 
     bare_client.close().await.map_err(AgentCliError::from)?;
+
+    // TODO: why does NATS need some time here? without this the inventory isn't always sent
+    tokio::time::sleep(Duration::from_secs(5)).await;
 
     let host_client = hostd::host_client::run(
         &host_id,

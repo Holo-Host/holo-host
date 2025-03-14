@@ -53,17 +53,17 @@ pub async fn run(
     let mut first_start = true;
     loop {
         // Periodically check inventory and compare against latest state (in-memory)
-        if should_check_inventory(last_check_time, check_interval_duration) {
+        if first_start || should_check_inventory(last_check_time, check_interval_duration) {
             log::debug!("Checking Host inventory...");
 
             let current_inventory = HoloInventory::from_host();
-            if HoloInventory::load_from_file(inventory_file_path).map_err(|e| {
-                ServiceError::internal(
-                    e.to_string(),
-                    Some("Failed to read host inventory from file.".to_string()),
-                )
-            })? != current_inventory
-                || first_start
+            if first_start
+                || HoloInventory::load_from_file(inventory_file_path).map_err(|e| {
+                    ServiceError::internal(
+                        e.to_string(),
+                        Some("Failed to read host inventory from file.".to_string()),
+                    )
+                })? != current_inventory
             {
                 first_start = false;
 
