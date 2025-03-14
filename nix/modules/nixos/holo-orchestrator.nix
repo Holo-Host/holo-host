@@ -68,10 +68,12 @@ in
 
         user = lib.mkOption {
           type = lib.types.nullOr lib.types.str;
+          default = null;
         };
 
         passwordFile = lib.mkOption {
           type = lib.types.nullOr lib.types.path;
+          default = null;
         };
       };
     };
