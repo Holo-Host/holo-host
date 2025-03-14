@@ -53,8 +53,7 @@ in
 
       url = lib.mkOption {
         type = lib.types.str;
-        default = "mongodb://${cfg.mongo.bind_ip}";
-
+        # default = "mongodb://${cfg.mongo.bind_ip}";
       };
     };
 
