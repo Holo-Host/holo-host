@@ -86,6 +86,8 @@ pub struct HoloInventory {
 impl HoloInventory {
     /// Saves the HoloInventory struct to a file in JSON format.
     pub fn save_to_file(&self, path: &str) -> Result<(), InventoryError> {
+        // TODO: ensure parent-dir of the path exists
+
         let file = OpenOptions::new()
             .write(true)
             .create(true)
