@@ -46,10 +46,10 @@ in
     };
 
     mongo = {
-      bind_ip = lib.mkOption {
-        type = lib.types.str;
-        default = "127.0.0.1";
-      };
+      # bind_ip = lib.mkOption {
+      #   type = lib.types.str;
+      #   default = "127.0.0.1";
+      # };
 
       url = lib.mkOption {
         type = lib.types.str;
@@ -72,11 +72,10 @@ in
   };
 
   config = lib.mkIf cfg.enable {
-    services.ferretdb = {
-      enable = true;
-      settings.listen-addr = "127.0.0.1:27017";
-      # inherit (cfg.mongo) bind_ip;
-    };
+    # services.ferretdb = lib.mkIf {
+    #   enable = true;
+    #   settings.listen-addr = "127.0.0.1:27017";
+    # };
 
     # virtualisation.docker.rootless = {
     #   enable = true;
