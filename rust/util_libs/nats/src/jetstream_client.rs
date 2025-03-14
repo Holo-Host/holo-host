@@ -47,8 +47,8 @@ impl JsClient {
             .custom_inbox_prefix(&p.inbox_prefix);
 
         if let (Some(user), Some(password_file)) = (p.maybe_nats_user, p.maybe_nats_password_file) {
-            let pass =
-                std::fs::read_to_string(&password_file).context("reading {password_file}")?;
+            let pass = std::fs::read_to_string(&password_file)
+                .context(format!("reading {password_file:?}"))?;
 
             connect_options = connect_options.user_and_password(user, pass);
         }

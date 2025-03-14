@@ -124,7 +124,7 @@ in
           NATS_USER = cfg.nats.hub.user;
         }
         // lib.attrsets.optionalAttrs (cfg.nats.hub.passwordFile != null) {
-          NATS_PASSWORD_FILE = "$%d/NATS_PASSWORD_FILE";
+          NATS_PASSWORD_FILE = "%d/NATS_PASSWORD_FILE";
         };
 
       serviceConfig.LoadCredential = lib.lists.optional (cfg.nats.hub.passwordFile != null) [
