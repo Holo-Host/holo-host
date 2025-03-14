@@ -67,11 +67,11 @@ in
         };
 
         user = lib.mkOption {
-          type = lib.tyeps.nullor lib.types.str;
+          type = lib.types.nullOr lib.types.str;
         };
 
         passwordFile = lib.mkOption {
-          type = lib.tyeps.nullor lib.types.path;
+          type = lib.types.nullOr lib.types.path;
         };
       };
     };
