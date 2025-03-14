@@ -1,6 +1,7 @@
 use bson::oid::ObjectId;
 use clap::{Args, Parser, Subcommand};
 use db_utils::schemas::WorkloadDeployableHolochainDhtV1;
+use nats_utils::types::NATS_URL_DEFAULT;
 use netdiag::IPVersion;
 use std::path::PathBuf;
 use url::Url;
@@ -96,6 +97,9 @@ pub struct DaemonzeArgs {
         default_value_t = false
     )]
     pub(crate) host_inventory_disable: bool,
+
+    #[arg(long, env = "NATS_URL", default_value = NATS_URL_DEFAULT)]
+    pub(crate) nats_url: String,
 }
 
 /// A set of commands for being able to manage the local host. We may (later) want to gate some

@@ -3,17 +3,34 @@ mod extern_api;
 mod inventory;
 mod utils;
 mod workloads;
+use std::path::PathBuf;
+
 use anyhow::{Context, Result};
+use clap::Parser;
 use db_utils::mongodb::get_mongodb_url;
 use dotenv::dotenv;
 use mongodb::{options::ClientOptions, Client as MongoDBClient};
-use nats_utils::jetstream_client::get_nats_url;
 use tokio::task::spawn;
+use url::Url;
+
+#[derive(clap::Parser)]
+struct Args {
+    #[clap(long, env = "NATS_PASSWORD_FILE")]
+    nats_password_file: Option<PathBuf>,
+
+    #[clap(long, env = "NATS_USER")]
+    nats_user: Option<String>,
+
+    #[clap(long, env = "NAST_URL", default_value = "nats://127.0.0.1")]
+    nats_url: Url,
+}
 
 #[tokio::main]
 async fn main() -> Result<(), async_nats::Error> {
     dotenv().ok();
     env_logger::init();
+
+    let args = Args::parse();
 
     // Setup MongoDB Client
     let mongo_uri: String = get_mongodb_url();
@@ -27,7 +44,13 @@ async fn main() -> Result<(), async_nats::Error> {
 
     // Start Nats Admin Services
     log::debug!("spawning admin client...");
-    let admin_client = admin_client::run(&None, get_nats_url()).await?;
+    let admin_client = admin_client::run(
+        &None,
+        args.nats_url,
+        args.nats_user,
+        args.nats_password_file,
+    )
+    .await?;
 
     let admin_workload_clone = admin_client.clone();
     let db_workload_clone = db_client.clone();

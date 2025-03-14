@@ -4,6 +4,7 @@ use async_nats::jetstream::consumer::PullConsumer;
 use async_nats::jetstream::ErrorCode;
 use async_nats::{HeaderMap, Message};
 use async_trait::async_trait;
+use educe::Educe;
 use serde::{Deserialize, Serialize};
 use std::any::Any;
 use std::collections::HashMap;
@@ -11,6 +12,7 @@ use std::error::Error;
 use std::fmt;
 use std::fmt::Debug;
 use std::future::Future;
+use std::path::PathBuf;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
@@ -216,8 +218,12 @@ pub enum Credentials {
     Token(String),
 }
 
-#[derive(Deserialize, Default)]
+pub const NATS_URL_DEFAULT: &str = "nats://127.0.0.1";
+
+#[derive(Deserialize, Educe)]
+#[educe(Default)]
 pub struct JsClientBuilder {
+    #[educe(Default( expression = NATS_URL_DEFAULT.to_string()))]
     pub nats_url: String,
     pub name: String,
     pub inbox_prefix: String,
@@ -229,6 +235,8 @@ pub struct JsClientBuilder {
     pub request_timeout: Option<Duration>, // Defaults to 5s
     #[serde(skip_deserializing)]
     pub listeners: Vec<EventListener>,
+    pub maybe_nats_user: Option<String>,
+    pub maybe_nats_password_file: Option<PathBuf>,
 }
 
 #[derive(Clone, Deserialize, Default)]

@@ -1,6 +1,5 @@
 use super::{
     jetstream_service::JsStreamService,
-    leaf_server::LEAF_SERVER_DEFAULT_LISTEN_PORT,
     types::{
         Credentials, ErrClientDisconnected, EventHandler, EventListener, JsClientBuilder,
         JsServiceBuilder, PublishInfo,
@@ -46,6 +45,13 @@ impl JsClient {
             .ping_interval(p.ping_interval.unwrap_or(Duration::from_secs(120)))
             .request_timeout(Some(p.request_timeout.unwrap_or(Duration::from_secs(1))))
             .custom_inbox_prefix(&p.inbox_prefix);
+
+        if let (Some(user), Some(password_file)) = (p.maybe_nats_user, p.maybe_nats_password_file) {
+            let pass =
+                std::fs::read_to_string(&password_file).context("reading {password_file}")?;
+
+            connect_options = connect_options.user_and_password(user, pass);
+        }
 
         if let Some(credentials_list) = p.credentials {
             for credentials in credentials_list {
@@ -236,16 +242,6 @@ where
     Arc::new(Box::new(move |c: &mut JsClient| {
         c.on_msg_failed_event = Some(Arc::new(Box::pin(f.clone())));
     }))
-}
-
-// Helpers:
-// TODO: there's overlap with the NATS_LISTEN_PORT. refactor this to e.g. read NATS_LISTEN_HOST and NATS_LISTEN_PORT
-pub fn get_nats_url() -> String {
-    std::env::var("NATS_URL").unwrap_or_else(|_| {
-        let default = format!("127.0.0.1:{LEAF_SERVER_DEFAULT_LISTEN_PORT}"); // Shouldn't this be the 'NATS_LISTEN_PORT'?
-        log::debug!("using default for NATS_URL: {default}");
-        default
-    })
 }
 
 pub fn get_event_listeners() -> Vec<EventListener> {

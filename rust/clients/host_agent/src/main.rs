@@ -73,14 +73,19 @@ async fn daemonize(args: &DaemonzeArgs) -> anyhow::Result<()> {
         args.hub_url.clone(),
         args.hub_tls_insecure,
         args.nats_connect_timeout_secs,
+        &args.nats_url,
     )
     .await?;
     // TODO: would it be a good idea to reuse this client in the workload_manager and elsewhere later on?
 
     bare_client.close().await.map_err(AgentCliError::from)?;
 
-    let host_client =
-        hostd::host_client::run(&host_id, &args.nats_leafnode_client_creds_path).await?;
+    let host_client = hostd::host_client::run(
+        &host_id,
+        &args.nats_leafnode_client_creds_path,
+        &args.nats_url,
+    )
+    .await?;
 
     if !args.host_inventory_disable {
         // Get Host Agent inventory check duration env var..
