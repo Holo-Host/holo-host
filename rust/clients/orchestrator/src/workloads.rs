@@ -106,9 +106,7 @@ pub async fn run(
     let db_modification_response_handler = create_callback_subject_to_host(
         true,
         "assigned_hosts".to_string(),
-        WorkloadServiceSubjects::UpdateInstalled
-            .as_ref()
-            .to_string(),
+        WorkloadServiceSubjects::Update.as_ref().to_string(),
     );
     add_workload_consumer(
         ServiceConsumerBuilder::new(

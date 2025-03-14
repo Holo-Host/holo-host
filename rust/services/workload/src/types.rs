@@ -24,7 +24,6 @@ pub enum WorkloadServiceSubjects {
     SendStatus,
     Install,
     Uninstall,
-    UpdateInstalled,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

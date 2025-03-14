@@ -3,6 +3,9 @@ name = "inventory"
 version = "0.0.1"
 edition = "2021"
 
+[lib]
+path = "src/lib.rs"
+
 [dependencies]
 tokio = { workspace = true }
 anyhow = { workspace = true }
@@ -26,4 +29,3 @@ hpos-hal = { path = "../../hpos-hal" }
 [dev-dependencies]
 tempfile = "3.8"
 mock_utils = { path = "../../util_libs/mocks" }
-

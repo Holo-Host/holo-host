@@ -1,6 +1,10 @@
+use bson::oid::ObjectId;
 use clap::{Args, Parser, Subcommand};
+use db_utils::schemas::WorkloadDeployableHolochainDhtV1;
+use nats_utils::types::NATS_URL_DEFAULT;
 use netdiag::IPVersion;
 use std::path::PathBuf;
+use url::Url;
 
 /// Module containing all of the Clap Derive structs/definitions that make up the agent's
 /// command line. To start the agent daemon (usually from systemd), use `host_agent daemonize`.
@@ -30,6 +34,16 @@ pub enum CommandScopes {
     Support {
         #[command(subcommand)]
         command: SupportCommands,
+    },
+
+    /// Interact with a remote host-agent (via NATS).
+    Remote {
+        /// Url for the NATS connection. Can contain credentials.
+        #[clap(long, env = "HOST_AGENT_NATS_URL", default_value = "nats://dev-hub")]
+        nats_url: Url,
+
+        #[command(subcommand)]
+        command: RemoteCommands,
     },
 }
 
@@ -66,11 +80,32 @@ pub struct DaemonzeArgs {
     )]
     pub(crate) nats_connect_timeout_secs: u64,
 
-    #[arg(long, help = "host agent inventory check interval (in seconds)")]
-    pub(crate) host_inventory_check_interval_sec: Option<u64>,
+    #[arg(
+        long,
+        help = "host agent inventory check interval (in seconds)",
+        env = "HOST_INVENTORY_CHECK_DURATION",
+        default_value_t = 3600
+    )]
+    pub(crate) host_inventory_check_interval_sec: u64,
 
-    #[arg(long, help = "host agent inventory file path")]
-    pub(crate) host_inventory_file_path: Option<String>,
+    #[arg(
+        long,
+        help = "host agent inventory file path",
+        env = "HOST_INVENTORY_FILE_PATH",
+        default_value = "/var/lib/holo-host-agent/inventory.json"
+    )]
+    pub(crate) host_inventory_file_path: String,
+
+    #[arg(
+        long,
+        short,
+        help = "disable host agent inventory functionality",
+        default_value_t = false
+    )]
+    pub(crate) host_inventory_disable: bool,
+
+    #[arg(long, env = "NATS_URL", default_value = NATS_URL_DEFAULT)]
+    pub(crate) nats_url: String,
 }
 
 /// A set of commands for being able to manage the local host. We may (later) want to gate some
@@ -109,5 +144,33 @@ pub enum SupportCommands {
     SupportTunnel {
         #[arg(long)]
         enable: bool,
+    },
+}
+
+/// A set of commands for remotely interacting with a running host-agent instance, by exchanging NATS messages.
+#[derive(Subcommand, Clone)]
+pub enum RemoteCommands {
+    /// Status
+    Ping {},
+
+    /// Manage workloads.
+    HolochainDhtV1Workload {
+        #[arg(long)]
+        workload_id_override: Option<ObjectId>,
+
+        #[arg(long)]
+        host_id: String,
+
+        #[arg(long)]
+        desired_status: String,
+
+        #[command(flatten)]
+        deployable: Box<WorkloadDeployableHolochainDhtV1>,
+
+        #[arg(long)]
+        workload_only: bool,
+
+        #[arg(long)]
+        subject_override: Option<String>,
     },
 }

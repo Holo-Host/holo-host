@@ -1,6 +1,6 @@
 /*
   this can be run on a nixos machine (that has extra-containers installed ?) using:
-  $ nix run --refresh github:holo-host/holo-host/extra-container-template-and-holochain#extra-container-holochain -- --restart-changed
+  $ nix run --extra-experimental-features "nix-command flakes" --refresh github:holo-host/holo-host#extra-container-holochain -- --restart-changed
 
   optionally deploy locally to a dev machine:
 

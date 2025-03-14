@@ -3,6 +3,9 @@ name = "nats_utils"
 version = "0.1.0"
 edition = "2021"
 
+[lib]
+path = "src/lib.rs"
+
 [dependencies]
 async-nats = { workspace = true }
 anyhow = { workspace = true }
@@ -25,6 +28,7 @@ tokio-retry = "0.3.0"
 async-trait = "0.1.83"
 strum = "0.24"
 sea-strum_macros = "0.23.0"
+educe = "0.6"
 url = { version = "2", features = ["serde"] }
 bson = { version = "2.6.1", features = ["chrono-0_4"] }
 derive_more = { version = "1.0.0", features = ["debug"] }

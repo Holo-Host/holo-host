@@ -51,31 +51,9 @@ pub async fn run(mut host_client: JsClient, host_id: &str) -> Result<JsClient, a
 
     add_workload_consumer(
         ServiceConsumerBuilder::new(
-            "install_workload".to_string(),
-            WorkloadServiceSubjects::Install,
-            generate_service_call!(workload_api, install_workload),
-        )
-        .with_subject_prefix(host_id.to_lowercase()),
-        workload_service,
-    )
-    .await?;
-
-    add_workload_consumer(
-        ServiceConsumerBuilder::new(
             "update_installed_workload".to_string(),
-            WorkloadServiceSubjects::UpdateInstalled,
+            WorkloadServiceSubjects::Update,
             generate_service_call!(workload_api, update_workload),
-        )
-        .with_subject_prefix(host_id.to_lowercase()),
-        workload_service,
-    )
-    .await?;
-
-    add_workload_consumer(
-        ServiceConsumerBuilder::new(
-            "uninstall_workload".to_string(),
-            WorkloadServiceSubjects::Uninstall,
-            generate_service_call!(workload_api, uninstall_workload),
         )
         .with_subject_prefix(host_id.to_lowercase()),
         workload_service,

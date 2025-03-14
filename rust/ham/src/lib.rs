@@ -67,7 +67,7 @@ impl Ham {
     }
 
     /// Download a .happ file from a URL to a temporary location
-    async fn download_happ(url: &Url) -> Result<PathBuf> {
+    pub async fn download_happ(url: &Url) -> Result<PathBuf> {
         // Create a temporary directory that won't be deleted when the TempDir is dropped
         let temp_dir = tempfile::Builder::new()
             .prefix("ham-download-")
@@ -84,7 +84,7 @@ impl Ham {
 
         let file_path = temp_path.join(file_name);
 
-        println!("Downloading happ to: {:?}", file_path); // Add debug logging
+        log::debug!("Downloading happ to: {:?}", file_path); // Add debug logging
 
         let response = reqwest::get(url.as_str())
             .await
@@ -103,7 +103,7 @@ impl Ham {
             .await
             .context("Failed to read response body")?;
 
-        println!("Downloaded {} bytes", bytes.len()); // Add debug logging
+        log::debug!("Downloaded {} bytes", bytes.len()); // Add debug logging
 
         std::fs::write(&file_path, bytes).context("Failed to write happ file")?;
 

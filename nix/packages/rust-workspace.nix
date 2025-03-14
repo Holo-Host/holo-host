@@ -49,6 +49,88 @@ craneLib.buildPackage (
     # NB: we disable tests since we'll run them all via cargo-nextest
     doCheck = false;
 
+    passthru.individual =
+      let
+        fileSetForCrate =
+          paths:
+          pkgs.lib.fileset.toSource {
+            root = ../../.;
+            # TODO(refactor): DRY this based on the workspace Cargo.toml
+            fileset = pkgs.lib.fileset.unions (
+              [
+                (craneLib.fileset.cargoTomlAndLock ../..)
+
+                (craneLib.fileset.commonCargoSources ../../rust/util_libs/nats)
+                (craneLib.fileset.commonCargoSources ../../rust/util_libs/db)
+                (craneLib.fileset.commonCargoSources ../../rust/hpos-hal)
+                (craneLib.fileset.commonCargoSources ../../rust/services/workload)
+                (craneLib.fileset.commonCargoSources ../../rust/services/inventory)
+                (craneLib.fileset.commonCargoSources ../../rust/ham)
+                (craneLib.fileset.commonCargoSources ../../rust/netdiag)
+              ]
+              ++ paths
+            );
+          };
+
+        commonCargoArtifacts = craneLib.buildDepsOnly (
+          commonArgs
+          // {
+            src = fileSetForCrate [ ];
+          }
+        );
+
+        mkCargoArtifacts =
+          src:
+          craneLib.buildDepsOnly (
+            commonArgs
+            // {
+              cargoArtifacts = commonCargoArtifacts;
+              inherit src;
+            }
+          );
+
+        individualCrateArgs = commonArgs // {
+          inherit (craneLib.crateNameFromCargoToml { inherit src; }) version;
+          # NB: we disable tests since we'll run them all via cargo-nextest
+          doCheck = false;
+        };
+      in
+      {
+        host_agent =
+          let
+            src = fileSetForCrate [
+              (craneLib.fileset.commonCargoSources ../../rust/clients/host_agent)
+            ];
+          in
+          craneLib.buildPackage (
+            individualCrateArgs
+            // {
+              inherit src;
+
+              pname = "host_agent";
+              cargoExtraArgs = "-p host_agent";
+              cargoArtifacts = mkCargoArtifacts src;
+            }
+          );
+
+        orchestrator =
+          let
+            src = fileSetForCrate [
+              (craneLib.fileset.commonCargoSources ../../rust/clients/orchestrator)
+            ];
+          in
+          craneLib.buildPackage (
+            individualCrateArgs
+            // {
+              inherit src;
+
+              pname = "orchestrator";
+              cargoExtraArgs = "-p orchestrator";
+              cargoArtifacts = mkCargoArtifacts src;
+            }
+          );
+      };
+
     passthru.tests = {
       clippy = craneLib.cargoClippy (
         commonArgs
@@ -103,8 +185,11 @@ craneLib.buildPackage (
                 done
               '')
             ]
+            ++ (pkgs.lib.lists.optionals pkgs.stdenv.isAarch64 [
+              # TODO: get full mongodb built for aarch64
+              pkgs.mongodb-ce
+            ])
             ++ (pkgs.lib.lists.optionals (!pkgs.stdenv.isAarch64) [
-              # TODO: get mongodb built for aarch64
               pkgs.mongodb
             ]);
           partitions = 1;

@@ -1193,6 +1193,7 @@ dependencies = [
  "bson",
  "bytes",
  "chrono",
+ "clap 4.5.31",
  "derive_more 1.0.0",
  "dotenv",
  "env_logger",
@@ -1207,7 +1208,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_with",
- "strum 0.24.1",
+ "strum 0.27.1",
  "tempfile",
  "thiserror 2.0.12",
  "tokio",
@@ -1424,6 +1425,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "educe"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1d7bc049e1bd8cdeb31b68bbd586a9464ecf9f3944af3958a7a9d0f8b9799417"
+dependencies = [
+ "enum-ordinalize",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.99",
+]
+
+[[package]]
 name = "either"
 version = "1.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1445,6 +1458,26 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a1e6a265c649f3f5979b601d26f1d05ada116434c87741c9493cb56218f76cbc"
 dependencies = [
  "heck 0.5.0",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.99",
+]
+
+[[package]]
+name = "enum-ordinalize"
+version = "4.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fea0dcfa4e54eeb516fe454635a95753ddd39acda650ce703031c6973e315dd5"
+dependencies = [
+ "enum-ordinalize-derive",
+]
+
+[[package]]
+name = "enum-ordinalize-derive"
+version = "4.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0d28318a75d4aead5c4db25382e8ef717932d0346600cacae6357eb5941bc5ff"
+dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.99",
@@ -1857,6 +1890,7 @@ dependencies = [
  "holochain_client",
  "holochain_conductor_api",
  "holochain_types",
+ "log",
  "reqwest",
  "serde",
  "serde_json",
@@ -2505,6 +2539,7 @@ dependencies = [
  "chrono",
  "clap 4.5.31",
  "data-encoding",
+ "db_utils",
  "dotenv",
  "ed25519-dalek",
  "env_logger",
@@ -3820,6 +3855,7 @@ dependencies = [
  "chrono",
  "derive_more 1.0.0",
  "dotenv",
+ "educe",
  "env_logger",
  "futures",
  "hpos-hal",
@@ -3854,6 +3890,13 @@ dependencies = [
  "thiserror 2.0.12",
  "uuid 1.15.1",
  "webpki-roots 0.26.8",
+]
+
+[[package]]
+name = "nixos-contain-rs"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
 ]
 
 [[package]]
@@ -4144,6 +4187,7 @@ dependencies = [
  "bson",
  "bytes",
  "chrono",
+ "clap 4.5.31",
  "db_utils",
  "dotenv",
  "env_logger",
@@ -5800,6 +5844,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "290d54ea6f91c969195bdbcd7442c8c2a2ba87da8bf60a7ee86a235d4bc1e125"
 
 [[package]]
+name = "strum"
+version = "0.27.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f64def088c51c9510a8579e3c5d67c65349dcf755e5479ad3d010aa6454e2c32"
+dependencies = [
+ "strum_macros 0.27.1",
+]
+
+[[package]]
 name = "strum_macros"
 version = "0.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5831,6 +5884,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "23dc1fa9ac9c169a78ba62f0b841814b7abae11bdd047b9c58f893439e309ea0"
 dependencies = [
  "heck 0.4.1",
+ "proc-macro2",
+ "quote",
+ "rustversion",
+ "syn 2.0.99",
+]
+
+[[package]]
+name = "strum_macros"
+version = "0.27.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c77a8c5abcaf0f9ce05d62342b7d298c346515365c36b673df4ebe3ced01fde8"
+dependencies = [
+ "heck 0.5.0",
  "proc-macro2",
  "quote",
  "rustversion",
@@ -7350,6 +7416,7 @@ dependencies = [
  "dotenv",
  "env_logger",
  "futures",
+ "ham",
  "hpos-hal",
  "log",
  "mock_utils",

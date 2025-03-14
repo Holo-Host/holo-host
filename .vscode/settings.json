@@ -17,7 +17,12 @@
   },
   "rust-analyzer.check.command": "clippy",
   "rust-analyzer.check.allTargets": true,
-  "rust-analyzer.check.extraArgs": ["--", "--deny=warnings"],
+  "rust-analyzer.check.extraArgs": [
+    "--",
+    "--no-deps"
+    // unfortunately this causes clippy to stop on the first occurrence of a warning, so actual compiler errors are obfuscated
+    // "--deny=warnings"
+  ],
   "[rust]": {
     "editor.defaultFormatter": "rust-lang.rust-analyzer"
   },

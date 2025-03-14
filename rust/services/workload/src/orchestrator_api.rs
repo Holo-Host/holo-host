@@ -258,7 +258,7 @@ impl OrchestratorWorkloadApi {
                         )
                     })?;
 
-                // Create tag map with host ids to inform nats to publish message to these hosts with workload install status                
+                // Create tag map with host ids to inform nats to publish message to these hosts with workload install status
                 let mut tag_map: HashMap<String, String> = HashMap::new();
                 for (index, host_id) in assigned_host_ids.iter().cloned().enumerate() {
                     let assigned_host = eligible_hosts.iter().find(|h| h._id == host_id).ok_or_else(|| ServiceError::internal("Error: Failed to locate host device id from assigned host ids.".to_string(), Some("Unable to forward workload to Host.".to_string())))?;

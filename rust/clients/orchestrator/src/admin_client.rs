@@ -4,11 +4,17 @@ use nats_utils::{
 };
 use std::vec;
 use std::{path::PathBuf, time::Duration};
+use url::Url;
 
 const ORCHESTRATOR_ADMIN_CLIENT_NAME: &str = "Orchestrator Admin Client";
 const ORCHESTRATOR_ADMIN_CLIENT_INBOX_PREFIX: &str = "_ADMIN_INBOX.orchestrator";
 
-pub async fn run(admin_creds_path: &Option<PathBuf>, nats_url: String) -> anyhow::Result<JsClient> {
+pub async fn run(
+    admin_creds_path: &Option<PathBuf>,
+    nats_url: Url,
+    maybe_nats_user: Option<String>,
+    maybe_nats_password_file: Option<PathBuf>,
+) -> anyhow::Result<JsClient> {
     log::info!("nats_url : {}", nats_url);
 
     let credentials = admin_creds_path
@@ -16,13 +22,15 @@ pub async fn run(admin_creds_path: &Option<PathBuf>, nats_url: String) -> anyhow
         .map(|creds| vec![Credentials::Path(creds)]);
 
     let admin_client = JsClient::new(JsClientBuilder {
-        nats_url: nats_url.clone(),
+        nats_url: nats_url.to_string(),
         name: ORCHESTRATOR_ADMIN_CLIENT_NAME.to_string(),
         inbox_prefix: ORCHESTRATOR_ADMIN_CLIENT_INBOX_PREFIX.to_string(),
         credentials,
         request_timeout: Some(Duration::from_secs(29)),
         ping_interval: Some(Duration::from_secs(10)),
         listeners: vec![with_event_listeners(get_event_listeners())],
+        maybe_nats_user,
+        maybe_nats_password_file,
     })
     .await
     .map_err(|e| anyhow::anyhow!("connecting to NATS via {nats_url}: {e}"))?;

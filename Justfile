@@ -43,3 +43,40 @@ ham-cycle i:
     just holochain-container-destroy {{i}}
     just holochain-container {{i}}
     just ham-install {{i}}
+
+
+devhost-cycle:
+    #!/usr/bin/env bash
+    set -xeE
+    nix build .\#extra-container-devhost
+    extra-container destroy dev-hub
+    extra-container destroy dev-host
+    extra-container destroy dev-orch
+    ./result/bin/container build
+    ./result/bin/container create
+    ./result/bin/container start dev-hub
+    ./result/bin/container start dev-host
+    ./result/bin/container start dev-orch
+
+devhost-host-agent-remote desired-status +args="":
+    #!/usr/bin/env bash
+    set -xeE
+
+    export RUST_BACKTRACE=1
+    export RUST_LOG=trace
+
+    # TODO(backlog): run a service on the host NATS instance that can be queried for the host-id
+    # devhost_machine_id="$(sudo machinectl shell dev-host /bin/sh -c "cat /etc/machine-id" | grep -oE '[a-z0-9]+')"
+
+    cargo run --bin host_agent -- remote holochain-dht-v1-workload \
+        --workload-id-override "67d2ef2a67d4b619a54286c4" \
+        --desired-status "{{desired-status}}" \
+        --host-id "f0b9a2b7a95848389fdb43eda8139569" \
+        --happ-binary-url "https://gist.github.com/steveej/5443d6d15395aa23081f1ee04712b2b3/raw/fdacb9b723ba83743567f2a39a8bfbbffb46b1f0/test-zome.bundle" \
+        --network-seed "just-testing" {{args}}
+
+
+devhost-hub-remote subject="WORKLOAD.add":
+    #!/usr/bin/env bash
+    set -xeE
+    just devhost-host-agent-remote installed --subject-override {{subject}} --workload-only
