@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
 use anyhow::Context;
-use async_nats::ServerAddr;
+use async_nats::{ConnectOptions, ServerAddr};
 use db_utils::schemas::{
     Workload, WorkloadDeployable, WorkloadState, WorkloadStateDiscriminants, WorkloadStatus,
 };
@@ -14,8 +14,11 @@ use crate::agent_cli::{self, RemoteCommands};
 pub(crate) async fn run(nats_url: Url, command: RemoteCommands) -> anyhow::Result<()> {
     log::info!("Trying to connect to {nats_url}...");
 
-    let vanilla_nats_client =
-        async_nats::connect([nats_url.to_string().parse::<ServerAddr>()?].as_slice()).await?;
+    let vanilla_nats_client = async_nats::connect_with_options(
+        nats_url.to_string().parse::<ServerAddr>()?,
+        ConnectOptions::new().retry_on_initial_connect(),
+    )
+    .await?;
 
     match command {
         agent_cli::RemoteCommands::Ping {} => {

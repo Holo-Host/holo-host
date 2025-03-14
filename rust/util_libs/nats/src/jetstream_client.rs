@@ -6,7 +6,7 @@ use super::{
         JsServiceBuilder, PublishInfo,
     },
 };
-use anyhow::Result;
+use anyhow::{Context, Result};
 use async_nats::{jetstream, ServerInfo};
 use core::option::Option::None;
 use std::sync::Arc;
@@ -41,10 +41,11 @@ impl JsClient {
     pub async fn new(p: JsClientBuilder) -> Result<Self, async_nats::Error> {
         let mut connect_options = async_nats::ConnectOptions::new()
             .name(&p.name)
+            // required for websocket connections
+            .retry_on_initial_connect()
             .ping_interval(p.ping_interval.unwrap_or(Duration::from_secs(120)))
-            .request_timeout(Some(p.request_timeout.unwrap_or(Duration::from_secs(10))))
+            .request_timeout(Some(p.request_timeout.unwrap_or(Duration::from_secs(1))))
             .custom_inbox_prefix(&p.inbox_prefix);
-        // .require_tls(true)
 
         if let Some(credentials_list) = p.credentials {
             for credentials in credentials_list {
@@ -63,7 +64,20 @@ impl JsClient {
             }
         };
 
-        let client = connect_options.connect(&p.nats_url).await?;
+        let client = {
+            let nats_url = p
+                .nats_url
+                .parse::<async_nats::ServerAddr>()
+                .context(format!("parsing {} as a NATS server address", &p.nats_url))?;
+            let context_msg = format!(
+                "connecting NATS to {nats_url:?} (websocket? {}) with options: {connect_options:?}",
+                nats_url.is_websocket()
+            );
+            connect_options
+                .connect([nats_url].as_slice())
+                .await
+                .context(context_msg)?
+        };
         let service_log_prefix = format!("NATS-CLIENT-LOG::{}::", p.name);
         log::info!(
             "{service_log_prefix}Connected to NATS server at {}",
