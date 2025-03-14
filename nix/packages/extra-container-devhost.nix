@@ -196,6 +196,7 @@ let
               services.mongodb = {
                 enable = true;
                 package = pkgs.mongodb-ce;
+                bind_ip = "0.0.0.0";
               };
 
               nixpkgs.config.allowUnfreePredicate =
