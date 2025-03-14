@@ -24,9 +24,9 @@ where
 }
 
 pub fn create_callback_subject_to_orchestrator(
-    sub_subject_name: String,
+    subject_name: String,
 ) -> ResponseSubjectsGenerator {
     Arc::new(move |_tag_map: HashMap<String, String>| -> Vec<String> {
-        vec![format!("orchestrator.{}", sub_subject_name)]
+        vec![format!("{}", subject_name)]
     })
 }
