@@ -70,7 +70,7 @@ impl HostWorkloadApi {
 
                 // TODO: move this to the workload processing function
                 let start_or_restart_if_desired = if let WorkloadState::Running = desired_state {
-                    "--start --restart-changed"
+                    " --start --restart-changed"
                 } else {
                     ""
                 };
@@ -93,10 +93,9 @@ impl HostWorkloadApi {
                     let extra_container_path =
                         provision_extra_container_closure_path(&workload_path_toplevel.into())?;
 
-                    bash(&format!(
-                        "extra-container destroy {extra_container_path} --all",
-                    ))
-                    .await?;
+                    bash(&format!("extra-container destroy {extra_container_path}")).await?;
+
+                    // TODO: remove workoad directory
                 }
 
                 desired_state
@@ -123,29 +122,6 @@ impl HostWorkloadApi {
         ))
     }
 
-    pub async fn install_workload(&self, msg: Arc<Message>) -> anyhow::Result<WorkloadApiResult> {
-        let msg_subject = msg.subject.clone().into_string();
-        log::trace!("Incoming message for '{}'", msg_subject);
-
-        let status = {
-            let err_msg = format!("Failed to process Workload Service Endpoint. Subject={} Error=Call not implemented. Please use 'update_workload' instead..", msg_subject);
-            log::error!("{}", err_msg);
-            WorkloadStatus {
-                id: None,
-                desired: WorkloadState::Unknown(Default::default()),
-                actual: WorkloadState::Error(err_msg),
-            }
-        };
-
-        Ok(WorkloadApiResult {
-            result: WorkloadResult {
-                status,
-                workload: None,
-            },
-            maybe_response_tags: None,
-        })
-    }
-
     pub async fn update_workload(
         &self,
         msg: Arc<Message>,
@@ -163,30 +139,6 @@ impl HostWorkloadApi {
             match Self::handle_update_workload(msg_subject, try_message_payload).await {
                 Ok(result) => (result.0, Some(result.1)),
                 Err(err) => {
-                    // let error_result = match err.downcast::<WorkloadResultError>() {
-                    //     Ok(WorkloadResultError { e, workload_result }) => WorkloadApiResult {
-                    //         maybe_response_tags: None,
-                    //         result: WorkloadResult {
-                    //             status: WorkloadStatus {
-                    //                 actual: WorkloadState::Error(e.to_string()),
-                    //                 ..workload_result.status
-                    //             },
-                    //             workload: Default::default(),
-                    //         },
-                    //     },
-                    //     Err(e) => WorkloadApiResult {
-                    //         result: WorkloadResult {
-                    //             status: WorkloadStatus {
-                    //                 id: None,
-                    //                 desired: WorkloadState::Unknown(Default::default()),
-                    //                 actual: WorkloadState::Error(e.to_string()),
-                    //             },
-                    //             workload: Default::default(),
-                    //         },
-                    //         maybe_response_tags: None,
-                    //     },
-                    // };
-
                     let (status, maybe_workload) = match err.downcast::<WorkloadResultError>() {
                         Ok(WorkloadResultError { e, workload_result }) => (
                             WorkloadStatus {

@@ -84,7 +84,8 @@ let
                 system_account = "SYS";
 
                 jetstream = {
-                  domain = "hub";
+                  # TODO: use "hub" once we support different domains on hub and leafs
+                  domain = "";
                   enabled = true;
                 };
 
