@@ -79,5 +79,4 @@ devhost-host-agent-remote desired-status +args="":
 devhost-hub-remote subject="WORKLOAD.add":
     #!/usr/bin/env bash
     set -xeE
-    export HOST_AGENT_NATS_URL="nats://admin:admin@dev-hub"
     just devhost-host-agent-remote installed --subject-override {{subject}} --workload-only
