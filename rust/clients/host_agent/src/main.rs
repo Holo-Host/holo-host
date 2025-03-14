@@ -16,6 +16,8 @@ mod hostd;
 mod remote_cmds;
 pub mod support_cmds;
 
+use std::time::Duration;
+
 use agent_cli::DaemonzeArgs;
 use clap::Parser;
 use dotenv::dotenv;
@@ -80,6 +82,9 @@ async fn daemonize(args: &DaemonzeArgs) -> anyhow::Result<()> {
 
     bare_client.close().await.map_err(AgentCliError::from)?;
 
+    // TODO: why does NATS need some time here? without this the inventory isn't always sent
+    tokio::time::sleep(Duration::from_secs(5)).await;
+
     let host_client = hostd::host_client::run(
         &host_id,
         &args.nats_leafnode_client_creds_path,
@@ -88,34 +93,16 @@ async fn daemonize(args: &DaemonzeArgs) -> anyhow::Result<()> {
     .await?;
 
     if !args.host_inventory_disable {
-        // Get Host Agent inventory check duration env var..
-        // If none exists, default to 1 hour
-        let host_inventory_check_interval_sec =
-            &args.host_inventory_check_interval_sec.unwrap_or_else(|| {
-                std::env::var("HOST_INVENTORY_CHECK_DURATION")
-                    .unwrap_or_else(|_| "3600".to_string())
-                    .parse::<u64>()
-                    .unwrap_or(3600) // 3600 seconds = 1 hour
-            });
+        let host_inventory_file_path = args.host_inventory_file_path.clone();
+        let host_client_inventory = host_client.clone();
+        let host_id_inventory = host_id.clone();
+        let inventory_interval = args.host_inventory_check_interval_sec;
 
-        // Get Host Agent inventory storage file path
-        // If none exists, default to "/var/lib/holo_inventory.json"
-        let inventory_file_path = args.host_inventory_file_path.as_ref().map_or_else(
-            || {
-                std::env::var("HOST_INVENTORY_FILE_PATH")
-                    .unwrap_or("/var/lib/holo_inventory.json".to_string())
-            },
-            |s| s.to_owned(),
-        );
-
-        let host_client_inventory_clone = host_client.clone();
-        let host_id_inventory_clone = host_id.clone();
-        let inventory_interval = host_inventory_check_interval_sec.to_owned();
         spawn(async move {
             if let Err(e) = hostd::inventory::run(
-                host_client_inventory_clone,
-                &host_id_inventory_clone,
-                &inventory_file_path,
+                host_client_inventory,
+                &host_id_inventory,
+                &host_inventory_file_path,
                 inventory_interval,
                 host_inventory,
             )

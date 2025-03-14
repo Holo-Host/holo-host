@@ -68,10 +68,12 @@ in
 
         user = lib.mkOption {
           type = lib.types.nullOr lib.types.str;
+          default = null;
         };
 
         passwordFile = lib.mkOption {
           type = lib.types.nullOr lib.types.path;
+          default = null;
         };
       };
     };
@@ -120,6 +122,9 @@ in
         }
         // lib.attrsets.optionalAttrs (cfg.nats.hub.user != null) {
           NATS_USER = cfg.nats.hub.user;
+        }
+        // lib.attrsets.optionalAttrs (cfg.nats.hub.passwordFile != null) {
+          NATS_PASSWORD_FILE = "%d/NATS_PASSWORD_FILE";
         };
 
       serviceConfig.LoadCredential = lib.lists.optional (cfg.nats.hub.passwordFile != null) [

@@ -44,6 +44,7 @@ pub(crate) async fn run(nats_url: Url, command: RemoteCommands) -> anyhow::Resul
                 .await
                 .expect("subscribe works");
 
+            log::info!("subscribing to {reply_subject}");
             tokio::spawn(async move {
                 while let Some(message) = subscription.next().await {
                     println!("{message:#?}");
@@ -102,11 +103,14 @@ pub(crate) async fn run(nats_url: Url, command: RemoteCommands) -> anyhow::Resul
 
             log::debug!("publishing to {subject}:\n{payload:?}");
 
-            vanilla_nats_client
-                // .publish_with_reply(subject, reply_subject, payload.into())
-                .publish(subject, payload.into())
+            let response = vanilla_nats_client
+                .request(subject, payload.into())
+                // .publish_with_reply(subject, reply_subject, )
+                // .publish(subject, payload.into())
                 .await?;
             vanilla_nats_client.flush().await?;
+
+            log::info!("request completed. response: {response:#?}");
 
             // Only exit program when explicitly requested
             log::info!("waiting until ctrl+c is pressed.");

@@ -21,7 +21,7 @@ struct Args {
     #[clap(long, env = "NATS_USER")]
     nats_user: Option<String>,
 
-    #[clap(long, env = "NAST_URL", default_value = "nats://127.0.0.1")]
+    #[clap(long, env = "NATS_URL", default_value = "nats://127.0.0.1")]
     nats_url: Url,
 }
 
