@@ -178,6 +178,9 @@ let
 
                 nats.hub.url = "wss://${devHubFqdn}:${builtins.toString config.containers.dev-hub.config.holo.nats-server.websocket.externalPort}";
                 nats.hub.tlsInsecure = true;
+
+                # TODO: actually provide an instance
+                mongo.url = "mongodb://127.0.0.1";
               };
             };
         };
