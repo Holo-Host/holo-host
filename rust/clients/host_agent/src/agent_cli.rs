@@ -84,11 +84,21 @@ pub struct DaemonzeArgs {
     )]
     pub(crate) nats_connect_timeout_secs: u64,
 
-    #[arg(long, help = "host agent inventory check interval (in seconds)")]
-    pub(crate) host_inventory_check_interval_sec: Option<u64>,
+    #[arg(
+        long,
+        help = "host agent inventory check interval (in seconds)",
+        env = "HOST_INVENTORY_CHECK_DURATION",
+        default_value_t = 3600
+    )]
+    pub(crate) host_inventory_check_interval_sec: u64,
 
-    #[arg(long, help = "host agent inventory file path")]
-    pub(crate) host_inventory_file_path: Option<String>,
+    #[arg(
+        long,
+        help = "host agent inventory file path",
+        env = "HOST_INVENTORY_FILE_PATH",
+        default_value = "/var/lib/holo-host-agent/inventory.json"
+    )]
+    pub(crate) host_inventory_file_path: String,
 
     #[arg(
         long,
