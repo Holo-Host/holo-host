@@ -65,6 +65,14 @@ in
         tlsInsecure = lib.mkOption {
           type = lib.types.bool;
         };
+
+        user = lib.mkOption {
+          type = lib.tyeps.nullor lib.types.str;
+        };
+
+        passwordFile = lib.mkOption {
+          type = lib.tyeps.nullor lib.types.path;
+        };
       };
     };
 
@@ -109,7 +117,19 @@ in
         }
         // lib.attrsets.optionalAttrs (cfg.nats.hub.url != null) {
           NATS_URL = cfg.nats.hub.url;
+        }
+        // lib.attrsets.optionalAttrs (cfg.nats.hub.user != null) {
+          NATS_USER = cfg.nats.hub.user;
         };
+
+      serviceConfig.LoadCredential = lib.lists.optional (cfg.nats.hub.passwordFile != null) [
+        # specified like: <filename inside unit>:<source of secret>
+        "NATS_PASSWORD_FILE:${cfg.nats.hub.passwordFile}"
+
+        # Using agenix, perhaps:
+        #
+        # "target:${config.age.secrets.greeting_target.path}"
+      ];
 
       path = [
         pkgs.nats-server
