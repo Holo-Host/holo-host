@@ -87,7 +87,6 @@ let
                         # password = "admin";
                       }
                     ];
-
                   };
                 };
                 system_account = "SYS";
@@ -186,7 +185,7 @@ let
                   backtrace = "full";
                 };
 
-                nats.hub.url = "wss://{devHubFqdn}:${builtins.toString config.containers.dev-hub.config.holo.nats-server.websocket.externalPort}";
+                nats.hub.url = "wss://${devHubFqdn}:${builtins.toString config.containers.dev-hub.config.holo.nats-server.websocket.externalPort}";
                 nats.hub.tlsInsecure = true;
 
                 # TODO: actually provide an instance
@@ -196,6 +195,7 @@ let
               services.mongodb = {
                 enable = true;
                 package = pkgs.mongodb-ce;
+                bind_ip = "0.0.0.0";
               };
 
               nixpkgs.config.allowUnfreePredicate =
