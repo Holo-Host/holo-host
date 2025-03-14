@@ -55,6 +55,7 @@ impl HostWorkloadApi {
         };
 
         // TODO: consider status.actual to inform assumptions towards the current state
+        // TODO: run a seperate thread to send status updates while this is processed
 
         let desired_state = &workload.status.desired;
         let actual_status = match desired_state {
@@ -111,6 +112,8 @@ impl HostWorkloadApi {
                 anyhow::bail!("unsupported desired state {desired_state:?}")
             }
         };
+
+        // TODO: send a reply message
 
         Ok((
             WorkloadStatus {

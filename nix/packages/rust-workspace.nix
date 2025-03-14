@@ -185,8 +185,11 @@ craneLib.buildPackage (
                 done
               '')
             ]
+            ++ (pkgs.lib.lists.optionals pkgs.stdenv.isAarch64 [
+              # TODO: get full mongodb built for aarch64
+              pkgs.mongodb-ce
+            ])
             ++ (pkgs.lib.lists.optionals (!pkgs.stdenv.isAarch64) [
-              # TODO: get mongodb built for aarch64
               pkgs.mongodb
             ]);
           partitions = 1;

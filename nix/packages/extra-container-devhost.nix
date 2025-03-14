@@ -80,8 +80,18 @@ let
                       }
                     ];
                   };
+                  HOLO = {
+                    users = [
+                      {
+                        user = "anon";
+                        # password = "admin";
+                      }
+                    ];
+
+                  };
                 };
                 system_account = "SYS";
+                no_auth_user = "anon";
 
                 jetstream = {
                   # TODO: use "hub" once we support different domains on hub and leafs
@@ -139,7 +149,7 @@ let
                 };
 
                 # TODO: i suspect there's a bug where the inventory prevents the workload messages from being processed
-                extraDaemonizeArgs.host-inventory-disable = true;
+                extraDaemonizeArgs.host-inventory-disable = false;
 
                 nats.hub.url = "wss://${devHubFqdn}:${builtins.toString config.containers.dev-hub.config.holo.nats-server.websocket.externalPort}";
                 nats.hub.tlsInsecure = true;
@@ -158,7 +168,7 @@ let
           # specialArgs = { inherit inputs; };
 
           config =
-            { ... }:
+            { pkgs, lib, ... }:
             {
               # in case the container shares the host network, don't mess with the firewall rules.
               networking.firewall.enable = false;
@@ -176,12 +186,24 @@ let
                   backtrace = "full";
                 };
 
-                nats.hub.url = "wss://${devHubFqdn}:${builtins.toString config.containers.dev-hub.config.holo.nats-server.websocket.externalPort}";
+                nats.hub.url = "wss://{devHubFqdn}:${builtins.toString config.containers.dev-hub.config.holo.nats-server.websocket.externalPort}";
                 nats.hub.tlsInsecure = true;
 
                 # TODO: actually provide an instance
                 mongo.url = "mongodb://127.0.0.1";
               };
+
+              services.mongodb = {
+                enable = true;
+                package = pkgs.mongodb-ce;
+              };
+
+              nixpkgs.config.allowUnfreePredicate =
+                pkg:
+                builtins.elem (lib.getName pkg) [
+                  "mongodb-ce"
+                ];
+
             };
         };
       };
