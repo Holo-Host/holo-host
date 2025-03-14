@@ -11,6 +11,7 @@ use nats_utils::{
 };
 use tempfile::tempdir;
 
+#[allow(clippy::too_many_arguments)]
 pub async fn run(
     host_id: &str,
     maybe_server_name: &Option<String>,
@@ -19,6 +20,7 @@ pub async fn run(
     hub_url: String,
     hub_tls_insecure: bool,
     nats_connect_timeout_secs: u64,
+    nats_url: &str,
 ) -> anyhow::Result<(jetstream_client::JsClient, LeafServer)> {
     let leaf_client_conn_domain = "127.0.0.1";
     let leaf_client_conn_port = std::env::var("NATS_LISTEN_PORT")
@@ -90,7 +92,6 @@ pub async fn run(
     // Spin up Nats Client
     // Nats takes a moment to become responsive, so we try to connecti in a loop for a few seconds.
     // in case of a connection loss to Nats this client is self-recovering.
-    let nats_url = jetstream_client::get_nats_url();
     log::info!("nats_url : {nats_url}");
 
     const HOST_AGENT_CLIENT_NAME: &str = "Host Agent Bare";
@@ -98,13 +99,15 @@ pub async fn run(
     let nats_client = tokio::select! {
         client = async {loop {
                 let host_workload_client = jetstream_client::JsClient::new(JsClientBuilder {
-                    nats_url:nats_url.clone(),
+                    nats_url: nats_url.to_string(),
                     name:HOST_AGENT_CLIENT_NAME.to_string(),
                     inbox_prefix: Default::default(),
                     credentials: Default::default(),
                     ping_interval:Some(Duration::from_secs(10)),
                     request_timeout:Some(Duration::from_secs(29)),
                     listeners: Default::default(),
+
+                    ..Default::default()
                 })
                 .await
                 .map_err(|e| anyhow::anyhow!("connecting to NATS via {nats_url}: {e:?}"));
