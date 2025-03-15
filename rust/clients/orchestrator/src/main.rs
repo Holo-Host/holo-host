@@ -6,12 +6,12 @@ mod workloads;
 use std::path::PathBuf;
 
 use anyhow::{Context, Result};
+use async_nats::ServerAddr;
 use clap::Parser;
 use db_utils::mongodb::get_mongodb_url;
 use dotenv::dotenv;
 use mongodb::{options::ClientOptions, Client as MongoDBClient};
 use tokio::task::spawn;
-use url::Url;
 
 #[derive(clap::Parser)]
 struct Args {
@@ -22,7 +22,14 @@ struct Args {
     nats_user: Option<String>,
 
     #[clap(long, env = "NATS_URL", default_value = "nats://127.0.0.1")]
-    nats_url: Url,
+    nats_url: ServerAddr,
+
+    #[clap(
+        long,
+        default_value_t = false,
+        env = "NATS_SKIP_TLS_VERIFICATION_DANGER"
+    )]
+    nats_skip_tls_verification_danger: bool,
 }
 
 #[tokio::main]
@@ -31,6 +38,10 @@ async fn main() -> Result<(), async_nats::Error> {
     env_logger::init();
 
     let args = Args::parse();
+
+    if args.nats_skip_tls_verification_danger {
+        nats_utils::jetstream_client::tls_skip_verifier::early_in_process_install_crypto_provider();
+    }
 
     // Setup MongoDB Client
     let mongo_uri: String = get_mongodb_url();
@@ -46,9 +57,10 @@ async fn main() -> Result<(), async_nats::Error> {
     log::debug!("spawning admin client...");
     let admin_client = admin_client::run(
         &None,
-        args.nats_url,
+        &args.nats_url,
         args.nats_user,
         args.nats_password_file,
+        args.nats_skip_tls_verification_danger,
     )
     .await?;
 
