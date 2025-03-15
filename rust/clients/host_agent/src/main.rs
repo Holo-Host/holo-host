@@ -50,8 +50,15 @@ async fn main() -> anyhow::Result<()> {
         }
         agent_cli::CommandScopes::Host { command } => host_cmds::host_command(&command)?,
         agent_cli::CommandScopes::Support { command } => support_cmds::support_command(&command)?,
-        agent_cli::CommandScopes::Remote { nats_url, command } => {
-            remote_cmds::run(nats_url, command).await?
+        agent_cli::CommandScopes::Remote {
+            remote_args,
+            command,
+        } => {
+            if remote_args.nats_skip_tls_verification_danger {
+                nats_utils::jetstream_client::tls_skip_verifier::early_in_process_install_crypto_provider();
+            }
+
+            remote_cmds::run(remote_args, command).await?
         }
     }
 

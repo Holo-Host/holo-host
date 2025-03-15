@@ -1,10 +1,10 @@
+use async_nats::ServerAddr;
 use bson::oid::ObjectId;
 use clap::{Args, Parser, Subcommand};
 use db_utils::schemas::WorkloadDeployableHolochainDhtV1;
 use nats_utils::types::NATS_URL_DEFAULT;
 use netdiag::IPVersion;
 use std::path::PathBuf;
-use url::Url;
 
 /// Module containing all of the Clap Derive structs/definitions that make up the agent's
 /// command line. To start the agent daemon (usually from systemd), use `host_agent daemonize`.
@@ -38,13 +38,26 @@ pub enum CommandScopes {
 
     /// Interact with a remote host-agent (via NATS).
     Remote {
-        /// Url for the NATS connection. Can contain credentials.
-        #[clap(long, env = "HOST_AGENT_NATS_URL", default_value = "nats://dev-hub")]
-        nats_url: Url,
+        #[clap(flatten)]
+        remote_args: RemoteArgs,
 
         #[command(subcommand)]
         command: RemoteCommands,
     },
+}
+
+#[derive(Clone, clap::Args)]
+pub struct RemoteArgs {
+    /// Url for the NATS connection. Can contain credentials.
+    #[clap(long, env = "NATS_URL", default_value = "nats://dev-hub")]
+    pub nats_url: ServerAddr,
+
+    #[clap(
+        long,
+        default_value_t = false,
+        env = "NATS_SKIP_TLS_VERIFICATION_DANGER"
+    )]
+    pub nats_skip_tls_verification_danger: bool,
 }
 
 #[derive(Args, Clone, Debug)]
@@ -105,7 +118,7 @@ pub struct DaemonzeArgs {
     pub(crate) host_inventory_disable: bool,
 
     #[arg(long, env = "NATS_URL", default_value = NATS_URL_DEFAULT)]
-    pub(crate) nats_url: String,
+    pub(crate) nats_url: ServerAddr,
 }
 
 /// A set of commands for being able to manage the local host. We may (later) want to gate some

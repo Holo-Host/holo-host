@@ -21,7 +21,11 @@ members = [
 ]
 
 [workspace.dependencies]
-async-nats = { version = "0.38.0", features = ["service"] }
+async-nats = { version = "0.39.0", features = [
+  "service",
+  "websockets",
+  "ring",
+] }
 tokio = { version = "1", features = ["full"] }
 clap = { version = "4.5.23", features = ["derive", "env"] }
 thiserror = "2.0"
@@ -40,3 +44,7 @@ opt-level = "z"
 
 [profile.release]
 opt-level = "z"
+
+
+[patch.crates-io]
+async-nats = { git = "https://github.com/steveej-forks/nats.rs", branch = "schema-based-ports" }

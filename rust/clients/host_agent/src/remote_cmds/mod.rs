@@ -1,28 +1,38 @@
 use std::str::FromStr;
 
 use anyhow::Context;
-use async_nats::{ConnectOptions, ServerAddr};
 use db_utils::schemas::{
     Workload, WorkloadDeployable, WorkloadState, WorkloadStateDiscriminants, WorkloadStatus,
 };
-use futures::StreamExt;
-use url::Url;
+use nats_utils::{
+    jetstream_client::JsClient,
+    types::{JsClientBuilder, PublishInfo},
+};
 use workload::types::WorkloadResult;
 
-use crate::agent_cli::{self, RemoteCommands};
+use crate::agent_cli::{self, RemoteArgs, RemoteCommands};
 
-pub(crate) async fn run(nats_url: Url, command: RemoteCommands) -> anyhow::Result<()> {
-    log::info!("Trying to connect to {nats_url}...");
+pub(crate) async fn run(args: RemoteArgs, command: RemoteCommands) -> anyhow::Result<()> {
+    let RemoteArgs {
+        nats_url,
+        nats_skip_tls_verification_danger,
+    } = args;
 
-    let vanilla_nats_client = async_nats::connect_with_options(
-        nats_url.to_string().parse::<ServerAddr>()?,
-        ConnectOptions::new().retry_on_initial_connect(),
-    )
-    .await?;
+    let nats_client = JsClient::new(JsClientBuilder {
+        nats_url: (&nats_url).into(),
+        nats_skip_tls_verification_danger,
+
+        ..Default::default()
+    })
+    .await
+    .map_err(|e| anyhow::anyhow!("connecting to NATS via {nats_url:?}: {e:?}"))?;
 
     match command {
         agent_cli::RemoteCommands::Ping {} => {
-            let check = vanilla_nats_client.connection_state().clone();
+            let check = nats_client
+                .check_connection()
+                .await
+                .map_err(|e| anyhow::anyhow!(e.to_string()))?;
 
             log::info!("Connection check result: {check}");
         }
@@ -34,22 +44,7 @@ pub(crate) async fn run(nats_url: Url, command: RemoteCommands) -> anyhow::Resul
             workload_only,
             subject_override,
         } => {
-            // run the NATS workload service
-
             let id: bson::oid::ObjectId = workload_id_override.unwrap_or_default();
-            let reply_subject = format!("REMOTE_CMD.{}", id.to_hex());
-
-            let mut subscription = vanilla_nats_client
-                .subscribe(reply_subject.clone())
-                .await
-                .expect("subscribe works");
-
-            log::info!("subscribing to {reply_subject}");
-            tokio::spawn(async move {
-                while let Some(message) = subscription.next().await {
-                    println!("{message:#?}");
-                }
-            });
 
             let state_discriminant = WorkloadStateDiscriminants::from_str(&desired_status)
                 .map_err(|e| anyhow::anyhow!("failed to parse {desired_status}: {e}"))?;
@@ -103,14 +98,17 @@ pub(crate) async fn run(nats_url: Url, command: RemoteCommands) -> anyhow::Resul
 
             log::debug!("publishing to {subject}:\n{payload:?}");
 
-            let response = vanilla_nats_client
-                .request(subject, payload.into())
-                // .publish_with_reply(subject, reply_subject, )
-                // .publish(subject, payload.into())
-                .await?;
-            vanilla_nats_client.flush().await?;
-
-            log::info!("request completed. response: {response:#?}");
+            if let Ok(response) = nats_client
+                .publish(PublishInfo {
+                    subject,
+                    msg_id: Default::default(),
+                    data: payload.into(),
+                    headers: None,
+                })
+                .await
+            {
+                log::info!("request completed. response: {response:#?}");
+            };
 
             // Only exit program when explicitly requested
             log::info!("waiting until ctrl+c is pressed.");

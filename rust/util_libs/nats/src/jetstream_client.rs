@@ -6,7 +6,7 @@ use super::{
     },
 };
 use anyhow::{Context, Result};
-use async_nats::{jetstream, ServerInfo};
+use async_nats::{jetstream, ServerAddr, ServerInfo};
 use core::option::Option::None;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -26,7 +26,7 @@ impl std::fmt::Debug for JsClient {
 
 #[derive(Clone)]
 pub struct JsClient {
-    url: String,
+    url: ServerAddr,
     pub name: String,
     on_msg_published_event: Option<EventHandler>,
     on_msg_failed_event: Option<EventHandler>,
@@ -36,12 +36,104 @@ pub struct JsClient {
     client: async_nats::Client, // Built-in Nats Client which manages the cloned clients within jetstream contexts
 }
 
+/// Implements a permissive `ServerCertVerifier` for convenience in testing.
+pub mod tls_skip_verifier {
+    use std::sync::Arc;
+
+    use async_nats::rustls::{
+        self,
+        client::danger::{HandshakeSignatureValid, ServerCertVerified},
+    };
+
+    /// this needs to run early in the process or else it might conflict
+    /// with something else installing a crypto provider
+    pub fn early_in_process_install_crypto_provider() -> bool {
+        if let Err(other) = async_nats::rustls::crypto::ring::default_provider().install_default() {
+            log::error!("error installing the default ring crypto provider. custom cert verification logic may not work as expected.");
+            let _ = <async_nats::rustls::crypto::CryptoProvider as Clone>::clone(&other)
+                .install_default();
+            false
+        } else {
+            true
+        }
+    }
+
+    #[derive(Debug)]
+    pub struct SkipServerVerification;
+
+    impl SkipServerVerification {
+        pub fn new() -> Arc<Self> {
+            Arc::new(Self)
+        }
+    }
+
+    use rustls::client::danger::ServerCertVerifier;
+    impl ServerCertVerifier for SkipServerVerification {
+        fn verify_tls12_signature(
+            &self,
+            _message: &[u8],
+            _cert: &rustls::pki_types::CertificateDer<'_>,
+            _dss: &rustls::DigitallySignedStruct,
+        ) -> Result<HandshakeSignatureValid, rustls::Error> {
+            Ok(HandshakeSignatureValid::assertion())
+        }
+
+        fn verify_tls13_signature(
+            &self,
+            _message: &[u8],
+            _cert: &rustls::pki_types::CertificateDer<'_>,
+            _dss: &rustls::DigitallySignedStruct,
+        ) -> Result<HandshakeSignatureValid, rustls::Error> {
+            Ok(HandshakeSignatureValid::assertion())
+        }
+
+        fn supported_verify_schemes(&self) -> Vec<rustls::SignatureScheme> {
+            use rustls::SignatureScheme::*;
+
+            vec![
+                RSA_PKCS1_SHA1,
+                ECDSA_SHA1_Legacy,
+                RSA_PKCS1_SHA256,
+                ECDSA_NISTP256_SHA256,
+                RSA_PKCS1_SHA384,
+                ECDSA_NISTP384_SHA384,
+                RSA_PKCS1_SHA512,
+                ECDSA_NISTP521_SHA512,
+                RSA_PSS_SHA256,
+                RSA_PSS_SHA384,
+                RSA_PSS_SHA512,
+                ED25519,
+                ED448,
+            ]
+        }
+
+        fn verify_server_cert(
+            &self,
+            _end_entity: &rustls::pki_types::CertificateDer<'_>,
+            _intermediates: &[rustls::pki_types::CertificateDer<'_>],
+            _server_name: &rustls::pki_types::ServerName<'_>,
+            _ocsp_response: &[u8],
+            _now: rustls::pki_types::UnixTime,
+        ) -> Result<ServerCertVerified, rustls::Error> {
+            Ok(ServerCertVerified::assertion())
+        }
+    }
+}
+
 impl JsClient {
     pub async fn new(p: JsClientBuilder) -> Result<Self, async_nats::Error> {
+        let JsClientBuilder { ref nats_url, .. } = p;
+
         let mut connect_options = async_nats::ConnectOptions::new()
             .name(&p.name)
             // required for websocket connections
-            .retry_on_initial_connect()
+            .reconnect_delay_callback({
+                let nats_url = p.nats_url.clone();
+                move |i| {
+                    log::warn!("[{i}] problems connecting to {nats_url:?}");
+                    Duration::from_secs(i as u64)
+                }
+            })
             .ping_interval(p.ping_interval.unwrap_or(Duration::from_secs(120)))
             .request_timeout(Some(p.request_timeout.unwrap_or(Duration::from_secs(1))))
             .custom_inbox_prefix(&p.inbox_prefix);
@@ -70,28 +162,40 @@ impl JsClient {
             }
         };
 
+        if p.nats_skip_tls_verification_danger {
+            log::warn!("! configuring TLS client to skip certificate verification. DO NOT RUN THIS IN PRODUCTION !");
+
+            let tls_client = async_nats::rustls::ClientConfig::builder()
+                .dangerous()
+                .with_custom_certificate_verifier(tls_skip_verifier::SkipServerVerification::new())
+                .with_no_client_auth();
+
+            connect_options = connect_options.tls_client_config(tls_client);
+        }
+
+        if let "wss" | "tls" = nats_url.as_ref().scheme() {
+            log::info!("tls with handshake-first enabled.");
+            connect_options = connect_options.tls_first();
+        };
+
         let client = {
-            let nats_url = p
-                .nats_url
-                .parse::<async_nats::ServerAddr>()
-                .context(format!("parsing {} as a NATS server address", &p.nats_url))?;
             let context_msg = format!(
                 "connecting NATS to {nats_url:?} (websocket? {}) with options: {connect_options:?}",
                 nats_url.is_websocket()
             );
             connect_options
-                .connect([nats_url].as_slice())
+                .connect(nats_url.as_ref())
                 .await
                 .context(context_msg)?
         };
         let service_log_prefix = format!("NATS-CLIENT-LOG::{}::", p.name);
         log::info!(
-            "{service_log_prefix}Connected to NATS server at {}",
-            p.nats_url
+            "{service_log_prefix}Connected to NATS server at {:?}",
+            *p.nats_url
         );
 
         let mut js_client = JsClient {
-            url: p.nats_url,
+            url: p.nats_url.as_ref().clone(),
             name: p.name,
             on_msg_published_event: None,
             on_msg_failed_event: None,
@@ -142,11 +246,11 @@ impl JsClient {
     ) -> Result<(), async_nats::error::Error<async_nats::jetstream::context::PublishErrorKind>>
     {
         log::debug!(
-            "{}Called Publish message: subj={}, msg_id={} data={:?}",
+            "{}Called Publish message: subj={}, msg_id={} data={}",
             self.service_log_prefix,
             payload.subject,
             payload.msg_id,
-            payload.data
+            String::from_utf8_lossy(&payload.data),
         );
 
         let now = Instant::now();
