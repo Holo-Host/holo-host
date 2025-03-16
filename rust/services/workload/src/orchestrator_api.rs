@@ -88,7 +88,18 @@ impl OrchestratorWorkloadApi {
         &self,
         msg: Arc<Message>,
     ) -> Result<WorkloadApiResult, ServiceError> {
-        log::debug!("Incoming message for 'WORKLOAD.update'");
+        const SUBJECT: &str = "WORKLOAD.update";
+
+        if msg.subject.to_string() != SUBJECT {
+            return Err(ServiceError::Internal {
+                message: format!(
+                    "received message with subject {} when this method expects {SUBJECT}",
+                    msg.subject
+                ),
+                context: None,
+            });
+        }
+        log::debug!("Incoming message for {SUBJECT}");
         self.process_request(
             msg,
             WorkloadState::Updating,
@@ -110,7 +121,8 @@ impl OrchestratorWorkloadApi {
                     )
                 })?;
 
-                self.workload_collection
+                let _update_result = self
+                    .workload_collection
                     .update_one_within(
                         doc! { "_id":  workload._id },
                         UpdateModifications::Document(doc! { "$set": updated_workload_doc }),
@@ -125,7 +137,7 @@ impl OrchestratorWorkloadApi {
                 Ok(WorkloadApiResult {
                     result: WorkloadResult {
                         status,
-                        workload: None,
+                        workload: Some(workload),
                     },
                     maybe_response_tags: None,
                 })
@@ -207,7 +219,7 @@ impl OrchestratorWorkloadApi {
 
                 let status = WorkloadStatus {
                     id: Some(workload_id),
-                    desired: WorkloadState::Running,
+                    desired: workload.status.desired.clone(),
                     actual: WorkloadState::Assigned,
                 };
 
