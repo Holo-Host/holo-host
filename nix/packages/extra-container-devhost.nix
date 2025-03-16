@@ -73,26 +73,27 @@ let
               holo.nats-server.enable = true;
               holo.nats-server.host = "0.0.0.0";
               services.nats.settings = {
-                accounts = {
-                  SYS = {
-                    users = [
-                      {
-                        user = "admin";
-                        password = "admin";
-                      }
-                    ];
-                  };
-                  HOLO = {
-                    users = [
-                      {
-                        user = "anon";
-                        # password = "admin";
-                      }
-                    ];
-                  };
-                };
-                system_account = "SYS";
-                no_auth_user = "anon";
+                # TODO: re-enable this and replicate the same account structure on the host-agent side.
+                # accounts = {
+                #   SYS = {
+                #     users = [
+                #       {
+                #         user = "admin";
+                #         password = "admin";
+                #       }
+                #     ];
+                #   };
+                #   TESTING = {
+                #     users = [
+                #       {
+                #         user = "anon";
+                #         # password = "admin";
+                #       }
+                #     ];
+                #   };
+                # };
+                # system_account = "SYS";
+                # no_auth_user = "anon";
 
                 jetstream = {
                   # TODO: use "hub" once we support different domains on hub and leafs
