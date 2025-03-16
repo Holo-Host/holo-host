@@ -3842,6 +3842,7 @@ dependencies = [
  "bson",
  "bytes",
  "chrono",
+ "clap 4.5.31",
  "derive_more 1.0.0",
  "dotenv",
  "educe",

@@ -13,19 +13,16 @@ use workload::types::WorkloadResult;
 use crate::agent_cli::{self, RemoteArgs, RemoteCommands};
 
 pub(crate) async fn run(args: RemoteArgs, command: RemoteCommands) -> anyhow::Result<()> {
-    let RemoteArgs {
-        nats_url,
-        nats_skip_tls_verification_danger,
-    } = args;
+    let nats_client = {
+        let nats_url = args.nats_remote_args.nats_url.clone();
+        JsClient::new(JsClientBuilder {
+            nats_remote_args: args.nats_remote_args,
 
-    let nats_client = JsClient::new(JsClientBuilder {
-        nats_url: (&nats_url).into(),
-        nats_skip_tls_verification_danger,
-
-        ..Default::default()
-    })
-    .await
-    .map_err(|e| anyhow::anyhow!("connecting to NATS via {nats_url:?}: {e:?}"))?;
+            ..Default::default()
+        })
+        .await
+        .map_err(|e| anyhow::anyhow!("connecting to NATS via {nats_url:?}: {e:?}"))
+    }?;
 
     match command {
         agent_cli::RemoteCommands::Ping {} => {

@@ -146,8 +146,8 @@ let
               holo.host-agent = {
                 enable = true;
                 rust = {
-                  log = "trace";
-                  backtrace = "trace";
+                  log = "trace,async_nats=warn";
+                  backtrace = "1";
                 };
 
                 # TODO: i suspect there's a bug where the inventory prevents the workload messages from being processed
@@ -184,8 +184,8 @@ let
               holo.orchestrator = {
                 enable = true;
                 rust = {
-                  log = "trace";
-                  backtrace = "full";
+                  log = "trace,async_nats=warn";
+                  backtrace = "1";
                 };
 
                 nats.hub.url = "wss://dev-hub:${builtins.toString config.containers.dev-hub.config.holo.nats-server.websocket.externalPort}";
