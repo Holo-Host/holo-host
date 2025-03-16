@@ -45,7 +45,8 @@ where
         serde_json::from_slice::<T>(&payload_buf).map_err(|e| {
             let err_msg = format!("Failed to deserialize payload: {}", e);
             log::error!(
-                "Deserialization error for subject '{}': {}",
+                "Error deserializing into {} for subject '{}': {}",
+                std::any::type_name::<T>(),
                 subject,
                 err_msg
             );
