@@ -1,3 +1,5 @@
+use crate::types::NatsRemoteArgs;
+
 use super::{
     jetstream_service::JsStreamService,
     types::{
@@ -122,13 +124,21 @@ pub mod tls_skip_verifier {
 
 impl JsClient {
     pub async fn new(p: JsClientBuilder) -> Result<Self, async_nats::Error> {
-        let JsClientBuilder { ref nats_url, .. } = p;
+        let JsClientBuilder {
+            nats_remote_args:
+                NatsRemoteArgs {
+                    ref nats_url,
+                    nats_skip_tls_verification_danger,
+                    ..
+                },
+            ..
+        } = p;
 
         let mut connect_options = async_nats::ConnectOptions::new()
             .name(&p.name)
             // required for websocket connections
             .reconnect_delay_callback({
-                let nats_url = p.nats_url.clone();
+                let nats_url = nats_url.clone();
                 move |i| {
                     log::warn!("[{i}] problems connecting to {nats_url:?}");
                     Duration::from_secs(i as u64)
@@ -138,10 +148,7 @@ impl JsClient {
             .request_timeout(Some(p.request_timeout.unwrap_or(Duration::from_secs(1))))
             .custom_inbox_prefix(&p.inbox_prefix);
 
-        if let (Some(user), Some(password_file)) = (p.maybe_nats_user, p.maybe_nats_password_file) {
-            let pass = std::fs::read_to_string(&password_file)
-                .context(format!("reading {password_file:?}"))?;
-
+        if let Some((user, pass)) = p.nats_remote_args.maybe_user_password()? {
             connect_options = connect_options.user_and_password(user, pass);
         }
 
@@ -162,7 +169,7 @@ impl JsClient {
             }
         };
 
-        if p.nats_skip_tls_verification_danger {
+        if nats_skip_tls_verification_danger {
             log::warn!("! configuring TLS client to skip certificate verification. DO NOT RUN THIS IN PRODUCTION !");
 
             let tls_client = async_nats::rustls::ClientConfig::builder()
@@ -191,11 +198,11 @@ impl JsClient {
         let service_log_prefix = format!("NATS-CLIENT-LOG::{}::", p.name);
         log::info!(
             "{service_log_prefix}Connected to NATS server at {:?}",
-            *p.nats_url
+            nats_url
         );
 
         let mut js_client = JsClient {
-            url: p.nats_url.as_ref().clone(),
+            url: nats_url.as_ref().clone(),
             name: p.name,
             on_msg_published_event: None,
             on_msg_failed_event: None,
