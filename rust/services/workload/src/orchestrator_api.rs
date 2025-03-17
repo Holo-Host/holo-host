@@ -1,11 +1,15 @@
 /*
-Endpoints & Managed Subjects:
+Current Endpoints & Managed Subjects:
     - `add_workload`: handles the "WORKLOAD.add" subject
     - `update_workload`: handles the "WORKLOAD.update" subject
     - `delete_workload`: handles the "WORKLOAD.delete" subject
     - `handle_db_insertion`: handles the "WORKLOAD.insert" subject // published by mongo<>nats connector
     - `handle_db_modification`: handles the "WORKLOAD.modify" subject // published by mongo<>nats connector
     - `handle_status_update`: handles the "WORKLOAD.handle_status_update" subject // published by hosting agent
+
+Refactored:
+    - `WORKLOAD.command`: request changes to a workload
+    - `WORKLOAD.event`: information about events that factually happened, .e.g. during the handling of a command
 */
 
 use super::{types::WorkloadApiResult, WorkloadServiceApi};

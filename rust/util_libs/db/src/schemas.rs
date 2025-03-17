@@ -376,7 +376,7 @@ pub struct Workload {
     pub min_hosts: i32,
     /// System requirements for the workload
     pub system_specs: SystemSpecs,
-    /// List of hosts running this workload
+    /// List of hosts this workload is assigned to
     pub assigned_hosts: Vec<ObjectId>,
     /// Current status of the workload
     pub status: WorkloadStatus,
