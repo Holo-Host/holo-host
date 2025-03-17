@@ -414,10 +414,10 @@ impl Default for Workload {
     /// Creates a default workload configuration with:
     /// - Version 0.0.0
     /// - Minimum 1 host
-    /// - 512 GiB drive space
-    /// - 20 cores
-    /// - 200 Mbps network speed
-    /// - 80% uptime requirement
+    /// - 1 GiB drive space
+    /// - 1 cores
+    /// - 0 Mbps network speed
+    /// - 0% uptime requirement
     fn default() -> Self {
         let version = semver::Version {
             major: 0,
@@ -441,12 +441,9 @@ impl Default for Workload {
             assigned_developer: ObjectId::new(),
             min_hosts: 1,
             system_specs: SystemSpecs {
-                capacity: Capacity {
-                    drive: 512,
-                    cores: 20,
-                },
-                avg_network_speed: 200,
-                avg_uptime: 0.8,
+                capacity: Capacity { drive: 1, cores: 1 },
+                avg_network_speed: 0,
+                avg_uptime: 0f64,
             },
             assigned_hosts: Vec::new(),
             status: WorkloadStatus {

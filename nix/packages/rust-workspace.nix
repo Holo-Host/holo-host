@@ -184,6 +184,8 @@ craneLib.buildPackage (
                   ln -s $bin $out/bin/
                 done
               '')
+
+              pkgs.pkg-config
             ]
             ++ (pkgs.lib.lists.optionals pkgs.stdenv.isAarch64 [
               # TODO: get full mongodb built for aarch64
@@ -192,6 +194,10 @@ craneLib.buildPackage (
             ++ (pkgs.lib.lists.optionals (!pkgs.stdenv.isAarch64) [
               pkgs.mongodb
             ]);
+
+          buildInputs = [
+            pkgs.openssl.dev
+          ];
           partitions = 1;
           partitionType = "count";
         }

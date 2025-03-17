@@ -40,10 +40,10 @@ let
         orchestratorLocalAddress = "192.168.42.47";
         hostMachineId = "f0b9a2b7a95848389fdb43eda8139569";
 
-        devHubFqdn = config.containers.dev-hub.config.networking.fqdn;
         hosts = {
-          "${hubLocalAddress}" = [ devHubFqdn ];
+          "${hubLocalAddress}" = [ "dev-hub" ];
         };
+
       in
       {
         containers.dev-hub = {
@@ -64,34 +64,36 @@ let
                 flake.nixosModules.holo-nats-server
               ];
 
-              networking.hostName = "hub";
-              networking.domain = "local";
+              networking.hosts = hosts;
+
+              # networking.hostName = "hub";
+              # networking.domain = "local";
 
               # holo.orchestrator.enable = true;
               holo.nats-server.enable = true;
               holo.nats-server.host = "0.0.0.0";
               services.nats.settings = {
-                accounts = {
-                  SYS = {
-                    users = [
-                      {
-                        user = "admin";
-                        password = "admin";
-                      }
-                    ];
-                  };
-                  HOLO = {
-                    users = [
-                      {
-                        user = "anon";
-                        # password = "admin";
-                      }
-                    ];
-
-                  };
-                };
-                system_account = "SYS";
-                no_auth_user = "anon";
+                # TODO: re-enable this and replicate the same account structure on the host-agent side.
+                # accounts = {
+                #   SYS = {
+                #     users = [
+                #       {
+                #         user = "admin";
+                #         password = "admin";
+                #       }
+                #     ];
+                #   };
+                #   TESTING = {
+                #     users = [
+                #       {
+                #         user = "anon";
+                #         # password = "admin";
+                #       }
+                #     ];
+                #   };
+                # };
+                # system_account = "SYS";
+                # no_auth_user = "anon";
 
                 jetstream = {
                   # TODO: use "hub" once we support different domains on hub and leafs
@@ -144,14 +146,14 @@ let
               holo.host-agent = {
                 enable = true;
                 rust = {
-                  log = "trace";
-                  backtrace = "trace";
+                  log = "trace,async_nats=warn";
+                  backtrace = "1";
                 };
 
                 # TODO: i suspect there's a bug where the inventory prevents the workload messages from being processed
                 extraDaemonizeArgs.host-inventory-disable = false;
 
-                nats.hub.url = "wss://${devHubFqdn}:${builtins.toString config.containers.dev-hub.config.holo.nats-server.websocket.externalPort}";
+                nats.hub.url = "wss://dev-hub:${builtins.toString config.containers.dev-hub.config.holo.nats-server.websocket.externalPort}";
                 nats.hub.tlsInsecure = true;
                 nats.store_dir = "/var/lib/holo-host-agent/store_dir";
               };
@@ -182,11 +184,11 @@ let
               holo.orchestrator = {
                 enable = true;
                 rust = {
-                  log = "trace";
-                  backtrace = "full";
+                  log = "trace,async_nats=warn";
+                  backtrace = "1";
                 };
 
-                nats.hub.url = "wss://{devHubFqdn}:${builtins.toString config.containers.dev-hub.config.holo.nats-server.websocket.externalPort}";
+                nats.hub.url = "wss://dev-hub:${builtins.toString config.containers.dev-hub.config.holo.nats-server.websocket.externalPort}";
                 nats.hub.tlsInsecure = true;
 
                 # TODO: actually provide an instance

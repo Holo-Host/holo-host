@@ -3,19 +3,23 @@
     NB: This setup expects the `nats-server` binary to be locally installed and accessible.
 -------- */
 use anyhow::Context;
+use async_nats::ServerAddr;
 use serde::Serialize;
 use serde_with::skip_serializing_none;
 use std::fmt::Debug;
 use std::fs::File;
 use std::io::Write;
 use std::path::PathBuf;
-use std::process::Stdio; // Child, Command,
+use std::process::Stdio;
+use std::str::FromStr;
+// Child, Command,
 use std::sync::Arc;
 use tokio::process::{Child, Command};
 use tokio::sync::Mutex;
+use url::Host;
 
 pub const LEAF_SERVER_CONFIG_PATH: &str = "test_leaf_server.conf";
-pub const LEAF_SERVER_DEFAULT_LISTEN_PORT: u16 = 4111;
+pub const LEAF_SERVER_DEFAULT_LISTEN_PORT: u16 = 4222;
 
 #[derive(Serialize, Debug, Clone)]
 pub struct JetStreamConfig {
@@ -24,11 +28,11 @@ pub struct JetStreamConfig {
     pub max_file_store: u64,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Serialize, Clone)]
 pub struct LoggingOptions {
     pub debug: bool,
     pub trace: bool,
-    pub longtime: bool,
+    pub logtime: bool,
 }
 
 #[skip_serializing_none]
@@ -56,33 +60,39 @@ impl Default for LeafNodeRemoteTlsConfig {
 
 #[derive(Debug, Clone)]
 pub struct LeafServer {
-    // needs to be unique
-    // [1465412] [ERR] 65.108.153.204:443 - lid_ws:5 - Leafnode Error 'Duplicate Remote LeafNode Connection'
-    pub name: Option<String>,
+    nats_config: NatsConfig,
     pub config_path: String,
-    host: String,
-    pub port: u16,
-    jetstream_config: JetStreamConfig,
-    pub logging: LoggingOptions,
-    leaf_node_remotes: Vec<LeafNodeRemote>,
     server_handle: Arc<Mutex<Option<Child>>>,
     server_command: Arc<Mutex<Option<tokio::process::Command>>>,
 }
 
-// TODO: consider merging this with the `LeafServer` struct
-#[derive(Serialize)]
+#[derive(Clone, Serialize, Debug)]
 struct NatsConfig {
+    // needs to be unique
+    // [1465412] [ERR] 65.108.153.204:443 - lid_ws:5 - Leafnode Error 'Duplicate Remote LeafNode Connection'
     server_name: Option<String>,
-    host: String,
+    #[serde(serialize_with = "serialize_host")]
+    host: Host<String>,
     port: u16,
     jetstream: JetStreamConfig,
     leafnodes: LeafNodes,
-    debug: bool,
-    trace: bool,
-    logtime: bool,
+    #[serde(flatten)]
+    logging: LoggingOptions,
+    // debug: bool,
+    // trace: bool,
+    // logtime: bool,
 }
 
-#[derive(Serialize)]
+fn serialize_host<S>(t: &Host<String>, s: S) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    let serialized = t.to_string().serialize(s)?;
+
+    Ok(serialized)
+}
+
+#[derive(Debug, Clone, Serialize)]
 struct LeafNodes {
     remotes: Vec<LeafNodeRemote>,
 }
@@ -93,20 +103,24 @@ impl LeafServer {
     pub fn new(
         server_name: Option<&str>,
         new_config_path: &str,
-        host: &str,
+        host: Host<String>,
         port: u16,
         jetstream_config: JetStreamConfig,
         logging: LoggingOptions,
         leaf_node_remotes: Vec<LeafNodeRemote>,
     ) -> Self {
         Self {
-            name: server_name.map(ToString::to_string),
+            nats_config: NatsConfig {
+                server_name: server_name.map(ToString::to_string),
+                host,
+                port,
+                jetstream: jetstream_config,
+                logging,
+                leafnodes: LeafNodes {
+                    remotes: leaf_node_remotes,
+                },
+            },
             config_path: new_config_path.to_string(),
-            host: host.to_string(),
-            port,
-            jetstream_config,
-            logging,
-            leaf_node_remotes,
             server_handle: Default::default(),
             server_command: Default::default(),
         }
@@ -116,20 +130,7 @@ impl LeafServer {
     pub async fn run(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         let mut config_file = File::create(&self.config_path)?;
 
-        let config = NatsConfig {
-            server_name: self.name.clone(),
-            host: self.host.clone(),
-            port: self.port,
-            jetstream: self.jetstream_config.clone(),
-            leafnodes: LeafNodes {
-                remotes: self.leaf_node_remotes.clone(),
-            },
-
-            debug: self.logging.debug,
-            trace: self.logging.trace,
-            logtime: self.logging.longtime,
-        };
-
+        let config = self.nats_config.clone();
         let config_str = serde_json::to_string_pretty(&config)?;
 
         log::trace!("NATS leaf config:\n{config_str}");
@@ -170,7 +171,10 @@ impl LeafServer {
 
         // TODO: wait for a readiness indicator
 
-        log::info!("NATS Leaf Server is running at {}:{}", self.host, self.port);
+        log::info!(
+            "NATS Leaf Server is running at {}",
+            self.server_addr()?.into_inner()
+        );
 
         Ok(())
     }
@@ -198,5 +202,12 @@ impl LeafServer {
         self.server_command = Default::default();
 
         Ok(())
+    }
+
+    pub fn server_addr(&self) -> anyhow::Result<ServerAddr> {
+        Ok(ServerAddr::from_str(&format!(
+            "{}:{}",
+            self.nats_config.host, self.nats_config.port
+        ))?)
     }
 }

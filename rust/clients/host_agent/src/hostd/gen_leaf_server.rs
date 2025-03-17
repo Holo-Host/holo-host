@@ -5,11 +5,12 @@ use nats_utils::{
     jetstream_client,
     leaf_server::{
         JetStreamConfig, LeafNodeRemote, LeafNodeRemoteTlsConfig, LeafServer, LoggingOptions,
-        LEAF_SERVER_CONFIG_PATH, LEAF_SERVER_DEFAULT_LISTEN_PORT,
+        LEAF_SERVER_CONFIG_PATH,
     },
-    types::JsClientBuilder,
+    types::{DeServerAddr, JsClientBuilder, NatsRemoteArgs},
 };
 use tempfile::tempdir;
+use url::Host;
 
 #[allow(clippy::too_many_arguments)]
 pub async fn run(
@@ -20,13 +21,9 @@ pub async fn run(
     hub_url: String,
     hub_tls_insecure: bool,
     nats_connect_timeout_secs: u64,
-    nats_url: &str,
+    leaf_server_listen_host: Host<String>,
+    leaf_server_listen_port: u16,
 ) -> anyhow::Result<(jetstream_client::JsClient, LeafServer)> {
-    let leaf_client_conn_domain = "127.0.0.1";
-    let leaf_client_conn_port = std::env::var("NATS_LISTEN_PORT")
-        .map(|var| var.parse().expect("can't parse into number"))
-        .unwrap_or_else(|_| LEAF_SERVER_DEFAULT_LISTEN_PORT);
-
     let (
         store_dir,
         _, // need to prevent the tempdir from dropping
@@ -51,13 +48,13 @@ pub async fn run(
         debug: true, // NB: This logging is a blocking action, only run in non-prod
         // TODO: make this configurable
         trace: false, // NB: This logging is a blocking action, only run in non-prod
-        longtime: false,
+        logtime: false,
     };
 
     // Instantiate the Leaf Server with the user cred file
     let leaf_node_remotes = vec![LeafNodeRemote {
-        // sys account user (automated)
         url: hub_url,
+        // sys account user (automated)
         credentials: user_creds_path.clone(),
         tls: LeafNodeRemoteTlsConfig {
             insecure: hub_tls_insecure,
@@ -77,8 +74,8 @@ pub async fn run(
     let mut leaf_server = LeafServer::new(
         Some(&server_name),
         LEAF_SERVER_CONFIG_PATH,
-        leaf_client_conn_domain,
-        leaf_client_conn_port,
+        leaf_server_listen_host,
+        leaf_server_listen_port,
         jetstream_config,
         logging_options,
         leaf_node_remotes,
@@ -92,25 +89,26 @@ pub async fn run(
     // Spin up Nats Client
     // Nats takes a moment to become responsive, so we try to connecti in a loop for a few seconds.
     // in case of a connection loss to Nats this client is self-recovering.
-    log::info!("nats_url : {nats_url}");
+    let nats_url = leaf_server.server_addr()?;
+    log::info!("nats_url : {nats_url:?}");
 
     const HOST_AGENT_CLIENT_NAME: &str = "Host Agent Bare";
 
     let nats_client = tokio::select! {
         client = async {loop {
                 let host_workload_client = jetstream_client::JsClient::new(JsClientBuilder {
-                    nats_url: nats_url.to_string(),
+                    nats_remote_args: NatsRemoteArgs {
+                        nats_url: DeServerAddr(nats_url.clone()),
+                        ..Default::default()
+                    },
                     name:HOST_AGENT_CLIENT_NAME.to_string(),
-                    inbox_prefix: Default::default(),
-                    credentials: Default::default(),
                     ping_interval:Some(Duration::from_secs(10)),
                     request_timeout:Some(Duration::from_secs(29)),
-                    listeners: Default::default(),
 
                     ..Default::default()
                 })
                 .await
-                .map_err(|e| anyhow::anyhow!("connecting to NATS via {nats_url}: {e:?}"));
+                .map_err(|e| anyhow::anyhow!("connecting to NATS via {nats_url:?}: {e:?}"));
 
                 match host_workload_client {
                     Ok(client) => break client,
@@ -125,7 +123,7 @@ pub async fn run(
             log::debug!("will time out waiting for NATS after {nats_connect_timeout_secs:?}");
             tokio::time::sleep(tokio::time::Duration::from_secs(nats_connect_timeout_secs))
          } => {
-            anyhow::bail!("timed out waiting for NATS on {nats_url}");
+            anyhow::bail!("timed out waiting for NATS on {nats_url:?}");
         }
     };
 

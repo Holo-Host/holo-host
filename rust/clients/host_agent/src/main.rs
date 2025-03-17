@@ -50,8 +50,13 @@ async fn main() -> anyhow::Result<()> {
         }
         agent_cli::CommandScopes::Host { command } => host_cmds::host_command(&command)?,
         agent_cli::CommandScopes::Support { command } => support_cmds::support_command(&command)?,
-        agent_cli::CommandScopes::Remote { nats_url, command } => {
-            remote_cmds::run(nats_url, command).await?
+        agent_cli::CommandScopes::Remote {
+            remote_args,
+            command,
+        } => {
+            nats_utils::jetstream_client::tls_skip_verifier::early_in_process_install_crypto_provider();
+
+            remote_cmds::run(remote_args, command).await?
         }
     }
 
@@ -75,7 +80,8 @@ async fn daemonize(args: &DaemonzeArgs) -> anyhow::Result<()> {
         args.hub_url.clone(),
         args.hub_tls_insecure,
         args.nats_connect_timeout_secs,
-        &args.nats_url,
+        args.leaf_server_listen_host.clone(),
+        args.leaf_server_listen_port,
     )
     .await?;
     // TODO: would it be a good idea to reuse this client in the workload_manager and elsewhere later on?
@@ -88,7 +94,7 @@ async fn daemonize(args: &DaemonzeArgs) -> anyhow::Result<()> {
     let host_client = hostd::host_client::run(
         &host_id,
         &args.nats_leafnode_client_creds_path,
-        &args.nats_url,
+        &leaf_server.server_addr()?,
     )
     .await?;
 

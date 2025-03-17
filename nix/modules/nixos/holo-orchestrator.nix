@@ -125,6 +125,9 @@ in
         }
         // lib.attrsets.optionalAttrs (cfg.nats.hub.passwordFile != null) {
           NATS_PASSWORD_FILE = "%d/NATS_PASSWORD_FILE";
+        }
+        // lib.attrsets.optionalAttrs cfg.nats.hub.tlsInsecure {
+          NATS_SKIP_TLS_VERIFICATION_DANGER = "true";
         };
 
       serviceConfig.LoadCredential = lib.lists.optional (cfg.nats.hub.passwordFile != null) [
