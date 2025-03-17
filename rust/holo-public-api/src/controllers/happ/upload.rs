@@ -1,19 +1,13 @@
 use std::fs;
 use std::io::Write;
 
-use actix_web::{post, web, HttpMessage, HttpRequest, HttpResponse, Responder};
-use aws_sdk_s3::primitives::ByteStream;
-use aws_sdk_s3::types::{CompletedMultipartUpload, CompletedPart};
+use actix_web::{post, HttpMessage, HttpRequest, HttpResponse, Responder};
 use actix_multipart::Multipart;
 use futures_util::StreamExt;
 use serde::Serialize;
 use utoipa::{OpenApi, ToSchema};
 use blake3;
-
-use crate::providers::config::AppConfig;
 use crate::providers::{error_response::ErrorResponse, jwt::AccessTokenClaims};
-
-const MIN_PART_SIZE: usize = 5 * 1024 * 1024; // 5 MB
 
 #[derive(OpenApi)]
 #[openapi(
