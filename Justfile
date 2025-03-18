@@ -112,8 +112,26 @@ dev-logs +args="-f -n200":
     --unit holo-host-agent \
     {{args}}
 
+# (compat) follows the logs for the applications services from the dev containers
+# requires sudo because the containers log into the system journal
+dev-logs-compat +args="-f -n100":
+    #!/usr/bin/env bash
+    set -xeE
+    (sudo machinectl shell dev-host /run/current-system/sw/sbin/journalctl --unit holo-host-agent {{args}}) &
+    pid_hostagent=$!
+    (sudo machinectl shell dev-orch /run/current-system/sw/sbin/journalctl --unit holo-orchestrator {{args}}) &
+    pid_orchestrator=$!
+    trap 'kill $pid_hostagent $pid_orchestrator' SIGINT SIGTERM EXIT
+    echo press CTRL+C **twice** to exit
+    waitpid $pid_hostagent $pid_orchestrator
+
 
 # re-create the dev containers and start following the relevant logs
 dev-cycle-logs:
     just dev-cycle
     just dev-logs
+
+# re-create the dev containers and start following the relevant logs in compat mode
+dev-cycle-logs-compat:
+    just dev-cycle
+    just dev-logs-compat
