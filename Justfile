@@ -63,7 +63,7 @@ host-agent-remote +args="":
     set -xeE
 
     export RUST_BACKTRACE=1
-    export RUST_LOG=trace,async_nats=error
+    export RUST_LOG=mio=error,rustls=error,async_nats=error,trace
 
     cargo run --bin host_agent -- remote {{args}}
 
@@ -71,8 +71,8 @@ host-agent-remote-hc desired-status +args="":
     #!/usr/bin/env bash
     set -xeE
 
-    # export RUST_BACKTRACE=1
-    export RUST_LOG=trace,async_nats=error
+    export RUST_BACKTRACE=1
+    export RUST_LOG=mio=error,rustls=error,async_nats=error,trace
 
     # TODO(backlog): run a service on the host NATS instance that can be queried for the host-id
     # devhost_machine_id="$(sudo machinectl shell dev-host /bin/sh -c "cat /etc/machine-id" | grep -oE '[a-z0-9]+')"
@@ -93,7 +93,7 @@ dev-host-host-agent-remote-hc desired-status:
 dev-hub-host-agent-remote-hc desired-status subject="WORKLOAD.update":
     #!/usr/bin/env bash
     set -xeE
-    export NATS_URL="ws://dev-hub:4223"
+    export NATS_URL="wss://dev-hub:443"
     export NATS_SKIP_TLS_VERIFICATION_DANGER="true"
     just host-agent-remote-hc {{desired-status}} --subject-override {{subject}} --workload-only
 
