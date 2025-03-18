@@ -55,7 +55,7 @@ impl HostWorkloadApi {
         };
 
         // TODO: consider status.actual to inform assumptions towards the current state
-        // TODO: run a seperate thread to send status updates while this is processed
+        // TODO: spawn longer-running tasks and report back Pending, and set up a periodic status updates while the spawned task is running
 
         let desired_state = &workload.status.desired;
         let actual_status = match desired_state {
@@ -112,8 +112,6 @@ impl HostWorkloadApi {
                 anyhow::bail!("unsupported desired state {desired_state:?}")
             }
         };
-
-        // TODO: send a reply message
 
         Ok((
             WorkloadStatus {

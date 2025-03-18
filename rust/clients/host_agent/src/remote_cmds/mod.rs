@@ -8,7 +8,7 @@ use nats_utils::{
     jetstream_client::JsClient,
     types::{JsClientBuilder, PublishInfo},
 };
-use workload::types::WorkloadResult;
+use workload::types::{WorkloadResult, WorkloadServiceSubjects};
 
 use crate::agent_cli::{self, RemoteArgs, RemoteCommands};
 
@@ -61,7 +61,7 @@ pub(crate) async fn run(args: RemoteArgs, command: RemoteCommands) -> anyhow::Re
                 metadata: Default::default(),
                 assigned_developer: Default::default(),
                 version: Default::default(),
-                min_hosts: Default::default(),
+                min_hosts: 1,
                 assigned_hosts: Default::default(),
 
                 ..Default::default() // ---
@@ -79,19 +79,22 @@ pub(crate) async fn run(args: RemoteArgs, command: RemoteCommands) -> anyhow::Re
             }
             .context("serializing workload payload")?;
 
-            let subject_suffix = {
+            let subject = if let Some(subject) = subject_override {
+                subject
+            } else {
                 use WorkloadStateDiscriminants::*;
 
-                match state_discriminant {
-                    Installed | Running => "update",
-                    Uninstalled | Deleted | Removed => "update",
-                    Updated => "update",
-                    unsupported => anyhow::bail!("don't knwo where to send {unsupported:?}"),
-                }
+                format!(
+                    "WORKLOAD.{host_id}.{}",
+                    match state_discriminant {
+                        Installed | Running => WorkloadServiceSubjects::Command,
+                        Uninstalled | Deleted | Removed => WorkloadServiceSubjects::Command,
+                        Updated => WorkloadServiceSubjects::Command,
+                        Reported => WorkloadServiceSubjects::Command,
+                        unsupported => anyhow::bail!("don't know where to send {unsupported:?}"),
+                    }
+                )
             };
-
-            let subject =
-                subject_override.unwrap_or_else(|| format!("WORKLOAD.{host_id}.{subject_suffix}"));
 
             log::debug!("publishing to {subject}:\n{payload:?}");
 
@@ -107,9 +110,9 @@ pub(crate) async fn run(args: RemoteArgs, command: RemoteCommands) -> anyhow::Re
                 log::info!("request completed. response: {response:#?}");
             };
 
-            // Only exit program when explicitly requested
-            log::info!("waiting until ctrl+c is pressed.");
-            tokio::signal::ctrl_c().await?;
+            // // Only exit program when explicitly requested
+            // log::info!("waiting until ctrl+c is pressed.");
+            // tokio::signal::ctrl_c().await?;
         }
     }
 

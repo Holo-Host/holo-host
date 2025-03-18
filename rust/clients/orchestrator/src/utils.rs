@@ -23,6 +23,11 @@ where
     Ok(())
 }
 
+// TODO: either create a service that handles these or refactor error handling altogether
+pub const WORKLOAD_ERROR_INBOX_SUBJECT: &str = "WORKLOAD.ERROR.INBOX";
+
+/// `is_prefix == false` is considered an error case
+// TODO(correctness): ensure these errors are forwarded to a human being in some way
 pub fn create_callback_subject_to_host(
     is_prefix: bool,
     tag_name: String,
@@ -43,8 +48,8 @@ pub fn create_callback_subject_to_host(
         log::error!(
             "WORKLOAD Error: Failed to find {tag_name}.
             Unable to send orchestrator response to hosting agent for subject {sub_subject_name}.
-            Fwding response to `WORKLOAD.ERROR.INBOX`."
+            Fwding response to `{WORKLOAD_ERROR_INBOX_SUBJECT}`."
         );
-        vec!["WORKLOAD.ERROR.INBOX".to_string()]
+        vec![WORKLOAD_ERROR_INBOX_SUBJECT.to_string()]
     })
 }

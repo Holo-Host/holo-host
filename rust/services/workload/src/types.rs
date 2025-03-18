@@ -11,7 +11,7 @@ pub struct HostIdJSON {
     pub device_id: String,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, AsRefStr)]
+#[derive(Serialize, Deserialize, Clone, Debug, AsRefStr, strum_macros::Display)]
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 pub enum WorkloadServiceSubjects {
@@ -24,6 +24,8 @@ pub enum WorkloadServiceSubjects {
     SendStatus,
     Install,
     Uninstall,
+    // /// TODO: Command replaces Add, Update, Delete, Install, Uninstall, SendStatus
+    Command,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

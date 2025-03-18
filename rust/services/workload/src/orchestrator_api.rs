@@ -7,13 +7,16 @@ Current Endpoints & Managed Subjects:
     - `handle_db_modification`: handles the "WORKLOAD.modify" subject // published by mongo<>nats connector
     - `handle_status_update`: handles the "WORKLOAD.handle_status_update" subject // published by hosting agent
 
-Refactored:
-    - `WORKLOAD.command`: request changes to a workload
-    - `WORKLOAD.event`: information about events that factually happened, .e.g. during the handling of a command
+TODO(refactor) discuss the following alternative model:
+    - `COMMAND.CHANGE_WORKLOAD`: request changes to a workload
+    - `EVENT.WORKLOAD.CHANGED`: information about events that factually happened, .e.g. during the handling of a command
 */
 
 use super::{types::WorkloadApiResult, WorkloadServiceApi};
-use crate::types::{HostIdJSON, WorkloadResult};
+use crate::{
+    types::{HostIdJSON, WorkloadResult},
+    TAG_MAP_PREFIX_ASSIGNED_HOST,
+};
 use anyhow::Result;
 use async_nats::Message;
 use bson::{self, doc, oid::ObjectId, to_document, Bson};
@@ -159,7 +162,21 @@ impl OrchestratorWorkloadApi {
             msg,
             WorkloadState::Deleted,
             WorkloadState::Error,
-            |workload_id: ObjectId| async move {
+            |workload: Workload| async move {
+                let workload_id = if let Some(workload_id) = workload._id {
+                    workload_id
+                } else {
+                    return Ok(WorkloadApiResult {
+                        result: WorkloadResult {
+                            status: WorkloadStatus {
+                                ..workload.status.clone()
+                            },
+                            workload: Some(workload),
+                        },
+                        maybe_response_tags: None,
+                    });
+                };
+
                 let status = WorkloadStatus {
                     id: Some(workload_id),
                     desired: WorkloadState::Removed,
@@ -209,7 +226,7 @@ impl OrchestratorWorkloadApi {
         log::debug!("Incoming message for 'WORKLOAD.insert'");
         self.process_request(
             msg,
-            WorkloadState::Assigned,
+            WorkloadState::Installed,
             WorkloadState::Error,
             |workload: schemas::Workload| async move {
                 log::debug!("New workload to assign. Workload={:#?}", workload);
@@ -279,8 +296,10 @@ impl OrchestratorWorkloadApi {
                 for (index, host_id) in assigned_host_ids.iter().cloned().enumerate() {
                     let assigned_host = eligible_hosts.iter().find(|h| h._id == host_id).ok_or_else(|| ServiceError::internal("Error: Failed to locate host device id from assigned host ids.".to_string(), Some("Unable to forward workload to Host.".to_string())))?;
 
-                    tag_map.insert(format!("assigned_host_{}", index), assigned_host.device_id.to_string());
+                    tag_map.insert(format!("{TAG_MAP_PREFIX_ASSIGNED_HOST}{}", index), assigned_host.device_id.to_string());
                 }
+
+                log::debug!("tag_map: {tag_map:?}");
 
                 Ok(WorkloadApiResult {
                     result: WorkloadResult {
@@ -395,7 +414,7 @@ impl OrchestratorWorkloadApi {
                             )
                         })?;
                     tag_map.insert(
-                        format!("assigned_host_{}", index),
+                        format!("{TAG_MAP_PREFIX_ASSIGNED_HOST}{}", index),
                         assigned_host.device_id.to_string(),
                     );
                 }
@@ -449,7 +468,10 @@ impl OrchestratorWorkloadApi {
                     .collect::<Result<Vec<ObjectId>, ServiceError>>()?;
 
                 for (index, host_pubkey) in host_ids.iter().enumerate() {
-                    tag_map.insert(format!("assigned_host_{}", index), host_pubkey.to_hex());
+                    tag_map.insert(
+                        format!("{TAG_MAP_PREFIX_ASSIGNED_HOST}{}", index),
+                        host_pubkey.to_hex(),
+                    );
                 }
 
                 log::info!("{} Hosts={:?}", log_msg, hosts);
