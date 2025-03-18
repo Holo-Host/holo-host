@@ -34,22 +34,27 @@ pub fn create_callback_subject_to_host(
     sub_subject_name: String,
 ) -> ResponseSubjectsGenerator {
     Arc::new(move |tag_map: HashMap<String, String>| -> Vec<String> {
-        if is_prefix {
-            let matching_tags = tag_map.into_iter().fold(vec![], |mut acc, (k, v)| {
-                if k.starts_with(&tag_name) {
-                    acc.push(v)
-                }
-                acc
-            });
-            return matching_tags;
-        } else if let Some(tag) = tag_map.get(&tag_name) {
-            return vec![format!("{}.{}", tag, sub_subject_name)];
-        }
-        log::error!(
-            "WORKLOAD Error: Failed to find {tag_name}.
+        if !is_prefix {
+            log::error!(
+                "WORKLOAD Error: Failed to find {tag_name}.
             Unable to send orchestrator response to hosting agent for subject {sub_subject_name}.
             Fwding response to `{WORKLOAD_ERROR_INBOX_SUBJECT}`."
-        );
-        vec![WORKLOAD_ERROR_INBOX_SUBJECT.to_string()]
+            );
+            return vec![WORKLOAD_ERROR_INBOX_SUBJECT.to_string()];
+        }
+
+        tag_map
+            .into_iter()
+            .filter_map(|(k, v)| {
+                if k.starts_with(&tag_name)
+                // TODO(double-check): this condition is probbaly redudant
+                || k == tag_name
+                {
+                    Some(format!("{v}.{sub_subject_name}"))
+                } else {
+                    None
+                }
+            })
+            .collect()
     })
 }
