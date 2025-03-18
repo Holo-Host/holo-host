@@ -15,7 +15,7 @@ This client is responsible for:
 */
 
 use super::utils::{add_workload_consumer, create_callback_subject_to_host};
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use mongodb::Client as MongoDBClient;
 use nats_utils::{
     generate_service_call,
@@ -42,18 +42,12 @@ pub async fn run(
         version: WORKLOAD_SRV_VERSION.to_string(),
         service_subject: WORKLOAD_SRV_SUBJ.to_string(),
     };
-    orchestrator_client
-        .add_js_service(workload_stream_service)
-        .await?;
 
     // Register Workload Streams for Orchestrator to consume and proceess
     // NB: These subjects are published by external Developer (via external api), the Nats-DB-Connector, or the Hosting Agent
     let workload_service = orchestrator_client
-        .get_js_service(WORKLOAD_SRV_NAME.to_string())
-        .await
-        .ok_or(anyhow!(
-            "Failed to locate Workload Service. Unable to spin up Orchestrator Workl    oad Service."
-        ))?;
+        .add_js_service(workload_stream_service)
+        .await?;
 
     // Subjects published by Developer:
     add_workload_consumer(
@@ -62,7 +56,7 @@ pub async fn run(
             WorkloadServiceSubjects::Add,
             generate_service_call!(workload_api, add_workload),
         ),
-        workload_service,
+        &workload_service,
     )
     .await?;
 
@@ -72,7 +66,7 @@ pub async fn run(
             WorkloadServiceSubjects::Update,
             generate_service_call!(workload_api, update_workload),
         ),
-        workload_service,
+        &workload_service,
     )
     .await?;
 
@@ -82,7 +76,7 @@ pub async fn run(
             WorkloadServiceSubjects::Delete,
             generate_service_call!(workload_api, delete_workload),
         ),
-        workload_service,
+        &workload_service,
     )
     .await?;
 
@@ -99,7 +93,7 @@ pub async fn run(
             generate_service_call!(workload_api, handle_db_insertion),
         )
         .with_response_subject_fn(db_insertion_response_handler),
-        workload_service,
+        &workload_service,
     )
     .await?;
 
@@ -115,7 +109,7 @@ pub async fn run(
             generate_service_call!(workload_api, handle_db_modification),
         )
         .with_response_subject_fn(db_modification_response_handler),
-        workload_service,
+        &workload_service,
     )
     .await?;
 
@@ -126,7 +120,7 @@ pub async fn run(
             WorkloadServiceSubjects::HandleStatusUpdate,
             generate_service_call!(workload_api, handle_status_update),
         ),
-        workload_service,
+        &workload_service,
     )
     .await?;
 

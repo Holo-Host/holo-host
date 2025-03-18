@@ -1,3 +1,4 @@
+// TODO(refactor): this is very unclear in case of an error, e.g. the $method_name doesn't exist on the API
 #[macro_export]
 macro_rules! generate_service_call {
     ($api:expr, $method_name:ident) => {{

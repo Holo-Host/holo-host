@@ -10,8 +10,11 @@ use super::{
 use anyhow::{Context, Result};
 use async_nats::{jetstream, ServerAddr, ServerInfo};
 use core::option::Option::None;
-use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::{
+    collections::hash_map::Entry,
+    time::{Duration, Instant},
+};
+use std::{collections::HashMap, sync::Arc};
 
 impl std::fmt::Debug for JsClient {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -32,7 +35,7 @@ pub struct JsClient {
     pub name: String,
     on_msg_published_event: Option<EventHandler>,
     on_msg_failed_event: Option<EventHandler>,
-    pub js_services: Option<Vec<JsStreamService>>,
+    pub js_services: HashMap<String, Arc<JsStreamService>>,
     pub js_context: jetstream::Context,
     service_log_prefix: String,
     client: async_nats::Client, // Built-in Nats Client which manages the cloned clients within jetstream contexts
@@ -206,7 +209,7 @@ impl JsClient {
             name: p.name,
             on_msg_published_event: None,
             on_msg_failed_event: None,
-            js_services: None,
+            js_services: Default::default(),
             js_context: jetstream::new(client.clone()),
             service_log_prefix,
             client,
@@ -292,37 +295,40 @@ impl JsClient {
         Ok(())
     }
 
+    /// Corresponds roughly to `nats stream add {params.name}`
     pub async fn add_js_service(
         &mut self,
         params: JsServiceBuilder,
-    ) -> Result<(), async_nats::Error> {
-        let new_service = JsStreamService::new(
-            self.js_context.to_owned(),
-            &params.name,
-            &params.description,
-            &params.version,
-            &params.service_subject,
-        )
-        .await?;
+    ) -> Result<Arc<JsStreamService>, async_nats::Error> {
+        let new_service = Arc::new(
+            JsStreamService::new(
+                self.js_context.to_owned(),
+                &params.name,
+                &params.description,
+                &params.version,
+                &params.service_subject,
+            )
+            .await?,
+        );
 
-        let mut current_services = self.js_services.to_owned().unwrap_or_default();
-        current_services.push(new_service);
-        self.js_services = Some(current_services);
-
-        Ok(())
+        match self.js_services.entry(params.name) {
+            Entry::Occupied(occupied_entry) => {
+                Err(format!("didn't expect an entry, found {occupied_entry:?}").into())
+            }
+            Entry::Vacant(vacant_entry) => Ok(vacant_entry
+                .insert_entry(Arc::clone(&new_service))
+                .get()
+                .clone()),
+        }
     }
 
-    pub async fn get_js_service(&self, js_service_name: String) -> Option<&JsStreamService> {
-        if let Some(services) = &self.js_services {
-            return services
-                .iter()
-                .find(|s| s.get_service_info().name == js_service_name);
-        }
-        None
+    /// Look up a service in its own in-memory js_services collection
+    pub async fn get_js_service(&self, js_service_name: String) -> Option<Arc<JsStreamService>> {
+        self.js_services.get(&js_service_name).cloned()
     }
 
     pub async fn close(&self) -> Result<(), async_nats::Error> {
-        self.client.drain().await?;
+        self.client.drain().await.context("draining NATS client")?;
         Ok(())
     }
 }

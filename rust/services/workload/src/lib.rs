@@ -25,6 +25,7 @@ use std::future::Future;
 use std::{fmt::Debug, sync::Arc};
 use types::{WorkloadApiResult, WorkloadResult};
 
+// TODO: rename SRV -> SVC
 pub const WORKLOAD_SRV_NAME: &str = "WORKLOAD_SERVICE";
 pub const WORKLOAD_SRV_SUBJ: &str = "WORKLOAD";
 pub const WORKLOAD_SRV_VERSION: &str = "0.0.1";
@@ -67,7 +68,11 @@ where
         Fut: Future<Output = Result<WorkloadApiResult, ServiceError>> + Send,
     {
         // Deserialize payload into the expected type
-        let payload: T = Self::convert_msg_to_type::<T>(msg.clone())?;
+        // TODO: we probably don't want to lose this error information. instead, for now, return it in the WorkloadStatus
+        let payload: T = match Self::convert_msg_to_type::<T>(msg.clone()) {
+            Ok(t) => t,
+            Err(e) => todo!("transform this into Ok(WorkloadApiResult): {e}"),
+        };
         let subject = msg.subject.clone().into_string();
 
         // Call callback handler

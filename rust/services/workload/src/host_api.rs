@@ -33,7 +33,7 @@ struct WorkloadResultError {
 }
 
 impl HostWorkloadApi {
-    async fn handle_update_workload(
+    async fn handle_workload_command(
         msg_subject: String,
         try_message_payload: Result<WorkloadResult, ServiceError>,
     ) -> anyhow::Result<(WorkloadStatus, Workload)> {
@@ -139,7 +139,7 @@ impl HostWorkloadApi {
 
         // TODO: throwing an actual error from here leads to the request silently skipped with no logs entry in the host-agent.
         let (workload_status, maybe_workload) =
-            match Self::handle_update_workload(msg_subject, try_message_payload).await {
+            match Self::handle_workload_command(msg_subject, try_message_payload).await {
                 Ok(result) => (result.0, Some(result.1)),
                 Err(err) => {
                     let (status, maybe_workload) = match err.downcast::<WorkloadResultError>() {

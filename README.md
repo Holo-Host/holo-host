@@ -8,6 +8,20 @@ Please run `sh setup-hooks.sh` to enforce correct naming convention for branches
 
 The code is grouped by language or framework name.
 
+### Quickstart
+
+Motivated by a shareable development experience, this repository provides
+
+- [`nix develop .#rust`][nix develop] compatible shell environment containing a rust toolchain and other tools, including `nats` and `just`
+- [`just`][just] compatible recipes via the Justfile
+
+handily, `just` comes via the nix development shell as well.
+
+```shell
+nix develop .#rust
+just
+```
+
 ### Nix
 
 ```
@@ -56,3 +70,6 @@ nix fmt
 Even when this repository is made publicly available, original code in this repository is explicitly stated to be unlicenced.
 This means that this code cannot be modified or redistributed without explicit permission from the copyright holder, which are the authors in this repository.
 This will change in the future when we have made the decision which open-source license to apply.
+
+[just]: https://just.systems/man/en/
+[nix develop]: https://zero-to-nix.com/concepts/dev-env/
