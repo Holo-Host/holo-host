@@ -216,6 +216,8 @@ mod util {
         let mut workload_cmd = tokio::process::Command::new("/usr/bin/env");
         workload_cmd.args(["bash", "-c", cmd]);
 
+        log::trace!("running bash command: {cmd}");
+
         let output = workload_cmd
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
