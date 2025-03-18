@@ -47,4 +47,4 @@ opt-level = "z"
 
 
 [patch.crates-io]
-async-nats = { git = "https://github.com/steveej-forks/nats.rs", branch = "schema-based-ports" }
+async-nats = { git = "https://github.com/nats-io/nats.rs", rev = "7df9a4ec420aa48bc9e5cf87565d08d8440064ed" }

@@ -395,7 +395,7 @@ dependencies = [
 [[package]]
 name = "async-nats"
 version = "0.39.0"
-source = "git+https://github.com/steveej-forks/nats.rs?branch=schema-based-ports#50250f7e1f5b4bdafa10fcddf578cc53524adb7a"
+source = "git+https://github.com/nats-io/nats.rs?rev=7df9a4ec420aa48bc9e5cf87565d08d8440064ed#7df9a4ec420aa48bc9e5cf87565d08d8440064ed"
 dependencies = [
  "base64 0.22.1",
  "bytes",
