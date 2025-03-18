@@ -45,13 +45,18 @@ ham-cycle i:
     just ham-install {{i}}
 
 
-dev-cycle:
+dev-destroy:
     #!/usr/bin/env bash
     set -xeE
-    nix build .\#extra-container-devhost
     extra-container destroy dev-hub
     extra-container destroy dev-host
     extra-container destroy dev-orch
+
+dev-cycle:
+    #!/usr/bin/env bash
+    set -xeE
+    just dev-destroy
+    nix build .\#extra-container-devhost
     ./result/bin/container build
     ./result/bin/container create
     ./result/bin/container start dev-hub
