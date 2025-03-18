@@ -58,7 +58,6 @@ dev-cycle:
     ./result/bin/container start dev-host
     ./result/bin/container start dev-orch
 
-
 host-agent-remote +args="":
     #!/usr/bin/env bash
     set -xeE
@@ -103,3 +102,18 @@ cloud-hub-host-agent-remote-hc desired-status subject="WORKLOAD.update":
     set -xeE
     export NATS_URL="wss://nats-server-0.holotest.dev:443"
     just host-agent-remote-hc {{desired-status}} --subject-override {{subject}} --workload-only
+
+
+# follows the logs for the applications services from the dev containers
+# requires sudo because the containers log into the system journal
+dev-logs +args="-f -n200":
+    sudo journalctl -m \
+    --unit holo-orchestrator \
+    --unit holo-host-agent \
+    {{args}}
+
+
+# re-create the dev containers and start following the relevant logs
+dev-cycle-logs:
+    just dev-cycle
+    just dev-logs
