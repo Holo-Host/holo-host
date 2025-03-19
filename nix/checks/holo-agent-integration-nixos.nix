@@ -27,7 +27,7 @@ pkgs.testers.runNixOSTest (
 
           nats.hub.url = "wss://${nodes.hub.networking.fqdn}:${builtins.toString nodes.hub.holo.nats-server.websocket.externalPort}";
           nats.hub.tlsInsecure = true;
-          nats.store_dir = "/var/lib/holo-host-agent/store_dir";
+          nats.store_dir = "${nats.host.storage_path}/store_dir";
         };
       };
   in
@@ -130,13 +130,14 @@ pkgs.testers.runNixOSTest (
               "storage": "file",
               "discard": "old",
               "num_replicas": 1,
-              "mirror": {
+              "sources": [{
                   "name": "${testStreamName}",
                   "external": {
                       "api": "$JS.${hubJsDomain}.API",
                       "deliver": ""
-                  }
-              },
+                  },
+                  subject_transforms: [],
+              }],
               "sealed": false,
               "deny_delete": false,
               "deny_purge": false,

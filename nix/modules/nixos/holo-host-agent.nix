@@ -64,12 +64,28 @@ in
         default = "${cfg.nats.listenHost}:${builtins.toString cfg.nats.listenPort}";
       };
 
+      host = {
+        storage_path = lib.mkOption {
+          type = lib.types.path;
+          default = "/var/lib/holo-host-agent";
+        };
+        inventory_file_path = lib.mkOption {
+          type = lib.types.str;
+          default = "${builtins.toString cfg.nats.storage_path}/inventory.json";
+        };
+      };
+
       hub = {
         url = lib.mkOption {
           type = lib.types.str;
         };
         tlsInsecure = lib.mkOption {
           type = lib.types.bool;
+        };
+        jetstream_domain = lib.mkOption  {
+          type = lib.types.str;
+          # NB: This str value needs to match the jetstream domain in the hub nats server config
+          default = "hub";
         };
       };
 
@@ -135,6 +151,8 @@ in
               --hub-url=${cfg.nats.hub.url} \
               ${lib.optionalString cfg.nats.hub.tlsInsecure "--hub-tls-insecure"} \
               ${lib.optionalString (cfg.nats.store_dir != null) "--store-dir=${cfg.nats.store_dir}"} \
+              "--host-inventory-file-path=${cfg.nats.host.inventory_file_path} \
+              "--hub-jetstream-domain=${cfg.nats.hub.jetstream_domain} \
               ${builtins.concatStringsSep " " extraDaemonizeArgsList}
           ''
         );

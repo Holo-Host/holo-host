@@ -94,8 +94,8 @@ pub struct DaemonzeArgs {
 
     #[arg(
         long,
-        help = "host agent inventory file path",
-        env = "HOST_INVENTORY_FILE_PATH",
+        help = "host agent inventory file path (as str)",
+        env = "HOST_INVENTORY_FILE_PATH_STR",
         default_value = "/var/lib/holo-host-agent/inventory.json"
     )]
     pub(crate) host_inventory_file_path: String,
@@ -113,7 +113,7 @@ pub struct DaemonzeArgs {
         env = "NATS_HUB_JETSTREAM_DOMAIN_NAME",
         default_value = "holo"
     )]
-    pub(crate) jetstream_domain: String,
+    pub(crate) hub_jetstream_domain: String,
 
     #[arg(
         long,
