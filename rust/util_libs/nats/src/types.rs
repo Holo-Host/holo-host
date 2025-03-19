@@ -479,6 +479,8 @@ impl NatsRemoteArgs {
                 let pass = std::fs::read_to_string(password_file)
                     .context(format!("reading {password_file:?}"))?;
 
+                log::debug!("user '{user}' and a password provided.");
+
                 Some((user.clone(), pass))
             }
             (Some(user), Some(pass), None) => Some((user.clone(), pass.clone())),

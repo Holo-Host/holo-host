@@ -74,26 +74,31 @@ let
               holo.nats-server.host = "0.0.0.0";
               services.nats.settings = {
                 # TODO: re-enable this and replicate the same account structure on the host-agent side.
-                # accounts = {
-                #   SYS = {
-                #     users = [
-                #       {
-                #         user = "admin";
-                #         password = "admin";
-                #       }
-                #     ];
-                #   };
-                #   TESTING = {
-                #     users = [
-                #       {
-                #         user = "anon";
-                #         # password = "admin";
-                #       }
-                #     ];
-                #   };
-                # };
-                # system_account = "SYS";
-                # no_auth_user = "anon";
+                accounts = {
+                  SYS = {
+                    users = [
+                      {
+                        user = "admin";
+                        password = "admin";
+                      }
+                    ];
+                  };
+                  TESTING = {
+                    jetstream = "enabled";
+                    users = [
+                      {
+                        user = "anon";
+                        password = "anon";
+                      }
+                      {
+                        user = "orchestrator";
+                        password = "$2a$11$MhaeMYaGfTKPUphrsDHHwugySr/Z5PSEugH28ctqEYowGXiAq2eOO";
+                      }
+                    ];
+                  };
+                };
+                system_account = "SYS";
+                no_auth_user = "anon";
 
                 jetstream = {
                   # TODO: use "hub" once we support different domains on hub and leafs
@@ -190,6 +195,8 @@ let
 
                 nats.hub.url = "wss://dev-hub:${builtins.toString config.containers.dev-hub.config.holo.nats-server.websocket.externalPort}";
                 nats.hub.tlsInsecure = true;
+                nats.hub.user = "orchestrator";
+                nats.hub.passwordFile = builtins.toFile "nats.pw" "yooveihuQuai4ziphiel4F";
 
                 # TODO: actually provide an instance
                 mongo.url = "mongodb://127.0.0.1";
