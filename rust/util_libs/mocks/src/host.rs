@@ -50,7 +50,7 @@ pub fn create_test_host(
         host.device_id = device_id;
     }
     if let Some(assigned_hoster) = assigned_hoster {
-        host.assigned_hoster = assigned_hoster;
+        host.assigned_hoster = Some(assigned_hoster);
     }
     if let Some(assigned_workloads) = assigned_workloads {
         host.assigned_workloads = assigned_workloads;

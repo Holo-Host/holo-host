@@ -4,7 +4,7 @@ mod tests {
     use crate::{orchestrator_api::OrchestratorWorkloadApi, types::WorkloadResult};
     use anyhow::Result;
     use bson::doc;
-    use db_utils::schemas::{WorkloadState, WorkloadStatus};
+    use db_utils::schemas::{WorkloadState, WorkloadStatePayload, WorkloadStatus};
     use hpos_hal::inventory::{HoloDriveInventory, HoloInventory};
     use mock_utils::{
         host::{create_test_host, gen_mock_processors},
@@ -268,6 +268,7 @@ mod tests {
             id: Some(workload_id),
             desired: WorkloadState::Running,
             actual: WorkloadState::Running,
+            payload: WorkloadStatePayload::None,
         };
         let result = WorkloadResult {
             status: status.clone(),

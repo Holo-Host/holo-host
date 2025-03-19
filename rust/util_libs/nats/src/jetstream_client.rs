@@ -164,10 +164,10 @@ impl JsClient {
             .request_timeout(Some(p.request_timeout.unwrap_or(Duration::from_secs(1))))
             .custom_inbox_prefix(&p.inbox_prefix);
 
+        // TODO: Remove repetition. Merge this pattern and the `Credentials::Password` pattern below.
         if let Some((user, pass)) = p.nats_remote_args.maybe_user_password()? {
             connect_options = connect_options.user_and_password(user, pass);
         }
-
         if let Some(credentials_list) = p.credentials {
             for credentials in credentials_list {
                 match credentials {
@@ -211,7 +211,8 @@ impl JsClient {
                 .await
                 .context(context_msg)?
         };
-        let service_log_prefix = format!("NATS-CLIENT-LOG::{}::", p.name);
+
+        let service_log_prefix = format!("CLIENT_LOG::{}::", p.name);
         log::info!(
             "{service_log_prefix}Connected to NATS server at {:?}",
             nats_url

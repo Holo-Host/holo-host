@@ -741,6 +741,7 @@ impl OrchestratorWorkloadApi {
                 .host_collection
                 .get_many_from(doc! {
                     "_id": { "$in": eligible_host_ids.clone() },
+                    // Currently we only allow a single workload per host
                     "assigned_workloads": { "$size": 0 }
                 })
                 .await?;

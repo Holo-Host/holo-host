@@ -64,7 +64,7 @@ impl JsStreamService {
             })
             .await?;
 
-        let service_log_prefix = format!("{}_LOG::", name);
+        let service_log_prefix = format!("SERVICE_LOG::{}::", name);
 
         Ok(JsStreamService {
             name: name.to_string(),
