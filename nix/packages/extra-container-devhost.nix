@@ -151,11 +151,11 @@ let
 
                 # TODO: i suspect there's a bug where the inventory prevents the workload messages from being processed
                 extraDaemonizeArgs.host-inventory-disable = false;
-                extraDaemonizeArgs.host-inventory-file-path = "${builtins.toString nats.host.storage_path}/inventory.json";
+                extraDaemonizeArgs.host-inventory-file-path = "${builtins.toString nats.host.storagePath}/inventory.json";
 
                 nats.hub.url = "wss://dev-hub:${builtins.toString config.containers.dev-hub.config.holo.nats-server.websocket.externalPort}";
                 nats.hub.tlsInsecure = true;
-                nats.store_dir = "${nats.host.storage_path}/store_dir";
+                nats.store_dir = "${nats.host.storagePath}/store_dir";
               };
             };
         };
