@@ -28,13 +28,11 @@ pub fn should_check_inventory(
 pub async fn run(
     host_client: JsClient,
     host_id: &str,
-    _inventory_file_path: &str,
+    inventory_file_path: &str,
     host_inventory_check_interval_sec: u64,
     starting_inventory: HoloInventory,
 ) -> anyhow::Result<()> {
     log::info!("Host Agent Client: starting Inventory job...");
-    let inventory_file_path = "host_temp_dir";
-    log::info!("Host Agent Client: inventory_file_path={inventory_file_path}");
 
     // Store latest inventory record in memory
     starting_inventory
@@ -45,8 +43,7 @@ pub async fn run(
                 Some("Failed to save host inventory to file.".to_string()),
             )
         })?;
-
-    log::info!("Host Agent Client: saved inventory to file...");
+    log::trace!("Host Agent Client: saved inventory to file...");
 
     let interval = tokio::time::Duration::from_secs(host_inventory_check_interval_sec);
     let check_interval_duration = chrono::TimeDelta::seconds(interval.as_secs() as i64);

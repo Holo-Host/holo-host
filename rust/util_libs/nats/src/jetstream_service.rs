@@ -253,10 +253,8 @@ impl JsStreamService {
     {
         while let Some(Ok(js_msg)) = messages.next().await {
             log::trace!(
-                "{}Consumer received message: service_name={}, service_subj='{}', endpoint_name={}, endpoint_subj='{}'",
+                "{}Consumer received message: endpoint_name={}, subject='{}'",
                 log_info.prefix,
-                log_info.service_name,
-                log_info.service_subject,
                 log_info.endpoint_name,
                 log_info.endpoint_subject,
             );
@@ -288,10 +286,8 @@ impl JsStreamService {
                     .await
                 {
                     log::error!(
-                        "{}Failed to send reply upon successful message consumption: service_name={}, service_subj='{}', endpoint_name={}, endpoint_subj='{}', reply_subj='{}', err={:?}",
+                        "{}Failed to send reply upon successful message consumption: endpoint_name={}, subject='{}', reply_subj='{}', err={:?}",
                         log_info.prefix,
-                        log_info.service_name,
-                        log_info.service_subject,
                         log_info.endpoint_name,
                         log_info.endpoint_subject,
                         reply,
@@ -317,10 +313,8 @@ impl JsStreamService {
                         .await
                     {
                         log::error!(
-                            "{}Failed to publish new message upon successful message consumption: service_name={}, service_subj='{}', endpoint_name={}, endpoint_subj='{}', err={:?}",
+                            "{}Failed to publish new message upon successful message consumption: endpoint_name={}, subject='{}', err={:?}",
                             log_info.prefix,
-                            log_info.service_name,
-                            log_info.service_subject,
                             log_info.endpoint_name,
                             log_info.endpoint_subject,
                             err
@@ -333,10 +327,8 @@ impl JsStreamService {
             // Send back message acknowledgment
             if let Err(err) = js_msg.ack().await {
                 log::error!(
-                    "{}Failed to send ACK new message upon successful message consumption: service_name={}, service_subj='{}', endpoint_name={}, endpoint_subj='{}', err={:?}",
+                    "{}Failed to send ACK new message upon successful message consumption: endpoint_name={}, subject='{}', err={:?}",
                     log_info.prefix,
-                    log_info.service_name,
-                    log_info.service_subject,
                     log_info.endpoint_name,
                     log_info.endpoint_subject,
                     err
