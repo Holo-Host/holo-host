@@ -45,14 +45,19 @@ ham-cycle i:
     just ham-install {{i}}
 
 
+dev-destroy:
+    #!/usr/bin/env bash
+    set -xeE
+    extra-container destroy dev-hub
+    extra-container destroy dev-host
+    extra-container destroy dev-orch
+
 dev-cycle:
     #!/usr/bin/env bash
     set -xeE
     nix build .\#extra-container-devhost
-    extra-container destroy dev-hub
-    extra-container destroy dev-host
-    extra-container destroy dev-orch
-    ./result/bin/container build
+    just dev-destroy
+    # ./result/bin/container build
     ./result/bin/container create
     ./result/bin/container start dev-hub
     ./result/bin/container start dev-host
@@ -63,7 +68,7 @@ host-agent-remote +args="":
     set -xeE
 
     export RUST_BACKTRACE=1
-    export RUST_LOG=trace,async_nats=error
+    export RUST_LOG=mio=error,rustls=error,async_nats=error,trace
 
     cargo run --bin host_agent -- remote {{args}}
 
@@ -71,8 +76,8 @@ host-agent-remote-hc desired-status +args="":
     #!/usr/bin/env bash
     set -xeE
 
-    # export RUST_BACKTRACE=1
-    export RUST_LOG=trace,async_nats=error
+    export RUST_BACKTRACE=1
+    export RUST_LOG=mio=error,rustls=error,async_nats=error,trace
 
     # TODO(backlog): run a service on the host NATS instance that can be queried for the host-id
     # devhost_machine_id="$(sudo machinectl shell dev-host /bin/sh -c "cat /etc/machine-id" | grep -oE '[a-z0-9]+')"
@@ -90,12 +95,12 @@ dev-host-host-agent-remote-hc desired-status:
     export NATS_URL="nats://dev-host"
     just host-agent-remote-hc {{desired-status}}
 
-dev-hub-host-agent-remote-hc desired-status subject="WORKLOAD.update":
+dev-hub-host-agent-remote-hc desired-status subject="WORKLOAD.update" +args="":
     #!/usr/bin/env bash
     set -xeE
-    export NATS_URL="ws://dev-hub:4223"
+    export NATS_URL="wss://dev-hub:443"
     export NATS_SKIP_TLS_VERIFICATION_DANGER="true"
-    just host-agent-remote-hc {{desired-status}} --subject-override {{subject}} --workload-only
+    just host-agent-remote-hc {{desired-status}} --subject-override {{subject}} --workload-only {{args}}
 
 cloud-hub-host-agent-remote-hc desired-status subject="WORKLOAD.update":
     #!/usr/bin/env bash
@@ -112,8 +117,26 @@ dev-logs +args="-f -n200":
     --unit holo-host-agent \
     {{args}}
 
+# (compat) follows the logs for the applications services from the dev containers
+# requires sudo because the containers log into the system journal
+dev-logs-compat +args="-f -n100":
+    #!/usr/bin/env bash
+    set -xeE
+    (sudo machinectl shell dev-host /run/current-system/sw/sbin/journalctl --unit holo-host-agent {{args}}) &
+    pid_hostagent=$!
+    (sudo machinectl shell dev-orch /run/current-system/sw/sbin/journalctl --unit holo-orchestrator {{args}}) &
+    pid_orchestrator=$!
+    trap "kill $(jobs -pr)" SIGINT SIGTERM EXIT
+    echo press CTRL+C **twice** to exit
+    waitpid $pid_hostagent $pid_orchestrator
+
 
 # re-create the dev containers and start following the relevant logs
 dev-cycle-logs:
     just dev-cycle
     just dev-logs
+
+# re-create the dev containers and start following the relevant logs in compat mode
+dev-cycle-logs-compat:
+    just dev-cycle
+    just dev-logs-compat

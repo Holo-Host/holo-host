@@ -15,6 +15,7 @@ use std::{
     time::{Duration, Instant},
 };
 use std::{collections::HashMap, sync::Arc};
+use tokio::runtime::Handle;
 
 impl std::fmt::Debug for JsClient {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -39,6 +40,18 @@ pub struct JsClient {
     pub js_context: jetstream::Context,
     service_log_prefix: String,
     client: async_nats::Client, // Built-in Nats Client which manages the cloned clients within jetstream contexts
+}
+
+impl Drop for JsClient {
+    // TODO(bug): this doesnt' always run to completion. without this, data could get lost if the caller forgets to `close()`
+    fn drop(&mut self) {
+        let client = self.client.clone();
+        if let Ok(rt) = Handle::try_current() {
+            rt.spawn_blocking(move || async move {
+                let _ = client.flush().await;
+            });
+        };
+    }
 }
 
 /// Implements a permissive `ServerCertVerifier` for convenience in testing.
@@ -280,6 +293,8 @@ impl JsClient {
                     .await
             }
         };
+        // TODO(performance): remove this once Self::drop works properly as this may slow performance down.
+        let _ = self.client.flush().await;
 
         let duration = now.elapsed();
         if let Err(err) = result {
@@ -292,6 +307,7 @@ impl JsClient {
         if let Some(ref on_published) = self.on_msg_published_event {
             on_published(&payload.subject, &self.name, duration);
         }
+
         Ok(())
     }
 
@@ -328,8 +344,18 @@ impl JsClient {
     }
 
     pub async fn close(&self) -> Result<(), async_nats::Error> {
+        self.client.flush().await?;
+
         self.client.drain().await.context("draining NATS client")?;
         Ok(())
+    }
+
+    /// wraps around async_nats::Client::subsceribe
+    pub async fn subscribe<S: async_nats::subject::ToSubject>(
+        &self,
+        subject: S,
+    ) -> Result<async_nats::Subscriber, async_nats::SubscribeError> {
+        self.client.subscribe(subject).await
     }
 }
 

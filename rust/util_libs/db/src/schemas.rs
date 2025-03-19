@@ -27,7 +27,7 @@ use super::mongodb::IntoIndexes;
 use crate::mongodb::MutMetadata;
 use anyhow::Result;
 use bson::oid::ObjectId;
-use bson::{self, doc, DateTime, Document};
+use bson::{self, doc, Bson, DateTime, Document};
 use hpos_hal::inventory::HoloInventory;
 use mongodb::options::IndexOptions;
 use semver::{BuildMetadata, Prerelease};
@@ -338,6 +338,8 @@ pub struct WorkloadStatus {
     pub desired: WorkloadState,
     /// Actual current state of the workload
     pub actual: WorkloadState,
+
+    pub payload: WorkloadStatePayload,
 }
 
 /// Resource capacity requirements for a workload
@@ -390,6 +392,13 @@ pub enum WorkloadDeployable {
     ExtraContainerStorePath { store_path: PathBuf },
     ExtraContainerBuildCmd { nix_args: Box<[String]> },
     HolochainDhtV1(Box<WorkloadDeployableHolochainDhtV1>),
+}
+
+#[derive(Default, Clone, Debug, Deserialize, Serialize)]
+pub enum WorkloadStatePayload {
+    #[default]
+    None,
+    HolochainDhtV1(Bson),
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, clap::Args)]
@@ -450,6 +459,7 @@ impl Default for Workload {
                 id: None,
                 desired: WorkloadState::Unknown("default state".to_string()),
                 actual: WorkloadState::Unknown("default state".to_string()),
+                payload: WorkloadStatePayload::None,
             },
             deployable: WorkloadDeployable::None,
         }

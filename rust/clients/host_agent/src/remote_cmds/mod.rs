@@ -4,11 +4,12 @@ use anyhow::Context;
 use db_utils::schemas::{
     Workload, WorkloadDeployable, WorkloadState, WorkloadStateDiscriminants, WorkloadStatus,
 };
+use futures::StreamExt;
 use nats_utils::{
     jetstream_client::JsClient,
     types::{JsClientBuilder, PublishInfo},
 };
-use workload::types::WorkloadResult;
+use workload::types::{WorkloadResult, WorkloadServiceSubjects};
 
 use crate::agent_cli::{self, RemoteArgs, RemoteCommands};
 
@@ -40,6 +41,7 @@ pub(crate) async fn run(args: RemoteArgs, command: RemoteCommands) -> anyhow::Re
             deployable,
             workload_only,
             subject_override,
+            subscribe_to_subject,
         } => {
             let id: bson::oid::ObjectId = workload_id_override.unwrap_or_default();
 
@@ -51,6 +53,7 @@ pub(crate) async fn run(args: RemoteArgs, command: RemoteCommands) -> anyhow::Re
                 desired: WorkloadState::from_repr(state_discriminant as usize)
                     .ok_or_else(|| anyhow::anyhow!("failed to parse {desired_status}"))?,
                 actual: WorkloadState::Unknown("most uncertain".to_string()),
+                payload: Default::default(),
             };
 
             let workload = Workload {
@@ -61,7 +64,7 @@ pub(crate) async fn run(args: RemoteArgs, command: RemoteCommands) -> anyhow::Re
                 metadata: Default::default(),
                 assigned_developer: Default::default(),
                 version: Default::default(),
-                min_hosts: Default::default(),
+                min_hosts: 1,
                 assigned_hosts: Default::default(),
 
                 ..Default::default() // ---
@@ -79,19 +82,31 @@ pub(crate) async fn run(args: RemoteArgs, command: RemoteCommands) -> anyhow::Re
             }
             .context("serializing workload payload")?;
 
-            let subject_suffix = {
+            let subject = if let Some(subject) = subject_override {
+                subject
+            } else {
                 use WorkloadStateDiscriminants::*;
 
-                match state_discriminant {
-                    Installed | Running => "update",
-                    Uninstalled | Deleted | Removed => "update",
-                    Updated => "update",
-                    unsupported => anyhow::bail!("don't knwo where to send {unsupported:?}"),
-                }
+                format!(
+                    "WORKLOAD.{host_id}.{}",
+                    match state_discriminant {
+                        Installed | Running => WorkloadServiceSubjects::Command,
+                        Uninstalled | Deleted | Removed => WorkloadServiceSubjects::Command,
+                        Updated => WorkloadServiceSubjects::Command,
+                        Reported => WorkloadServiceSubjects::Command,
+                        unsupported => anyhow::bail!("don't know where to send {unsupported:?}"),
+                    }
+                )
             };
 
-            let subject =
-                subject_override.unwrap_or_else(|| format!("WORKLOAD.{host_id}.{subject_suffix}"));
+            {
+                let mut subscriber = nats_client.subscribe(subscribe_to_subject.clone()).await?;
+                tokio::spawn(async move {
+                    while let Some(msg) = subscriber.next().await {
+                        log::info!("[{subscribe_to_subject}] received message: {msg:#?}");
+                    }
+                });
+            }
 
             log::debug!("publishing to {subject}:\n{payload:?}");
 

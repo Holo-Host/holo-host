@@ -49,7 +49,12 @@ pub async fn run(mut host_client: JsClient, host_id: &str) -> Result<JsClient, a
             WorkloadServiceSubjects::Update,
             generate_service_call!(workload_api, update_workload),
         )
-        .with_subject_prefix(host_id.to_lowercase()),
+        .with_subject_prefix(host_id.to_lowercase())
+        .with_response_subject_fn(create_callback_subject(
+            WorkloadServiceSubjects::HandleStatusUpdate
+                .as_ref()
+                .to_string(),
+        )),
         &workload_service,
     )
     .await?;

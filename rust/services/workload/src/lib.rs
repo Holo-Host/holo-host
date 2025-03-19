@@ -31,6 +31,9 @@ pub const WORKLOAD_SRV_SUBJ: &str = "WORKLOAD";
 pub const WORKLOAD_SRV_VERSION: &str = "0.0.1";
 pub const WORKLOAD_SRV_DESC: &str = "This service handles the flow of Workload requests between the Developer and the Orchestrator, and between the Orchestrator and Host.";
 
+// TODO(double-check): this was plural but i believe that's a bug because "assigned_host_0" does not start with "assigned_hosts"
+pub const TAG_MAP_PREFIX_ASSIGNED_HOST: &str = "assigned_host";
+
 #[async_trait]
 pub trait WorkloadServiceApi
 where
@@ -56,6 +59,14 @@ where
     }
 
     // Helper function to standardize the processing of incoming workload messages
+
+    /* TODO(correctness):
+        remove desired_ and error_state, and instead fill them in from result that is returned from  cb_fn.
+        the assumptions are probably too strong. if we want to limit the values that can be inserted maybe we could find a way to handle that at insertion time. when we process the entry here it's already too late and the unexpected/invalid entry is persisted.
+
+        the refactor can be done in a way where this function turns any Err(err) from the cb_fn into an Ok(WorkloadApiResult) that has sets the actual status to error the given details.
+        by doing this, the cb_fn impls can use the rust native error handling instead of our custom one.
+    */
     async fn process_request<T, Fut>(
         &self,
         msg: Arc<Message>,
@@ -92,6 +103,7 @@ where
                             id: None,
                             desired: desired_state,
                             actual: error_state(format!("{}: {}", err_msg, e)),
+                            payload: Default::default(),
                         },
                         workload: None,
                     },

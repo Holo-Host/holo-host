@@ -11,8 +11,11 @@ use crate::types::WorkloadResult;
 use super::{types::WorkloadApiResult, WorkloadServiceApi};
 use anyhow::Result;
 use async_nats::Message;
+use bson::Bson;
 use core::option::Option::None;
-use db_utils::schemas::{Workload, WorkloadState, WorkloadStatus};
+use db_utils::schemas::{
+    Workload, WorkloadDeployable, WorkloadState, WorkloadStatePayload, WorkloadStatus,
+};
 use nats_utils::types::ServiceError;
 use std::{fmt::Debug, sync::Arc};
 use util::{
@@ -55,10 +58,10 @@ impl HostWorkloadApi {
         };
 
         // TODO: consider status.actual to inform assumptions towards the current state
-        // TODO: run a seperate thread to send status updates while this is processed
+        // TODO: spawn longer-running tasks and report back Pending, and set up a periodic status updates while the spawned task is running
 
         let desired_state = &workload.status.desired;
-        let actual_status = match desired_state {
+        let (actual_status, status_payload) = match desired_state {
             WorkloadState::Installed | WorkloadState::Running => {
                 let (workload_path_toplevel, _) =
                     ensure_workload_path(&workload_id, None, util::EnsureWorkloadPathMode::Create)?;
@@ -69,7 +72,6 @@ impl HostWorkloadApi {
                 )
                 .await?;
 
-                // TODO: move this to the workload processing function
                 let start_or_restart_if_desired = if let WorkloadState::Running = desired_state {
                     " --start --restart-changed"
                 } else {
@@ -81,7 +83,19 @@ impl HostWorkloadApi {
                 ))
                 .await?;
 
-                desired_state
+                let status_payload = match (desired_state, &workload.deployable) {
+                    (WorkloadState::Running, WorkloadDeployable::HolochainDhtV1 { .. }) => {
+                        // TODO: install the happ into the conductor0
+                        // TODO: get the happ_info from the conductor
+                        let app_info = Bson::String("get the real thing".to_owned());
+
+                        db_utils::schemas::WorkloadStatePayload::HolochainDhtV1(app_info)
+                    }
+
+                    _ => WorkloadStatePayload::None,
+                };
+
+                (desired_state, status_payload)
             }
             WorkloadState::Uninstalled | WorkloadState::Removed | WorkloadState::Deleted => {
                 let (workload_path_toplevel, exists) = ensure_workload_path(
@@ -96,10 +110,10 @@ impl HostWorkloadApi {
 
                     bash(&format!("extra-container destroy {extra_container_path}")).await?;
 
-                    // TODO: remove workoad directory
+                    // TODO(clarify): remove workoad directory?
                 }
 
-                desired_state
+                (desired_state, WorkloadStatePayload::None)
             }
 
             WorkloadState::Updated
@@ -113,13 +127,12 @@ impl HostWorkloadApi {
             }
         };
 
-        // TODO: send a reply message
-
         Ok((
             WorkloadStatus {
                 id: workload._id,
                 desired: workload.status.desired.clone(),
                 actual: actual_status.clone(),
+                payload: status_payload,
             },
             workload,
         ))
@@ -155,6 +168,7 @@ impl HostWorkloadApi {
                                 id: None,
                                 desired: WorkloadState::Unknown(Default::default()),
                                 actual: WorkloadState::Error(e.to_string()),
+                                payload: Default::default(),
                             },
                             None,
                         ),
@@ -167,6 +181,7 @@ impl HostWorkloadApi {
 
         Ok(WorkloadApiResult {
             maybe_response_tags: None,
+
             result: WorkloadResult {
                 status: workload_status,
                 workload: maybe_workload,
@@ -183,15 +198,37 @@ impl HostWorkloadApi {
         let msg_subject = msg.subject.clone().into_string();
         log::trace!("Incoming message for '{}'", msg_subject);
 
-        let workload_status = Self::convert_msg_to_type::<WorkloadResult>(msg)?.status;
+        let workload_result = Self::convert_msg_to_type::<WorkloadResult>(msg)?;
+        let status = workload_result.status;
+
+        // we're interested in the actual status on the system for this workload
+        let workload =
+            match workload_result.workload {
+                Some(workload) => workload,
+                None => return Ok(WorkloadApiResult {
+                    result: WorkloadResult {
+                        status: WorkloadStatus {
+                            actual: WorkloadState::Error(
+                                "we need to know the workload information to get a status for it"
+                                    .to_owned(),
+                            ),
+                            ..status
+                        },
+                        workload: None,
+                    },
+                    maybe_response_tags: None,
+                }),
+            };
+
+        // TODO: look up the status for the given workload
 
         // Send updated status:
         // NB: This will send the update to both the requester (if one exists)
         // and will broadcast the update to for any `response_subject` address registred for the endpoint
         Ok(WorkloadApiResult {
             result: WorkloadResult {
-                status: workload_status,
-                workload: None,
+                status,
+                workload: Some(workload),
             },
             maybe_response_tags: None,
         })
@@ -217,6 +254,8 @@ mod util {
     pub(crate) async fn bash(cmd: &str) -> anyhow::Result<()> {
         let mut workload_cmd = tokio::process::Command::new("/usr/bin/env");
         workload_cmd.args(["bash", "-c", cmd]);
+
+        log::trace!("running bash command: {cmd}");
 
         let output = workload_cmd
             .stdout(Stdio::piped())
