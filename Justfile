@@ -55,9 +55,9 @@ dev-destroy:
 dev-cycle:
     #!/usr/bin/env bash
     set -xeE
-    just dev-destroy
     nix build .\#extra-container-devhost
-    ./result/bin/container build
+    just dev-destroy
+    # ./result/bin/container build
     ./result/bin/container create
     ./result/bin/container start dev-hub
     ./result/bin/container start dev-host
@@ -95,12 +95,12 @@ dev-host-host-agent-remote-hc desired-status:
     export NATS_URL="nats://dev-host"
     just host-agent-remote-hc {{desired-status}}
 
-dev-hub-host-agent-remote-hc desired-status subject="WORKLOAD.update":
+dev-hub-host-agent-remote-hc desired-status subject="WORKLOAD.update" +args="":
     #!/usr/bin/env bash
     set -xeE
     export NATS_URL="wss://dev-hub:443"
     export NATS_SKIP_TLS_VERIFICATION_DANGER="true"
-    just host-agent-remote-hc {{desired-status}} --subject-override {{subject}} --workload-only
+    just host-agent-remote-hc {{desired-status}} --subject-override {{subject}} --workload-only {{args}}
 
 cloud-hub-host-agent-remote-hc desired-status subject="WORKLOAD.update":
     #!/usr/bin/env bash
@@ -126,7 +126,7 @@ dev-logs-compat +args="-f -n100":
     pid_hostagent=$!
     (sudo machinectl shell dev-orch /run/current-system/sw/sbin/journalctl --unit holo-orchestrator {{args}}) &
     pid_orchestrator=$!
-    trap 'kill $pid_hostagent $pid_orchestrator' SIGINT SIGTERM EXIT
+    trap "kill $(jobs -pr)" SIGINT SIGTERM EXIT
     echo press CTRL+C **twice** to exit
     waitpid $pid_hostagent $pid_orchestrator
 

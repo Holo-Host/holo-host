@@ -103,6 +103,7 @@ where
                             id: None,
                             desired: desired_state,
                             actual: error_state(format!("{}: {}", err_msg, e)),
+                            payload: Default::default(),
                         },
                         workload: None,
                     },

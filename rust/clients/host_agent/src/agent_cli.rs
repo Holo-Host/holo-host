@@ -186,5 +186,9 @@ pub enum RemoteCommands {
 
         #[arg(long)]
         subject_override: Option<String>,
+
+        #[arg(long, default_value = "WORKLOAD.>")]
+        /// Subscribe to a subject after sending the workload data
+        subscribe_to_subject: String,
     },
 }

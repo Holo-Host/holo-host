@@ -4,6 +4,7 @@ use anyhow::Context;
 use db_utils::schemas::{
     Workload, WorkloadDeployable, WorkloadState, WorkloadStateDiscriminants, WorkloadStatus,
 };
+use futures::StreamExt;
 use nats_utils::{
     jetstream_client::JsClient,
     types::{JsClientBuilder, PublishInfo},
@@ -40,6 +41,7 @@ pub(crate) async fn run(args: RemoteArgs, command: RemoteCommands) -> anyhow::Re
             deployable,
             workload_only,
             subject_override,
+            subscribe_to_subject,
         } => {
             let id: bson::oid::ObjectId = workload_id_override.unwrap_or_default();
 
@@ -51,6 +53,7 @@ pub(crate) async fn run(args: RemoteArgs, command: RemoteCommands) -> anyhow::Re
                 desired: WorkloadState::from_repr(state_discriminant as usize)
                     .ok_or_else(|| anyhow::anyhow!("failed to parse {desired_status}"))?,
                 actual: WorkloadState::Unknown("most uncertain".to_string()),
+                payload: Default::default(),
             };
 
             let workload = Workload {
@@ -96,6 +99,15 @@ pub(crate) async fn run(args: RemoteArgs, command: RemoteCommands) -> anyhow::Re
                 )
             };
 
+            {
+                let mut subscriber = nats_client.subscribe(subscribe_to_subject.clone()).await?;
+                tokio::spawn(async move {
+                    while let Some(msg) = subscriber.next().await {
+                        log::info!("[{subscribe_to_subject}] received message: {msg:#?}");
+                    }
+                });
+            }
+
             log::debug!("publishing to {subject}:\n{payload:?}");
 
             if let Ok(response) = nats_client
@@ -110,9 +122,9 @@ pub(crate) async fn run(args: RemoteArgs, command: RemoteCommands) -> anyhow::Re
                 log::info!("request completed. response: {response:#?}");
             };
 
-            // // Only exit program when explicitly requested
-            // log::info!("waiting until ctrl+c is pressed.");
-            // tokio::signal::ctrl_c().await?;
+            // Only exit program when explicitly requested
+            log::info!("waiting until ctrl+c is pressed.");
+            tokio::signal::ctrl_c().await?;
         }
     }
 

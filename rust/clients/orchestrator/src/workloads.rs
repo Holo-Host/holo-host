@@ -144,7 +144,8 @@ pub async fn run(
             "handle_status_update".to_string(),
             WorkloadServiceSubjects::HandleStatusUpdate,
             generate_service_call!(workload_api, handle_status_update),
-        ),
+        )
+        .with_subject_prefix("orchestrator".to_string()),
         &workload_service,
     )
     .await?;

@@ -67,7 +67,10 @@ impl OrchestratorWorkloadApi {
                 let mut status = WorkloadStatus {
                     id: None,
                     desired: WorkloadState::Running,
+
                     actual: WorkloadState::Reported,
+
+                    payload: Default::default(),
                 };
                 workload.status = status.clone();
 
@@ -116,6 +119,7 @@ impl OrchestratorWorkloadApi {
                     id: workload._id,
                     desired: WorkloadState::Updated,
                     actual: WorkloadState::Updating,
+                    payload: Default::default(),
                 };
 
                 workload.status = status.clone();
@@ -181,6 +185,7 @@ impl OrchestratorWorkloadApi {
                     id: Some(workload_id),
                     desired: WorkloadState::Removed,
                     actual: WorkloadState::Deleted,
+                    payload: Default::default(),
                 };
 
                 let updated_status_doc = bson::to_bson(&status).map_err(|e| {
@@ -242,6 +247,7 @@ impl OrchestratorWorkloadApi {
                     id: Some(workload_id),
                     desired: workload.status.desired.clone(),
                     actual: WorkloadState::Assigned,
+                    payload: Default::default(),
                 };
 
                 // Perform sanity check to ensure workload is not already assigned to a host and if so, exit fn
@@ -388,6 +394,8 @@ impl OrchestratorWorkloadApi {
                     id: None,
                     desired: WorkloadState::Running,
                     actual: WorkloadState::Updated,
+
+                    payload: Default::default(),
                 };
                 self.assign_hosts_to_workload(
                     assigned_host_ids.clone(),
@@ -482,6 +490,8 @@ impl OrchestratorWorkloadApi {
                             id: Some(workload_id),
                             desired: WorkloadState::Uninstalled,
                             actual: WorkloadState::Removed,
+
+                            payload: Default::default(),
                         },
                         workload: Some(workload),
                     },
@@ -497,6 +507,7 @@ impl OrchestratorWorkloadApi {
                         id: Some(workload_id),
                         desired: workload.status.desired,
                         actual: workload.status.actual,
+                        payload: Default::default(),
                     },
                     workload: None,
                 },
@@ -508,11 +519,13 @@ impl OrchestratorWorkloadApi {
     }
 
     // NB: Published by the Hosting Agent whenever the status of a workload changes
+    // TODO(correctness): make sure the errors are caught and sent to somewhere relevant
     pub async fn handle_status_update(
         &self,
         msg: Arc<Message>,
     ) -> Result<WorkloadApiResult, ServiceError> {
-        log::debug!("Incoming message for 'WORKLOAD.handle_status_update'");
+        let incoming_subject = msg.subject.clone();
+        log::debug!("Incoming message for '{incoming_subject}'");
 
         let workload_status = Self::convert_msg_to_type::<WorkloadResult>(msg)?.status;
         log::trace!("Workload status to update. Status={:?}", workload_status);

@@ -349,6 +349,14 @@ impl JsClient {
         self.client.drain().await.context("draining NATS client")?;
         Ok(())
     }
+
+    /// wraps around async_nats::Client::subsceribe
+    pub async fn subscribe<S: async_nats::subject::ToSubject>(
+        &self,
+        subject: S,
+    ) -> Result<async_nats::Subscriber, async_nats::SubscribeError> {
+        self.client.subscribe(subject).await
+    }
 }
 
 // Client Options:
