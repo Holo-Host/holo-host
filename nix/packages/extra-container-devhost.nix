@@ -158,8 +158,14 @@ let
                 # TODO: i suspect there's a bug where the inventory prevents the workload messages from being processed
                 extraDaemonizeArgs.host-inventory-disable = false;
 
+                # dev-container
                 nats.hub.url = "wss://dev-hub:${builtins.toString config.containers.dev-hub.config.holo.nats-server.websocket.externalPort}";
                 nats.hub.tlsInsecure = true;
+
+                # cloud testing
+                # nats.hub.url = "wss://nats-server-0.holotest.dev:443";
+                # nats.hub.tlsInsecure = false;
+
                 nats.store_dir = "/var/lib/holo-host-agent/store_dir";
               };
             };
