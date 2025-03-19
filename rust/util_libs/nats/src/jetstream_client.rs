@@ -323,6 +323,7 @@ impl JsClient {
                 &params.description,
                 &params.version,
                 &params.service_subject,
+                params.maybe_source_js_domain,
             )
             .await?,
         );

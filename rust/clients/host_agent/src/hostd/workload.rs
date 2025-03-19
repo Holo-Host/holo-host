@@ -25,7 +25,11 @@ use workload::{
 };
 
 // TODO: Use _host_creds_path for auth once we add in the more resilient auth pattern.
-pub async fn run(mut host_client: JsClient, host_id: &str) -> Result<JsClient, async_nats::Error> {
+pub async fn run(
+    mut host_client: JsClient,
+    host_id: &str,
+    jetstream_domain: &str,
+) -> Result<JsClient, async_nats::Error> {
     log::info!("Host Agent Client: starting workload service...");
     log::info!("host_id : {}", host_id);
 
@@ -39,6 +43,7 @@ pub async fn run(mut host_client: JsClient, host_id: &str) -> Result<JsClient, a
         description: WORKLOAD_SRV_DESC.to_string(),
         version: WORKLOAD_SRV_VERSION.to_string(),
         service_subject: WORKLOAD_SRV_SUBJ.to_string(),
+        maybe_source_js_domain: Some(jetstream_domain.to_string()),
     };
 
     let workload_service = host_client.add_js_service(workload_stream_service).await?;

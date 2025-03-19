@@ -119,9 +119,12 @@ async fn daemonize(args: &DaemonzeArgs) -> anyhow::Result<()> {
         });
     }
 
+    let jetstream_domain = "holo";
     let host_client_workload_clone = host_client.clone();
     spawn(async move {
-        if let Err(e) = hostd::workload::run(host_client_workload_clone, &host_id).await {
+        if let Err(e) =
+            hostd::workload::run(host_client_workload_clone, &host_id, jetstream_domain).await
+        {
             log::error!("Error running host agent workload service. Err={:?}", e)
         };
     });

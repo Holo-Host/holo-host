@@ -4,7 +4,7 @@ use super::types::{
 };
 use anyhow::{anyhow, Result};
 use async_nats::jetstream::consumer::{self, AckPolicy};
-use async_nats::jetstream::stream::{self, Info, Stream};
+use async_nats::jetstream::stream::{self, External, Info, Stream};
 use async_nats::jetstream::Context;
 use futures::StreamExt;
 use std::collections::HashMap;
@@ -35,21 +35,36 @@ impl JsStreamService {
         description: &str,
         version: &str,
         service_subject: &str,
+        maybe_source_js_domain: Option<String>,
     ) -> Result<Self, async_nats::Error>
     where
         Self: 'static,
     {
+        let service_stream_subject = format!("{}.>", service_subject);
+        let sources = maybe_source_js_domain.map(|source_jetstream_domain| {
+            vec![stream::Source {
+                name: name.to_string(),
+                filter_subject: Some(service_stream_subject.clone()),
+                external: Some(External {
+                    api_prefix: format!("$JS.{}.API", source_jetstream_domain),
+                    delivery_prefix: None,
+                }),
+                ..Default::default()
+            }]
+        });
+
         let stream = context
             .get_or_create_stream(&stream::Config {
                 name: name.to_string(),
                 description: Some(description.to_string()),
-                subjects: vec![format!("{}.>", service_subject)],
+                subjects: vec![service_stream_subject],
                 allow_direct: true,
+                sources,
                 ..Default::default()
             })
             .await?;
 
-        let service_log_prefix = format!("JS-LOG::{}::", name);
+        let service_log_prefix = format!("{}_LOG::", name);
 
         Ok(JsStreamService {
             name: name.to_string(),
@@ -238,12 +253,12 @@ impl JsStreamService {
     {
         while let Some(Ok(js_msg)) = messages.next().await {
             log::trace!(
-                "{}Consumer received message: subj='{}.{}', endpoint={}, service={}",
+                "{}Consumer received message: service_name={}, service_subj='{}', endpoint_name={}, endpoint_subj='{}'",
                 log_info.prefix,
+                log_info.service_name,
                 log_info.service_subject,
-                log_info.endpoint_subject,
                 log_info.endpoint_name,
-                log_info.service_name
+                log_info.endpoint_subject,
             );
 
             // TODO(learning; author: stefan): on which level do sync vs async play out?
@@ -252,7 +267,7 @@ impl JsStreamService {
                 EndpointType::Async(ref handler) => handler(Arc::new(js_msg.clone().message)).await,
             };
 
-            let (response_bytes, maybe_subject_tags) = match result {
+            let (response_bytes, subject_tag_map) = match result {
                 Ok(r) => (r.get_response(), r.get_tags()),
                 Err(err) => (err.to_string().into(), HashMap::new()),
             };
@@ -273,13 +288,13 @@ impl JsStreamService {
                     .await
                 {
                     log::error!(
-                        "{}Failed to send reply upon successful message consumption: subj='{}.{}.{}', endpoint={}, service={}, err={:?}",
+                        "{}Failed to send reply upon successful message consumption: service_name={}, service_subj='{}', endpoint_name={}, endpoint_subj='{}', reply_subj='{}', err={:?}",
                         log_info.prefix,
-                        reply,
-                        log_info.service_subject,
-                        log_info.endpoint_subject,
-                        log_info.endpoint_name,
                         log_info.service_name,
+                        log_info.service_subject,
+                        log_info.endpoint_name,
+                        log_info.endpoint_subject,
+                        reply,
                         err
                     );
 
@@ -289,7 +304,7 @@ impl JsStreamService {
 
             // Publish a response message to response subjects when an endpoint response subject generator exists for endpoint
             if let Some(response_subject_fn) = maybe_response_generator.as_ref() {
-                let response_subjects = response_subject_fn(maybe_subject_tags);
+                let response_subjects = response_subject_fn(subject_tag_map);
                 for response_subject in response_subjects.iter() {
                     let subject = format!("{}.{}", log_info.service_subject, response_subject);
 
@@ -302,12 +317,12 @@ impl JsStreamService {
                         .await
                     {
                         log::error!(
-                            "{}Failed to publish new message upon successful message consumption: subj='{}.{}', endpoint={}, service={}, err={:?}",
+                            "{}Failed to publish new message upon successful message consumption: service_name={}, service_subj='{}', endpoint_name={}, endpoint_subj='{}', err={:?}",
                             log_info.prefix,
-                            log_info.service_subject,
-                            log_info.endpoint_subject,
-                            log_info.endpoint_name,
                             log_info.service_name,
+                            log_info.service_subject,
+                            log_info.endpoint_name,
+                            log_info.endpoint_subject,
                             err
                         );
                     };
@@ -318,12 +333,12 @@ impl JsStreamService {
             // Send back message acknowledgment
             if let Err(err) = js_msg.ack().await {
                 log::error!(
-                    "{}Failed to send ACK new message upon successful message consumption: subj='{}.{}', endpoint={}, service={}, err={:?}",
+                    "{}Failed to send ACK new message upon successful message consumption: service_name={}, service_subj='{}', endpoint_name={}, endpoint_subj='{}', err={:?}",
                     log_info.prefix,
-                    log_info.service_subject,
-                    log_info.endpoint_subject,
-                    log_info.endpoint_name,
                     log_info.service_name,
+                    log_info.service_subject,
+                    log_info.endpoint_name,
+                    log_info.endpoint_subject,
                     err
                 );
 
