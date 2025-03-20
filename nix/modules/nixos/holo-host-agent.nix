@@ -71,7 +71,7 @@ in
         };
         inventoryFilePath = lib.mkOption {
           type = lib.types.str;
-          default = "${builtins.toString cfg.nats.storagePath}/inventory.json";
+          default = "${builtins.toString cfg.nats.host.storagePath}/inventory.json";
         };
       };
 
