@@ -67,9 +67,7 @@ impl OrchestratorWorkloadApi {
                 let mut status = WorkloadStatus {
                     id: None,
                     desired: WorkloadState::Running,
-
                     actual: WorkloadState::Reported,
-
                     payload: Default::default(),
                 };
                 workload.status = status.clone();
@@ -121,10 +119,9 @@ impl OrchestratorWorkloadApi {
                     actual: WorkloadState::Updating,
                     payload: Default::default(),
                 };
-
                 workload.status = status.clone();
 
-                // convert workload to document and submit to mongodb
+                // Convert the workload to a bson document and submit to mongodb
                 let updated_workload_doc = to_document(&workload).map_err(|e| {
                     ServiceError::internal(
                         e.to_string(),
@@ -132,6 +129,7 @@ impl OrchestratorWorkloadApi {
                     )
                 })?;
 
+                // Update the workload record in the db collection
                 let _update_result = self
                     .workload_collection
                     .update_one_within(
@@ -182,30 +180,14 @@ impl OrchestratorWorkloadApi {
                 //     });
                 // };
 
-                let status = WorkloadStatus {
+                let new_status = WorkloadStatus {
                     id: Some(workload_id),
-                    desired: WorkloadState::Unlinked,
                     actual: WorkloadState::Deleted,
+                    desired: WorkloadState::Unlinked,
                     payload: Default::default(),
                 };
 
-                let updated_status_doc = bson::to_bson(&status).map_err(|e| {
-                    ServiceError::internal(
-                        e.to_string(),
-                        Some("Failed to serialize workload status".to_string()),
-                    )
-                })?;
-
-                self.workload_collection
-                    .update_one_within(
-                        doc! { "_id":  workload_id },
-                        UpdateModifications::Document(doc! {
-                            "$set": {
-                                "status": updated_status_doc
-                            }
-                        }),
-                        true,
-                    )
+                self.update_workload_status_in_db(new_status.clone())
                     .await?;
 
                 log::info!(
@@ -214,7 +196,7 @@ impl OrchestratorWorkloadApi {
                 );
                 Ok(WorkloadApiResult {
                     result: WorkloadResult {
-                        status,
+                        status: new_status,
                         workload: None,
                     },
                     maybe_response_tags: None,
@@ -256,7 +238,7 @@ impl OrchestratorWorkloadApi {
                     )
                 })?;
 
-                // Otherwise call mongodb to get host collection to get hosts that meet the capacity requirements
+                // Call mongodb to get hosts that meet the capacity requirements
                 let eligible_hosts = self
                     .find_hosts_meeting_workload_criteria(workload.clone(), None)
                     .await?;
@@ -265,7 +247,7 @@ impl OrchestratorWorkloadApi {
                     eligible_hosts
                 );
 
-                // Update the selected host records with the assigned Workload ID
+                // Add the assigned Workload ID to the eligible host records 
                 let eligible_host_ids: Vec<ObjectId> = eligible_hosts.iter().map(|h| h._id).collect();
                 let assigned_host_ids = self
                     .assign_workload_to_hosts(workload_id, eligible_host_ids, workload.min_hosts)
@@ -290,7 +272,7 @@ impl OrchestratorWorkloadApi {
                 };
 
 
-                // Update the Workload Collection with the assigned Host IDs and new status
+                // Add the assigned Host IDs to the Workload record
                 self.assign_hosts_to_workload(assigned_host_ids.clone(), workload_id, new_status.clone())
                     .await
                     .map_err(|e| {
@@ -300,7 +282,8 @@ impl OrchestratorWorkloadApi {
                         )
                     })?;
 
-                // Create tag map with host ids to inform nats to publish message to these hosts with workload install status
+                // Create tag map with all assigned host ids
+                // Nb: This is required to inform nats to publish message to these hosts with workload status..
                 let mut tag_map: HashMap<String, String> = HashMap::new();
                 for (index, host_id) in assigned_host_ids.iter().cloned().enumerate() {
                     let assigned_host = eligible_hosts.iter().find(|h| h._id == host_id).ok_or_else(|| ServiceError::internal("Error: Failed to locate host device id from assigned host ids.".to_string(), Some("Unable to forward workload to Host.".to_string())))?;
@@ -391,8 +374,8 @@ impl OrchestratorWorkloadApi {
                         )
                     })?;
 
-                // IMP: It is very important that the workload state changes to a state that is not `WorkloadState::Updating`,
-                // IMP: ...otherwise, this change will cause the workload update to loop between the db stream modification reads and this handler
+                // IMP: It is very important that the workload state changes to a state that is not `WorkloadState::Updating`..
+                // IMP: Otherwise, this change will cause the workload update to loop between the db stream modification reads and this handler..
                 let new_status = WorkloadStatus {
                     id: None,
                     desired: WorkloadState::Running,
@@ -419,6 +402,8 @@ impl OrchestratorWorkloadApi {
                     workload_id
                 );
 
+                // Create tag map with all assigned host ids
+                // Nb: This is required to inform nats to publish message to these hosts with workload status..
                 for (index, host_id) in assigned_host_ids.iter().enumerate() {
                     let assigned_host = eligible_hosts
                         .iter()
@@ -494,6 +479,8 @@ impl OrchestratorWorkloadApi {
                     })
                     .collect::<Result<Vec<ObjectId>, ServiceError>>()?;
 
+                // Create tag map with all assigned host ids
+                // Nb: This is required to inform nats to publish message to these hosts with workload status..
                 for (index, host_pubkey) in host_ids.iter().enumerate() {
                     tag_map.insert(
                         format!("{TAG_MAP_PREFIX_ASSIGNED_HOST}{}", index),
@@ -587,7 +574,7 @@ impl OrchestratorWorkloadApi {
             .update_one_within(
                 doc! { "_id": workload_status_id },
                 UpdateModifications::Document(doc! { "$set": { "status": status_bson } }),
-                false,
+                workload_status.actual == WorkloadState::Deleted,
             )
             .await?;
 
@@ -640,7 +627,7 @@ impl OrchestratorWorkloadApi {
     }
 
     // Looks through existing hosts to find possible hosts for a given workload
-    // returns the minimum number of hosts required for workload
+    // returns the minimum number of hosts required for workload (based on `workload.min_hosts` field)
     async fn find_hosts_meeting_workload_criteria(
         &self,
         workload: Workload,
@@ -648,6 +635,7 @@ impl OrchestratorWorkloadApi {
     ) -> Result<Vec<HostIdJSON>, ServiceError> {
         let mut needed_host_count = workload.min_hosts;
         let mut still_eligible_host_ids: Vec<HostIdJSON> = vec![];
+        let mut host_ids: Vec<HostIdJSON> = vec![];
 
         if let Some(hosts) = maybe_existing_hosts {
             still_eligible_host_ids = hosts
@@ -678,39 +666,42 @@ impl OrchestratorWorkloadApi {
             needed_host_count -= still_eligible_host_ids.len() as i32;
         }
 
-        let pipeline = vec![
-            doc! {
-                "$match": {
-                    // verify there are enough system resources
-                    "$expr": { "$gte": [{ "$sum": "$inventory.drive" }, Bson::Int64(workload.system_specs.capacity.drive)]},
-                    "$expr": { "$gte": [{ "$size": "$inventory.cpus" }, Bson::Int64(workload.system_specs.capacity.cores)]},
-                }
-            },
-            doc! {
-                // the maximum number of hosts returned should be the minimum hosts required by workload
-                // sample randomized results and always return back at least 1 result
-                "$sample": { "size": std::cmp::max(needed_host_count, 1) }
-            },
-            doc! {
-                // only return the `host._id` and `host.device_id` fields
-                "$project": { "_id": 1, "device_id": 1 }
-            },
-        ];
-        let mut host_ids = self
-            .host_collection
-            .aggregate::<HostIdJSON>(pipeline)
-            .await?;
-        if host_ids.is_empty() {
-            let err_msg = format!(
-                "Failed to locate a compatible host for workload. Workload_Id={:?}",
-                workload._id
-            );
-            return Err(ServiceError::internal(err_msg, None));
-        } else if workload.min_hosts > host_ids.len() as i32 {
-            log::warn!(
-                "Failed to locate the the min required number of hosts for workload. Workload_Id={:?}",
-                workload._id
-            );
+        if needed_host_count > 0 {
+            let pipeline = vec![
+                doc! {
+                    "$match": {
+                        // verify there are enough system resources
+                        "$expr": { "$gte": [{ "$sum": "$inventory.drive" }, Bson::Int64(workload.system_specs.capacity.drive)]},
+                        "$expr": { "$gte": [{ "$size": "$inventory.cpus" }, Bson::Int64(workload.system_specs.capacity.cores)]},
+                    }
+                },
+                doc! {
+                    // the maximum number of hosts returned should be the minimum hosts required by workload
+                    // sample randomized results and always return back at least 1 result
+                    "$sample": { "size": std::cmp::max(needed_host_count, 1) }
+                },
+                doc! {
+                    // only return the `host._id` and `host.device_id` fields
+                    "$project": { "_id": 1, "device_id": 1 }
+                },
+            ];
+
+            host_ids = self
+                .host_collection
+                .aggregate::<HostIdJSON>(pipeline)
+                .await?;
+            if host_ids.is_empty() {
+                let err_msg = format!(
+                    "Failed to locate a compatible host for workload. Workload_Id={:?}",
+                    workload._id
+                );
+                return Err(ServiceError::internal(err_msg, None));
+            } else if workload.min_hosts > host_ids.len() as i32 {
+                log::warn!(
+                    "Failed to locate the the min required number of hosts for workload. Workload_Id={:?}",
+                    workload._id
+                );
+            }
         }
 
         host_ids.extend(still_eligible_host_ids);

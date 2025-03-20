@@ -78,8 +78,6 @@ mod tests {
 
         let r = api.delete_workload(msg).await?;
 
-        println!("test_delete_workload result: {:?}", r.result);
-
         assert!(matches!(r.result.status.actual, WorkloadState::Deleted));
         assert!(matches!(r.result.status.desired, WorkloadState::Unlinked));
 

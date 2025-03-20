@@ -15,15 +15,14 @@ pub struct HostIdJSON {
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 pub enum WorkloadServiceSubjects {
-    Add,
-    Update,
-    Delete,
+    DbAdd,
+    DbUpdate,
+    DbDelete,
+    DbStatusUpdate,
     Insert, // db change stream trigger
     Modify, // db change stream trigger
-    HandleStatusUpdate,
-    SendStatus,
-    Install,
-    Uninstall,
+    HostSendStatus,
+    HostUpdate,
     // /// TODO: Command replaces Add, Update, Delete, Install, Uninstall, SendStatus
     Command,
 }
