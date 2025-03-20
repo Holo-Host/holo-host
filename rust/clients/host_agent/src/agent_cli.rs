@@ -66,7 +66,7 @@ pub struct DaemonzeArgs {
     )]
     pub(crate) nats_connect_timeout_secs: u64,
 
-    #[arg(long, short, help = "host agent inventory check interval (in seconds)")]
+    #[arg(long, help = "host agent inventory check interval (in seconds)")]
     pub(crate) host_inventory_check_interval_sec: Option<u64>,
 
     #[arg(long, help = "host agent inventory file path")]

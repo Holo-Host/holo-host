@@ -25,12 +25,9 @@ use workload::{
 };
 
 // TODO: Use _host_creds_path for auth once we add in the more resilient auth pattern.
-pub async fn run(
-    mut host_client: JsClient,
-    host_pubkey: &str,
-) -> Result<JsClient, async_nats::Error> {
+pub async fn run(mut host_client: JsClient, host_id: &str) -> Result<JsClient, async_nats::Error> {
     log::info!("Host Agent Client: starting workload service...");
-    log::info!("host_pubkey : {}", host_pubkey);
+    log::info!("host_id : {}", host_id);
 
     // Instantiate the Workload API
     let workload_api = HostWorkloadApi::default();
@@ -58,7 +55,7 @@ pub async fn run(
             WorkloadServiceSubjects::Install,
             generate_service_call!(workload_api, install_workload),
         )
-        .with_subject_prefix(host_pubkey.to_lowercase()),
+        .with_subject_prefix(host_id.to_lowercase()),
         workload_service,
     )
     .await?;
@@ -69,7 +66,7 @@ pub async fn run(
             WorkloadServiceSubjects::UpdateInstalled,
             generate_service_call!(workload_api, update_workload),
         )
-        .with_subject_prefix(host_pubkey.to_lowercase()),
+        .with_subject_prefix(host_id.to_lowercase()),
         workload_service,
     )
     .await?;
@@ -80,7 +77,7 @@ pub async fn run(
             WorkloadServiceSubjects::Uninstall,
             generate_service_call!(workload_api, uninstall_workload),
         )
-        .with_subject_prefix(host_pubkey.to_lowercase()),
+        .with_subject_prefix(host_id.to_lowercase()),
         workload_service,
     )
     .await?;
@@ -96,7 +93,7 @@ pub async fn run(
             WorkloadServiceSubjects::SendStatus,
             generate_service_call!(workload_api, fetch_workload_status),
         )
-        .with_subject_prefix(host_pubkey.to_lowercase())
+        .with_subject_prefix(host_id.to_lowercase())
         .with_response_subject_fn(update_workload_status_response),
         workload_service,
     )

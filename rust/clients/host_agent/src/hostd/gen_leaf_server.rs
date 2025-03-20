@@ -12,13 +12,14 @@ use nats_utils::{
 use tempfile::tempdir;
 
 pub async fn run(
+    host_id: &str,
     maybe_server_name: &Option<String>,
     user_creds_path: &Option<PathBuf>,
     maybe_store_dir: &Option<PathBuf>,
     hub_url: String,
     hub_tls_insecure: bool,
     nats_connect_timeout_secs: u64,
-) -> anyhow::Result<jetstream_client::JsClient> {
+) -> anyhow::Result<(jetstream_client::JsClient, LeafServer)> {
     let leaf_client_conn_domain = "127.0.0.1";
     let leaf_client_conn_port = std::env::var("NATS_LISTEN_PORT")
         .map(|var| var.parse().expect("can't parse into number"))
@@ -62,17 +63,16 @@ pub async fn run(
         },
     }];
 
+    // The hub needs a unique name for each server to distinguish the leaf node connection
     let server_name = if let Some(server_name) = maybe_server_name {
         server_name.clone()
     } else {
-        // the hub needs a unique name for each server to distinguish the leaf node connection
-        machineid_rs::IdBuilder::new(machineid_rs::Encryption::SHA256)
-            .add_component(machineid_rs::HWIDComponent::SystemID)
-            .build("host-agent")?
+        host_id.to_string()
     };
 
+    log::info!("Spawning Leaf Server");
     // Create a new Leaf Server instance
-    let leaf_server = LeafServer::new(
+    let mut leaf_server = LeafServer::new(
         Some(&server_name),
         LEAF_SERVER_CONFIG_PATH,
         leaf_client_conn_domain,
@@ -81,21 +81,15 @@ pub async fn run(
         logging_options,
         leaf_node_remotes,
     );
-
-    log::info!("Spawning Leaf Server");
-    tokio::spawn(async move {
-        if let Err(e) = leaf_server.run().await {
-            anyhow::bail!("Failed to run Leaf Server: {e:?}")
-        };
-
-        Ok(())
-    })
-    .await
-    .context("Failed to spawn the Leaf Server in a separate thread")??;
+    leaf_server
+        .run()
+        .await
+        .map_err(|e| anyhow::anyhow!(e.to_string()))
+        .context("Failed to spawn the Leaf Server in a separate thread")?;
 
     // Spin up Nats Client
     // Nats takes a moment to become responsive, so we try to connecti in a loop for a few seconds.
-    // TODO: how do we recover from a connection loss to Nats in case it crashes or something else?
+    // in case of a connection loss to Nats this client is self-recovering.
     let nats_url = jetstream_client::get_nats_url();
     log::info!("nats_url : {nats_url}");
 
@@ -132,5 +126,5 @@ pub async fn run(
         }
     };
 
-    Ok(nats_client)
+    Ok((nats_client, leaf_server))
 }

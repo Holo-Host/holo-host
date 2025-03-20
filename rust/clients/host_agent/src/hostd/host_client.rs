@@ -7,13 +7,13 @@ use std::{path::PathBuf, time::Duration};
 const HOST_AGENT_CLIENT_NAME: &str = "Host Agent";
 const HOST_AGENT_INBOX_PREFIX: &str = "_HPOS_INBOX";
 
-pub async fn run(host_pubkey: &str, host_creds_path: &Option<PathBuf>) -> anyhow::Result<JsClient> {
+pub async fn run(host_id: &str, host_creds_path: &Option<PathBuf>) -> anyhow::Result<JsClient> {
     let nats_url = get_nats_url();
     log::info!("nats_url : {nats_url}");
     log::info!("host_creds_path (currently omited) : {host_creds_path:?}");
-    log::info!("host_pubkey : {host_pubkey}");
+    log::info!("host_id : {host_id}");
 
-    let pubkey_lowercase: String = host_pubkey.to_string().to_lowercase();
+    let pubkey_lowercase: String = host_id.to_string().to_lowercase();
 
     let host_creds = host_creds_path
         .to_owned()
