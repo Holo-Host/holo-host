@@ -32,6 +32,7 @@ pub async fn run(
         description: INVENTORY_SRV_DESC.to_string(),
         version: INVENTORY_SRV_VERSION.to_string(),
         service_subject: INVENTORY_SRV_SUBJ.to_string(),
+        maybe_source_js_domain: None,
     };
     nats_client.add_js_service(inventory_stream_service).await?;
 

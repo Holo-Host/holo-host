@@ -12,7 +12,7 @@
     - sending out active periodic workload reports
 */
 
-use super::utils::{add_workload_consumer, create_callback_subject};
+use super::utils::{add_workload_consumer, create_callback_subject_to_orchestrator};
 use anyhow::Result;
 use nats_utils::{
     generate_service_call,
@@ -25,7 +25,11 @@ use workload::{
 };
 
 // TODO: Use _host_creds_path for auth once we add in the more resilient auth pattern.
-pub async fn run(mut host_client: JsClient, host_id: &str) -> Result<JsClient, async_nats::Error> {
+pub async fn run(
+    mut host_client: JsClient,
+    host_id: &str,
+    jetstream_domain: &str,
+) -> Result<JsClient, async_nats::Error> {
     log::info!("Host Agent Client: starting workload service...");
     log::info!("host_id : {}", host_id);
 
@@ -39,21 +43,20 @@ pub async fn run(mut host_client: JsClient, host_id: &str) -> Result<JsClient, a
         description: WORKLOAD_SRV_DESC.to_string(),
         version: WORKLOAD_SRV_VERSION.to_string(),
         service_subject: WORKLOAD_SRV_SUBJ.to_string(),
+        maybe_source_js_domain: Some(jetstream_domain.to_string()),
     };
 
     let workload_service = host_client.add_js_service(workload_stream_service).await?;
 
     add_workload_consumer(
         ServiceConsumerBuilder::new(
-            "update_workload".to_string(),
-            WorkloadServiceSubjects::Update,
+            "update_workload_on_host".to_string(),
+            WorkloadServiceSubjects::HostUpdate,
             generate_service_call!(workload_api, update_workload),
         )
         .with_subject_prefix(host_id.to_lowercase())
-        .with_response_subject_fn(create_callback_subject(
-            WorkloadServiceSubjects::HandleStatusUpdate
-                .as_ref()
-                .to_string(),
+        .with_response_subject_fn(create_callback_subject_to_orchestrator(
+            WorkloadServiceSubjects::DbStatusUpdate.as_ref().to_string(),
         )),
         &workload_service,
     )
@@ -62,14 +65,12 @@ pub async fn run(mut host_client: JsClient, host_id: &str) -> Result<JsClient, a
     add_workload_consumer(
         ServiceConsumerBuilder::new(
             "fetch_workload_status".to_string(),
-            WorkloadServiceSubjects::SendStatus,
+            WorkloadServiceSubjects::HostSendStatus,
             generate_service_call!(workload_api, fetch_workload_status),
         )
         .with_subject_prefix(host_id.to_lowercase())
-        .with_response_subject_fn(create_callback_subject(
-            WorkloadServiceSubjects::HandleStatusUpdate
-                .as_ref()
-                .to_string(),
+        .with_response_subject_fn(create_callback_subject_to_orchestrator(
+            WorkloadServiceSubjects::DbStatusUpdate.as_ref().to_string(),
         )),
         &workload_service,
     )

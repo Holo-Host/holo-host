@@ -1,9 +1,9 @@
 /*
 Endpoints & Managed Subjects:
-    - `install_workload`: handles the "WORKLOAD.<host_pukey>.install." subject
     - `update_workload`: handles the "WORKLOAD.<host_pukey>.update_installed" subject
-    - `uninstall_workload`: handles the "WORKLOAD.<host_pukey>.uninstall." subject
+        - manages the install, update installed, and uninstall cases for workloads
     - `fetch_workload_status`: handles the "WORKLOAD.<host_pukey>.send_status" subject
+        - calls logic to deteremine current workload status and fwds the workload status back to the Orchestrator
 */
 
 use crate::types::WorkloadResult;
@@ -97,7 +97,7 @@ impl HostWorkloadApi {
 
                 (desired_state, status_payload)
             }
-            WorkloadState::Uninstalled | WorkloadState::Removed | WorkloadState::Deleted => {
+            WorkloadState::Uninstalled | WorkloadState::Unlinked | WorkloadState::Deleted => {
                 let (workload_path_toplevel, exists) = ensure_workload_path(
                     &workload_id,
                     None,

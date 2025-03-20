@@ -101,8 +101,7 @@ let
                 no_auth_user = "anon";
 
                 jetstream = {
-                  # TODO: use "hub" once we support different domains on hub and leafs
-                  domain = "";
+                  domain = "hub";
                   enabled = true;
                 };
 
@@ -157,6 +156,7 @@ let
 
                 # TODO: i suspect there's a bug where the inventory prevents the workload messages from being processed
                 extraDaemonizeArgs.host-inventory-disable = false;
+                extraDaemonizeArgs.host-inventory-file-path = "/var/lib/holo-host-agent/inventory.json";
 
                 # dev-container
                 nats.hub.url = "wss://dev-hub:${builtins.toString config.containers.dev-hub.config.holo.nats-server.websocket.externalPort}";

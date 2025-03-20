@@ -43,6 +43,7 @@ pub async fn run(
                 Some("Failed to save host inventory to file.".to_string()),
             )
         })?;
+    log::trace!("Host Agent Client: saved inventory to file...");
 
     let interval = tokio::time::Duration::from_secs(host_inventory_check_interval_sec);
     let check_interval_duration = chrono::TimeDelta::seconds(interval.as_secs() as i64);

@@ -130,13 +130,14 @@ pkgs.testers.runNixOSTest (
               "storage": "file",
               "discard": "old",
               "num_replicas": 1,
-              "mirror": {
+              "sources": [{
                   "name": "${testStreamName}",
                   "external": {
                       "api": "$JS.${hubJsDomain}.API",
                       "deliver": ""
-                  }
-              },
+                  },
+                  subject_transforms: [],
+              }],
               "sealed": false,
               "deny_delete": false,
               "deny_purge": false,

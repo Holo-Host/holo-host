@@ -30,7 +30,7 @@ use serde::{Deserialize, Serialize};
 use std::{fmt::Debug, sync::Arc};
 use types::InventoryApiResult;
 
-pub const INVENTORY_SRV_NAME: &str = "INVENTORY";
+pub const INVENTORY_SRV_NAME: &str = "INVENTORY_SERVICE";
 pub const INVENTORY_SRV_SUBJ: &str = "INVENTORY";
 pub const INVENTORY_SRV_VERSION: &str = "0.0.1";
 pub const INVENTORY_SRV_DESC: &str = "This service handles the Inventory updates from Host.";
@@ -75,25 +75,15 @@ impl InventoryServiceApi {
             })?
             .to_string();
 
-        log::debug!("Processing inventory update for host: {host_id}");
-
         // Update host inventory and get the host record
-        self.update_host_inventory(&host_id, &host_inventory)
+        let host = self
+            .update_host_inventory(&host_id, &host_inventory)
             .await?;
 
-        let host = self
-            .host_collection
-            .get_one_from(doc! { "device_id": &host_id })
-            .await?
-            .ok_or_else(|| {
-                ServiceError::internal(
-                    format!("Host not found: {}", host_id),
-                    Some("Host lookup failed after inventory update".to_string()),
-                )
-            })?;
-
         // Handle workloads that are no longer compatible with the host
-        self.handle_ineligible_host_workloads(host).await?;
+        if !host.assigned_workloads.is_empty() {
+            self.handle_ineligible_host_workloads(host).await?;
+        }
 
         Ok(InventoryApiResult {
             status: types::InventoryUpdateStatus::Ok,
@@ -107,31 +97,35 @@ impl InventoryServiceApi {
         &self,
         host_id: &str,
         inventory: &HoloInventory,
-    ) -> Result<(), ServiceError> {
+    ) -> Result<Host, ServiceError> {
+        // Create a default Host instance to extract default values
+        let default_host = Host::default();
         let filter = doc! { "device_id": host_id };
-
         let update = doc! {
             "$set": {
                 "inventory": bson::to_bson(inventory)
                     .map_err(|e| ServiceError::internal(e.to_string(), None))?,
-                "metadata.updated_at": DateTime::now()
+                "metadata.updated_at": DateTime::now(),
             },
             // If the document doesn't exist, also set the device_id (host_id)
             "$setOnInsert": {
+                "metadata.is_deleted": false,
                 "metadata.created_at": DateTime::now(),
                 "device_id": host_id,
-                "avg_uptime": 100.00,
+                "avg_uptime": default_host.avg_uptime,
+                "avg_network_speed": default_host.avg_network_speed,
+                "avg_latency": default_host.avg_latency,
                 "assigned_workloads": [],
-                "assigned_hoster": bson::Bson::Null,
-                // todo: ip_address
             }
         };
 
         // Use upsert to either insert or update the document
-        self.host_collection
+        let host = self
+            .host_collection
             .inner
             .find_one_and_update(filter, UpdateModifications::Document(update))
             .upsert(true)
+            .return_document(mongodb::options::ReturnDocument::After)
             .await
             .map_err(|e| {
                 ServiceError::database(
@@ -139,9 +133,15 @@ impl InventoryServiceApi {
                     Some("Host Collection".to_string()),
                     Some("find_one_and_update".to_string()),
                 )
+            })?
+            .ok_or_else(|| {
+                ServiceError::internal(
+                    "Failed to return Host after update",
+                    Some("Host Collection".to_string()),
+                )
             })?;
 
-        Ok(())
+        Ok(host)
     }
 
     fn calculate_host_drive_capacity(&self, host_inventory: &HoloInventory) -> i64 {

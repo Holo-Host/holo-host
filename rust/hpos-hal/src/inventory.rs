@@ -13,6 +13,7 @@ use std::fmt::{self, Display};
 use std::fs::OpenOptions;
 use std::io;
 use std::io::Read;
+use std::path::Path;
 use std::{fs, fs::File};
 use thiserror::Error;
 use thiserror_context::{impl_context, Context};
@@ -86,7 +87,15 @@ pub struct HoloInventory {
 impl HoloInventory {
     /// Saves the HoloInventory struct to a file in JSON format.
     pub fn save_to_file(&self, path: &str) -> Result<(), InventoryError> {
-        // TODO: ensure parent-dir of the path exists
+        log::trace!("Saving inventory to file: path={path:?}");
+
+        // Ensure directory exists
+        if let Some(parent) = Path::new(path).parent() {
+            if !parent.exists() {
+                fs::create_dir_all(parent)
+                    .context("ERROR: Failed to create host inventory path directory.")?;
+            }
+        }
 
         let file = OpenOptions::new()
             .write(true)
