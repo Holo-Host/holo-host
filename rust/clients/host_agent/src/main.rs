@@ -43,6 +43,7 @@ async fn main() -> Result<(), AgentCliError> {
         }
         agent_cli::CommandScopes::Host { command } => host_cmds::host_command(command)?,
         agent_cli::CommandScopes::Support { command } => support_cmds::support_command(command)?,
+        agent_cli::CommandScopes::Version {} => version(),
     }
 
     Ok(())
@@ -122,4 +123,12 @@ async fn daemonize(args: &DaemonzeArgs) -> Result<(), async_nats::Error> {
     let _ = host_client.close().await;
     let _ = leaf_server.close().await;
     Ok(())
+}
+
+/// Simple function to display various version numbers and strings. This includes other info that
+/// the default `-V` implementation within clap implements, such as the git commit hash.
+fn version() {
+    println!("Agent version: {}", env!["CARGO_PKG_VERSION"]);
+    println!("Git commit: {}", env!["GIT_HASH"]);
+    println!("Workspace status: {}", env!["GIT_STATUS"]);
 }
