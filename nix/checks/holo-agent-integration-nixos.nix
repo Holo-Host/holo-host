@@ -27,7 +27,7 @@ pkgs.testers.runNixOSTest (
 
           nats.hub.url = "wss://${nodes.hub.networking.fqdn}:${builtins.toString nodes.hub.holo.nats-server.websocket.externalPort}";
           nats.hub.tlsInsecure = true;
-          nats.store_dir = "${nats.host.storagePath}/store_dir";
+          nats.store_dir = "/var/lib/holo-host-agent/store_dir";
         };
       };
   in
