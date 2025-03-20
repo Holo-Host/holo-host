@@ -6,10 +6,6 @@ Current Endpoints & Managed Subjects:
     - `handle_db_insertion`: handles the "WORKLOAD.insert" subject // published by mongo<>nats connector
     - `handle_db_modification`: handles the "WORKLOAD.modify" subject // published by mongo<>nats connector
     - `handle_status_update`: handles the "WORKLOAD.handle_status_update" subject // published by hosting agent
-
-TODO(refactor) discuss the following alternative model:
-    - `COMMAND.CHANGE_WORKLOAD`: request changes to a workload
-    - `EVENT.WORKLOAD.CHANGED`: information about events that factually happened, .e.g. during the handling of a command
 */
 
 use super::{types::WorkloadApiResult, WorkloadServiceApi};

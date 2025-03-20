@@ -24,8 +24,8 @@ use nats_utils::{
 };
 use workload::{
     orchestrator_api::OrchestratorWorkloadApi, types::WorkloadServiceSubjects,
-    TAG_MAP_PREFIX_ASSIGNED_HOST, WORKLOAD_SRV_DESC, WORKLOAD_SRV_NAME, WORKLOAD_SRV_SUBJ,
-    WORKLOAD_SRV_VERSION,
+    TAG_MAP_PREFIX_ASSIGNED_HOST, WORKLOAD_ORCHESTRATOR_SUBJECT_PREFIX, WORKLOAD_SRV_DESC,
+    WORKLOAD_SRV_NAME, WORKLOAD_SRV_SUBJ, WORKLOAD_SRV_VERSION,
 };
 
 pub async fn run(
@@ -64,12 +64,6 @@ pub async fn run(
         Mar 18 16:12:20 dev-orch holo-orchestrator-start[322]: [2025-03-18T15:12:20Z DEBUG db_utils::mongodb] Inserting new document
         Mar 18 16:12:20 dev-orch holo-orchestrator-start[322]: [2025-03-18T15:12:20Z ERROR db_utils::mongodb] MongoDB insert_one_into operation failed: Kind: An error occurred when trying to execute a write operation: WriteError(WriteError { code: 11000, code_name: None, message: "E11000 duplicate key error collection: holo-hosting.workload index: _id_ dup key: { _id: ObjectId('67d2ef2a67d4b619a54286c4') }", details: None }), labels: {}
         Mar 18 16:12:20 dev-orch holo-orchestrator-start[322]: [2025-03-18T15:12:20Z ERROR workload] Failed to process workload request. Subject=WORKLOAD.add, Payload=Workload { _id: Some(ObjectId("67d2ef2a67d4b619a54286c4")), metadata: Metadata { is_deleted: false, deleted_at: None, updated_at: None, created_at: None }, assigned_developer: ObjectId("67d98d547999125b12b5cac9"), version: "", min_hosts: 0, system_specs: SystemSpecs { capacity: Capacity { drive: 1, cores: 1 }, avg_network_speed: 0, avg_uptime: 0.0 }, assigned_hosts: [], status: WorkloadStatus { id: Some(ObjectId("67d2ef2a67d4b619a54286c4")), desired: Installed, actual: Unknown("most uncertain") }, deployable: HolochainDhtV1(WorkloadDeployableHolochainDhtV1 { happ_binary_url: Url { scheme: "https", cannot_be_a_base: false, username: "", password: None, host: Some(Domain("gist.github.com")), port: None, path: "/steveej/5443d6d15395aa23081f1ee04712b2b3/raw/fdacb9b723ba83743567f2a39a8bfbbffb46b1f0/test-zome.bundle", query: None, fragment: None }, network_seed: "just-testing", memproof: None, bootstrap_server_urls: None, sbd_server_urls: None, holochain_feature_flags: None, holochain_version: None }) }: Database error: Kind: An error occurred when trying to execute a write operation: WriteError(WriteError { code: 11000, code_name: None, message: "E11000 duplicate key error collection: holo-hosting.workload index: _id_ dup key: { _id: ObjectId('67d2ef2a67d4b619a54286c4') }", details: None }), labels: {}
-
-
-        * [ ] design subjects and permissions so we can control forwarding per host
-        * [ ] subject pattern:
-            COMMAND.$OWNER.$SERVICE.$TASK
-            EVENT.$OWNER.$FACT
     */
 
     add_workload_consumer(
@@ -140,7 +134,7 @@ pub async fn run(
             WorkloadServiceSubjects::DbStatusUpdate,
             generate_service_call!(workload_api, handle_status_update),
         )
-        .with_subject_prefix("orchestrator".to_string()),
+        .with_subject_prefix(WORKLOAD_ORCHESTRATOR_SUBJECT_PREFIX.to_string()),
         &workload_service,
     )
     .await?;
