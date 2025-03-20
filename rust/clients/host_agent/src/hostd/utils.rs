@@ -23,9 +23,11 @@ where
     Ok(())
 }
 
-pub fn create_callback_subject(sub_subject_name: String) -> ResponseSubjectsGenerator {
+pub fn create_callback_subject_to_orchestrator(
+    sub_subject_name: String,
+) -> ResponseSubjectsGenerator {
     Arc::new(move |_tag_map: HashMap<String, String>| -> Vec<String> {
-        // TODO(correctness): update this
+        // NB: this must match the expected subject for the `OrchestratorWorkloadApi.handle_status_update` consumer
         vec![format!("orchestrator.{}", sub_subject_name)]
     })
 }

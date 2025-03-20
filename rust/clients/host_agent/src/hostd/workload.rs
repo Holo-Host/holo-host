@@ -12,7 +12,7 @@
     - sending out active periodic workload reports
 */
 
-use super::utils::{add_workload_consumer, create_callback_subject};
+use super::utils::{add_workload_consumer, create_callback_subject_to_orchestrator};
 use anyhow::Result;
 use nats_utils::{
     generate_service_call,
@@ -55,7 +55,7 @@ pub async fn run(
             generate_service_call!(workload_api, update_workload),
         )
         .with_subject_prefix(host_id.to_lowercase())
-        .with_response_subject_fn(create_callback_subject(
+        .with_response_subject_fn(create_callback_subject_to_orchestrator(
             WorkloadServiceSubjects::HandleStatusUpdate
                 .as_ref()
                 .to_string(),
@@ -71,7 +71,7 @@ pub async fn run(
             generate_service_call!(workload_api, fetch_workload_status),
         )
         .with_subject_prefix(host_id.to_lowercase())
-        .with_response_subject_fn(create_callback_subject(
+        .with_response_subject_fn(create_callback_subject_to_orchestrator(
             WorkloadServiceSubjects::HandleStatusUpdate
                 .as_ref()
                 .to_string(),

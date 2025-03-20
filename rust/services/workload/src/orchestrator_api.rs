@@ -166,24 +166,25 @@ impl OrchestratorWorkloadApi {
             msg,
             WorkloadState::Deleted,
             WorkloadState::Error,
-            |workload: Workload| async move {
-                let workload_id = if let Some(workload_id) = workload._id {
-                    workload_id
-                } else {
-                    return Ok(WorkloadApiResult {
-                        result: WorkloadResult {
-                            status: WorkloadStatus {
-                                ..workload.status.clone()
-                            },
-                            workload: Some(workload),
-                        },
-                        maybe_response_tags: None,
-                    });
-                };
+            |workload_id: ObjectId| async move {
+                // TODO: Disucss with Stefan - what is the reason for passing in the whole workload? This fn only requires the workload ID to take the action it requires...
+                // let workload_id = if let Some(workload_id) = workload._id {
+                //     workload_id
+                // } else {
+                //     return Ok(WorkloadApiResult {
+                //         result: WorkloadResult {
+                //             status: WorkloadStatus {
+                //                 ..workload.status.clone()
+                //             },
+                //             workload: Some(workload),
+                //         },
+                //         maybe_response_tags: None,
+                //     });
+                // };
 
                 let status = WorkloadStatus {
                     id: Some(workload_id),
-                    desired: WorkloadState::Removed,
+                    desired: WorkloadState::Unlinked,
                     actual: WorkloadState::Deleted,
                     payload: Default::default(),
                 };
@@ -236,6 +237,18 @@ impl OrchestratorWorkloadApi {
             |workload: schemas::Workload| async move {
                 log::debug!("New workload to assign. Workload={:#?}", workload);
 
+                // Perform sanity check to ensure workload is not already assigned to a host and if so, exit fn
+                if !workload.assigned_hosts.is_empty() {
+                    log::warn!("Attempted to assign host for new workload, but host already exists.");
+                    return Ok(WorkloadApiResult {
+                        result: WorkloadResult {
+                            status: workload.status,
+                            workload: None,
+                        },
+                        maybe_response_tags: None,
+                    });
+                }
+
                 let workload_id = workload.clone()._id.ok_or_else(|| {
                     ServiceError::internal(
                         format!("No `_id` found for workload. Unable to proceed assigning a host. Workload={:?}", workload),
@@ -243,30 +256,11 @@ impl OrchestratorWorkloadApi {
                     )
                 })?;
 
-                let status = WorkloadStatus {
-                    id: Some(workload_id),
-                    desired: workload.status.desired.clone(),
-                    actual: WorkloadState::Assigned,
-                    payload: Default::default(),
-                };
-
-                // Perform sanity check to ensure workload is not already assigned to a host and if so, exit fn
-                if !workload.assigned_hosts.is_empty() {
-                    log::warn!("Attempted to assign host for new workload, but host already exists.");
-                    return Ok(WorkloadApiResult {
-                        result: WorkloadResult {
-                            status,
-                            workload: None,
-                        },
-                        maybe_response_tags: None,
-                    });
-                }
-
                 // Otherwise call mongodb to get host collection to get hosts that meet the capacity requirements
                 let eligible_hosts = self
                     .find_hosts_meeting_workload_criteria(workload.clone(), None)
                     .await?;
-                log::debug!(
+                log::trace!(
                     "Eligible hosts for new workload. MongodDB Hosts={:?}",
                     eligible_hosts
                 );
@@ -283,12 +277,21 @@ impl OrchestratorWorkloadApi {
                         )
                     })?;
 
-                // Update the Workload Collection with the assigned Host ID
+                log::trace!(
+                    "Assigned host ids for new workload. MongodDB Hosts={:?}",
+                    assigned_host_ids
+                );
+
                 let new_status = WorkloadStatus {
-                    id: None,
-                    ..status.clone()
+                    id: Some(workload_id),
+                    desired: WorkloadState::Running, // TODO: connect with stefan on appropriate desired state
+                    actual: WorkloadState::Assigned,
+                    payload: Default::default(),
                 };
-                self.assign_hosts_to_workload(assigned_host_ids.clone(), workload_id, new_status)
+
+
+                // Update the Workload Collection with the assigned Host IDs and new status
+                self.assign_hosts_to_workload(assigned_host_ids.clone(), workload_id, new_status.clone())
                     .await
                     .map_err(|e| {
                         ServiceError::internal(
@@ -305,11 +308,11 @@ impl OrchestratorWorkloadApi {
                     tag_map.insert(format!("{TAG_MAP_PREFIX_ASSIGNED_HOST}{}", index), assigned_host.device_id.to_string());
                 }
 
-                log::debug!("tag_map: {tag_map:?}");
+                log::trace!("Forwarding subject tag map: {tag_map:?}");
 
                 Ok(WorkloadApiResult {
                     result: WorkloadResult {
-                        status,
+                        status: new_status,
                         workload: Some(workload),
                     },
                     maybe_response_tags: Some(tag_map),
@@ -359,7 +362,7 @@ impl OrchestratorWorkloadApi {
                         )
                     })?;
 
-                self.remove_workload_from_hosts(workload_id)
+                self.unlink_workload_from_hosts(workload_id)
                     .await
                     .map_err(|e| {
                         ServiceError::internal(
@@ -371,7 +374,7 @@ impl OrchestratorWorkloadApi {
                 let eligible_hosts = self
                     .find_hosts_meeting_workload_criteria(workload.clone(), Some(hosts))
                     .await?;
-                log::debug!(
+                log::trace!(
                     "Eligible hosts for new workload. MongodDB Hosts={:?}",
                     eligible_hosts
                 );
@@ -410,6 +413,12 @@ impl OrchestratorWorkloadApi {
                     )
                 })?;
 
+                log::info!(
+                    "Assigned workload to hosts. Host_Ids={:?} Workload={:#?}",
+                    assigned_host_ids,
+                    workload_id
+                );
+
                 for (index, host_id) in assigned_host_ids.iter().enumerate() {
                     let assigned_host = eligible_hosts
                         .iter()
@@ -427,7 +436,7 @@ impl OrchestratorWorkloadApi {
                     );
                 }
 
-                log::info!("Added workload to new hosts. Workload={:#?}", workload_id);
+                log::trace!("Forwarding subject tag map: {tag_map:?}");
 
                 WorkloadApiResult {
                     result: WorkloadResult {
@@ -454,7 +463,7 @@ impl OrchestratorWorkloadApi {
                         )
                     })?;
 
-                self.remove_workload_from_hosts(workload_id)
+                self.unlink_workload_from_hosts(workload_id)
                     .await
                     .map_err(|e| {
                         ServiceError::internal(
@@ -462,6 +471,16 @@ impl OrchestratorWorkloadApi {
                             Some("Failed to remove workload from hosts".to_string()),
                         )
                     })?;
+
+                let new_status = WorkloadStatus {
+                    id: Some(workload_id),
+                    desired: WorkloadState::Uninstalled,
+                    actual: WorkloadState::Unlinked,
+
+                    payload: Default::default(),
+                };
+                self.update_workload_status_in_db(new_status.clone())
+                    .await?;
 
                 let host_ids = hosts
                     .iter()
@@ -486,13 +505,7 @@ impl OrchestratorWorkloadApi {
 
                 WorkloadApiResult {
                     result: WorkloadResult {
-                        status: WorkloadStatus {
-                            id: Some(workload_id),
-                            desired: WorkloadState::Uninstalled,
-                            actual: WorkloadState::Removed,
-
-                            payload: Default::default(),
-                        },
+                        status: new_status,
                         workload: Some(workload),
                     },
                     maybe_response_tags: Some(tag_map),
@@ -530,6 +543,32 @@ impl OrchestratorWorkloadApi {
         let workload_status = Self::convert_msg_to_type::<WorkloadResult>(msg)?.status;
         log::trace!("Workload status to update. Status={:?}", workload_status);
 
+        let workload_id = workload_status.id;
+        self.update_workload_status_in_db(workload_status.clone())
+            .await
+            .map_err(|e| {
+                ServiceError::internal(
+                    e.to_string(),
+                    Some(format!(
+                        "Failed to update workload status in db. id={:?}",
+                        workload_id
+                    )),
+                )
+            })?;
+
+        Ok(WorkloadApiResult {
+            result: WorkloadResult {
+                status: workload_status,
+                workload: None,
+            },
+            maybe_response_tags: None,
+        })
+    }
+
+    async fn update_workload_status_in_db(
+        &self,
+        workload_status: WorkloadStatus,
+    ) -> Result<(), ServiceError> {
         let workload_status_id = workload_status.id.ok_or_else(|| {
             ServiceError::internal(
                 "Failed to read ._id from record".to_string(),
@@ -552,13 +591,7 @@ impl OrchestratorWorkloadApi {
             )
             .await?;
 
-        Ok(WorkloadApiResult {
-            result: WorkloadResult {
-                status: workload_status,
-                workload: None,
-            },
-            maybe_response_tags: None,
-        })
+        Ok(())
     }
 
     // Verifies that a host meets the workload criteria
@@ -589,7 +622,7 @@ impl OrchestratorWorkloadApi {
             .await?)
     }
 
-    async fn remove_workload_from_hosts(&self, workload_id: ObjectId) -> Result<()> {
+    async fn unlink_workload_from_hosts(&self, workload_id: ObjectId) -> Result<()> {
         self.host_collection
             .update_many_within(
                 doc! {},
@@ -600,7 +633,7 @@ impl OrchestratorWorkloadApi {
             )
             .await?;
         log::info!(
-            "Removed workload from previous hosts. Workload={:#?}",
+            "Unlinked workload from previous hosts. Workload={:#?}",
             workload_id
         );
         Ok(())

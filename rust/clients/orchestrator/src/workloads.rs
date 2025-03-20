@@ -88,12 +88,6 @@ pub async fn run(
             WorkloadServiceSubjects::Update,
             generate_service_call!(workload_api, update_workload),
         ),
-        //
-        // .with_response_subject_fn(create_callback_subject_to_host(
-        //     true,
-        //     "assigned_hosts".to_string(),
-        //     WorkloadServiceSubjects::Update.to_string(),
-        // ))
         &workload_service,
     )
     .await?;

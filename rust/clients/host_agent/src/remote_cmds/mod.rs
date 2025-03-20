@@ -91,7 +91,7 @@ pub(crate) async fn run(args: RemoteArgs, command: RemoteCommands) -> anyhow::Re
                     "WORKLOAD.{host_id}.{}",
                     match state_discriminant {
                         Installed | Running => WorkloadServiceSubjects::Command,
-                        Uninstalled | Deleted | Removed => WorkloadServiceSubjects::Command,
+                        Uninstalled | Deleted | Unlinked => WorkloadServiceSubjects::Command,
                         Updated => WorkloadServiceSubjects::Command,
                         Reported => WorkloadServiceSubjects::Command,
                         unsupported => anyhow::bail!("don't know where to send {unsupported:?}"),

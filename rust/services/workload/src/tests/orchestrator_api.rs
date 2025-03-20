@@ -25,17 +25,12 @@ mod tests {
         let workload = create_test_workload_default();
         let msg_payload = serde_json::to_vec(&workload).unwrap();
         let msg = Arc::new(NatsMessage::new("WORKLOAD.add", msg_payload).into_message());
-        let result = api.add_workload(msg).await?;
+        let r = api.add_workload(msg).await?;
 
-        assert!(result.result.status.id.is_some());
-        assert!(matches!(
-            result.result.status.actual,
-            WorkloadState::Reported
-        ));
-        assert!(matches!(
-            result.result.status.desired,
-            WorkloadState::Running
-        ));
+        assert!(r.result.status.id.is_some());
+        assert!(matches!(r.result.status.actual, WorkloadState::Reported));
+        assert!(matches!(r.result.status.desired, WorkloadState::Running));
+
         Ok(())
     }
 
@@ -58,22 +53,15 @@ mod tests {
         let msg_payload = serde_json::to_vec(&workload).unwrap();
         let msg = Arc::new(NatsMessage::new("WORKLOAD.update", msg_payload).into_message());
 
-        let result = api.update_workload(msg).await?;
-
-        assert!(matches!(
-            result.result.status.actual,
-            WorkloadState::Updating
-        ));
-        assert!(matches!(
-            result.result.status.desired,
-            WorkloadState::Updated
-        ));
+        let r = api.update_workload(msg).await?;
+        assert!(matches!(r.result.status.actual, WorkloadState::Updating));
+        assert!(matches!(r.result.status.desired, WorkloadState::Updated));
 
         Ok(())
     }
 
     #[tokio::test]
-    async fn test_remove_workload() -> Result<()> {
+    async fn test_delete_workload() -> Result<()> {
         let mongod = MongodRunner::run().expect("Failed to run mongod");
         let db_client = mongod.client().expect("Failed to create db client");
 
@@ -86,18 +74,14 @@ mod tests {
         // Then remove it
         let msg_payload =
             serde_json::to_vec(&workload_id).expect("Failed to serialize workload id");
-        let msg = Arc::new(NatsMessage::new("WORKLOAD.remove", msg_payload).into_message());
+        let msg = Arc::new(NatsMessage::new("WORKLOAD.delete", msg_payload).into_message());
 
-        let result = api.delete_workload(msg).await?;
+        let r = api.delete_workload(msg).await?;
 
-        assert!(matches!(
-            result.result.status.actual,
-            WorkloadState::Deleted
-        ));
-        assert!(matches!(
-            result.result.status.desired,
-            WorkloadState::Removed
-        ));
+        println!("test_delete_workload result: {:?}", r.result);
+
+        assert!(matches!(r.result.status.actual, WorkloadState::Deleted));
+        assert!(matches!(r.result.status.desired, WorkloadState::Unlinked));
 
         // Verify workload is marked as deleted
         let deleted_workload = api
@@ -144,8 +128,10 @@ mod tests {
             Some(required_avg_network_speed),
             Some(required_avg_uptime),
         );
+
+        let device_id = "host_inventory_machine_id_1";
         let host = create_test_host(
-            None,
+            device_id,
             None,
             None,
             Some(valid_host_remaining_capacity),
@@ -201,8 +187,9 @@ mod tests {
         valid_host_remaining_capacity.cpus = gen_mock_processors(20);
 
         // Create and add a host first
+        let device_id = "host_inventory_machine_id_2";
         let host = create_test_host(
-            None,
+            device_id,
             None,
             None,
             Some(valid_host_remaining_capacity),
@@ -230,16 +217,9 @@ mod tests {
         let msg_payload = serde_json::to_vec(&workload).unwrap();
         let msg = Arc::new(NatsMessage::new("WORKLOAD.insert", msg_payload).into_message());
 
-        let result = api.handle_db_insertion(msg).await?;
-
-        assert!(matches!(
-            result.result.status.actual,
-            WorkloadState::Assigned
-        ));
-        assert!(matches!(
-            result.result.status.desired,
-            WorkloadState::Running
-        ));
+        let r = api.handle_db_insertion(msg).await?;
+        assert!(matches!(r.result.status.desired, WorkloadState::Running));
+        assert!(matches!(r.result.status.actual, WorkloadState::Assigned));
 
         // Verify host assignment
         let updated_host = api
@@ -278,16 +258,10 @@ mod tests {
         let msg_payload = serde_json::to_vec(&result).unwrap();
         let msg = Arc::new(NatsMessage::new("WORKLOAD.status", msg_payload).into_message());
 
-        let update_result = api.handle_status_update(msg).await?;
+        let r = api.handle_status_update(msg).await?;
 
-        assert!(matches!(
-            update_result.result.status.actual,
-            WorkloadState::Running
-        ));
-        assert!(matches!(
-            update_result.result.status.desired,
-            WorkloadState::Running
-        ));
+        assert!(matches!(r.result.status.actual, WorkloadState::Running));
+        assert!(matches!(r.result.status.desired, WorkloadState::Running));
 
         // Verify workload status was updated
         let updated_workload = api

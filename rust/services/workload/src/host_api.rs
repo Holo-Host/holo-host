@@ -97,7 +97,7 @@ impl HostWorkloadApi {
 
                 (desired_state, status_payload)
             }
-            WorkloadState::Uninstalled | WorkloadState::Removed | WorkloadState::Deleted => {
+            WorkloadState::Uninstalled | WorkloadState::Unlinked | WorkloadState::Deleted => {
                 let (workload_path_toplevel, exists) = ensure_workload_path(
                     &workload_id,
                     None,

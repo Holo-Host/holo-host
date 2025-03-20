@@ -336,8 +336,8 @@ pub enum WorkloadState {
     Updated,
     /// Workload marked for deletion
     Deleted,
-    /// Workload links removed
-    Removed,
+    /// Workload links removed from hosts
+    Unlinked,
     /// Workload uninstalled from host device
     Uninstalled,
     /// Error state with message
