@@ -194,6 +194,76 @@ impl JsClient {
         self.client.drain().await?;
         Ok(())
     }
+
+    #[allow(dead_code)]
+    async fn create_object_store(
+        &self,
+        bucket_name: String,
+        description: Option<String>,
+        compression: bool,
+        max_bytes: i64,
+        max_age: Duration,
+        num_replicas: usize,
+    ) -> Result<jetstream::object_store::ObjectStore, anyhow::Error> {
+        let config = async_nats::jetstream::object_store::Config {
+            // Name of the storage bucket.
+            bucket: bucket_name,
+            // A short description of the purpose of this storage bucket.
+            description,
+            // Sets compression of the underlying stream.
+            compression,
+            // The type of storage backend, `File` (default) and `Memory`
+            storage: async_nats::jetstream::stream::StorageType::File,
+            // How large the storage bucket may become in total bytes.
+            max_bytes,
+            // Maximum age of any value in the bucket, expressed in nanoseconds
+            max_age,
+            // How many replicas to keep for each value in a cluster, maximum 5.
+            num_replicas,
+            // Cluster and tag placement.
+            placement: None,
+        };
+        let object_store: jetstream::object_store::ObjectStore = self.js_context.create_object_store(config).await?;
+        Ok(object_store)
+    }
+
+    #[allow(dead_code)]
+    async fn get_object_store(&self, bucket_name: &str, object_key: &str) -> Result<async_nats::jetstream::object_store::Object, anyhow::Error> {
+        let object_store = self.js_context.get_object_store(bucket_name).await?;
+        let object = object_store.get(object_key).await?;
+        Ok(object)
+    }
+
+    #[allow(dead_code)]
+    async fn delete_object_store(&self, bucket_name: &str) -> Result<(), anyhow::Error> {
+        self.js_context.delete_object_store(bucket_name).await?;
+        Ok(())
+    }
+
+    #[allow(dead_code)]
+    async fn upload_file_to_object_store(&self, bucket_name: &str, object_key: &str, file_path: &str) -> Result<(), anyhow::Error> {
+        let file = match tokio::fs::File::open(file_path).await {
+            Ok(file) => file,
+            Err(e) => {
+                log::error!("Error opening file: {}", e);
+                return Err(anyhow::anyhow!("Error opening file: {}", e));
+            }
+        };
+        let mut reader = tokio::io::BufReader::new(file);
+        let object_store = self.js_context.get_object_store(bucket_name).await?;
+        object_store.put(object_key, &mut reader).await?;
+        Ok(())
+    }
+
+    #[allow(dead_code)]
+    async fn download_file_from_object_store(&self, bucket_name: &str, object_key: &str, file_path: &str) -> Result<(), anyhow::Error> {
+        let object_store = self.js_context.get_object_store(bucket_name).await?;
+        let mut file = tokio::fs::File::create(file_path).await?;
+        let object = object_store.get(object_key).await?;
+        let mut reader = tokio::io::BufReader::new(object);
+        tokio::io::copy(&mut reader, &mut file).await?;
+        Ok(())
+    }
 }
 
 // Client Options:
