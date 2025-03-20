@@ -33,10 +33,15 @@ in
       default = inputs.self.packages.${pkgs.stdenv.system}.rust-workspace.individual.orchestrator;
     };
 
+    logLevel = lib.mkOption {
+      type = lib.types.str;
+      default = "debug";
+    };
+
     rust = {
       log = lib.mkOption {
-        type = lib.types.str;
-        default = "debug";
+        type = lib.types.nullOr lib.types.str;
+        default = null;
       };
 
       backtrace = lib.mkOption {
@@ -113,7 +118,9 @@ in
 
       environment =
         {
-          RUST_LOG = cfg.rust.log;
+          RUST_LOG =
+            if cfg.rust.log != null then cfg.rust.log else "${cfg.logLevel},async_nats=error,mio=error";
+
           RUST_BACKTRACE = cfg.rust.backtrace;
           MONGO_URI = cfg.mongo.url;
         }
