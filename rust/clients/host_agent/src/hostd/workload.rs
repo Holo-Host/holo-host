@@ -50,15 +50,13 @@ pub async fn run(
 
     add_workload_consumer(
         ServiceConsumerBuilder::new(
-            "update_workload".to_string(),
-            WorkloadServiceSubjects::Update,
+            "update_workload_on_host".to_string(),
+            WorkloadServiceSubjects::HostUpdate,
             generate_service_call!(workload_api, update_workload),
         )
         .with_subject_prefix(host_id.to_lowercase())
         .with_response_subject_fn(create_callback_subject_to_orchestrator(
-            WorkloadServiceSubjects::HandleStatusUpdate
-                .as_ref()
-                .to_string(),
+            WorkloadServiceSubjects::DbStatusUpdate.as_ref().to_string(),
         )),
         &workload_service,
     )
@@ -67,14 +65,12 @@ pub async fn run(
     add_workload_consumer(
         ServiceConsumerBuilder::new(
             "fetch_workload_status".to_string(),
-            WorkloadServiceSubjects::SendStatus,
+            WorkloadServiceSubjects::HostSendStatus,
             generate_service_call!(workload_api, fetch_workload_status),
         )
         .with_subject_prefix(host_id.to_lowercase())
         .with_response_subject_fn(create_callback_subject_to_orchestrator(
-            WorkloadServiceSubjects::HandleStatusUpdate
-                .as_ref()
-                .to_string(),
+            WorkloadServiceSubjects::DbStatusUpdate.as_ref().to_string(),
         )),
         &workload_service,
     )

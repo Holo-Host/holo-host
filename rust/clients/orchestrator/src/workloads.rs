@@ -74,8 +74,8 @@ pub async fn run(
 
     add_workload_consumer(
         ServiceConsumerBuilder::new(
-            "add_workload".to_string(),
-            WorkloadServiceSubjects::Add,
+            "add_workload_in_db".to_string(),
+            WorkloadServiceSubjects::DbAdd,
             generate_service_call!(workload_api, add_workload),
         ),
         &workload_service,
@@ -84,8 +84,8 @@ pub async fn run(
 
     add_workload_consumer(
         ServiceConsumerBuilder::new(
-            "update_workload".to_string(),
-            WorkloadServiceSubjects::Update,
+            "update_workload_in_db".to_string(),
+            WorkloadServiceSubjects::DbUpdate,
             generate_service_call!(workload_api, update_workload),
         ),
         &workload_service,
@@ -94,8 +94,8 @@ pub async fn run(
 
     add_workload_consumer(
         ServiceConsumerBuilder::new(
-            "delete_workload".to_string(),
-            WorkloadServiceSubjects::Delete,
+            "delete_workload_in_db".to_string(),
+            WorkloadServiceSubjects::DbDelete,
             generate_service_call!(workload_api, delete_workload),
         ),
         &workload_service,
@@ -105,14 +105,14 @@ pub async fn run(
     // Subjects published by the Nats-DB-Connector:
     add_workload_consumer(
         ServiceConsumerBuilder::new(
-            "handle_db_insertion".to_string(),
+            "handle_workload_insertion_change_stream".to_string(),
             WorkloadServiceSubjects::Insert,
             generate_service_call!(workload_api, handle_db_insertion),
         )
         .with_response_subject_fn(create_callback_subject_to_host(
             true,
             TAG_MAP_PREFIX_ASSIGNED_HOST.to_string(),
-            WorkloadServiceSubjects::Update.to_string(),
+            WorkloadServiceSubjects::HostUpdate.to_string(),
         )),
         &workload_service,
     )
@@ -120,14 +120,14 @@ pub async fn run(
 
     add_workload_consumer(
         ServiceConsumerBuilder::new(
-            "handle_db_modification".to_string(),
+            "handle_workload_modification_change_stream".to_string(),
             WorkloadServiceSubjects::Modify,
             generate_service_call!(workload_api, handle_db_modification),
         )
         .with_response_subject_fn(create_callback_subject_to_host(
             true,
             TAG_MAP_PREFIX_ASSIGNED_HOST.to_string(),
-            WorkloadServiceSubjects::Update.as_ref().to_string(),
+            WorkloadServiceSubjects::HostUpdate.as_ref().to_string(),
         )),
         &workload_service,
     )
@@ -136,8 +136,8 @@ pub async fn run(
     // Subjects published by the Host Agent:
     add_workload_consumer(
         ServiceConsumerBuilder::new(
-            "handle_status_update".to_string(),
-            WorkloadServiceSubjects::HandleStatusUpdate,
+            "update_workload_status_in_db".to_string(),
+            WorkloadServiceSubjects::DbStatusUpdate,
             generate_service_call!(workload_api, handle_status_update),
         )
         .with_subject_prefix("orchestrator".to_string()),
