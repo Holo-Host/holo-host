@@ -253,7 +253,7 @@ pub struct Host {
     /// Common metadata fields
     pub metadata: Metadata,
     /// Unique identifier for the device
-    pub device_id: PubKey,
+    pub device_id: String,
     /// IP address of the host
     pub ip_address: String,
     /// Hardware inventory information
@@ -278,13 +278,13 @@ impl IntoIndexes for Host {
     fn into_indices(self) -> Result<Vec<(Document, Option<IndexOptions>)>> {
         let mut indices = vec![];
         //  Add Device ID Index
-        let pubkey_index_doc = doc! { "device_id": 1 };
-        let pubkey_index_opts = Some(
+        let device_id_index_doc = doc! { "device_id": 1 };
+        let device_id_index_opts = Some(
             IndexOptions::builder()
                 .name(Some("device_id_index".to_string()))
                 .build(),
         );
-        indices.push((pubkey_index_doc, pubkey_index_opts));
+        indices.push((device_id_index_doc, device_id_index_opts));
         Ok(indices)
     }
 }

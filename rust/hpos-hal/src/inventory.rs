@@ -212,34 +212,40 @@ impl HoloUsbInventory {
             let usb_dev = usb_dev.unwrap().clone();
             let dev_base = format!("{}", usb_dev.to_string_lossy());
             let usb_path = fs::canonicalize(&dev_base).unwrap_or_default();
-            let usb_path = usb_path.to_string_lossy();
-            debug!("USB link: {}", &usb_path);
-            let usb_class = sysfs::string_attr(format!("{}/bDeviceClass", dev_base));
-            // We aren't interested in things like USB hubs. We should instead ignore those.
-            match usb_class {
-                Some(class) => {
-                    if Self::UNINTERESTING_CLASSES.contains(&class.as_str()) {
-                        continue;
+            let mut usb_path_clone = usb_path.clone();
+            usb_path_clone.push("bDeviceClass");
+
+            if std::fs::exists(usb_path_clone).unwrap_or(false) {
+                let usb_path = usb_path.to_string_lossy();
+                debug!("USB link: {}", &usb_path);
+
+                let usb_class = sysfs::string_attr(format!("{}/bDeviceClass", dev_base));
+                // We aren't interested in things like USB hubs. We should instead ignore those.
+                match usb_class {
+                    Some(class) => {
+                        if Self::UNINTERESTING_CLASSES.contains(&class.as_str()) {
+                            continue;
+                        }
+
+                        // This device is something of potential interest
+                        let vendor_id = sysfs::string_attr(format!("{}/idVendor", dev_base));
+                        let product_id = sysfs::string_attr(format!("{}/idProduct", dev_base));
+                        let subclass = sysfs::string_attr(format!("{}/bDeviceSubClass", dev_base));
+                        let usb_version = sysfs::string_attr(format!("{}/version", dev_base));
+
+                        // Add to inventory
+                        debug!("Adding USB device {}", usb_path);
+                        ret.push(HoloUsbInventory {
+                            class: Some(class),
+                            subclass,
+                            vendor_id,
+                            product_id,
+                            usb_version,
+                            path: usb_path.to_string(),
+                        });
                     }
-
-                    // This device is something of potential interest
-                    let vendor_id = sysfs::string_attr(format!("{}/idVendor", dev_base));
-                    let product_id = sysfs::string_attr(format!("{}/idProduct", dev_base));
-                    let subclass = sysfs::string_attr(format!("{}/bDeviceSubClass", dev_base));
-                    let usb_version = sysfs::string_attr(format!("{}/version", dev_base));
-
-                    // Add to inventory
-                    debug!("Adding USB device {}", usb_path);
-                    ret.push(HoloUsbInventory {
-                        class: Some(class),
-                        subclass,
-                        vendor_id,
-                        product_id,
-                        usb_version,
-                        path: usb_path.to_string(),
-                    });
+                    None => continue,
                 }
-                None => continue,
             }
         }
 

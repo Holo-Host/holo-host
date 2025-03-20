@@ -8,6 +8,7 @@ pkgs.mkShell {
   packages = [
     flake.formatter.${system}
     pkgs.jq
+    pkgs.just
   ];
 
   # Add environment variables
