@@ -29,7 +29,7 @@ in
 
     package = lib.mkOption {
       type = lib.types.package;
-      default = inputs.holonix.packages.${pkgs.system}.holochain;
+      default = inputs.holonix_0_4.packages.${pkgs.system}.holochain;
     };
 
     rust = {
