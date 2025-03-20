@@ -316,7 +316,9 @@ impl MutMetadata for Host {
 }
 
 /// Enumeration of possible workload states
-#[derive(Debug, Clone, Serialize, Deserialize, AsRefStr, EnumDiscriminants, FromRepr)]
+#[derive(
+    Debug, Clone, Serialize, Deserialize, PartialEq, AsRefStr, EnumDiscriminants, FromRepr,
+)]
 #[strum_discriminants(derive(EnumString), repr(usize), strum(serialize_all = "snake_case"))]
 pub enum WorkloadState {
     /// Workload reported by developer

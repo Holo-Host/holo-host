@@ -232,33 +232,19 @@ impl OrchestratorWorkloadApi {
             |workload: schemas::Workload| async move {
                 log::debug!("New workload to assign. Workload={:#?}", workload);
 
-                let workload_id = workload.clone()._id.ok_or_else(|| {
-                    ServiceError::internal(
-                        format!("No `_id` found for workload. Unable to proceed assigning a host. Workload={:?}", workload),
-                        Some("Missing workload ID".to_string()),
-                    )
-                })?;
-
-                let status = WorkloadStatus {
-                    id: Some(workload_id),
-                    desired: workload.status.desired.clone(),
-                    actual: WorkloadState::Assigned,
-                    payload: Default::default(),
-                };
-
                 // Perform sanity check to ensure workload is not already assigned to a host and if so, exit fn
                 if !workload.assigned_hosts.is_empty() {
                     log::warn!("Attempted to assign host for new workload, but host already exists.");
                     return Ok(WorkloadApiResult {
                         result: WorkloadResult {
-                            status,
-                            workload: None,
+                            status: workload.status.clone(),
+                            workload: Some(workload),
                         },
                         maybe_response_tags: None,
                     });
                 }
 
-                // Otherwise call mongodb to get host collection to get hosts that meet the capacity requirements
+                // call mongodb to get host collection to get hosts that meet the capacity requirements
                 let eligible_hosts = self
                     .find_hosts_meeting_workload_criteria(workload.clone(), None)
                     .await?;
@@ -266,6 +252,13 @@ impl OrchestratorWorkloadApi {
                     "Eligible hosts for new workload. MongodDB Hosts={:?}",
                     eligible_hosts
                 );
+
+                let workload_id = workload.clone()._id.ok_or_else(|| {
+                    ServiceError::internal(
+                        format!("No `_id` found for workload. Unable to proceed assigning a host. Workload={:?}", workload),
+                        Some("Missing workload ID".to_string()),
+                    )
+                })?;
 
                 // Update the selected host records with the assigned Workload ID
                 let eligible_host_ids: Vec<ObjectId> = eligible_hosts.iter().map(|h| h._id).collect();
@@ -281,10 +274,10 @@ impl OrchestratorWorkloadApi {
 
                 // Update the Workload Collection with the assigned Host ID
                 let new_status = WorkloadStatus {
-                    id: None,
-                    ..status.clone()
+                    actual: WorkloadState::Assigned,
+                    ..workload.status.clone()
                 };
-                self.assign_hosts_to_workload(assigned_host_ids.clone(), workload_id, new_status)
+                self.assign_hosts_to_workload(assigned_host_ids.clone(), workload_id, new_status.clone())
                     .await
                     .map_err(|e| {
                         ServiceError::internal(
@@ -305,7 +298,7 @@ impl OrchestratorWorkloadApi {
 
                 Ok(WorkloadApiResult {
                     result: WorkloadResult {
-                        status,
+                        status: new_status,
                         workload: Some(workload),
                     },
                     maybe_response_tags: Some(tag_map),
