@@ -9,11 +9,12 @@ use tempfile::TempDir;
 /// It disables TCP and relies only unix domain sockets.
 pub struct MongodRunner {
     _child: std::process::Child,
+    // This is stored to prevent premature removing of the tempdir
     tempdir: TempDir,
 }
 
 impl MongodRunner {
-    fn socket_path(tempdir: &TempDir) -> anyhow::Result<String> {
+    fn get_socket_path(tempdir: &TempDir) -> anyhow::Result<String> {
         Ok(format!(
             "{}/mongod.sock",
             tempdir
@@ -26,8 +27,19 @@ impl MongodRunner {
     }
 
     pub fn run() -> anyhow::Result<Self> {
-        let tempdir = TempDir::new().unwrap();
-        std::fs::File::create_new(Self::socket_path(&tempdir)?)?;
+        let tempdir = TempDir::new().context("Failed to create tempdir.")?;
+        let socket_path = Self::get_socket_path(&tempdir)?;
+
+        // Ensure socket file does not exist
+        let socket_file = PathBuf::from(&socket_path);
+        if socket_file.exists() {
+            std::fs::remove_file(&socket_file)?;
+        }
+        // std::fs::exists(Self::get_socket_path(&new_self.tempdir)?)
+        // .context("mongod socket should exist")?;
+
+        // Create new socket file
+        std::fs::File::create_new(socket_path)?;
 
         let mut cmd = std::process::Command::new("mongod");
         cmd.args([
@@ -36,40 +48,50 @@ impl MongodRunner {
             "--dbpath",
             &tempdir.path().to_string_lossy(),
             "--bind_ip",
-            &Self::socket_path(&tempdir)?,
+            &Self::get_socket_path(&tempdir)?,
             "--port",
             &0.to_string(),
         ])
-        .stdout(Stdio::null())
-        .stderr(Stdio::null());
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
 
-        let child = cmd
-            .spawn()
-            .unwrap_or_else(|e| panic!("Failed to spawn {cmd:?}: {e}"));
+        let child = cmd.spawn().context("Failed to start mongod")?;
 
         let new_self = Self {
             _child: child,
             tempdir,
         };
 
-        log::info!(
-            "MongoDB Server is running at {:?}",
-            new_self.socket_pathbuf()
-        );
+        // Wait for db to be ready
+        let retries = 10;
+        for _ in 0..retries {
+            if socket_file.exists() {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_secs(3));
+        }
 
-        std::fs::exists(Self::socket_path(&new_self.tempdir)?)
-            .context("mongod socket should exist")?;
+        if !socket_file.exists() {
+            return Err(anyhow::anyhow!(
+                "MongoDB did not create the socket file in time"
+            ));
+        }
+
+        println!(
+            "MongoDB Server is running at {:?}",
+            new_self.get_socket_pathbuf()
+        );
 
         Ok(new_self)
     }
 
-    fn socket_pathbuf(&self) -> anyhow::Result<PathBuf> {
-        Ok(PathBuf::from_str(&Self::socket_path(&self.tempdir)?)?)
+    pub fn get_socket_pathbuf(&self) -> anyhow::Result<PathBuf> {
+        Ok(PathBuf::from_str(&Self::get_socket_path(&self.tempdir)?)?)
     }
 
     pub fn client(&self) -> anyhow::Result<MongoDBClient> {
         let server_address = mongodb::options::ServerAddress::Unix {
-            path: self.socket_pathbuf()?,
+            path: self.get_socket_pathbuf()?,
         };
         let client_options = ClientOptions::builder().hosts(vec![server_address]).build();
         Ok(MongoDBClient::with_options(client_options)?)

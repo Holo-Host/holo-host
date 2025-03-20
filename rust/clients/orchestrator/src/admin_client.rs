@@ -9,7 +9,8 @@ const ORCHESTRATOR_ADMIN_CLIENT_NAME: &str = "Orchestrator Admin Client";
 const ORCHESTRATOR_ADMIN_CLIENT_INBOX_PREFIX: &str = "_ADMIN_INBOX.orchestrator";
 
 pub async fn run(admin_creds_path: &Option<PathBuf>, nats_url: String) -> anyhow::Result<JsClient> {
-    log::info!("nats_url : {}", nats_url);
+    log::info!("nats_url : {nats_url}");
+    log::info!("admin_creds_path : {admin_creds_path:?}",);
 
     let credentials = admin_creds_path
         .to_owned()
