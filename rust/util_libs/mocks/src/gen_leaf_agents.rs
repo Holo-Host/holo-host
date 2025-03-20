@@ -1,3 +1,4 @@
+use std::error::Error;
 use std::fs::File;
 use std::io::Write;
 use std::{fs, path::Path, process::Command};
@@ -11,6 +12,19 @@ pub const OPERATOR_NAME: &str = "test-operator";
 pub const USER_ACCOUNT_NAME: &str = "host-account";
 pub const USER_NAME: &str = "host-user";
 pub const NSC_CREDS_PATH: &str = ".local/share/nats/nsc/keys/creds";
+
+fn run_nsc_command(args: &[&str]) -> Result<std::process::Output, Box<dyn Error>> {
+    let output = Command::new("nsc").args(args).output()?;
+    if !output.status.success() {
+        eprintln!(
+            "Error executing nsc command: {}\n{}",
+            String::from_utf8_lossy(&output.stderr),
+            String::from_utf8_lossy(&output.stdout)
+        );
+        return Err("Failed to execute nsc command".into());
+    }
+    Ok(output)
+}
 
 // TODO: Clean up this function to abstract away redundancy and improve readability
 // Generates Operator, SYS account with user, and holo-account Account with user,
@@ -48,31 +62,21 @@ pub fn gen_test_agents_for_leaf(jwt_server_url: &str) {
     fs::create_dir_all(&nsc_user_account_path).expect("Failed to create nsc creds dir");
 
     // Create operator and sys account/user
-    Command::new("nsc")
-        .args(["env", "-s", TEST_AUTH_DIR])
-        .output()
-        .expect("Failed to set env to the test auth dir");
+    run_nsc_command(&["env", "-s", TEST_AUTH_DIR]).expect("Failed to set env to the test auth dir");
 
-    Command::new("nsc")
-        .args(["add", "operator", "-n", OPERATOR_NAME, "--sys"])
-        .output()
+    run_nsc_command(&["add", "operator", "-n", OPERATOR_NAME, "--sys"])
         .expect("Failed to add operator");
 
-    Command::new("nsc")
-        .args([
-            "edit",
-            "operator",
-            "--account-jwt-server-url",
-            &format!("nats://{}", jwt_server_url),
-        ])
-        .output()
-        .expect("Failed to create edit operator");
+    run_nsc_command(&[
+        "edit",
+        "operator",
+        "--account-jwt-server-url",
+        &format!("nats://{}", jwt_server_url),
+    ])
+    .expect("Failed to create edit operator");
 
     // Create host account (with js enabled)
-    Command::new("nsc")
-        .args(["add", "account", USER_ACCOUNT_NAME])
-        .output()
-        .expect("Failed to add acccount");
+    run_nsc_command(&["add", "account", USER_ACCOUNT_NAME]).expect("Failed to add acccount");
 
     Command::new("nsc")
         .args(["edit", "account", USER_ACCOUNT_NAME])
@@ -94,53 +98,47 @@ pub fn gen_test_agents_for_leaf(jwt_server_url: &str) {
         .expect("Failed to add user");
 
     // Generate resolver file and create resolver file
-    Command::new("nsc")
-        .args([
-            "generate",
-            "config",
-            "--nats-resolver",
-            "--sys-account",
-            "SYS",
-            "--force",
-            "--config-file",
-            RESOLVER_FILE_PATH,
-        ])
-        .output()
-        .expect("Failed to create resolver config file");
+    run_nsc_command(&[
+        "generate",
+        "config",
+        "--nats-resolver",
+        "--sys-account",
+        "SYS",
+        "--force",
+        "--config-file",
+        RESOLVER_FILE_PATH,
+    ])
+    .expect("Failed to create resolver config file");
 
     let nsc_sys_creds_path = format!("{}/{}/SYS/sys.creds", NSC_CREDS_PATH, OPERATOR_NAME);
-    Command::new("nsc")
-        .args([
-            "generate",
-            "creds",
-            "--name",
-            "sys",
-            "--account",
-            "SYS",
-            "--output-file",
-            &nsc_sys_creds_path,
-        ])
-        .output()
-        .expect("Failed to add sys user key to hosting agent");
+    run_nsc_command(&[
+        "generate",
+        "creds",
+        "--name",
+        "sys",
+        "--account",
+        "SYS",
+        "--output-file",
+        &nsc_sys_creds_path,
+    ])
+    .expect("Failed to add sys user key to hosting agent");
     log::debug!("nsc_sys_creds_path : {}", nsc_sys_creds_path);
 
     let nsc_user_creds_path = format!(
         "{}/{}/{}/{}.creds",
         NSC_CREDS_PATH, OPERATOR_NAME, USER_ACCOUNT_NAME, USER_NAME
     );
-    Command::new("nsc")
-        .args([
-            "generate",
-            "creds",
-            "--name",
-            USER_NAME,
-            "--account",
-            USER_ACCOUNT_NAME,
-            "--output-file",
-            &nsc_user_creds_path,
-        ])
-        .output()
-        .expect("Failed to add sys user key to hosting agent");
+    run_nsc_command(&[
+        "generate",
+        "creds",
+        "--name",
+        USER_NAME,
+        "--account",
+        USER_ACCOUNT_NAME,
+        "--output-file",
+        &nsc_user_creds_path,
+    ])
+    .expect("Failed to add sys user key to hosting agent");
     log::debug!("nsc_user_creds_path : {}", nsc_user_creds_path);
 
     let sys_account_output = Command::new("nsc")
