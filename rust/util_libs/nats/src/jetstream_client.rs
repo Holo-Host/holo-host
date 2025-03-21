@@ -1,16 +1,21 @@
+use crate::types::NatsRemoteArgs;
+
 use super::{
     jetstream_service::JsStreamService,
-    leaf_server::LEAF_SERVER_DEFAULT_LISTEN_PORT,
     types::{
         Credentials, ErrClientDisconnected, EventHandler, EventListener, JsClientBuilder,
         JsServiceBuilder, PublishInfo,
     },
 };
-use anyhow::Result;
-use async_nats::{jetstream, ServerInfo};
+use anyhow::{Context, Result};
+use async_nats::{jetstream, ServerAddr, ServerInfo};
 use core::option::Option::None;
-use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::{
+    collections::hash_map::Entry,
+    time::{Duration, Instant},
+};
+use std::{collections::HashMap, sync::Arc};
+use tokio::runtime::Handle;
 
 impl std::fmt::Debug for JsClient {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -27,24 +32,141 @@ impl std::fmt::Debug for JsClient {
 
 #[derive(Clone)]
 pub struct JsClient {
-    url: String,
+    url: ServerAddr,
     pub name: String,
     on_msg_published_event: Option<EventHandler>,
     on_msg_failed_event: Option<EventHandler>,
-    pub js_services: Option<Vec<JsStreamService>>,
+    pub js_services: HashMap<String, Arc<JsStreamService>>,
     pub js_context: jetstream::Context,
     service_log_prefix: String,
     client: async_nats::Client, // Built-in Nats Client which manages the cloned clients within jetstream contexts
 }
 
+impl Drop for JsClient {
+    // TODO(bug): this doesnt' always run to completion. without this, data could get lost if the caller forgets to `close()`
+    fn drop(&mut self) {
+        let client = self.client.clone();
+        if let Ok(rt) = Handle::try_current() {
+            rt.spawn_blocking(move || async move {
+                let _ = client.flush().await;
+            });
+        };
+    }
+}
+
+/// Implements a permissive `ServerCertVerifier` for convenience in testing.
+pub mod tls_skip_verifier {
+    use std::sync::Arc;
+
+    use async_nats::rustls::{
+        self,
+        client::danger::{HandshakeSignatureValid, ServerCertVerified},
+    };
+
+    /// this needs to run early in the process or else it might conflict
+    /// with something else installing a crypto provider
+    pub fn early_in_process_install_crypto_provider() -> bool {
+        if let Err(other) = async_nats::rustls::crypto::ring::default_provider().install_default() {
+            log::error!("error installing the default ring crypto provider. custom cert verification logic may not work as expected.");
+            let _ = <async_nats::rustls::crypto::CryptoProvider as Clone>::clone(&other)
+                .install_default();
+            false
+        } else {
+            true
+        }
+    }
+
+    #[derive(Debug)]
+    pub struct SkipServerVerification;
+
+    impl SkipServerVerification {
+        pub fn new() -> Arc<Self> {
+            Arc::new(Self)
+        }
+    }
+
+    use rustls::client::danger::ServerCertVerifier;
+    impl ServerCertVerifier for SkipServerVerification {
+        fn verify_tls12_signature(
+            &self,
+            _message: &[u8],
+            _cert: &rustls::pki_types::CertificateDer<'_>,
+            _dss: &rustls::DigitallySignedStruct,
+        ) -> Result<HandshakeSignatureValid, rustls::Error> {
+            Ok(HandshakeSignatureValid::assertion())
+        }
+
+        fn verify_tls13_signature(
+            &self,
+            _message: &[u8],
+            _cert: &rustls::pki_types::CertificateDer<'_>,
+            _dss: &rustls::DigitallySignedStruct,
+        ) -> Result<HandshakeSignatureValid, rustls::Error> {
+            Ok(HandshakeSignatureValid::assertion())
+        }
+
+        fn supported_verify_schemes(&self) -> Vec<rustls::SignatureScheme> {
+            use rustls::SignatureScheme::*;
+
+            vec![
+                RSA_PKCS1_SHA1,
+                ECDSA_SHA1_Legacy,
+                RSA_PKCS1_SHA256,
+                ECDSA_NISTP256_SHA256,
+                RSA_PKCS1_SHA384,
+                ECDSA_NISTP384_SHA384,
+                RSA_PKCS1_SHA512,
+                ECDSA_NISTP521_SHA512,
+                RSA_PSS_SHA256,
+                RSA_PSS_SHA384,
+                RSA_PSS_SHA512,
+                ED25519,
+                ED448,
+            ]
+        }
+
+        fn verify_server_cert(
+            &self,
+            _end_entity: &rustls::pki_types::CertificateDer<'_>,
+            _intermediates: &[rustls::pki_types::CertificateDer<'_>],
+            _server_name: &rustls::pki_types::ServerName<'_>,
+            _ocsp_response: &[u8],
+            _now: rustls::pki_types::UnixTime,
+        ) -> Result<ServerCertVerified, rustls::Error> {
+            Ok(ServerCertVerified::assertion())
+        }
+    }
+}
+
 impl JsClient {
     pub async fn new(p: JsClientBuilder) -> Result<Self, async_nats::Error> {
+        let JsClientBuilder {
+            nats_remote_args:
+                NatsRemoteArgs {
+                    ref nats_url,
+                    nats_skip_tls_verification_danger,
+                    ..
+                },
+            ..
+        } = p;
+
         let mut connect_options = async_nats::ConnectOptions::new()
             .name(&p.name)
+            // required for websocket connections
+            .reconnect_delay_callback({
+                let nats_url = nats_url.clone();
+                move |i| {
+                    log::warn!("[{i}] problems connecting to {nats_url:?}");
+                    Duration::from_secs(i as u64)
+                }
+            })
             .ping_interval(p.ping_interval.unwrap_or(Duration::from_secs(120)))
-            .request_timeout(Some(p.request_timeout.unwrap_or(Duration::from_secs(10))))
+            .request_timeout(Some(p.request_timeout.unwrap_or(Duration::from_secs(1))))
             .custom_inbox_prefix(&p.inbox_prefix);
-        // .require_tls(true)
+
+        if let Some((user, pass)) = p.nats_remote_args.maybe_user_password()? {
+            connect_options = connect_options.user_and_password(user, pass);
+        }
 
         if let Some(credentials_list) = p.credentials {
             for credentials in credentials_list {
@@ -63,19 +185,44 @@ impl JsClient {
             }
         };
 
-        let client = connect_options.connect(&p.nats_url).await?;
+        if nats_skip_tls_verification_danger {
+            log::warn!("! configuring TLS client to skip certificate verification. DO NOT RUN THIS IN PRODUCTION !");
+
+            let tls_client = async_nats::rustls::ClientConfig::builder()
+                .dangerous()
+                .with_custom_certificate_verifier(tls_skip_verifier::SkipServerVerification::new())
+                .with_no_client_auth();
+
+            connect_options = connect_options.tls_client_config(tls_client);
+        }
+
+        if let "wss" | "tls" = nats_url.as_ref().scheme() {
+            log::info!("tls with handshake-first enabled.");
+            connect_options = connect_options.tls_first();
+        };
+
+        let client = {
+            let context_msg = format!(
+                "connecting NATS to {nats_url:?} (websocket? {}) with options: {connect_options:?}",
+                nats_url.is_websocket()
+            );
+            connect_options
+                .connect(nats_url.as_ref())
+                .await
+                .context(context_msg)?
+        };
         let service_log_prefix = format!("NATS-CLIENT-LOG::{}::", p.name);
         log::info!(
-            "{service_log_prefix}Connected to NATS server at {}",
-            p.nats_url
+            "{service_log_prefix}Connected to NATS server at {:?}",
+            nats_url
         );
 
         let mut js_client = JsClient {
-            url: p.nats_url,
+            url: nats_url.as_ref().clone(),
             name: p.name,
             on_msg_published_event: None,
             on_msg_failed_event: None,
-            js_services: None,
+            js_services: Default::default(),
             js_context: jetstream::new(client.clone()),
             service_log_prefix,
             client,
@@ -122,11 +269,11 @@ impl JsClient {
     ) -> Result<(), async_nats::error::Error<async_nats::jetstream::context::PublishErrorKind>>
     {
         log::debug!(
-            "{}Called Publish message: subj={}, msg_id={} data={:?}",
+            "{}Called Publish message: subj={}, msg_id={} data={}",
             self.service_log_prefix,
             payload.subject,
             payload.msg_id,
-            payload.data
+            String::from_utf8_lossy(&payload.data),
         );
 
         let now = Instant::now();
@@ -146,6 +293,8 @@ impl JsClient {
                     .await
             }
         };
+        // TODO(performance): remove this once Self::drop works properly as this may slow performance down.
+        let _ = self.client.flush().await;
 
         let duration = now.elapsed();
         if let Err(err) = result {
@@ -158,41 +307,55 @@ impl JsClient {
         if let Some(ref on_published) = self.on_msg_published_event {
             on_published(&payload.subject, &self.name, duration);
         }
+
         Ok(())
     }
 
+    /// Corresponds roughly to `nats stream add {params.name}`
     pub async fn add_js_service(
         &mut self,
         params: JsServiceBuilder,
-    ) -> Result<(), async_nats::Error> {
-        let new_service = JsStreamService::new(
-            self.js_context.to_owned(),
-            &params.name,
-            &params.description,
-            &params.version,
-            &params.service_subject,
-        )
-        .await?;
+    ) -> Result<Arc<JsStreamService>, async_nats::Error> {
+        let new_service = Arc::new(
+            JsStreamService::new(
+                self.js_context.to_owned(),
+                &params.name,
+                &params.description,
+                &params.version,
+                &params.service_subject,
+            )
+            .await?,
+        );
 
-        let mut current_services = self.js_services.to_owned().unwrap_or_default();
-        current_services.push(new_service);
-        self.js_services = Some(current_services);
-
-        Ok(())
+        match self.js_services.entry(params.name) {
+            Entry::Occupied(occupied_entry) => {
+                Err(format!("didn't expect an entry, found {occupied_entry:?}").into())
+            }
+            Entry::Vacant(vacant_entry) => Ok(vacant_entry
+                .insert_entry(Arc::clone(&new_service))
+                .get()
+                .clone()),
+        }
     }
 
-    pub async fn get_js_service(&self, js_service_name: String) -> Option<&JsStreamService> {
-        if let Some(services) = &self.js_services {
-            return services
-                .iter()
-                .find(|s| s.get_service_info().name == js_service_name);
-        }
-        None
+    /// Look up a service in its own in-memory js_services collection
+    pub async fn get_js_service(&self, js_service_name: String) -> Option<Arc<JsStreamService>> {
+        self.js_services.get(&js_service_name).cloned()
     }
 
     pub async fn close(&self) -> Result<(), async_nats::Error> {
-        self.client.drain().await?;
+        self.client.flush().await?;
+
+        self.client.drain().await.context("draining NATS client")?;
         Ok(())
+    }
+
+    /// wraps around async_nats::Client::subsceribe
+    pub async fn subscribe<S: async_nats::subject::ToSubject>(
+        &self,
+        subject: S,
+    ) -> Result<async_nats::Subscriber, async_nats::SubscribeError> {
+        self.client.subscribe(subject).await
     }
 }
 
@@ -222,16 +385,6 @@ where
     Arc::new(Box::new(move |c: &mut JsClient| {
         c.on_msg_failed_event = Some(Arc::new(Box::pin(f.clone())));
     }))
-}
-
-// Helpers:
-// TODO: there's overlap with the NATS_LISTEN_PORT. refactor this to e.g. read NATS_LISTEN_HOST and NATS_LISTEN_PORT
-pub fn get_nats_url() -> String {
-    std::env::var("NATS_URL").unwrap_or_else(|_| {
-        let default = format!("127.0.0.1:{LEAF_SERVER_DEFAULT_LISTEN_PORT}"); // Shouldn't this be the 'NATS_LISTEN_PORT'?
-        log::debug!("using default for NATS_URL: {default}");
-        default
-    })
 }
 
 pub fn get_event_listeners() -> Vec<EventListener> {

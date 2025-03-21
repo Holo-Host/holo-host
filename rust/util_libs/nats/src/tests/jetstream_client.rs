@@ -1,6 +1,6 @@
 use crate::{
     jetstream_client::{get_event_listeners, JsClient},
-    types::{JsClientBuilder, JsServiceBuilder, PublishInfo},
+    types::{JsClientBuilder, JsServiceBuilder, NatsRemoteArgs, PublishInfo},
 };
 use anyhow::Result;
 use mock_utils::test_nats_server::{check_nats_server, TestNatsServer};
@@ -18,7 +18,7 @@ async fn test_client_initialization() -> Result<()> {
     let server = TestNatsServer::new().await?;
 
     let client = JsClient::new(JsClientBuilder {
-        nats_url: format!("nats://localhost:{}", server.port),
+        nats_remote_args: NatsRemoteArgs::try_new(&format!("nats://localhost:{}", server.port))?,
         name: "test_client".to_string(),
         inbox_prefix: "_INBOX".to_string(),
         credentials: None,
@@ -53,7 +53,7 @@ async fn test_publish_message() -> Result<()> {
     let server = TestNatsServer::new().await?;
 
     let client = JsClient::new(JsClientBuilder {
-        nats_url: format!("nats://localhost:{}", server.port),
+        nats_remote_args: NatsRemoteArgs::try_new(&format!("nats://localhost:{}", server.port))?,
         name: "test_client".to_string(),
         inbox_prefix: "_INBOX".to_string(),
         credentials: None,
@@ -89,7 +89,7 @@ async fn test_add_js_service() -> Result<()> {
     let server = TestNatsServer::new().await?;
 
     let mut client = JsClient::new(JsClientBuilder {
-        nats_url: format!("nats://localhost:{}", server.port),
+        nats_remote_args: NatsRemoteArgs::try_new(&format!("nats://localhost:{}", server.port))?,
         name: "test_client".to_string(),
         inbox_prefix: "_INBOX".to_string(),
         credentials: None,
@@ -128,7 +128,7 @@ async fn test_client_close() -> Result<()> {
     let server = TestNatsServer::new().await?;
 
     let client = JsClient::new(JsClientBuilder {
-        nats_url: format!("nats://localhost:{}", server.port),
+        nats_remote_args: NatsRemoteArgs::try_new(&format!("nats://localhost:{}", server.port))?,
         name: "test_client".to_string(),
         inbox_prefix: "_INBOX".to_string(),
         credentials: None,

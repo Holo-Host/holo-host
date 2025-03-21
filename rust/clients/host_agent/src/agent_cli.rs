@@ -1,4 +1,5 @@
 use clap::{Args, Parser, Subcommand};
+use nats_utils::leaf_server::LEAF_SERVER_DEFAULT_LISTEN_PORT;
 use netdiag::IPVersion;
 use std::path::PathBuf;
 
@@ -66,11 +67,42 @@ pub struct DaemonzeArgs {
     )]
     pub(crate) nats_connect_timeout_secs: u64,
 
-    #[arg(long, help = "host agent inventory check interval (in seconds)")]
-    pub(crate) host_inventory_check_interval_sec: Option<u64>,
+    #[arg(
+        long,
+        help = "host agent inventory check interval (in seconds)",
+        env = "HOST_INVENTORY_CHECK_DURATION",
+        default_value_t = 3600
+    )]
+    pub(crate) host_inventory_check_interval_sec: u64,
 
-    #[arg(long, help = "host agent inventory file path")]
-    pub(crate) host_inventory_file_path: Option<String>,
+    #[arg(
+        long,
+        help = "host agent inventory file path",
+        env = "HOST_INVENTORY_FILE_PATH",
+        default_value = "/var/lib/holo-host-agent/inventory.json"
+    )]
+    pub(crate) host_inventory_file_path: String,
+
+    #[arg(
+        long,
+        help = "disable host agent inventory functionality",
+        default_value_t = false
+    )]
+    pub(crate) host_inventory_disable: bool,
+
+    #[arg(
+        long,
+        env = "NATS_LEAF_SERVER_LISTEN_HOST",
+        default_value = "127.0.0.1",
+        value_parser = |s: &str| url::Host::<String>::parse(s),
+    )]
+    pub(crate) leaf_server_listen_host: url::Host<String>,
+
+    #[arg(long,
+        env = "NATS_LEAF_SERVER_LISTEN_PORT",
+        default_value_t = LEAF_SERVER_DEFAULT_LISTEN_PORT,
+    )]
+    pub(crate) leaf_server_listen_port: u16,
 }
 
 /// A set of commands for being able to manage the local host. We may (later) want to gate some

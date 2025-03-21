@@ -62,7 +62,7 @@ pub async fn run(
             WorkloadServiceSubjects::Add,
             generate_service_call!(workload_api, add_workload),
         ),
-        workload_service,
+        &workload_service,
     )
     .await?;
 
@@ -72,7 +72,7 @@ pub async fn run(
             WorkloadServiceSubjects::Update,
             generate_service_call!(workload_api, update_workload),
         ),
-        workload_service,
+        &workload_service,
     )
     .await?;
 
@@ -82,7 +82,7 @@ pub async fn run(
             WorkloadServiceSubjects::Delete,
             generate_service_call!(workload_api, delete_workload),
         ),
-        workload_service,
+        &workload_service,
     )
     .await?;
 
@@ -99,7 +99,7 @@ pub async fn run(
             generate_service_call!(workload_api, handle_db_insertion),
         )
         .with_response_subject_fn(db_insertion_response_handler),
-        workload_service,
+        &workload_service,
     )
     .await?;
 
@@ -117,7 +117,7 @@ pub async fn run(
             generate_service_call!(workload_api, handle_db_modification),
         )
         .with_response_subject_fn(db_modification_response_handler),
-        workload_service,
+        &workload_service,
     )
     .await?;
 
@@ -128,7 +128,7 @@ pub async fn run(
             WorkloadServiceSubjects::HandleStatusUpdate,
             generate_service_call!(workload_api, handle_status_update),
         ),
-        workload_service,
+        &workload_service,
     )
     .await?;
 
