@@ -15,6 +15,12 @@ in
       default = true;
     };
 
+    host = lib.mkOption {
+      description = "native client listen host";
+      type = lib.types.str;
+      default = "127.0.0.1";
+    };
+
     port = lib.mkOption {
       description = "native client port";
       type = lib.types.int;
@@ -81,6 +87,7 @@ in
         jetstream = lib.mkDefault true;
 
         settings = {
+          host = lib.mkDefault cfg.host;
           port = lib.mkDefault cfg.port;
           leafnodes.port = lib.mkDefault cfg.leafnodePort;
           websocket = {
@@ -111,11 +118,14 @@ in
               if maybe_fqdn.success then
                 maybe_fqdn.value
               else
-                builtins.trace "WARNING: FQDN is not available, this will most likely lead to an invalid caddy configuration. falling back to hostname" config.networking.hostName;
-
+                builtins.trace "WARNING: FQDN is not available, this will most likely lead to an invalid caddy configuration. falling back to hostname ${config.networking.hostName}" config.networking.hostName;
           in
           {
             "https://${domain}:${builtins.toString cfg.websocket.externalPort}".extraConfig = ''
+              tls {
+                issuer acme
+                issuer internal
+              }
               reverse_proxy http://127.0.0.1:${builtins.toString cfg.websocket.port}
             '';
           };
