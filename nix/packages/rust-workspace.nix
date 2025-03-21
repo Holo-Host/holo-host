@@ -26,7 +26,10 @@ let
     ];
 
     buildInputs =
-      [ pkgs.openssl.dev ]
+      [
+        pkgs.openssl.dev
+        pkgs.openssl
+      ]
       ++ pkgs.lib.optionals pkgs.stdenv.isDarwin [
         # Additional darwin specific inputs can be set here
         pkgs.libiconv
@@ -174,32 +177,34 @@ craneLib.buildPackage (
           # this will allow some read-only (by ways of little permissions) machine introspection.
           __noChroot = true;
 
-          nativeBuildInputs = [
-            ## hpos-hal
-            pkgs.dosfstools
-            pkgs.e2fsprogs
-            pkgs.coreutils
-            pkgs.systemd
+          nativeBuildInputs =
+            # TODO(dry): the recursiveUpdate is supposed to merge this list with commonArgs.nativeBuildInputs, but it doesn't work.
+            commonArgs.nativeBuildInputs ++ [
+              ## hpos-hal
+              pkgs.dosfstools
+              pkgs.e2fsprogs
+              pkgs.coreutils
+              pkgs.systemd
 
-            # pkgs.dmidecode
-            # (pkgs.writeShellScriptBin "sudo" ''
-            #   exec "$@"
-            # '')
+              # pkgs.dmidecode
+              # (pkgs.writeShellScriptBin "sudo" ''
+              #   exec "$@"
+              # '')
 
-            ## NATS/mongodb integration tests
-            pkgs.nats-server
-            pkgs.nsc
+              ## NATS/mongodb integration tests
+              pkgs.nats-server
+              pkgs.nsc
 
-            # link only the `hc` binaries into the devshell
-            (pkgs.runCommand "hc" { } ''
-              mkdir -p $out/bin
-              for bin in ${perSystem.holonix_0_4.holochain}/bin/hc*; do
-                ln -s $bin $out/bin/
-              done
-            '')
+              # link only the `hc` binaries into the devshell
+              (pkgs.runCommand "hc" { } ''
+                mkdir -p $out/bin
+                for bin in ${perSystem.holonix_0_4.holochain}/bin/hc*; do
+                  ln -s $bin $out/bin/
+                done
+              '')
 
-            pkgs.mongodb-ce
-          ];
+              pkgs.mongodb-ce
+            ];
 
           partitions = 1;
           partitionType = "count";
