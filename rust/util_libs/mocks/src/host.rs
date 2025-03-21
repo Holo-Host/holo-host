@@ -38,19 +38,20 @@ pub fn create_mock_inventory(
 
 // Helper function to create a test host
 pub fn create_test_host(
-    device_id: Option<String>,
+    device_id: &str,
     assigned_hoster: Option<ObjectId>,
     assigned_workloads: Option<Vec<ObjectId>>,
     holo_inventory: Option<HoloInventory>,
     avg_network_speed: Option<i64>,
     avg_uptime: Option<f64>,
 ) -> schemas::Host {
-    let mut host = schemas::Host::default();
-    if let Some(device_id) = device_id {
-        host.device_id = device_id;
-    }
+    let mut host = schemas::Host {
+        device_id: device_id.to_string(),
+        ..Default::default()
+    };
+
     if let Some(assigned_hoster) = assigned_hoster {
-        host.assigned_hoster = assigned_hoster;
+        host.assigned_hoster = Some(assigned_hoster);
     }
     if let Some(assigned_workloads) = assigned_workloads {
         host.assigned_workloads = assigned_workloads;

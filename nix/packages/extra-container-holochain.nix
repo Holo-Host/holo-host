@@ -17,6 +17,7 @@
   index ? 0,
   adminWebsocketPort ? 8000 + index,
   containerName ? "holochain${builtins.toString index}",
+  autoStart ? false,
   # these are passed to holochain
   bootstrapUrl ? null,
   signalUrl ? null,
@@ -44,7 +45,7 @@ let
 
     config = {
       containers."${containerName}" = {
-        inherit privateNetwork;
+        inherit privateNetwork autoStart;
 
         # `specialArgs` is available in nixpkgs > 22.11
         # This is useful for importing flakes from modules (see nixpkgs/lib/modules.nix).

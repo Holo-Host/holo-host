@@ -246,21 +246,18 @@ impl JsStreamService {
                 log_info.service_name
             );
 
+            // TODO(learning; author: stefan): on which level do sync vs async play out?
             let result = match endpoint_handler {
                 EndpointType::Sync(ref handler) => handler(&js_msg.message),
                 EndpointType::Async(ref handler) => handler(Arc::new(js_msg.clone().message)).await,
             };
 
             let (response_bytes, maybe_subject_tags) = match result {
-                Ok(r) => {
-                    let bytes = r.get_response();
-                    let maybe_subject_tags = r.get_tags();
-                    (bytes, maybe_subject_tags)
-                }
+                Ok(r) => (r.get_response(), r.get_tags()),
                 Err(err) => (err.to_string().into(), HashMap::new()),
             };
 
-            // Returns a response if a reply address exists.
+            // Returns a response if a reply subject exists.
             // (Note: This means the js subject was called with a `req` instead of a `pub`.)
             if let Some(reply) = &js_msg.reply {
                 if let Err(err) = service_context
@@ -294,13 +291,14 @@ impl JsStreamService {
             if let Some(response_subject_fn) = maybe_response_generator.as_ref() {
                 let response_subjects = response_subject_fn(maybe_subject_tags);
                 for response_subject in response_subjects.iter() {
+                    let subject = format!("{}.{}", log_info.service_subject, response_subject);
+
+                    log::debug!("publishing a response on {subject}");
+
                     if let Err(err) = service_context
                         .read()
                         .await
-                        .publish(
-                            format!("{}.{}", log_info.service_subject, response_subject),
-                            response_bytes.clone(),
-                        )
+                        .publish(subject, response_bytes.clone())
                         .await
                     {
                         log::error!(
