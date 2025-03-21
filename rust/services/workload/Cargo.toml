@@ -4,6 +4,9 @@ name = "workload"
 version = "0.0.1"
 edition = "2021"
 
+[lib]
+path = "src/lib.rs"
+
 [dependencies]
 async-nats = { workspace = true }
 anyhow = { workspace = true }
@@ -29,10 +32,13 @@ url = { version = "2", features = ["serde"] }
 bytes = "1.8.0"
 nkeys = "=0.4.4"
 chrono = "0.4.0"
+ham = { workspace = true }
 
 [dev-dependencies]
-serde_json = "1.0"
 mock_utils = { workspace = true }
+db_utils = { path = "../../util_libs/db" }
+nats_utils = { path = "../../util_libs/nats" }
+hpos-hal = { path = "../../hpos-hal" }
 
 [features]
 tests_integration_workload_service = []
