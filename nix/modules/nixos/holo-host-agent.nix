@@ -33,13 +33,18 @@ in
 
     package = lib.mkOption {
       type = lib.types.package;
-      default = inputs.self.packages.${pkgs.stdenv.system}.rust-workspace;
+      default = inputs.self.packages.${pkgs.stdenv.system}.rust-workspace.passthru.individual.host_agent;
+    };
+
+    logLevel = lib.mkOption {
+      type = lib.types.str;
+      default = "debug";
     };
 
     rust = {
       log = lib.mkOption {
-        type = lib.types.str;
-        default = "debug";
+        type = lib.types.nullOr lib.types.str;
+        default = null;
       };
 
       backtrace = lib.mkOption {
@@ -77,14 +82,15 @@ in
         type = lib.types.nullOr lib.types.path;
         default = null;
       };
+    };
 
-      extraDaemonizeArgs = lib.mkOption {
-        # forcing everything to be a string because the bool -> str conversion is strange (true -> "1" and false -> "")
-        type = lib.types.attrs;
-        default = {
-        };
+    extraDaemonizeArgs = lib.mkOption {
+      # forcing everything to be a string because the bool -> str conversion is strange (true -> "1" and false -> "")
+      type = lib.types.attrs;
+      default = {
       };
     };
+
   };
 
   config = lib.mkIf cfg.enable {
@@ -101,15 +107,20 @@ in
 
       environment =
         {
-          RUST_LOG = cfg.rust.log;
+          RUST_LOG =
+            if cfg.rust.log != null then
+              cfg.rust.log
+            else
+              "${cfg.logLevel},request=error,tungstenite=error,async_nats=error,mio=error";
           RUST_BACKTRACE = cfg.rust.backtrace;
           NATS_LISTEN_PORT = builtins.toString cfg.nats.listenPort;
+          NIX_REMOTE = "daemon";
         }
         // lib.attrsets.optionalAttrs (cfg.nats.url != null) {
           NATS_URL = cfg.nats.url;
         };
 
-      path = [
+      path = config.environment.systemPackages ++ [
         pkgs.nats-server
       ];
 
@@ -117,18 +128,15 @@ in
         let
           extraDaemonizeArgsList = lib.attrsets.mapAttrsToList (
             name: value:
-            let
-              type = lib.typeOf value;
-            in
-            if type == lib.types.str then
-              "--${name}=${value}"
-            else if (type == lib.types.int || type == lib.types.path) then
+            if lib.types.bool.check value then
+              (lib.optionalString value "--${name}")
+            else if (value == lib.types.int.check value || lib.types.path.check value) then
               "--${name}=${builtins.toString value}"
-            else if type == lib.types.bool then
-              (lib.optionalString value name)
+            else if (lib.types.str.check value) then
+              "--${name}=${value}"
             else
-              throw "don't know how to handle type ${type}"
-          ) cfg.nats.extraDaemonizeArgs;
+              throw "${name}: don't know how to handle type ${value}"
+          ) cfg.extraDaemonizeArgs;
         in
         builtins.toString (
           pkgs.writeShellScript "holo-host-agent" ''
