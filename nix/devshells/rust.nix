@@ -2,6 +2,7 @@
   flake,
   system,
   pkgs,
+  perSystem,
   ...
 }:
 let
@@ -29,5 +30,6 @@ craneLib.devShell {
   # Extra inputs can be added here; cargo and rustc are provided by default.
   packages = [
     pkgs.natscli
+    perSystem.holonix_0_4.holochain
   ];
 }

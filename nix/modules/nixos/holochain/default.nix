@@ -60,6 +60,50 @@ in
       default = 1234;
     };
 
+    adminWebsocketAllowedOrigins = lib.mkOption {
+      type = lib.types.str;
+      default = "*";
+    };
+
+    bootstrapServiceUrl = lib.mkOption {
+      type = lib.types.str;
+      # Use the Holo-provided default production bootstrap server.
+      default = "https://bootstrap.holo.host";
+    };
+
+    webrtcTransportPoolSignalUrl = lib.mkOption {
+      type = lib.types.str;
+      default = "wss://sbd-0.main.infra.holo.host";
+    };
+
+    webrtcTransportPoolIceServers = lib.mkOption {
+      type = lib.types.listOf lib.types.str;
+      default = [
+        "stun:stun-0.main.infra.holo.host:443"
+        "stun:stun-1.main.infra.holo.host:443"
+      ];
+    };
+
+    webrtcTransportPool = lib.mkOption {
+      type = lib.types.attrs;
+      default =
+        # Use WebRTC, which is the only option for now.
+        {
+          type = "webrtc";
+
+          # Use the Holo-provided default production sbd (signal) server.
+          # `signal_url` is REQUIRED.
+          signal_url = cfg.webrtcTransportPoolSignalUrl;
+
+          # Override the default WebRTC STUN configuration.
+          # This is OPTIONAL. If this is not specified, it will default
+          # to what you can see here:
+          webrtc_config = {
+            iceServers = lib.lists.map (url: { urls = [ url ]; }) cfg.webrtcTransportPoolIceServers;
+          };
+        };
+    };
+
     conductorConfig = lib.mkOption {
       type = lib.types.attrs;
       default = {
@@ -76,41 +120,20 @@ in
             driver = {
               type = "websocket";
               port = cfg.adminWebsocketPort;
-              allowed_origins = "*";
+              allowed_origins = cfg.adminWebsocketAllowedOrigins;
             };
           }
         ];
 
         # Configure the network.
         network = {
-          # Use the Holo-provided default production bootstrap server.
-          bootstrap_service = "https://bootstrap.holo.host";
+          bootstrap_service = cfg.bootstrapServiceUrl;
 
           # This currently has no effect on functionality but is required. Please just include as-is for now.
           network_type = "quic_bootstrap";
 
           # Setup a specific network configuration.
-          transport_pool = [
-            # Use WebRTC, which is the only option for now.
-            {
-
-              type = "webrtc";
-
-              # Use the Holo-provided default production sbd (signal) server.
-              # `signal_url` is REQUIRED.
-              signal_url = "wss://sbd-0.main.infra.holo.host";
-
-              # Override the default WebRTC STUN configuration.
-              # This is OPTIONAL. If this is not specified, it will default
-              # to what you can see here:
-              webrtc_config = {
-                iceServers = [
-                  { urls = [ "stun:stun-0.main.infra.holo.host:443" ]; }
-                  { urls = [ "stun:stun-1.main.infra.holo.host:443" ]; }
-                ];
-              };
-            }
-          ];
+          transport_pool = [ cfg.webrtcTransportPool ];
         };
       };
     };
