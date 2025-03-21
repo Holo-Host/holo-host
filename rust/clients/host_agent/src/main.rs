@@ -61,33 +61,27 @@ async fn daemonize(args: &DaemonzeArgs) -> Result<(), async_nats::Error> {
         args.hub_url.clone(),
         args.hub_tls_insecure,
         args.nats_connect_timeout_secs,
+        args.leaf_server_listen_host.clone(),
+        args.leaf_server_listen_port,
     )
     .await?;
     // TODO: would it be a good idea to reuse this client in the workload_manager and elsewhere later on?
     bare_client.close().await?;
 
-    let host_client =
-        hostd::host_client::run(&host_id, &args.nats_leafnode_client_creds_path).await?;
+    let host_client = hostd::host_client::run(
+        &host_id,
+        &args.nats_leafnode_client_creds_path,
+        &leaf_server.server_addr()?,
+    )
+    .await?;
 
     // Get Host Agent inventory check duration env var..
     // If none exists, default to 1 hour
-    let host_inventory_check_interval_sec =
-        &args.host_inventory_check_interval_sec.unwrap_or_else(|| {
-            std::env::var("HOST_INVENTORY_CHECK_DURATION")
-                .unwrap_or_else(|_| "3600".to_string())
-                .parse::<u64>()
-                .unwrap_or(3600) // 3600 seconds = 1 hour
-        });
+    let host_inventory_check_interval_sec = &args.host_inventory_check_interval_sec;
 
     // Get Host Agent inventory storage file path
     // If none exists, default to "/var/lib/holo_inventory.json"
-    let inventory_file_path = args.host_inventory_file_path.as_ref().map_or_else(
-        || {
-            std::env::var("HOST_INVENTORY_FILE_PATH")
-                .unwrap_or("/var/lib/holo_inventory.json".to_string())
-        },
-        |s| s.to_owned(),
-    );
+    let inventory_file_path = args.host_inventory_file_path.clone();
 
     let host_client_inventory_clone = host_client.clone();
     let host_id_inventory_clone = host_id.clone();
