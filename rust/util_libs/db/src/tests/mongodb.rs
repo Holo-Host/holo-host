@@ -36,6 +36,7 @@ async fn test_indexing_and_api() -> Result<()> {
                 deleted_at: None,
             },
             device_id: "placeholder_pubkey_host".to_string(),
+            ip_address: Some("127.0.0.1".to_string()),
             inventory: HoloInventory {
                 ..Default::default()
             },
