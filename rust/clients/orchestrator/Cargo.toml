@@ -3,6 +3,10 @@ name = "orchestrator"
 version = "0.0.1"
 edition = "2021"
 
+[[bin]]
+name = "orchestrator"
+path = "src/main.rs"
+
 [dependencies]
 async-nats = { workspace = true }
 anyhow = { workspace = true }
@@ -21,6 +25,7 @@ url = { version = "2", features = ["serde"] }
 bson = { version = "2.6.1", features = ["chrono-0_4"] }
 serde_with = { version = "3.1", features = ["macros"] }
 env_logger = { workspace = true }
+clap = { workspace = true }
 mongodb = "3.1.0"
 strum_macros = "0.25"
 chrono = "0.4.0"
