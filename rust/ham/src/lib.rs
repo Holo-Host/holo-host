@@ -141,6 +141,7 @@ impl Ham {
             let bundle = holochain_types::app::AppBundle::decode(happ_bytes)
                 .context("decoding happ_bytes into an AppBundle".to_string())?;
 
+            #[allow(deprecated)]
             let source = AppBundleSource::Bundle(bundle);
             InstallAppPayload {
                 agent_key: Some(agent_key.clone()),
