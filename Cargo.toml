@@ -14,6 +14,7 @@ members = [
   "rust/util_libs/db",
   "rust/util_libs/mocks",
   "rust/netdiag",
+  "rust/nixos-contain-rs",
 
   "rust/holochain_zome_testing_0",
   "rust/holochain_zome_testing_0_integrity",
