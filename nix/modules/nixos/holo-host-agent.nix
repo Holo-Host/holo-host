@@ -33,7 +33,7 @@ in
 
     package = lib.mkOption {
       type = lib.types.package;
-      default = inputs.self.packages.${pkgs.stdenv.system}.rust-workspace;
+      default = inputs.self.packages.${pkgs.stdenv.system}.rust-workspace.passthru.individual.host_agent;
     };
 
     logLevel = lib.mkOption {
@@ -111,7 +111,7 @@ in
             if cfg.rust.log != null then
               cfg.rust.log
             else
-              "${cfg.logLevel},request=error,tungstenite=error,async_nats=error,mio=error";
+              "${cfg.logLevel},request=error,tungstenite=error,async_nats=error,mio=error,tokio_tungstenite=error";
           RUST_BACKTRACE = cfg.rust.backtrace;
           NATS_LISTEN_PORT = builtins.toString cfg.nats.listenPort;
           NIX_REMOTE = "daemon";
