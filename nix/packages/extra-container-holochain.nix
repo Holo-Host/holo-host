@@ -23,6 +23,10 @@
   signalUrl ? null,
   stunUrls ? null,
   holochainFeatures ? null,
+
+  # hc-http-gw related args
+  enablehttpGw ? false,
+  httpGwAllowedAppIds ? [ ],
 }:
 
 let
@@ -63,6 +67,11 @@ let
             networking.firewall.enable = privateNetwork;
             networking.useHostResolvConf = true;
 
+            imports = [
+              flake.nixosModules.holochain
+              flake.nixosModules.hc-http-gw
+            ];
+
             holo.holochain =
               {
                 inherit adminWebsocketPort;
@@ -77,7 +86,7 @@ let
                           features = builtins.concatStringsSep "," holochainFeatures;
                           cargoExtraArgs = "--features ${features}";
                         in
-                        versioned.override (lib.optionalAttrs holochainFeatures != null { inherit cargoExtraArgs; })
+                        versioned.override { inherit cargoExtraArgs; }
                       else
                         versioned;
 
@@ -90,9 +99,12 @@ let
               // (lib.optionalAttrs (stunUrls != null) { webrtcTransportPoolIceServers = stunUrls; })
             #
             ;
-            imports = [
-              flake.nixosModules.holochain
-            ];
+
+            holo.hc-http-gw = {
+              enable = enablehttpGw;
+              adminWebsocketUrl = "ws://127.0.0.1:${builtins.toString adminWebsocketPort}";
+              allowedAppIds = httpGwAllowedAppIds;
+            };
           };
       };
     };

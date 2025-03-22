@@ -121,6 +121,7 @@ in
         };
 
       path = config.environment.systemPackages ++ [
+        pkgs.git
         pkgs.nats-server
       ];
 
