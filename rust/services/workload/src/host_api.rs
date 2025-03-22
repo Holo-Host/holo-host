@@ -511,9 +511,14 @@ mod util {
                     signal_server_url,
                     holochain_feature_flags,
                     stun_server_urls,
-                    // TODO(feat): support these
-                    // holochain_version,
-                    ..
+                    enable_http_gw,
+                    // TODO: support this
+                    holochain_version: _,
+
+                    // not relevant here
+                    happ_binary_url: _,
+                    network_seed: _,
+                    memproof: _,
                 } = *inner;
 
                 // this is used to store the key=value pairs for the attrset that is passed to `.override attrs`
@@ -522,6 +527,7 @@ mod util {
                     format!(r#"adminWebsocketPort = {}"#, HOLOCHAIN_ADMIN_PORT_DEFAULT),
                     // TODO: clarify if we want to autostart the container uncoditionally
                     format!(r#"autoStart = true"#),
+                    format!(r#"enablehttpGw = {}"#, enable_http_gw),
                 ];
 
                 if let Some(url) = bootstrap_server_url {
@@ -553,6 +559,18 @@ mod util {
                     ));
                 }
 
+                if enable_http_gw {
+                    // reminder: we pass the the workload_id as the installed_app_id at app install time
+                    // eventually these may more more than one
+                    let list_stringified = &[workload_id]
+                        .iter()
+                        .map(|s| format!(r#""{s}""#))
+                        .collect::<Vec<_>>()
+                        .join(" ");
+
+                    override_attrs.push(format!("httpGwAllowedAppIds = [{list_stringified}]"));
+                }
+
                 let override_attrs_stringified = override_attrs.join("; ") + ";";
 
                 log::debug!(
@@ -560,12 +578,14 @@ mod util {
                 );
 
                 let nix_build_args = [
+                    "--refresh",
                     "--extra-experimental-features",
                     "nix-command flakes",
                     "--impure",
                     "--expr",
                     &format!(
-                        r#"(builtins.getFlake "github:holo-host/holo-host/host-agent-workloads-container").packages.${{builtins.currentSystem}}.extra-container-holochain.override {{ {override_attrs_stringified} }}"#
+                        // TODO(feat): make this configurable and use something more dynamic.
+                        r#"(builtins.getFlake "github:holo-host/holo-host/hc-http-gw-prototyping").packages.${{builtins.currentSystem}}.extra-container-holochain.override {{ {override_attrs_stringified} }}"#
                     ),
                 ]
                 .into_iter()
