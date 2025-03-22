@@ -28,8 +28,13 @@ craneLib.devShell {
   # MY_CUSTOM_DEVELOPMENT_VAR = "something else";
 
   # Extra inputs can be added here; cargo and rustc are provided by default.
-  packages = [
-    pkgs.natscli
-    perSystem.holonix_0_4.holochain
-  ];
+  packages =
+    [
+      pkgs.natscli
+      perSystem.holonix_0_4.holochain
+    ]
+    ++ (pkgs.lib.lists.optionals pkgs.stdenv.isLinux [
+      # building this takes very long, so until necessary don't build on non-linux, i.e. darwin
+      perSystem.self.hc-http-gw
+    ]);
 }

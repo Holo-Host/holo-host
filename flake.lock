@@ -188,6 +188,37 @@
         "type": "github"
       }
     },
+    "hc-http-gw": {
+      "inputs": {
+        "flake-parts": [
+          "hc-http-gw",
+          "holonix",
+          "flake-parts"
+        ],
+        "holonix": [
+          "holonix_0_4"
+        ],
+        "nixpkgs": [
+          "nixpkgs"
+        ],
+        "rust-overlay": [
+          "rust-overlay"
+        ]
+      },
+      "locked": {
+        "lastModified": 1742318539,
+        "narHash": "sha256-61vu6oGwMVzfUumrrMEJcrFfGgnlOMycPNLEEk5BGfw=",
+        "owner": "holochain",
+        "repo": "hc-http-gw",
+        "rev": "198fedf72a6b5db985f423a4e3296bdc1f0b5e62",
+        "type": "github"
+      },
+      "original": {
+        "owner": "holochain",
+        "repo": "hc-http-gw",
+        "type": "github"
+      }
+    },
     "hc-launch": {
       "flake": false,
       "locked": {
@@ -490,6 +521,7 @@
         "crane": "crane",
         "disko": "disko",
         "extra-container": "extra-container",
+        "hc-http-gw": "hc-http-gw",
         "holonix_0_4": "holonix_0_4",
         "nixago": "nixago",
         "nixpkgs": "nixpkgs",
