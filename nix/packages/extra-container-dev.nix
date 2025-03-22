@@ -175,7 +175,6 @@ let
                 enable = true;
                 logLevel = "trace";
 
-                # TODO: i suspect there's a bug where the inventory prevents the workload messages from being processed
                 extraDaemonizeArgs.host-inventory-disable = false;
 
                 # dev-container
