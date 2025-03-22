@@ -87,17 +87,13 @@ async fn daemonize(args: &DaemonzeArgs) -> Result<(), async_nats::Error> {
     let host_id_inventory_clone = host_id.clone();
     let inventory_interval = host_inventory_check_interval_sec.to_owned();
     spawn(async move {
-        if let Err(e) = hostd::inventory::run(
+        hostd::inventory::run(
             host_client_inventory_clone,
             &host_id_inventory_clone,
             &inventory_file_path,
             inventory_interval,
-            host_inventory,
         )
         .await
-        {
-            log::error!("Error running host agent workload service. Err={:?}", e)
-        };
     });
 
     let host_client_workload_clone = host_client.clone();
