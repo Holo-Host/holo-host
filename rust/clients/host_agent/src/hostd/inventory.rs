@@ -9,7 +9,6 @@
   This client does not subject to or consume any inventory subjects.
 */
 
-use anyhow::Result;
 use hpos_hal::inventory::HoloInventory;
 use inventory::INVENTORY_UPDATE_SUBJECT;
 use nats_utils::{
@@ -32,7 +31,7 @@ pub async fn run(
     inventory_file_path: &str,
     host_inventory_check_interval_sec: u64,
     starting_inventory: HoloInventory,
-) -> Result<(), ServiceError> {
+) -> anyhow::Result<()> {
     log::info!("Host Agent Client: starting Inventory job...");
 
     // Store latest inventory record in memory
@@ -45,25 +44,29 @@ pub async fn run(
             )
         })?;
 
-    let one_hour_interval = tokio::time::Duration::from_secs(host_inventory_check_interval_sec);
-    let check_interval_duration = chrono::TimeDelta::seconds(one_hour_interval.as_secs() as i64);
+    let interval = tokio::time::Duration::from_secs(host_inventory_check_interval_sec);
+    let check_interval_duration = chrono::TimeDelta::seconds(interval.as_secs() as i64);
     let mut last_check_time = chrono::Utc::now();
 
     let pubkey_lowercase = host_id.to_lowercase();
 
+    let mut first_start = true;
     loop {
         // Periodically check inventory and compare against latest state (in-memory)
-        if should_check_inventory(last_check_time, check_interval_duration) {
+        if first_start || should_check_inventory(last_check_time, check_interval_duration) {
             log::debug!("Checking Host inventory...");
 
             let current_inventory = HoloInventory::from_host();
-            if HoloInventory::load_from_file(inventory_file_path).map_err(|e| {
-                ServiceError::internal(
-                    e.to_string(),
-                    Some("Failed to read host inventory from file.".to_string()),
-                )
-            })? != current_inventory
+            if first_start
+                || HoloInventory::load_from_file(inventory_file_path).map_err(|e| {
+                    ServiceError::internal(
+                        e.to_string(),
+                        Some("Failed to read host inventory from file.".to_string()),
+                    )
+                })? != current_inventory
             {
+                first_start = false;
+
                 log::debug!("Host Inventory has changed.  About to push update to Orchestrator");
                 let authenticated_user_inventory_subject =
                     format!("INVENTORY.{pubkey_lowercase}.{INVENTORY_UPDATE_SUBJECT}");
@@ -98,6 +101,6 @@ pub async fn run(
             last_check_time = chrono::Utc::now();
         }
 
-        sleep(one_hour_interval).await;
+        sleep(interval).await;
     }
 }
