@@ -38,9 +38,9 @@ pub async fn run(
 ) -> ! {
     log::info!("Host Agent Client: starting Inventory job...");
 
-    let one_hour_interval = tokio::time::Duration::from_secs(host_inventory_check_interval_sec);
-    let check_interval_duration = chrono::TimeDelta::seconds(one_hour_interval.as_secs() as i64);
-    let mut last_check_time = chrono::Utc::now() - one_hour_interval;
+    let interval = tokio::time::Duration::from_secs(host_inventory_check_interval_sec);
+    let check_interval_duration = chrono::TimeDelta::seconds(interval.as_secs() as i64);
+    let mut last_check_time = chrono::Utc::now() - interval;
 
     let pubkey_lowercase = host_id.to_lowercase();
 
@@ -131,6 +131,6 @@ pub async fn run(
             last_check_time = chrono::Utc::now();
         }
 
-        sleep(one_hour_interval).await;
+        sleep(interval).await;
     }
 }
