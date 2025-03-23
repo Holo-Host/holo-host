@@ -144,8 +144,9 @@ mod tests {
             Some(required_avg_network_speed),
             Some(required_avg_uptime),
         );
+        let device_id = "host_inventory_machine_id_1";
         let host = create_test_host(
-            None,
+            device_id,
             None,
             None,
             Some(valid_host_remaining_capacity),
@@ -201,8 +202,9 @@ mod tests {
         valid_host_remaining_capacity.cpus = gen_mock_processors(20);
 
         // Create and add a host first
+        let device_id = "host_inventory_machine_id_2";
         let host = create_test_host(
-            None,
+            device_id,
             None,
             None,
             Some(valid_host_remaining_capacity),
