@@ -113,6 +113,7 @@ craneLib.buildPackage (
               pname = "host_agent";
               cargoExtraArgs = "-p host_agent";
               cargoArtifacts = mkCargoArtifacts src;
+              meta.mainProgram = "host_agent";
             }
           );
 

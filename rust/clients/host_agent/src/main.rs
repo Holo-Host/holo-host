@@ -13,12 +13,14 @@ This client is responsible for subscribing the host agent to workload stream end
 pub mod agent_cli;
 pub mod host_cmds;
 mod hostd;
+mod remote_cmds;
 pub mod support_cmds;
+
 use agent_cli::DaemonzeArgs;
-use anyhow::Result;
 use clap::Parser;
 use dotenv::dotenv;
 use hpos_hal::inventory::HoloInventory;
+use std::time::Duration;
 use thiserror::Error;
 use tokio::task::spawn;
 
@@ -28,30 +30,44 @@ pub enum AgentCliError {
     AsyncNats(#[from] async_nats::Error),
     #[error("Command Line Error")]
     CommandError(#[from] std::io::Error),
+    #[error("Invalid Arguments: {0}")]
+    InvalidArguments(String),
 }
 
 #[tokio::main]
-async fn main() -> Result<(), AgentCliError> {
+async fn main() -> anyhow::Result<()> {
     dotenv().ok();
     env_logger::init();
 
     let cli = agent_cli::Root::parse();
-    match &cli.scope {
+    match cli.scope {
         agent_cli::CommandScopes::Daemonize(daemonize_args) => {
             log::info!("Spawning host agent.");
-            daemonize(daemonize_args).await?;
+            daemonize(&daemonize_args).await?;
         }
-        agent_cli::CommandScopes::Host { command } => host_cmds::host_command(command)?,
-        agent_cli::CommandScopes::Support { command } => support_cmds::support_command(command)?,
+        agent_cli::CommandScopes::Host { command } => host_cmds::host_command(&command)?,
+        agent_cli::CommandScopes::Support { command } => support_cmds::support_command(&command)?,
+        agent_cli::CommandScopes::Remote {
+            remote_args,
+            command,
+        } => {
+            nats_utils::jetstream_client::tls_skip_verifier::early_in_process_install_crypto_provider();
+
+            remote_cmds::run(remote_args, command).await?
+        }
     }
 
     Ok(())
 }
 
-async fn daemonize(args: &DaemonzeArgs) -> Result<(), async_nats::Error> {
+async fn daemonize(args: &DaemonzeArgs) -> anyhow::Result<()> {
     // let host_pubkey = auth::init_agent::run().await?;
     let host_inventory = HoloInventory::from_host();
     let host_id = host_inventory.system.machine_id.clone();
+
+    if host_id.is_empty() {
+        anyhow::bail!("host_id is empty")
+    }
 
     let (bare_client, mut leaf_server) = hostd::gen_leaf_server::run(
         &host_id,
@@ -66,7 +82,11 @@ async fn daemonize(args: &DaemonzeArgs) -> Result<(), async_nats::Error> {
     )
     .await?;
     // TODO: would it be a good idea to reuse this client in the workload_manager and elsewhere later on?
-    bare_client.close().await?;
+
+    bare_client.close().await.map_err(AgentCliError::from)?;
+
+    // TODO: why does NATS need some time here? without this the inventory isn't always sent
+    tokio::time::sleep(Duration::from_secs(5)).await;
 
     let host_client = hostd::host_client::run(
         &host_id,
@@ -75,26 +95,22 @@ async fn daemonize(args: &DaemonzeArgs) -> Result<(), async_nats::Error> {
     )
     .await?;
 
-    // Get Host Agent inventory check duration env var..
-    // If none exists, default to 1 hour
-    let host_inventory_check_interval_sec = &args.host_inventory_check_interval_sec;
+    {
+        let host_inventory_file_path = args.host_inventory_file_path.clone();
+        let host_client_inventory = host_client.clone();
+        let host_id_inventory = host_id.clone();
+        let inventory_interval = args.host_inventory_check_interval_sec;
 
-    // Get Host Agent inventory storage file path
-    // If none exists, default to "/var/lib/holo_inventory.json"
-    let inventory_file_path = args.host_inventory_file_path.clone();
-
-    let host_client_inventory_clone = host_client.clone();
-    let host_id_inventory_clone = host_id.clone();
-    let inventory_interval = host_inventory_check_interval_sec.to_owned();
-    spawn(async move {
-        hostd::inventory::run(
-            host_client_inventory_clone,
-            &host_id_inventory_clone,
-            &inventory_file_path,
-            inventory_interval,
-        )
-        .await
-    });
+        spawn(async move {
+            hostd::inventory::run(
+                host_client_inventory,
+                &host_id_inventory,
+                &host_inventory_file_path,
+                inventory_interval,
+            )
+            .await;
+        });
+    }
 
     let host_client_workload_clone = host_client.clone();
     spawn(async move {

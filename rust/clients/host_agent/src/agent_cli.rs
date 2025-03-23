@@ -1,5 +1,5 @@
 use clap::{Args, Parser, Subcommand};
-use nats_utils::leaf_server::LEAF_SERVER_DEFAULT_LISTEN_PORT;
+use nats_utils::{leaf_server::LEAF_SERVER_DEFAULT_LISTEN_PORT, types::NatsRemoteArgs};
 use netdiag::IPVersion;
 use std::path::PathBuf;
 
@@ -32,6 +32,21 @@ pub enum CommandScopes {
         #[command(subcommand)]
         command: SupportCommands,
     },
+
+    /// Interact with a remote host-agent (via NATS).
+    Remote {
+        #[clap(flatten)]
+        remote_args: RemoteArgs,
+
+        #[command(subcommand)]
+        command: RemoteCommands,
+    },
+}
+
+#[derive(Clone, clap::Parser)]
+pub struct RemoteArgs {
+    #[clap(flatten)]
+    pub nats_remote_args: NatsRemoteArgs,
 }
 
 #[derive(Args, Clone, Debug)]
@@ -85,13 +100,6 @@ pub struct DaemonzeArgs {
 
     #[arg(
         long,
-        help = "disable host agent inventory functionality",
-        default_value_t = false
-    )]
-    pub(crate) host_inventory_disable: bool,
-
-    #[arg(
-        long,
         env = "NATS_LEAF_SERVER_LISTEN_HOST",
         default_value = "127.0.0.1",
         value_parser = |s: &str| url::Host::<String>::parse(s),
@@ -142,4 +150,11 @@ pub enum SupportCommands {
         #[arg(long)]
         enable: bool,
     },
+}
+
+/// A set of commands for remotely interacting with a running host-agent instance, by exchanging NATS messages.
+#[derive(Subcommand, Clone)]
+pub enum RemoteCommands {
+    /// Status
+    Ping {},
 }
