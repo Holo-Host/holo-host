@@ -12,8 +12,8 @@
     - sending out active periodic workload reports
 */
 
-use super::utils::{add_workload_consumer, create_callback_subject_to_orchestrator};
-use anyhow::{anyhow, Result};
+use super::utils::{add_workload_consumer, create_callback_subject};
+use anyhow::Result;
 use nats_utils::{
     generate_service_call,
     jetstream_client::JsClient,
@@ -40,53 +40,25 @@ pub async fn run(mut host_client: JsClient, host_id: &str) -> Result<JsClient, a
         version: WORKLOAD_SRV_VERSION.to_string(),
         service_subject: WORKLOAD_SRV_SUBJ.to_string(),
     };
-    host_client.add_js_service(workload_stream_service).await?;
 
-    let workload_service = host_client
-        .get_js_service(WORKLOAD_SRV_NAME.to_string())
-        .await
-        .ok_or(anyhow!(
-            "Failed to locate workload service. Unable to run holo agent workload service."
-        ))?;
+    let workload_service = host_client.add_js_service(workload_stream_service).await?;
 
     add_workload_consumer(
         ServiceConsumerBuilder::new(
-            "install_workload".to_string(),
-            WorkloadServiceSubjects::Install,
-            generate_service_call!(workload_api, install_workload),
-        )
-        .with_subject_prefix(host_id.to_lowercase()),
-        workload_service,
-    )
-    .await?;
-
-    add_workload_consumer(
-        ServiceConsumerBuilder::new(
-            "update_installed_workload".to_string(),
-            WorkloadServiceSubjects::UpdateInstalled,
+            "update_workload".to_string(),
+            WorkloadServiceSubjects::Update,
             generate_service_call!(workload_api, update_workload),
         )
-        .with_subject_prefix(host_id.to_lowercase()),
-        workload_service,
+        .with_subject_prefix(host_id.to_lowercase())
+        .with_response_subject_fn(create_callback_subject(
+            WorkloadServiceSubjects::HandleStatusUpdate
+                .as_ref()
+                .to_string(),
+        )),
+        &workload_service,
     )
     .await?;
 
-    add_workload_consumer(
-        ServiceConsumerBuilder::new(
-            "uninstall_workload".to_string(),
-            WorkloadServiceSubjects::Uninstall,
-            generate_service_call!(workload_api, uninstall_workload),
-        )
-        .with_subject_prefix(host_id.to_lowercase()),
-        workload_service,
-    )
-    .await?;
-
-    let update_workload_status_response = create_callback_subject_to_orchestrator(
-        WorkloadServiceSubjects::HandleStatusUpdate
-            .as_ref()
-            .to_string(),
-    );
     add_workload_consumer(
         ServiceConsumerBuilder::new(
             "fetch_workload_status".to_string(),
@@ -94,8 +66,12 @@ pub async fn run(mut host_client: JsClient, host_id: &str) -> Result<JsClient, a
             generate_service_call!(workload_api, fetch_workload_status),
         )
         .with_subject_prefix(host_id.to_lowercase())
-        .with_response_subject_fn(update_workload_status_response),
-        workload_service,
+        .with_response_subject_fn(create_callback_subject(
+            WorkloadServiceSubjects::HandleStatusUpdate
+                .as_ref()
+                .to_string(),
+        )),
+        &workload_service,
     )
     .await?;
 

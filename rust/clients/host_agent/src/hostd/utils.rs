@@ -6,6 +6,7 @@ use nats_utils::{
 use serde::Serialize;
 use std::collections::HashMap;
 use std::sync::Arc;
+use workload::WORKLOAD_ORCHESTRATOR_SUBJECT_PREFIX;
 
 pub async fn add_workload_consumer<S, R>(
     service_builder: ServiceConsumerBuilder<S, R>,
@@ -23,10 +24,11 @@ where
     Ok(())
 }
 
-pub fn create_callback_subject_to_orchestrator(
-    sub_subject_name: String,
-) -> ResponseSubjectsGenerator {
+pub fn create_callback_subject(sub_subject_name: String) -> ResponseSubjectsGenerator {
     Arc::new(move |_tag_map: HashMap<String, String>| -> Vec<String> {
-        vec![format!("orchestrator.{}", sub_subject_name)]
+        // TODO(refactor): into event subject
+        vec![format!(
+            "{WORKLOAD_ORCHESTRATOR_SUBJECT_PREFIX}.{sub_subject_name}",
+        )]
     })
 }
