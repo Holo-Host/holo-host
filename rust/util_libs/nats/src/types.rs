@@ -2,8 +2,9 @@ use super::jetstream_client::JsClient;
 use anyhow::{Context, Result};
 use async_nats::jetstream::consumer::PullConsumer;
 use async_nats::jetstream::ErrorCode;
-use async_nats::{HeaderMap, Message, ServerAddr};
+use async_nats::{HeaderMap, Message, Request, ServerAddr};
 use async_trait::async_trait;
+use bytes::Bytes;
 use educe::Educe;
 use serde::{Deserialize, Serialize};
 use std::any::Any;
@@ -499,3 +500,71 @@ impl NatsRemoteArgs {
         Ok(maybe)
     }
 }
+
+/// This type is used for the request between the public facing HC HTTP API Gateway and the request handler running in the host-agent.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HcHttpGwRequest {
+    dna_hash: String,
+    coordinatior_identifier: String,
+    zome_name: String,
+    zome_fn_name: String,
+    payload: String,
+}
+
+impl HcHttpGwRequest {
+    pub const DEFAULT_BASE: &str = "http://127.0.0.1:8090";
+
+    /// Returns the URL path for the request towards the hc-http-gw
+    pub fn get_checked_url(
+        &self,
+        maybe_base: Option<&str>,
+        check_coordinator_identifier: &str,
+    ) -> Result<Url> {
+        let HcHttpGwRequest {
+            dna_hash,
+            payload,
+            coordinatior_identifier: coordinator_identifier,
+            zome_name,
+            zome_fn_name,
+        } = self;
+
+        if coordinator_identifier != check_coordinator_identifier {
+            anyhow::bail!("given coordinator identifier '{check_coordinator_identifier}' doesn't match '{coordinator_identifier}'");
+        }
+
+        let base = maybe_base.unwrap_or(Self::DEFAULT_BASE);
+
+        // an example curl command would be: curl -4v "http://dev-host:8090/{{HUMM_HIVE_DNA_HASH}}/{{WORKLOAD_ID}}/content/list_by_hive_link?payload=$payload"
+        let url_raw =format!("{base}/{dna_hash}/{coordinator_identifier}/{zome_name}/{zome_fn_name}?payload={payload}");
+
+        let url = Url::parse(&url_raw).context(format!("parsing {url_raw} as Url"))?;
+
+        Ok(url)
+    }
+
+    pub fn nats_subject_suffix(installed_app_id: &str) -> String {
+        format!("HC_HTTP_GW.{installed_app_id}",)
+    }
+}
+
+/// Response type for the HttpGwConsumer
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HcHttpGwResponse {
+    pub response_headers: HashMap<String, Box<[u8]>>,
+    pub response_bytes: Bytes,
+}
+
+impl CreateTag for HcHttpGwResponse {
+    fn get_tags(&self) -> HashMap<String, String> {
+        // TODO
+        HashMap::new()
+    }
+}
+
+impl CreateResponse for HcHttpGwResponse {
+    fn get_response(&self) -> bytes::Bytes {
+        serde_json::to_vec(&self).unwrap().into()
+    }
+}
+
+impl EndpointTraits for HcHttpGwResponse {}

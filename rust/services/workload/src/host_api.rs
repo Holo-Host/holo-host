@@ -22,17 +22,24 @@ use ham::{
         holochain_client::AllowedOrigins, holochain_conductor_api::AppInterfaceInfo,
         holochain_types::app::AppBundle,
     },
-    Ham,
+    Ham, HamState,
 };
-use nats_utils::types::ServiceError;
+use nats_utils::{
+    jetstream_service::JsStreamService,
+    types::{HcHttpGwRequest, HcHttpGwResponse, ServiceConsumerBuilder, ServiceError},
+};
+use reqwest::Method;
 use std::{fmt::Debug, net::Ipv4Addr, path::Path, sync::Arc};
+use url::Url;
 use util::{
     bash, ensure_workload_path, get_workload_id, provision_extra_container_closure_path,
     realize_extra_container_path,
 };
 
 #[derive(Debug, Clone, Default)]
-pub struct HostWorkloadApi {}
+pub struct HostWorkloadApi {
+    js_service: Option<Arc<JsStreamService>>,
+}
 
 impl WorkloadServiceApi for HostWorkloadApi {}
 
@@ -48,6 +55,7 @@ const HOLOCHAIN_ADMIN_PORT_DEFAULT: u16 = 8000;
 
 impl HostWorkloadApi {
     async fn handle_workload_command(
+        &self,
         msg_subject: String,
         try_message_payload: Result<WorkloadResult, ServiceError>,
     ) -> anyhow::Result<(WorkloadStatus, Workload)> {
@@ -174,7 +182,7 @@ impl HostWorkloadApi {
                             bson::to_bson(&app_info).context("serializing app_info into bson")?;
 
                         // persist the ham state for debugging purposes; maybe we can reuse it later
-                        {
+                        let ham_state = {
                             let mut ham_state_builder = ham::HamStateBuilder::default();
                             ham_state_builder = ham_state_builder.app_info(app_info);
                             ham_state_builder = ham_state_builder.agent_key(agent_key);
@@ -186,7 +194,48 @@ impl HostWorkloadApi {
                             ham_state
                                 .persist(&ham_state_path)
                                 .context(format!("persisting ham state to {ham_state_path:?}"))?;
-                        }
+                            ham_state
+                        };
+
+                        {
+                            // TODO: dynamically retrieve the port
+                            let js_service = if let Some(js_service) = &self.js_service {
+                                Arc::clone(js_service)
+                            } else {
+                                // TODO: better error handling or refactor this case away
+                                panic!("could not get js_service");
+                            };
+
+                            let http_gw_url_base = url::Url::parse("http://127.0.0.1:8090")?;
+                            let subject_suffix = HcHttpGwRequest::nats_subject_suffix(
+                                &ham_state.app_info.installed_app_id,
+                            );
+
+                            js_service
+                                .add_workload_consumer(
+                                    ServiceConsumerBuilder::new(
+                                        subject_suffix.to_string(),
+                                        subject_suffix.to_string(),
+                                        Arc::new(move |msg: Arc<async_nats::Message>| {
+                                            let http_gw_url_base = http_gw_url_base.clone();
+                                            Box::pin(async move {
+                                                hc_http_gw_consumer_handler(
+                                                    msg,
+                                                    http_gw_url_base.clone(),
+                                                    workload_id,
+                                                )
+                                                .await
+                                                .map_err(|e| ServiceError::Internal {
+                                                    message: e.to_string(),
+                                                    context: None,
+                                                })
+                                            })
+                                        }),
+                                    )
+                                    .with_subject_prefix(workload_id.to_hex()),
+                                )
+                                .await?;
+                        };
 
                         db_utils::schemas::WorkloadStatePayload::HolochainDhtV1(app_info_bson)
                     }
@@ -202,6 +251,25 @@ impl HostWorkloadApi {
                     None,
                     util::EnsureWorkloadPathMode::Observe,
                 )?;
+
+                match workload.manifest {
+                    WorkloadManifest::HolochainDhtV1(ref workload_manifest_holochain_dht_v1)
+                        if workload_manifest_holochain_dht_v1.enable_http_gw =>
+                    {
+                        let ham_state_path = Path::new(&workload_path_toplevel).join("ham.state");
+                        if let Ok(Some(ham_state)) = HamState::from_state_file(&ham_state_path) {
+                            // TODO: delete NATS consumer with a subject that's specific to this "{workload_id}_{installed_app_id}" combination that handles http requests to the http gw deployed here.
+
+                            // TODO: refactor this into a reusable function
+                            let _subject = format!(
+                                "WORKLOAD.{workload_id}.HC_HTTP_GW.{}",
+                                ham_state.app_info.installed_app_id
+                            );
+                        };
+                    }
+
+                    _ => (),
+                }
 
                 if exists {
                     let extra_container_path =
@@ -254,33 +322,35 @@ impl HostWorkloadApi {
             });
 
         // TODO: throwing an actual error from here leads to the request silently skipped with no logs entry in the host-agent.
-        let (workload_status, maybe_workload) =
-            match Self::handle_workload_command(msg_subject, try_message_payload).await {
-                Ok(result) => (result.0, Some(result.1)),
-                Err(err) => {
-                    let (status, maybe_workload) = match err.downcast::<WorkloadResultError>() {
-                        Ok(WorkloadResultError { e, workload_result }) => (
-                            WorkloadStatus {
-                                actual: WorkloadState::Error(e.to_string()),
-                                ..workload_result.status
-                            },
-                            workload_result.workload,
-                        ),
-                        Err(e) => (
-                            WorkloadStatus {
-                                id: None,
-                                desired: WorkloadState::Unknown(Default::default()),
-                                actual: WorkloadState::Error(e.to_string()),
-                                payload: Default::default(),
-                            },
-                            None,
-                        ),
-                    };
+        let (workload_status, maybe_workload) = match self
+            .handle_workload_command(msg_subject, try_message_payload)
+            .await
+        {
+            Ok(result) => (result.0, Some(result.1)),
+            Err(err) => {
+                let (status, maybe_workload) = match err.downcast::<WorkloadResultError>() {
+                    Ok(WorkloadResultError { e, workload_result }) => (
+                        WorkloadStatus {
+                            actual: WorkloadState::Error(e.to_string()),
+                            ..workload_result.status
+                        },
+                        workload_result.workload,
+                    ),
+                    Err(e) => (
+                        WorkloadStatus {
+                            id: None,
+                            desired: WorkloadState::Unknown(Default::default()),
+                            actual: WorkloadState::Error(e.to_string()),
+                            payload: Default::default(),
+                        },
+                        None,
+                    ),
+                };
 
-                    log::error!("{status:?}");
-                    (status, maybe_workload)
-                }
-            };
+                log::error!("{status:?}");
+                (status, maybe_workload)
+            }
+        };
 
         Ok(WorkloadApiResult {
             maybe_response_tags: None,
@@ -627,4 +697,39 @@ fn get_container_name(workload_id: &ObjectId) -> anyhow::Result<String> {
     } else {
         anyhow::bail!("{workload_id} needs a minimum hex length of {MIN_LENGTH}");
     }
+}
+
+async fn hc_http_gw_consumer_handler(
+    msg: Arc<async_nats::Message>,
+    http_gw_url_base: Url,
+    workload_id: ObjectId,
+) -> anyhow::Result<HcHttpGwResponse> {
+    let incoming_request: HcHttpGwRequest = serde_json::from_slice(&msg.payload)?;
+
+    let local_request_url_suffix = incoming_request
+        .get_checked_url(Some(http_gw_url_base.as_str()), &workload_id.to_hex())
+        .context(format!(
+            "getting checked url path from request {incoming_request:?}"
+        ))?;
+
+    let response = reqwest::Client::new()
+        .execute(reqwest::Request::new(Method::GET, local_request_url_suffix))
+        .await
+        .context("executing request")?
+        .error_for_status()?;
+
+    let response_headers = response
+        .headers()
+        .into_iter()
+        .map(|(k, v)| (k.to_string(), v.as_bytes().to_vec().into_boxed_slice()))
+        .collect();
+
+    let response_bytes = response.bytes().await?;
+
+    let response = HcHttpGwResponse {
+        response_headers,
+        response_bytes,
+    };
+
+    Ok(response)
 }

@@ -1,3 +1,5 @@
+use crate::types::ServiceConsumerBuilder;
+
 use super::types::{
     ConsumerBuilder, ConsumerExt, ConsumerExtTrait, EndpointTraits, EndpointType,
     JsStreamServiceInfo, LogInfo, ResponseSubjectsGenerator,
@@ -7,6 +9,7 @@ use async_nats::jetstream::consumer::{self, AckPolicy};
 use async_nats::jetstream::stream::{self, Info, Stream};
 use async_nats::jetstream::Context;
 use futures::StreamExt;
+use serde::Serialize;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::sync::Arc;
@@ -330,5 +333,20 @@ impl JsStreamService {
                 // todo: discuss how we want to handle error
             }
         }
+    }
+
+    pub async fn add_workload_consumer<S, R>(
+        &self,
+        service_builder: ServiceConsumerBuilder<S, R>,
+    ) -> Result<()>
+    where
+        S: Serialize + Clone + AsRef<str>,
+        R: EndpointTraits,
+    {
+        self.add_consumer(service_builder.into())
+            .await
+            .map_err(|e| anyhow::Error::msg(e.to_string()))?;
+
+        Ok(())
     }
 }

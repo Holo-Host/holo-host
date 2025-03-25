@@ -43,6 +43,8 @@ pub async fn run(mut host_client: JsClient, host_id: &str) -> Result<JsClient, a
 
     let workload_service = host_client.add_js_service(workload_stream_service).await?;
 
+    // TODO: add the service tot he HostWorkloadApi
+
     add_workload_consumer(
         ServiceConsumerBuilder::new(
             "update_workload".to_string(),
