@@ -440,7 +440,9 @@ pub struct WorkloadManifestHolochainDhtV1 {
     #[arg(long, value_delimiter = ',')]
     pub holochain_version: Option<String>,
     #[arg(long)]
-    pub enable_http_gw: bool,
+    pub http_gw_enable: bool,
+    #[arg(long)]
+    pub http_gw_allowed_fns: Option<Vec<String>>,
 }
 
 /// Parse a single key-value pair

@@ -241,11 +241,19 @@ impl HostWorkloadApi {
                                 .await;
 
                             log::debug!(
-                                "consumer there? {:?}",
+                                "consumer there? {:?}. add result: {consumer:?}",
                                 js_service_guard
                                     .get_consumer_stream_info(&consumer_name)
                                     .await
                             );
+
+                            /*
+
+                               TODO(bug): this comes back with a timeout
+
+                               Mar 25 20:58:29 dev-host holo-host-agent-start[328]: [2025-03-25T19:58:29Z DEBUG workload::host_api] consumer there? Ok(None). add result: Err(Error { kind: TimedOut, source: None })
+                               Mar 25 20:58:29 dev-host holo-host-agent-start[328]: [2025-03-25T19:58:29Z ERROR workload::host_api] adding consumer: timed out
+                            */
 
                             match consumer {
                                 Ok(consumer) => log::debug!("got the consumer {consumer:?}"),
@@ -270,7 +278,7 @@ impl HostWorkloadApi {
 
                 match workload.manifest {
                     WorkloadManifest::HolochainDhtV1(ref workload_manifest_holochain_dht_v1)
-                        if workload_manifest_holochain_dht_v1.enable_http_gw =>
+                        if workload_manifest_holochain_dht_v1.http_gw_enable =>
                     {
                         let ham_state_path = Path::new(&workload_path_toplevel).join("ham.state");
                         if let Ok(Some(ham_state)) = HamState::from_state_file(&ham_state_path) {
@@ -597,8 +605,9 @@ mod util {
                     signal_server_url,
                     holochain_feature_flags,
                     stun_server_urls,
-                    enable_http_gw,
+                    http_gw_enable,
                     // TODO: support this
+                    http_gw_allowed_fns: _,
                     holochain_version: _,
 
                     // not relevant here
@@ -613,7 +622,7 @@ mod util {
                     format!(r#"adminWebsocketPort = {}"#, HOLOCHAIN_ADMIN_PORT_DEFAULT),
                     // TODO: clarify if we want to autostart the container uncoditionally
                     format!(r#"autoStart = true"#),
-                    format!(r#"enablehttpGw = {}"#, enable_http_gw),
+                    format!(r#"enablehttpGw = {}"#, http_gw_enable),
                 ];
 
                 if let Some(url) = bootstrap_server_url {
@@ -645,7 +654,7 @@ mod util {
                     ));
                 }
 
-                if enable_http_gw {
+                if http_gw_enable {
                     // reminder: we pass the the workload_id as the installed_app_id at app install time
                     // eventually these may more more than one
                     let list_stringified = &[workload_id]

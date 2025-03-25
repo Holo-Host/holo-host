@@ -12,9 +12,7 @@
     - sending out active periodic workload reports
 */
 
-use std::sync::Arc;
-
-use super::utils::{add_workload_consumer, create_callback_subject};
+use super::utils::create_callback_subject;
 use anyhow::Result;
 use nats_utils::{
     generate_service_call,
@@ -41,46 +39,52 @@ pub async fn run(mut host_client: JsClient, host_id: &str) -> Result<JsClient, a
         service_subject: WORKLOAD_SRV_SUBJ.to_string(),
     };
 
-    let workload_service = host_client.add_js_service(workload_stream_service).await?;
-
     // Instantiate the Workload API
     let workload_api = HostWorkloadApi {
-        worload_api_js_service: std::sync::Arc::new(RwLock::new(Arc::clone(&workload_service))),
+        worload_api_js_service: std::sync::Arc::new(RwLock::new(
+            host_client.add_js_service(workload_stream_service).await?,
+        )),
     };
 
-    // TODO: add the service tot he HostWorkloadApi
-
-    add_workload_consumer(
-        ServiceConsumerBuilder::new(
-            "update_workload".to_string(),
-            WorkloadServiceSubjects::Update,
-            generate_service_call!(workload_api, update_workload),
+    workload_api
+        .worload_api_js_service
+        .write()
+        .await
+        .add_consumer(
+            ServiceConsumerBuilder::new(
+                "update_workload".to_string(),
+                WorkloadServiceSubjects::Update,
+                generate_service_call!(workload_api, update_workload),
+            )
+            .with_subject_prefix(host_id.to_lowercase())
+            .with_response_subject_fn(create_callback_subject(
+                WorkloadServiceSubjects::HandleStatusUpdate
+                    .as_ref()
+                    .to_string(),
+            ))
+            .into(),
         )
-        .with_subject_prefix(host_id.to_lowercase())
-        .with_response_subject_fn(create_callback_subject(
-            WorkloadServiceSubjects::HandleStatusUpdate
-                .as_ref()
-                .to_string(),
-        )),
-        &workload_service,
-    )
-    .await?;
+        .await?;
 
-    add_workload_consumer(
-        ServiceConsumerBuilder::new(
-            "fetch_workload_status".to_string(),
-            WorkloadServiceSubjects::SendStatus,
-            generate_service_call!(workload_api, fetch_workload_status),
+    workload_api
+        .worload_api_js_service
+        .write()
+        .await
+        .add_consumer(
+            ServiceConsumerBuilder::new(
+                "fetch_workload_status".to_string(),
+                WorkloadServiceSubjects::SendStatus,
+                generate_service_call!(workload_api, fetch_workload_status),
+            )
+            .with_subject_prefix(host_id.to_lowercase())
+            .with_response_subject_fn(create_callback_subject(
+                WorkloadServiceSubjects::HandleStatusUpdate
+                    .as_ref()
+                    .to_string(),
+            ))
+            .into(),
         )
-        .with_subject_prefix(host_id.to_lowercase())
-        .with_response_subject_fn(create_callback_subject(
-            WorkloadServiceSubjects::HandleStatusUpdate
-                .as_ref()
-                .to_string(),
-        )),
-        &workload_service,
-    )
-    .await?;
+        .await?;
 
     Ok(host_client)
 }

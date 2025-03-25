@@ -243,7 +243,7 @@ dev-hub-host-agent-remote-hc-humm desired-status subject="WORKLOAD.update" +args
         --bootstrap-server-url "https://bootstrap.holo.host" \
         --signal-server-url "wss://sbd.holo.host" \
         --holochain-feature-flags "unstable-functions,unstable-sharding,chc,unstable-countersigning" \
-        --enable-http-gw \
+        --http-gw-enable \
         {{args}}
 
 
