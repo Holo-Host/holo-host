@@ -246,6 +246,8 @@ dev-hub-host-agent-remote-hc-humm desired-status subject="WORKLOAD.update" +args
         --enable-http-gw \
         {{args}}
 
+
+
 dev-install-humm-hive:
     DONT_WAIT=true just dev-hub-host-agent-remote-hc-humm reported WORKLOAD.add
     just dev-hub-host-agent-remote-hc-humm running WORKLOAD.insert
@@ -253,3 +255,20 @@ dev-install-humm-hive:
 dev-uninstall-humm-hive:
     DONT_WAIT=true just dev-hub-host-agent-remote-hc-humm deleted WORKLOAD.update
     just dev-hub-host-agent-remote-hc-humm deleted WORKLOAD.insert
+
+
+dev-host-http-gw-remote-hive:
+    #!/usr/bin/env bash
+    set -xeE
+    # curl -4v "http://dev-host:8090/{{HUMM_HIVE_DNA_HASH}}/{{WORKLOAD_ID}}/humm_earth_core/init"
+    # echo done
+
+    payload="$(base64 -i -w0 <<<'{ "hive_id":"MTc0MTA4ODg5NDA5Ni1iZmVjZGEwZDUxYTMxMjgz", "content_type": "hummhive-extension-story-v1" }')"
+
+    export NATS_URL="nats://dev-hub"
+    just host-agent-remote hc-http-gw-req \
+      --dna-hash {{HUMM_HIVE_DNA_HASH}} \
+      --coordinatior-identifier {{WORKLOAD_ID}} \
+      --zome-name "content" \
+      --zome-fn-name "list_by_hive_link" \
+      --payload "$payload"

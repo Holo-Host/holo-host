@@ -3,7 +3,7 @@ use db_utils::schemas::{
     Workload, WorkloadManifest, WorkloadState, WorkloadStateDiscriminants, WorkloadStatus,
 };
 use futures::StreamExt;
-use nats_utils::types::PublishInfo;
+use nats_utils::types::{HcHttpGwResponse, PublishInfo};
 use nats_utils::{jetstream_client::JsClient, types::JsClientBuilder};
 use std::str::FromStr;
 use workload::types::{WorkloadResult, WorkloadServiceSubjects};
@@ -129,6 +129,25 @@ pub(crate) async fn run(args: RemoteArgs, command: RemoteCommands) -> anyhow::Re
                 log::info!("waiting until ctrl+c is pressed.");
                 tokio::signal::ctrl_c().await?;
             }
+        }
+
+        agent_cli::RemoteCommands::HcHttpGwReq { request } => {
+            let subject = request.nats_subject();
+
+            let data = serde_json::to_string(&request)?;
+
+            let publish_info = PublishInfo {
+                subject,
+                msg_id: Default::default(),
+                data: data.as_bytes().to_vec(),
+                headers: None,
+            };
+
+            let bytes = nats_client.request(publish_info).await?;
+
+            let response: HcHttpGwResponse = serde_json::from_slice(&bytes)?;
+
+            println!("{response:#?}");
         }
     }
 

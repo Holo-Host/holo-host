@@ -128,7 +128,7 @@ impl JsStreamService {
         let consumer_config = consumer::pull::Config {
             durable_name: Some(builder_params.name.to_string()),
             ack_policy: AckPolicy::Explicit,
-            filter_subject: consumer_subject,
+            filter_subject: consumer_subject.clone(),
             ..Default::default()
         };
 
@@ -145,17 +145,24 @@ impl JsStreamService {
             response_subject_fn: builder_params.response_subject_fn,
         };
 
-        self.local_consumers.write().await.insert(
+        if let Some(_previous_consumer) = self.local_consumers.write().await.insert(
             builder_params.name.to_string(),
             Arc::new(consumer_with_handler),
-        );
+        ) {
+            log::debug!(
+                "found previous local consumer with name {}",
+                &builder_params.name
+            );
+
+            // TODO: clean it up if this was the last usage of the consumer
+        };
 
         let endpoint_consumer: ConsumerExt<T> = self.get_consumer(&builder_params.name).await?;
         self.spawn_consumer_handler::<T>(&builder_params.name)
             .await?;
 
         log::debug!(
-            "{}Added the {} local consumer",
+            "{}Added the {} local consumer with subject {consumer_subject}",
             self.service_log_prefix,
             builder_params.name,
         );
@@ -163,6 +170,7 @@ impl JsStreamService {
         Ok(endpoint_consumer)
     }
 
+    // TODO: return the spawned handle and store it to be able to stop it later
     pub async fn spawn_consumer_handler<T>(
         &self,
         consumer_name: &str,

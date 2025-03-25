@@ -29,9 +29,6 @@ pub async fn run(mut host_client: JsClient, host_id: &str) -> Result<JsClient, a
     log::info!("Host Agent Client: starting workload service...");
     log::info!("host_id : {}", host_id);
 
-    // Instantiate the Workload API
-    let workload_api = HostWorkloadApi::default();
-
     // Register Workload Streams for Host Agent to consume
     // NB: Subjects are published by orchestrator or nats-db-connector
     let workload_stream_service = JsServiceBuilder {
@@ -42,6 +39,11 @@ pub async fn run(mut host_client: JsClient, host_id: &str) -> Result<JsClient, a
     };
 
     let workload_service = host_client.add_js_service(workload_stream_service).await?;
+
+    // Instantiate the Workload API
+    let workload_api = HostWorkloadApi {
+        js_service: std::sync::Arc::clone(&workload_service),
+    };
 
     // TODO: add the service tot he HostWorkloadApi
 

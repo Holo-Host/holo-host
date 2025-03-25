@@ -2,7 +2,7 @@ use super::jetstream_client::JsClient;
 use anyhow::{Context, Result};
 use async_nats::jetstream::consumer::PullConsumer;
 use async_nats::jetstream::ErrorCode;
-use async_nats::{HeaderMap, Message, Request, ServerAddr};
+use async_nats::{HeaderMap, Message, ServerAddr};
 use async_trait::async_trait;
 use bytes::Bytes;
 use educe::Educe;
@@ -502,12 +502,17 @@ impl NatsRemoteArgs {
 }
 
 /// This type is used for the request between the public facing HC HTTP API Gateway and the request handler running in the host-agent.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, clap::Args)]
 pub struct HcHttpGwRequest {
+    #[clap(long)]
     dna_hash: String,
-    coordinatior_identifier: String,
+    #[clap(long)]
+    pub coordinatior_identifier: String,
+    #[clap(long)]
     zome_name: String,
+    #[clap(long)]
     zome_fn_name: String,
+    #[clap(long)]
     payload: String,
 }
 
@@ -544,6 +549,14 @@ impl HcHttpGwRequest {
 
     pub fn nats_subject_suffix(installed_app_id: &str) -> String {
         format!("HC_HTTP_GW.{installed_app_id}",)
+    }
+
+    pub fn nats_subject(&self) -> String {
+        format!(
+            // TODO: create a constant for this and figure out why it's not WORKLOAD
+            "WORKLOAD_SERVICE.{}",
+            Self::nats_subject_suffix(&self.coordinatior_identifier)
+        )
     }
 }
 

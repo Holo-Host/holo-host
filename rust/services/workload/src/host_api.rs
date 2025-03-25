@@ -36,9 +36,9 @@ use util::{
     realize_extra_container_path,
 };
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct HostWorkloadApi {
-    js_service: Option<Arc<JsStreamService>>,
+    pub js_service: Arc<JsStreamService>,
 }
 
 impl WorkloadServiceApi for HostWorkloadApi {}
@@ -199,19 +199,15 @@ impl HostWorkloadApi {
 
                         {
                             // TODO: dynamically retrieve the port
-                            let js_service = if let Some(js_service) = &self.js_service {
-                                Arc::clone(js_service)
-                            } else {
-                                // TODO: better error handling or refactor this case away
-                                panic!("could not get js_service");
-                            };
-
                             let http_gw_url_base = url::Url::parse("http://127.0.0.1:8090")?;
                             let subject_suffix = HcHttpGwRequest::nats_subject_suffix(
                                 &ham_state.app_info.installed_app_id,
                             );
 
-                            js_service
+                            log::debug!("adding consumer for subject suffix {subject_suffix}");
+
+                            // TODO: what if the consumer already exists?
+                            self.js_service
                                 .add_workload_consumer(
                                     ServiceConsumerBuilder::new(
                                         subject_suffix.to_string(),

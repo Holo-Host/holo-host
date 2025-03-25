@@ -161,7 +161,7 @@ impl JsClient {
                 }
             })
             .ping_interval(p.ping_interval.unwrap_or(Duration::from_secs(120)))
-            .request_timeout(Some(p.request_timeout.unwrap_or(Duration::from_secs(1))))
+            .request_timeout(Some(p.request_timeout.unwrap_or(Duration::from_secs(30))))
             .custom_inbox_prefix(&p.inbox_prefix);
 
         if let Some((user, pass)) = p.nats_remote_args.maybe_user_password()? {
@@ -309,6 +309,26 @@ impl JsClient {
         }
 
         Ok(())
+    }
+
+    pub async fn request(&self, payload: PublishInfo) -> anyhow::Result<Box<[u8]>> {
+        log::debug!(
+            "{}Called Publish message: subj={}, msg_id={} data={}",
+            self.service_log_prefix,
+            payload.subject,
+            payload.msg_id,
+            String::from_utf8_lossy(&payload.data),
+        );
+
+        let result = self
+            .js_context
+            .request(payload.subject.clone(), &payload.data)
+            .await
+            .map_err(|e| anyhow::anyhow!(e.to_string()));
+        // TODO(performance): remove this once Self::drop works properly as this may slow performance down.
+        let _ = self.client.flush().await;
+
+        result
     }
 
     /// Corresponds roughly to `nats stream add {params.name}`
