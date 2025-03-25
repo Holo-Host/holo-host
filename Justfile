@@ -218,8 +218,8 @@ cloud-install-app:
     just cloud-hub-host-agent-remote-hc running WORKLOAD.insert
 
 cloud-uninstall-app:
-    DONT_WAIT=true just cloud-hub-host-agent-remote-hc uninstalled WORKLOAD.add
-    DONT_WAIT=true just cloud-hub-host-agent-remote-hc uninstalled WORKLOAD.insert
+    DONT_WAIT=true just cloud-hub-host-agent-remote-hc removed WORKLOAD.add
+    DONT_WAIT=true just cloud-hub-host-agent-remote-hc removed WORKLOAD.insert
 
 
 dev-host-http-gw-curl-hive:
@@ -243,8 +243,10 @@ dev-hub-host-agent-remote-hc-humm desired-status subject="WORKLOAD.update" +args
         --bootstrap-server-url "https://bootstrap.holo.host" \
         --signal-server-url "wss://sbd.holo.host" \
         --holochain-feature-flags "unstable-functions,unstable-sharding,chc,unstable-countersigning" \
-        --enable-http-gw \
+        --http-gw-enable \
         {{args}}
+
+
 
 dev-install-humm-hive:
     DONT_WAIT=true just dev-hub-host-agent-remote-hc-humm reported WORKLOAD.add
@@ -253,3 +255,21 @@ dev-install-humm-hive:
 dev-uninstall-humm-hive:
     DONT_WAIT=true just dev-hub-host-agent-remote-hc-humm deleted WORKLOAD.update
     just dev-hub-host-agent-remote-hc-humm deleted WORKLOAD.insert
+
+
+dev-host-http-gw-remote-hive:
+    #!/usr/bin/env bash
+    set -xeE
+    # curl -4v "http://dev-host:8090/{{HUMM_HIVE_DNA_HASH}}/{{WORKLOAD_ID}}/humm_earth_core/init"
+    # echo done
+
+    payload="$(base64 -i -w0 <<<'{ "hive_id":"MTc0MTA4ODg5NDA5Ni1iZmVjZGEwZDUxYTMxMjgz", "content_type": "hummhive-extension-story-v1" }')"
+
+    export NATS_URL="nats://dev-hub"
+    # export NATS_URL="nats://dev-host"
+    just host-agent-remote hc-http-gw-req \
+      --dna-hash {{HUMM_HIVE_DNA_HASH}} \
+      --coordinatior-identifier {{WORKLOAD_ID}} \
+      --zome-name "content" \
+      --zome-fn-name "list_by_hive_link" \
+      --payload "$payload"

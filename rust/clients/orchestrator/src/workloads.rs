@@ -14,6 +14,8 @@ This client is responsible for:
     - keeping service running until explicitly cancelled out
 */
 
+use std::sync::Arc;
+
 use super::utils::{add_workload_consumer, create_callback_subject_to_host};
 use anyhow::Result;
 use mongodb::Client as MongoDBClient;
@@ -33,7 +35,7 @@ pub async fn run(
     db_client: MongoDBClient,
 ) -> Result<JsClient, async_nats::Error> {
     // Instantiate the Workload API (requires access to db client)
-    let workload_api = OrchestratorWorkloadApi::new(&db_client).await?;
+    let workload_api = Arc::new(OrchestratorWorkloadApi::new(&db_client).await?);
 
     // Register Workload Streams for Orchestrator to consume and proceess
     // NB: These subjects are published by external Developer (via external api), the Nats-DB-Connector, or the Hosting Agent

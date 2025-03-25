@@ -20,7 +20,7 @@ use agent_cli::DaemonzeArgs;
 use clap::Parser;
 use dotenv::dotenv;
 use hpos_hal::inventory::HoloInventory;
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 use thiserror::Error;
 use tokio::task::spawn;
 
@@ -112,9 +112,9 @@ async fn daemonize(args: &DaemonzeArgs) -> anyhow::Result<()> {
         });
     }
 
-    let host_client_workload_clone = host_client.clone();
+    let host_client_workload = Arc::new(tokio::sync::RwLock::new(host_client.clone()));
     spawn(async move {
-        if let Err(e) = hostd::workload::run(host_client_workload_clone, &host_id).await {
+        if let Err(e) = hostd::workload::run(host_client_workload, &host_id).await {
             log::error!("Error running host agent workload service. Err={:?}", e)
         };
     });
