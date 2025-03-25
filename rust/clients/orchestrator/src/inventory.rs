@@ -10,6 +10,8 @@ This client is responsible for:
     - interfacing with mongodb DB
 */
 
+use std::sync::Arc;
+
 use anyhow::{anyhow, Result};
 use inventory::{
     InventoryServiceApi, INVENTORY_SRV_DESC, INVENTORY_SRV_NAME, INVENTORY_SRV_SUBJ,
@@ -43,7 +45,7 @@ pub async fn run(
         ))?;
 
     // Instantiate the Workload API (requires access to db client)
-    let inventory_api = InventoryServiceApi::new(&db_client).await?;
+    let inventory_api = Arc::new(InventoryServiceApi::new(&db_client).await?);
 
     // Subjects published by hosting agent:
     inventory_service

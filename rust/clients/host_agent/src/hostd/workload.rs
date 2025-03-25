@@ -12,6 +12,8 @@
     - sending out active periodic workload reports
 */
 
+use std::sync::Arc;
+
 use super::utils::{add_workload_consumer, create_callback_subject};
 use anyhow::Result;
 use nats_utils::{
@@ -19,6 +21,7 @@ use nats_utils::{
     jetstream_client::JsClient,
     types::{JsServiceBuilder, ServiceConsumerBuilder},
 };
+use tokio::sync::RwLock;
 use workload::{
     host_api::HostWorkloadApi, types::WorkloadServiceSubjects, WORKLOAD_SRV_DESC,
     WORKLOAD_SRV_NAME, WORKLOAD_SRV_SUBJ, WORKLOAD_SRV_VERSION,
@@ -42,7 +45,7 @@ pub async fn run(mut host_client: JsClient, host_id: &str) -> Result<JsClient, a
 
     // Instantiate the Workload API
     let workload_api = HostWorkloadApi {
-        js_service: std::sync::Arc::clone(&workload_service),
+        worload_api_js_service: std::sync::Arc::new(RwLock::new(Arc::clone(&workload_service))),
     };
 
     // TODO: add the service tot he HostWorkloadApi

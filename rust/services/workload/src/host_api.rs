@@ -30,6 +30,7 @@ use nats_utils::{
 };
 use reqwest::Method;
 use std::{fmt::Debug, net::Ipv4Addr, path::Path, sync::Arc};
+use tokio::sync::RwLock;
 use url::Url;
 use util::{
     bash, ensure_workload_path, get_workload_id, provision_extra_container_closure_path,
@@ -38,7 +39,7 @@ use util::{
 
 #[derive(Debug, Clone)]
 pub struct HostWorkloadApi {
-    pub js_service: Arc<JsStreamService>,
+    pub worload_api_js_service: Arc<RwLock<Arc<JsStreamService>>>,
 }
 
 impl WorkloadServiceApi for HostWorkloadApi {}
@@ -206,11 +207,17 @@ impl HostWorkloadApi {
 
                             log::debug!("adding consumer for subject suffix {subject_suffix}");
 
+                            let js_service_guard = self.worload_api_js_service.write().await;
+
+                            log::debug!("got the js service lock");
+
+                            let consumer_name = subject_suffix.to_string();
+
                             // TODO: what if the consumer already exists?
-                            self.js_service
-                                .add_workload_consumer(
+                            let consumer = js_service_guard
+                                .add_consumer(
                                     ServiceConsumerBuilder::new(
-                                        subject_suffix.to_string(),
+                                        consumer_name.clone(),
                                         subject_suffix.to_string(),
                                         Arc::new(move |msg: Arc<async_nats::Message>| {
                                             let http_gw_url_base = http_gw_url_base.clone();
@@ -228,9 +235,22 @@ impl HostWorkloadApi {
                                             })
                                         }),
                                     )
-                                    .with_subject_prefix(workload_id.to_hex()),
+                                    .with_subject_prefix(workload_id.to_hex())
+                                    .into(),
                                 )
-                                .await?;
+                                .await;
+
+                            log::debug!(
+                                "consumer there? {:?}",
+                                js_service_guard
+                                    .get_consumer_stream_info(&consumer_name)
+                                    .await
+                            );
+
+                            match consumer {
+                                Ok(consumer) => log::debug!("got the consumer {consumer:?}"),
+                                Err(e) => log::error!("adding consumer: {e}"),
+                            };
                         };
 
                         db_utils::schemas::WorkloadStatePayload::HolochainDhtV1(app_info_bson)

@@ -554,7 +554,7 @@ impl HcHttpGwRequest {
     pub fn nats_subject(&self) -> String {
         format!(
             // TODO: create a constant for this and figure out why it's not WORKLOAD
-            "WORKLOAD_SERVICE.{}",
+            "WORKLOAD.{}",
             Self::nats_subject_suffix(&self.coordinatior_identifier)
         )
     }

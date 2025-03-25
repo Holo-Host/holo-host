@@ -124,6 +124,8 @@ impl JsStreamService {
         // Add the Service Subject prefix
         let consumer_subject = format!("{}.{}", self.service_subject, builder_params.subject);
 
+        log::debug!("adding consumer with subject {consumer_subject}");
+
         // Register JS Subject Consumer
         let consumer_config = consumer::pull::Config {
             durable_name: Some(builder_params.name.to_string()),
