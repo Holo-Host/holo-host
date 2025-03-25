@@ -1,9 +1,10 @@
 use anyhow::Context;
+use async_nats::HeaderName;
 use db_utils::schemas::{
     Workload, WorkloadManifest, WorkloadState, WorkloadStateDiscriminants, WorkloadStatus,
 };
 use futures::StreamExt;
-use nats_utils::types::PublishInfo;
+use nats_utils::types::{HcHttpGwResponse, PublishInfo};
 use nats_utils::{jetstream_client::JsClient, types::JsClientBuilder};
 use std::str::FromStr;
 use workload::types::{WorkloadResult, WorkloadServiceSubjects};
@@ -129,6 +130,80 @@ pub(crate) async fn run(args: RemoteArgs, command: RemoteCommands) -> anyhow::Re
                 log::info!("waiting until ctrl+c is pressed.");
                 tokio::signal::ctrl_c().await?;
             }
+        }
+
+        agent_cli::RemoteCommands::HcHttpGwReq { request } => {
+            let destination_subject = request.nats_destination_subject();
+            let reply_subject = request.nats_reply_subject();
+
+            /*
+                TODO: the response never arrives. it does get sent, twice!
+
+                [#7] Received on "WORKLOAD.HC_HTTP_GW.67d2ef2a67d4b619a54286c4" with reply ".MRyc5qStnwDMTVD9MABt7n.MRyc5qStnwDMTVD9MABt3x"
+                {"dna_hash":"uhC0kwENLeSuselWQJtywbYB1QyFK1d-ujmFFtxsq6CYY7_Ohri2u","coordinatior_identifier":"67d2ef2a67d4b619a54286c4","zome_name":"content","zome_fn_name":"list_by_hive_link","payload":"eyAiaGl2ZV9pZCI6Ik1UYzBNVEE0T0RnNU5EQTVOaTFpWm1WalpHRXdaRFV4WVRNeE1qZ3oiLCAiY29udGVudF90eXBlIjogImh1bW1oaXZlLWV4dGVuc2lvbi1zdG9yeS12MSIgfQo="}
+
+
+                [#8] Received JetStream message: consumer: WORKLOAD_SERVICE > HC_HTTP_GW_67d2ef2a67d4b619a542 / subject: WORKLOAD.HC_HTTP_GW.67d2ef2a67d4b619a54286c4 / delivered: 1 / consumer seq: 3 / stream seq: 7
+                {"dna_hash":"uhC0kwENLeSuselWQJtywbYB1QyFK1d-ujmFFtxsq6CYY7_Ohri2u","coordinatior_identifier":"67d2ef2a67d4b619a54286c4","zome_name":"content","zome_fn_name":"list_by_hive_link","payload":"eyAiaGl2ZV9pZCI6Ik1UYzBNVEE0T0RnNU5EQTVOaTFpWm1WalpHRXdaRFV4WVRNeE1qZ3oiLCAiY29udGVudF90eXBlIjogImh1bW1oaXZlLWV4dGVuc2lvbi1zdG9yeS12MSIgfQo="}
+
+
+
+                [#9] Received on "$JS.ACK.WORKLOAD_SERVICE.HC_HTTP_GW_67d2ef2a67d4b619a542.1.7.3.1743028830450804547.0" with reply "_HPOS_INBOX.f0b9a2b7a95848389fdb43eda8139569.npOEAagmpNBPTOEhZvHwpT.npOEAagmpNBPTOEhZvHxl3"
+
+                [#10] Received on "$JS.ACK.WORKLOAD_SERVICE.HC_HTTP_GW_67d2ef2a67d4b619a542.1.7.3.1743028830450804547.0.WORKLOAD.WORKLOAD.HC_HTTP_GW.67d2ef2a67d4b619a54286c4" with reply "_HPOS_INBOX.f0b9a2b7a95848389fdb43eda8139569.npOEAagmpNBPTOEhZvHwpT.npOEAagmpNBPTOEhZvHxmy"
+            */
+
+            // TODO: this didn't work, it's worth double-checking.
+            // let response = {
+            //     let data = serde_json::to_string(&request)?;
+            //     let msg = nats_client
+            //         .client
+            //         .request(destination_subject, data.into())
+            //         .await?;
+            //     let response: HcHttpGwResponse = serde_json::from_slice(&msg.payload)?;
+            //     response
+            // };
+
+            let response = {
+                let data = serde_json::to_string(&request)?;
+                // let publish_info = PublishInfo {
+                //     subject: destination_subject,
+                //     msg_id: Default::default(),
+                //     data: data.as_bytes().to_vec(),
+                //     headers: None,
+                // };
+
+                // nats_client.publish(publish_info).await?;
+                let _ack = nats_client
+                    .js_context
+                    .publish_with_headers(
+                        destination_subject.clone(),
+                        async_nats::HeaderMap::from_iter([(
+                            HeaderName::from_static(nats_utils::jetstream_service::JsStreamService::HEADER_NAME_REPLY_OVERRIDE),
+                            async_nats::HeaderValue::from_str(&reply_subject).unwrap(),
+                        )]),
+                        data.into(),
+                    )
+                    .await?;
+                log::info!("request published");
+
+                let mut response = nats_client.client.subscribe(reply_subject.clone()).await?;
+
+                let msg = response
+                    .next()
+                    .await
+                    .ok_or_else(|| anyhow::anyhow!("got no response on subject {reply_subject}"))?;
+
+                let response: HcHttpGwResponse = serde_json::from_slice(&msg.payload)?;
+                response
+            };
+
+            let stringified = String::from_utf8(response.response_bytes.to_vec());
+
+            // let response: HcHttpGwResponse =
+            //     nats_client.js_context.request(subject, &request).await?;
+
+            println!("{response:?}\n{stringified:?}");
         }
     }
 

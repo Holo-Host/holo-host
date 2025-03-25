@@ -1,7 +1,10 @@
 use bson::oid::ObjectId;
 use clap::{Args, Parser, Subcommand};
 use db_utils::schemas::WorkloadManifestHolochainDhtV1;
-use nats_utils::{leaf_server::LEAF_SERVER_DEFAULT_LISTEN_PORT, types::NatsRemoteArgs};
+use nats_utils::{
+    leaf_server::LEAF_SERVER_DEFAULT_LISTEN_PORT,
+    types::{HcHttpGwRequest, NatsRemoteArgs},
+};
 use netdiag::IPVersion;
 use std::path::PathBuf;
 
@@ -192,5 +195,10 @@ pub enum RemoteCommands {
         #[arg(long, default_value = "WORKLOAD.>")]
         /// If provided, the CLI will subscribe to the given subject on the remote NATS after publishing the workload message.
         maybe_wait_on_subject: Option<String>,
+    },
+
+    HcHttpGwReq {
+        #[clap(flatten)]
+        request: HcHttpGwRequest,
     },
 }

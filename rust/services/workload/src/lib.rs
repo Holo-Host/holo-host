@@ -45,7 +45,7 @@ pub const WORKLOAD_ORCHESTRATOR_SUBJECT_PREFIX: &str = "orchestrator";
 #[async_trait]
 pub trait WorkloadServiceApi
 where
-    Self: std::fmt::Debug + Clone + 'static,
+    Self: std::fmt::Debug + 'static,
 {
     fn convert_msg_to_type<T>(msg: Arc<Message>) -> Result<T, ServiceError>
     where
