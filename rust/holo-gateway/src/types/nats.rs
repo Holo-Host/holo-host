@@ -2,6 +2,8 @@ use async_nats::Client;
 use nats_utils::types::NATS_URL_DEFAULT;
 use tokio::sync::OnceCell;
 
+pub const HTTP_GW_SUBJECT_NAME: &str = "HC_HTTP_GW";
+
 static NATS_CLIENT: OnceCell<Client> = OnceCell::const_new();
 pub async fn get_nats_client() -> &'static Client {
     NATS_CLIENT
