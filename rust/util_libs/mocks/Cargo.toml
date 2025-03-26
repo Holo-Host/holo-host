@@ -3,6 +3,9 @@ name = "mock_utils"
 version = "0.1.0"
 edition = "2021"
 
+[lib]
+path = "src/lib.rs"
+
 [dependencies]
 async-nats = { workspace = true }
 anyhow = { workspace = true }
@@ -17,8 +20,12 @@ log = { workspace = true }
 env_logger = { workspace = true }
 thiserror = { workspace = true }
 dotenv = { workspace = true }
+hpos-hal = { workspace = true }
+db_utils = { workspace = true }
+nats_utils = { workspace = true }
 mongodb = "3.1.0"
 chrono = "0.4.0"
+rand = "0.9.0"
 bytes = "1.8.0"
 tempfile = "3.8"
 tokio-retry = "0.3.0"
@@ -28,6 +35,3 @@ sea-strum_macros = "0.23.0"
 url = { version = "2", features = ["serde"] }
 bson = { version = "2.6.1", features = ["chrono-0_4"] }
 derive_more = { version = "1.0.0", features = ["debug"] }
-hpos-hal = { path = "../../hpos-hal" }
-db_utils = { path = "../../util_libs/db" }
-nats_utils = { path = "../../util_libs/nats" }

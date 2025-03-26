@@ -13,6 +13,7 @@ use std::fmt::{self, Display};
 use std::fs::OpenOptions;
 use std::io;
 use std::io::Read;
+use std::path::Path;
 use std::{fs, fs::File};
 use thiserror::Error;
 use thiserror_context::{impl_context, Context};
@@ -86,6 +87,16 @@ pub struct HoloInventory {
 impl HoloInventory {
     /// Saves the HoloInventory struct to a file in JSON format.
     pub fn save_to_file(&self, path: &str) -> Result<(), InventoryError> {
+        log::trace!("Saving inventory to file: path={path:?}");
+
+        // Ensure directory exists
+        if let Some(parent) = Path::new(path).parent() {
+            if !parent.exists() {
+                fs::create_dir_all(parent)
+                    .context("ERROR: Failed to create host inventory path directory.")?;
+            }
+        }
+
         let file = OpenOptions::new()
             .write(true)
             .create(true)
@@ -817,15 +828,19 @@ fn ssh_host_keys() -> Vec<SSHPubKey> {
 const MACHINE_ID_PATH: &str = "/etc/machine-id";
 
 fn systemd_machine_id() -> String {
-    let ret = match fs::read_to_string(MACHINE_ID_PATH) {
-        Ok(id) => id.strip_suffix("\n").unwrap_or_default().to_string(),
+    match fs::read_to_string(MACHINE_ID_PATH).and_then(|content| {
+        content
+            .lines()
+            .next()
+            .ok_or_else(|| std::io::Error::new(io::ErrorKind::InvalidData, "no lines found"))
+            .map(ToString::to_string)
+    }) {
+        Ok(id) => id,
         Err(e) => {
             info!("No systemd machine ID found at {}: {}", MACHINE_ID_PATH, e);
-            return "".to_string(); // most inventory attributes are best-effort
+            "".to_string() // most inventory attributes are best-effort
         }
-    };
-
-    ret
+    }
 }
 
 /// Path to kernel version string

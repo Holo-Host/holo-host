@@ -3,6 +3,10 @@ name = "orchestrator"
 version = "0.0.1"
 edition = "2021"
 
+[[bin]]
+name = "orchestrator"
+path = "src/main.rs"
+
 [dependencies]
 async-nats = { workspace = true }
 anyhow = { workspace = true }
@@ -13,10 +17,15 @@ serde_json = { workspace = true }
 log = { workspace = true }
 dotenv = { workspace = true }
 thiserror = { workspace = true }
+nats_utils = { workspace = true }
+db_utils = { workspace = true }
+workload = { workspace = true }
+inventory = { workspace = true }
 url = { version = "2", features = ["serde"] }
 bson = { version = "2.6.1", features = ["chrono-0_4"] }
 serde_with = { version = "3.1", features = ["macros"] }
 env_logger = { workspace = true }
+clap = { workspace = true }
 mongodb = "3.1.0"
 strum_macros = "0.25"
 chrono = "0.4.0"
@@ -29,7 +38,3 @@ utoipa-swagger-ui = { version = "9", features = [
   "vendored",
 ] }
 utoipa = { version = "5", features = ["actix_extras"] }
-nats_utils = { path = "../../util_libs/nats" }
-db_utils = { path = "../../util_libs/db" }
-workload = { path = "../../services/workload" }
-inventory = { path = "../../services/inventory" }

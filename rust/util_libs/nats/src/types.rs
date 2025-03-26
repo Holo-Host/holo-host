@@ -1,9 +1,10 @@
 use super::jetstream_client::JsClient;
-use anyhow::Result;
+use anyhow::{Context, Result};
 use async_nats::jetstream::consumer::PullConsumer;
 use async_nats::jetstream::ErrorCode;
-use async_nats::{HeaderMap, Message};
+use async_nats::{HeaderMap, Message, ServerAddr};
 use async_trait::async_trait;
+use educe::Educe;
 use serde::{Deserialize, Serialize};
 use std::any::Any;
 use std::collections::HashMap;
@@ -11,10 +12,13 @@ use std::error::Error;
 use std::fmt;
 use std::fmt::Debug;
 use std::future::Future;
+use std::path::PathBuf;
 use std::pin::Pin;
+use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 use thiserror::Error;
+use url::Url;
 
 pub type EventListener = Arc<Box<dyn Fn(&mut JsClient) + Send + Sync>>;
 pub type EventHandler = Arc<Pin<Box<dyn Fn(&str, &str, Duration) + Send + Sync>>>;
@@ -175,7 +179,7 @@ pub struct LogInfo {
 #[derive(Clone)]
 pub enum EndpointType<T>
 where
-    T: Serialize + for<'de> Deserialize<'de> + Send + Sync + CreateTag,
+    T: EndpointTraits,
 {
     Sync(EndpointHandler<T>),
     Async(AsyncEndpointHandler<T>),
@@ -183,7 +187,7 @@ where
 
 impl<T> std::fmt::Debug for EndpointType<T>
 where
-    T: Serialize + for<'de> Deserialize<'de> + Send + Sync + Clone + Debug + CreateTag + 'static,
+    T: EndpointTraits,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let t = match &self {
@@ -216,9 +220,12 @@ pub enum Credentials {
     Token(String),
 }
 
-#[derive(Deserialize, Default)]
+pub const NATS_URL_DEFAULT: &str = "nats://127.0.0.1";
+
+#[derive(Deserialize, Educe)]
+#[educe(Default)]
 pub struct JsClientBuilder {
-    pub nats_url: String,
+    pub nats_remote_args: NatsRemoteArgs,
     pub name: String,
     pub inbox_prefix: String,
     #[serde(default, skip_deserializing)]
@@ -229,6 +236,42 @@ pub struct JsClientBuilder {
     pub request_timeout: Option<Duration>, // Defaults to 5s
     #[serde(skip_deserializing)]
     pub listeners: Vec<EventListener>,
+}
+
+#[derive(Clone, Debug, Educe)]
+#[educe(Deref)]
+pub struct DeServerAddr(pub ServerAddr);
+impl DeServerAddr {
+    pub(crate) fn as_ref(&self) -> &ServerAddr {
+        &self.0
+    }
+}
+
+impl FromStr for DeServerAddr {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        Ok(Self(ServerAddr::from_str(s)?))
+    }
+}
+
+impl From<&ServerAddr> for DeServerAddr {
+    fn from(value: &ServerAddr) -> Self {
+        Self(value.clone())
+    }
+}
+
+impl<'a> Deserialize<'a> for DeServerAddr {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'a>,
+    {
+        let url = Url::deserialize(deserializer)?;
+
+        let server_addr = ServerAddr::from_url(url).map_err(serde::de::Error::custom)?;
+
+        Ok(Self(server_addr))
+    }
 }
 
 #[derive(Clone, Deserialize, Default)]
@@ -279,6 +322,12 @@ pub enum ServiceError {
 
     #[error("Internal error: {message}")]
     Internal {
+        message: String,
+        context: Option<String>,
+    },
+
+    #[error("Internal error: {message}")]
+    Workload {
         message: String,
         context: Option<String>,
     },
@@ -349,6 +398,7 @@ impl ServiceError {
             Self::Database { source, .. } => source.to_string(),
             Self::NATS { message, .. } => message.clone(),
             Self::Internal { message, .. } => message.clone(),
+            Self::Workload { message, .. } => message.clone(),
         }
     }
 }
@@ -385,5 +435,67 @@ impl From<bson::de::Error> for ServiceError {
             error.to_string(),
             Some("BSON deserialization failed".to_string()),
         )
+    }
+}
+#[derive(Deserialize, Clone, clap::Args, Educe)]
+#[educe(Default)]
+pub struct NatsRemoteArgs {
+    #[clap(long, env = "NATS_PASSWORD_FILE")]
+    pub nats_password_file: Option<PathBuf>,
+
+    #[clap(long, env = "NATS_PASSWORD")]
+    pub nats_password: Option<String>,
+
+    #[clap(long, env = "NATS_USER")]
+    pub nats_user: Option<String>,
+
+    #[clap(long, env = "NATS_URL")]
+    #[educe(Default( expression = DeServerAddr(ServerAddr::from_str(NATS_URL_DEFAULT).expect("default url parses"))))]
+    pub nats_url: DeServerAddr,
+    #[clap(
+        long,
+        default_value_t = false,
+        env = "NATS_SKIP_TLS_VERIFICATION_DANGER"
+    )]
+    pub nats_skip_tls_verification_danger: bool,
+}
+
+impl NatsRemoteArgs {
+    pub fn try_new(url: &str) -> anyhow::Result<Self> {
+        Ok(Self {
+            nats_url: url.parse()?,
+
+            ..Default::default()
+        })
+    }
+
+    pub fn maybe_user_password(&self) -> anyhow::Result<Option<(String, String)>> {
+        let maybe = match (
+            &self.nats_user,
+            &self.nats_password,
+            &self.nats_password_file,
+        ) {
+            // incomplete data provided
+            (None, None, None)
+            | (None, None, Some(_))
+            | (None, Some(_), None)
+            | (Some(_), None, None)
+            | (None, Some(_), Some(_)) => return Ok(None),
+
+            // prefer password_file
+            (Some(user), _, Some(password_file)) => {
+                let pass = std::fs::read_to_string(password_file)
+                    .context(format!("reading {password_file:?}"))?
+                    .trim()
+                    .to_string();
+
+                log::debug!("user '{user}' and a password provided.");
+
+                Some((user.clone(), pass))
+            }
+            (Some(user), Some(pass), None) => Some((user.clone(), pass.clone())),
+        };
+
+        Ok(maybe)
     }
 }

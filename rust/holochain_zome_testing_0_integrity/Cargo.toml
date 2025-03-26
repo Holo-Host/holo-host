@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [lib]
+path = "src/lib.rs"
 name = "holochain_zome_testing_0_integrity"
 crate-type = ["cdylib", "rlib"]
 

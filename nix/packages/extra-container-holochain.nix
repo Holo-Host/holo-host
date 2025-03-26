@@ -1,6 +1,6 @@
 /*
   this can be run on a nixos machine (that has extra-containers installed ?) using:
-  $ nix run --refresh github:holo-host/holo-host/extra-container-template-and-holochain#extra-container-holochain -- --restart-changed
+  $ nix run --extra-experimental-features "nix-command flakes" --refresh github:holo-host/holo-host#extra-container-holochain -- --restart-changed
 
   optionally deploy locally to a dev machine:
 
@@ -17,6 +17,12 @@
   index ? 0,
   adminWebsocketPort ? 8000 + index,
   containerName ? "holochain${builtins.toString index}",
+  autoStart ? false,
+  # these are passed to holochain
+  bootstrapUrl ? null,
+  signalUrl ? null,
+  stunUrls ? null,
+  holochainFeatures ? null,
 }:
 
 let
@@ -39,22 +45,51 @@ let
 
     config = {
       containers."${containerName}" = {
-        inherit privateNetwork;
+        inherit privateNetwork autoStart;
 
         # `specialArgs` is available in nixpkgs > 22.11
         # This is useful for importing flakes from modules (see nixpkgs/lib/modules.nix).
         # specialArgs = { inherit inputs; };
 
+        bindMounts."/etc/hosts" = {
+          hostPath = "/etc/hosts";
+          isReadOnly = true;
+        };
+
         config =
-          { ... }:
+          { lib, options, ... }:
           {
             # in case the container shares the host network, don't mess with the firewall rules.
             networking.firewall.enable = privateNetwork;
+            networking.useHostResolvConf = true;
 
-            holo.holochain = {
-              inherit adminWebsocketPort;
-            };
+            holo.holochain =
+              {
+                inherit adminWebsocketPort;
+                package =
+                  let
+                    # TODO: choose according to the requested version. maybe by overriding the holonix branch?
+                    versioned = options.holo.holochain.package.default;
 
+                    featured =
+                      if holochainFeatures != null then
+                        let
+                          features = builtins.concatStringsSep "," holochainFeatures;
+                          cargoExtraArgs = "--features ${features}";
+                        in
+                        versioned.override (lib.optionalAttrs holochainFeatures != null { inherit cargoExtraArgs; })
+                      else
+                        versioned;
+
+                    finalPkg = featured;
+                  in
+                  finalPkg;
+              }
+              // (lib.optionalAttrs (bootstrapUrl != null) { bootstrapServiceUrl = bootstrapUrl; })
+              // (lib.optionalAttrs (signalUrl != null) { webrtcTransportPoolSignalUrl = signalUrl; })
+              // (lib.optionalAttrs (stunUrls != null) { webrtcTransportPoolIceServers = stunUrls; })
+            #
+            ;
             imports = [
               flake.nixosModules.holochain
             ];

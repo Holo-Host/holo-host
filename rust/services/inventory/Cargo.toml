@@ -3,6 +3,9 @@ name = "inventory"
 version = "0.0.1"
 edition = "2021"
 
+[lib]
+path = "src/lib.rs"
+
 [dependencies]
 tokio = { workspace = true }
 anyhow = { workspace = true }
@@ -10,6 +13,9 @@ async-nats = { workspace = true }
 log = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+db_utils = { workspace = true }
+nats_utils = { workspace = true }
+hpos-hal = { workspace = true }
 bson = { version = "2.6.1", features = ["chrono-0_4"] }
 mongodb = "3.1"
 base32 = "0.5.1"
@@ -19,11 +25,7 @@ nats-jwt = "0.3.0"
 data-encoding = "2.7.0"
 jsonwebtoken = "9.3.0"
 bytes = "1.8.0"
-db_utils = { path = "../../util_libs/db" }
-nats_utils = { path = "../../util_libs/nats" }
-hpos-hal = { path = "../../hpos-hal" }
 
 [dev-dependencies]
 tempfile = "3.8"
-mock_utils = { path = "../../util_libs/mocks" }
-
+mock_utils = { workspace = true }

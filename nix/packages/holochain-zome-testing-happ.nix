@@ -72,7 +72,7 @@ let
     pkgs.runCommand "dnas"
       {
         nativeBuildInputs = [
-          perSystem.holonix.holochain
+          perSystem.holonix_0_4.holochain
           pkgs.tree
         ];
       }
@@ -110,7 +110,7 @@ let
     pkgs.runCommand "happ"
       {
         nativeBuildInputs = [
-          perSystem.holonix.holochain
+          perSystem.holonix_0_4.holochain
           pkgs.tree
         ];
 

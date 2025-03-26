@@ -27,7 +27,7 @@
     extra-container.url = "github:erikarvstedt/extra-container";
     extra-container.inputs.nixpkgs.follows = "nixpkgs";
 
-    holonix = {
+    holonix_0_4 = {
       url = "github:holochain/holonix?ref=main-0.4";
       inputs = {
         nixpkgs.follows = "nixpkgs";

@@ -1,14 +1,20 @@
 {
   flake,
   pkgs,
+  system,
   ...
 }:
 
 pkgs.testers.runNixOSTest (
-  { nodes, lib, ... }:
+  {
+    nodes,
+    lib,
+    ...
+  }:
   let
     hubIP = (pkgs.lib.head nodes.hub.networking.interfaces.eth1.ipv4.addresses).address;
     hubJsDomain = "hub";
+    hubNatsUrl = "wss://${nodes.hub.networking.fqdn}:${builtins.toString nodes.hub.holo.nats-server.websocket.externalPort}";
 
     mkHost =
       _:
@@ -25,7 +31,7 @@ pkgs.testers.runNixOSTest (
             backtrace = "trace";
           };
 
-          nats.hub.url = "wss://${nodes.hub.networking.fqdn}:${builtins.toString nodes.hub.holo.nats-server.websocket.externalPort}";
+          nats.hub.url = hubNatsUrl;
           nats.hub.tlsInsecure = true;
           nats.store_dir = "/var/lib/holo-host-agent/store_dir";
         };
@@ -148,7 +154,8 @@ pkgs.testers.runNixOSTest (
         '';
 
         natsCmdHub = "${natsCli} -s nats://127.0.0.1:${builtins.toString nodes.hub.holo.nats-server.port}";
-        natsCmdHosts = "${natsCli} -s nats://127.0.0.1:${builtins.toString nodes.host1.holo.host-agent.nats.listenPort}";
+        natsLocalhostUrl = "nats://127.0.0.1:${builtins.toString nodes.host1.holo.host-agent.nats.listenPort}";
+        natsCmdHosts = "${natsCli} -s ${natsLocalhostUrl}";
 
         hubTestScript = pkgs.writeShellScript "setup-hub" ''
           set -xe
@@ -166,6 +173,8 @@ pkgs.testers.runNixOSTest (
           ${natsCmdHosts} stream info --json ${testStreamName}
         '';
 
+        hostAgentCli = lib.getExe flake.packages.${system}.rust-workspace.individual.host_agent;
+
       in
       ''
         with subtest("start the hub and run the testscript"):
@@ -180,14 +189,27 @@ pkgs.testers.runNixOSTest (
 
         with subtest("start the hosts and ensure they have TCP level connectivity to the hub"):
           host1.start()
-          host2.start()
-          host3.start()
-          host4.start()
-          host5.start()
 
           host1.wait_for_open_port(addr = "${nodes.hub.networking.fqdn}", port = ${builtins.toString nodes.hub.holo.nats-server.websocket.externalPort}, timeout = 10)
 
           host1.wait_for_unit('holo-host-agent')
+
+          with subtest("NATS connectivity to localhost and the hub using `host_agent remote ping`"):
+            host1.wait_until_succeeds("${pkgs.writeShellScript "host-agent-remote-ping" ''
+              set -xeE
+              ${hostAgentCli} remote \
+                --nats-url ${natsLocalhostUrl} \
+                ping
+              ${hostAgentCli} remote \
+                --nats-skip-tls-verification-danger \
+                --nats-url ${hubNatsUrl} \
+                ping
+            ''}", timeout = 10)
+
+          host2.start()
+          host3.start()
+          host4.start()
+          host5.start()
           host2.wait_for_unit('holo-host-agent')
           host3.wait_for_unit('holo-host-agent')
           host4.wait_for_unit('holo-host-agent')
