@@ -15,11 +15,10 @@ pub async fn run(
     // At this point, we ought to be able to forward onward_request over NATS to the agent and have
     // it pass it through to the HC gateway. The request should have broken down all of the HC
     // super protocol stuff layered over HTTP to allow us to easily route to the right holoports.
-    if let Some(protocol) = onward_request.super_proto {
+    if let Some(protocol) = onward_request.super_proto.clone() {
         match protocol {
             SuperProtocol::HolochainHTTP(hc_payload) => {
-                let headers = onward_request.headers.into();
-
+                let headers = onward_request.try_into()?;
                 let payload_bytes = serde_json::to_vec(&hc_payload)?;
                 let holo_gatway_subject = hc_payload.into_subject();
                 println!("About to send out the {holo_gatway_subject}");
@@ -29,6 +28,7 @@ pub async fn run(
                     .request_with_headers(holo_gatway_subject, headers, payload_bytes.into())
                     .await?;
 
+                // QUESTION / TODO: Should we desrialize the response back and verify the content at all?
                 return Ok(Response::new(Full::new(nats_gateway_response.payload)));
             }
             _ => {
