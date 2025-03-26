@@ -12,7 +12,7 @@
     - sending out active periodic workload reports
 */
 
-use std::{sync::Arc, thread::spawn};
+use std::sync::Arc;
 
 use super::utils::create_callback_subject;
 use anyhow::{Context, Result};
@@ -165,9 +165,9 @@ async fn spawn_hc_http_gw_watcher(
     )
     .await?;
 
-    let _ = spawn({
+    tokio::spawn({
         let http_gw_worker_kv_store = http_gw_worker_kv_store.clone();
-        move || async move {
+        async move {
             let mut final_stream = {
                 let initial_entries_stream = http_gw_worker_kv_store
                     .keys()
