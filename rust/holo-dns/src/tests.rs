@@ -56,11 +56,11 @@ mod test {
         file.seek(SeekFrom::Start(0)).unwrap();
         let data = serde_json::to_string(&cache_source).unwrap();
         debug!("Data written: {} to {}", data, json_file);
-        let ret = file.write(&data.as_bytes());
+        let ret = file.write(data.as_bytes());
         debug!("Data ret: {:?}", ret);
 
         // Wait long enough for the cache thread to pick up our changes
-        let _ = sleep(Duration::from_secs(3));
+        sleep(Duration::from_secs(3));
         // Cache should contain the contents of the file.
         {
             let cache = crate::dns_cache::DNS_CACHE.read().unwrap();
