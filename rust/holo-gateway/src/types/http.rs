@@ -1,4 +1,3 @@
-use async_nats::{Client, HeaderMap, HeaderName, HeaderValue};
 /// This module contains data structures and types representing forwarded/proxied requests and
 /// responses.
 use holochain_http_gateway::HcHttpGatewayError;
@@ -8,13 +7,17 @@ use hyper::{
 };
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::error::Error;
 use std::fmt;
-use std::str::FromStr;
-use std::{collections::HashMap, sync::Arc};
-use std::{error::Error, io::Read};
 use url_parse::core::Parser;
 use uuid::Uuid;
 use workload::WORKLOAD_SRV_SUBJ;
+
+use crate::types::nats::HTTP_GW_SUBJECT_NAME;
+
+use async_nats::{HeaderMap, HeaderValue};
+use std::str::FromStr;
 
 lazy_static! {
     pub static ref NODE_ID: String = {
@@ -44,6 +47,18 @@ pub struct ForwardedHTTPRequest {
     body: Vec<u8>,
     /// Potential protocol implemented on top of HTTP, such as Holochain HTTP Gateway.
     pub super_proto: Option<SuperProtocol>,
+}
+
+impl TryFrom<ForwardedHTTPRequest> for HeaderMap {
+    type Error = HoloHttpGatewayError;
+    fn try_from(value: ForwardedHTTPRequest) -> Result<Self, Self::Error> {
+        let mut header_map = HeaderMap::new();
+        for (key, value) in value.headers {
+            let value = HeaderValue::from_str(&String::from_utf8(value)?)?;
+            header_map.insert(key, value);
+        }
+        Ok(header_map)
+    }
 }
 
 impl ForwardedHTTPRequest {
@@ -202,8 +217,8 @@ pub struct HolochainHTTP {
 impl HolochainHTTP {
     pub fn into_subject(&self) -> String {
         format!(
-            "{WORKLOAD_SRV_SUBJ}.{}.{}",
-            self.coordinator_id, self.dna_hash
+            "{WORKLOAD_SRV_SUBJ}.{HTTP_GW_SUBJECT_NAME}.{}",
+            self.coordinator_id
         )
     }
 }
@@ -237,6 +252,16 @@ impl From<async_nats::error::Error<async_nats::RequestErrorKind>> for HoloHttpGa
 }
 impl From<serde_json::Error> for HoloHttpGatewayError {
     fn from(value: serde_json::Error) -> Self {
+        Self::Internal(value.to_string())
+    }
+}
+impl From<async_nats::header::ParseHeaderValueError> for HoloHttpGatewayError {
+    fn from(value: async_nats::header::ParseHeaderValueError) -> Self {
+        Self::Internal(value.to_string())
+    }
+}
+impl From<std::string::FromUtf8Error> for HoloHttpGatewayError {
+    fn from(value: std::string::FromUtf8Error) -> Self {
         Self::Internal(value.to_string())
     }
 }
