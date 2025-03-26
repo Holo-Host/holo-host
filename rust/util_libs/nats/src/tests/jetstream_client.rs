@@ -107,11 +107,7 @@ async fn test_add_js_service() -> Result<()> {
         service_subject: "TEST".to_string(),
     };
 
-    let result = client.add_js_service(service_params).await;
-    assert!(result.is_ok());
-
-    let service = client.get_js_service("test_service".to_string()).await;
-    assert!(service.is_some());
+    let _ = client.add_js_service(service_params).await.unwrap();
 
     let _ = server.shutdown().await;
     Ok(())

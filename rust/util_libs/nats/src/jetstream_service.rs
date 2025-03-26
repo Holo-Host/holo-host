@@ -78,7 +78,6 @@ impl JsStreamService {
         consumer_name: &str,
     ) -> Result<Option<consumer::Info>> {
         if let Some(consumer_ext) = self
-            .to_owned()
             .local_consumers
             .write()
             .await
@@ -96,13 +95,13 @@ impl JsStreamService {
     where
         T: EndpointTraits,
     {
-        let consumer_ext = self
-            .local_consumers
-            .read()
-            .await
-            .get(&consumer_name.to_string())
-            .ok_or(anyhow!("Error"))?
-            .to_owned();
+        let consumer_ext = Arc::clone(
+            self.local_consumers
+                .read()
+                .await
+                .get(&consumer_name.to_string())
+                .ok_or(anyhow!("Error"))?,
+        );
 
         let endpoint_trait_obj = consumer_ext.get_endpoint();
         let handler: EndpointType<T> = EndpointType::try_from(endpoint_trait_obj)?;
@@ -181,13 +180,12 @@ impl JsStreamService {
         T: EndpointTraits,
     {
         if let Some(consumer_ext) = self
-            .to_owned()
             .local_consumers
             .write()
             .await
             .get_mut(&consumer_name.to_string())
         {
-            let consumer_details = consumer_ext.to_owned();
+            let consumer_details = Arc::clone(consumer_ext);
             let endpoint_handler: EndpointType<T> =
                 EndpointType::try_from(consumer_details.get_endpoint())?;
             let maybe_response_generator = consumer_ext.get_response();

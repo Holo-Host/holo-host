@@ -10,12 +10,12 @@ use crate::types::WorkloadResult;
 
 use super::{types::WorkloadApiResult, WorkloadServiceApi};
 use anyhow::{Context, Result};
-use async_nats::Message;
+use async_nats::{jetstream::kv::Store, Message};
 use bson::oid::ObjectId;
 use core::option::Option::None;
 use db_utils::schemas::{
     Workload, WorkloadManifest, WorkloadManifestHolochainDhtV1, WorkloadState,
-    WorkloadStatePayload, WorkloadStatus,
+    WorkloadStateDiscriminants, WorkloadStatePayload, WorkloadStatus,
 };
 use ham::{
     exports::{
@@ -24,13 +24,9 @@ use ham::{
     },
     Ham, HamState,
 };
-use nats_utils::{
-    jetstream_service::JsStreamService,
-    types::{HcHttpGwRequest, HcHttpGwResponse, ServiceConsumerBuilder, ServiceError},
-};
-use reqwest::Method;
+use nats_utils::types::ServiceError;
+use serde::{Deserialize, Serialize};
 use std::{fmt::Debug, net::Ipv4Addr, path::Path, sync::Arc};
-use tokio::sync::RwLock;
 use url::Url;
 use util::{
     bash, ensure_workload_path, get_workload_id, provision_extra_container_closure_path,
@@ -39,7 +35,7 @@ use util::{
 
 #[derive(Debug, Clone)]
 pub struct HostWorkloadApi {
-    pub worload_api_js_service: Arc<RwLock<Arc<JsStreamService>>>,
+    pub hc_http_gw_storetore: Store,
 }
 
 impl WorkloadServiceApi for HostWorkloadApi {}
@@ -183,7 +179,7 @@ impl HostWorkloadApi {
                             bson::to_bson(&app_info).context("serializing app_info into bson")?;
 
                         // persist the ham state for debugging purposes; maybe we can reuse it later
-                        let ham_state = {
+                        let _ = {
                             let mut ham_state_builder = ham::HamStateBuilder::default();
                             ham_state_builder = ham_state_builder.app_info(app_info);
                             ham_state_builder = ham_state_builder.agent_key(agent_key);
@@ -199,66 +195,50 @@ impl HostWorkloadApi {
                         };
 
                         {
-                            // TODO: dynamically retrieve the port
-                            let http_gw_url_base = url::Url::parse("http://127.0.0.1:8090")?;
-                            let subject_suffix = HcHttpGwRequest::nats_subject_suffix(
-                                &ham_state.app_info.installed_app_id,
-                            );
+                            /* TODO(feat: multiple workloads per host): dynamically allocate/retrieve ip:port
+                                multiple options
+                                a) we use privateNetwork = true in containers and can use the default hc-http-gw port
+                                b) we use privateNetwork = false in containers and need different hc-http-gw ports
 
-                            log::debug!("adding consumer for subject suffix {subject_suffix}");
+                                option (b) is inherently less secure as the admin websocktes will also be shared on the host network namespace
 
-                            let js_service_guard = self.worload_api_js_service.write().await;
-
-                            log::debug!("got the js service lock");
-
-                            let consumer_name = subject_suffix.to_string();
-
-                            // TODO: what if the consumer already exists?
-                            let consumer = js_service_guard
-                                .add_consumer(
-                                    ServiceConsumerBuilder::new(
-                                        consumer_name.clone(),
-                                        subject_suffix.to_string(),
-                                        Arc::new(move |msg: Arc<async_nats::Message>| {
-                                            let http_gw_url_base = http_gw_url_base.clone();
-                                            Box::pin(async move {
-                                                hc_http_gw_consumer_handler(
-                                                    msg,
-                                                    http_gw_url_base.clone(),
-                                                    workload_id,
-                                                )
-                                                .await
-                                                .map_err(|e| ServiceError::Internal {
-                                                    message: e.to_string(),
-                                                    context: None,
-                                                })
-                                            })
-                                        }),
-                                    )
-                                    .with_subject_prefix(workload_id.to_hex())
-                                    .into(),
-                                )
-                                .await;
-
-                            log::debug!(
-                                "consumer there? {:?}. add result: {consumer:?}",
-                                js_service_guard
-                                    .get_consumer_stream_info(&consumer_name)
-                                    .await
-                            );
-
-                            /*
-
-                               TODO(bug): this comes back with a timeout
-
-                               Mar 25 20:58:29 dev-host holo-host-agent-start[328]: [2025-03-25T19:58:29Z DEBUG workload::host_api] consumer there? Ok(None). add result: Err(Error { kind: TimedOut, source: None })
-                               Mar 25 20:58:29 dev-host holo-host-agent-start[328]: [2025-03-25T19:58:29Z ERROR workload::host_api] adding consumer: timed out
                             */
+                            let hc_http_gw_url_base = url::Url::parse("http://127.0.0.1:8090")?;
 
-                            match consumer {
-                                Ok(consumer) => log::debug!("got the consumer {consumer:?}"),
-                                Err(e) => log::error!("adding consumer: {e}"),
+                            match self
+                                .hc_http_gw_storetore
+                                .entry(workload_id.to_hex())
+                                .await
+                                .context("retrieving entry for {workload_id}")
+                            {
+                                Ok(Some(_)) => {
+                                    // TODO: deal with this case smarter
+                                    self.hc_http_gw_storetore
+                                        .delete(workload_id.to_hex())
+                                        .await
+                                        .context("deleting entry for {workload_id}")?;
+                                }
+                                Ok(None) => {}
+                                Err(e) => {
+                                    log::error!("{}", e);
+                                }
+                            }
+
+                            let key = workload_id.to_hex();
+                            let value = HcHttpGwWorkerKvBucketValue {
+                                desired_state: WorkloadStateDiscriminants::Running,
+                                hc_http_gw_url_base,
+                                installed_app_id,
                             };
+                            let value_blob = serde_json::to_string(&value)
+                                .context(format!("serializing {value:?}"))?;
+
+                            self.hc_http_gw_storetore
+                                .create(&key, value_blob.into())
+                                .await
+                                .context(format!(
+                                    "creating entry with key {key} and value {value:?}"
+                                ))?
                         };
 
                         db_utils::schemas::WorkloadStatePayload::HolochainDhtV1(app_info_bson)
@@ -724,37 +704,9 @@ fn get_container_name(workload_id: &ObjectId) -> anyhow::Result<String> {
     }
 }
 
-async fn hc_http_gw_consumer_handler(
-    msg: Arc<async_nats::Message>,
-    http_gw_url_base: Url,
-    workload_id: ObjectId,
-) -> anyhow::Result<HcHttpGwResponse> {
-    let incoming_request: HcHttpGwRequest = serde_json::from_slice(&msg.payload)?;
-
-    let local_request_url_suffix = incoming_request
-        .get_checked_url(Some(http_gw_url_base.as_str()), &workload_id.to_hex())
-        .context(format!(
-            "getting checked url path from request {incoming_request:?}"
-        ))?;
-
-    let response = reqwest::Client::new()
-        .execute(reqwest::Request::new(Method::GET, local_request_url_suffix))
-        .await
-        .context("executing request")?
-        .error_for_status()?;
-
-    let response_headers = response
-        .headers()
-        .into_iter()
-        .map(|(k, v)| (k.to_string(), v.as_bytes().to_vec().into_boxed_slice()))
-        .collect();
-
-    let response_bytes = response.bytes().await?;
-
-    let response = HcHttpGwResponse {
-        response_headers,
-        response_bytes,
-    };
-
-    Ok(response)
+#[derive(Debug, Serialize, Deserialize)]
+pub struct HcHttpGwWorkerKvBucketValue {
+    pub desired_state: WorkloadStateDiscriminants,
+    pub hc_http_gw_url_base: Url,
+    pub installed_app_id: String,
 }

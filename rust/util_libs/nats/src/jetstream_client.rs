@@ -15,7 +15,7 @@ use std::{
     time::{Duration, Instant},
 };
 use std::{collections::HashMap, sync::Arc};
-use tokio::runtime::Handle;
+use tokio::{runtime::Handle, sync::RwLock};
 
 impl std::fmt::Debug for JsClient {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -36,7 +36,7 @@ pub struct JsClient {
     pub name: String,
     on_msg_published_event: Option<EventHandler>,
     on_msg_failed_event: Option<EventHandler>,
-    pub js_services: HashMap<String, Arc<JsStreamService>>,
+    pub js_services: Arc<RwLock<HashMap<String, Arc<JsStreamService>>>>,
     pub js_context: jetstream::Context,
     service_log_prefix: String,
     client: async_nats::Client, // Built-in Nats Client which manages the cloned clients within jetstream contexts
@@ -336,31 +336,23 @@ impl JsClient {
         &mut self,
         params: JsServiceBuilder,
     ) -> Result<Arc<JsStreamService>, async_nats::Error> {
-        let new_service = Arc::new(
-            JsStreamService::new(
-                self.js_context.to_owned(),
-                &params.name,
-                &params.description,
-                &params.version,
-                &params.service_subject,
-            )
-            .await?,
-        );
+        let new_service = JsStreamService::new(
+            self.js_context.to_owned(),
+            &params.name,
+            &params.description,
+            &params.version,
+            &params.service_subject,
+        )
+        .await?;
 
-        match self.js_services.entry(params.name) {
+        match self.js_services.write().await.entry(params.name) {
             Entry::Occupied(occupied_entry) => {
                 Err(format!("didn't expect an entry, found {occupied_entry:?}").into())
             }
-            Entry::Vacant(vacant_entry) => Ok(vacant_entry
-                .insert_entry(Arc::clone(&new_service))
-                .get()
-                .clone()),
+            Entry::Vacant(vacant_entry) => Ok(Arc::clone(
+                vacant_entry.insert_entry(new_service.into()).get(),
+            )),
         }
-    }
-
-    /// Look up a service in its own in-memory js_services collection
-    pub async fn get_js_service(&self, js_service_name: String) -> Option<Arc<JsStreamService>> {
-        self.js_services.get(&js_service_name).cloned()
     }
 
     pub async fn close(&self) -> Result<(), async_nats::Error> {
