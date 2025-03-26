@@ -17,7 +17,7 @@ log = { workspace = true }
 env_logger = { workspace = true }
 thiserror = { workspace = true }
 dotenv = { workspace = true }
-mongodb = "3.1.0"
+mongodb = { workspace = true }
 chrono = "0.4.0"
 bytes = "1.8.0"
 tempfile = "3.8"
