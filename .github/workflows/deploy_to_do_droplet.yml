@@ -49,7 +49,7 @@ jobs:
           cache-map: |
             {
               "docker-cargo": "/root/.cargo",
-              "docker-target": "/usr/src/holo-public-api/target"
+              "docker-target": "/usr/src/${{ inputs.project }}/target"
             }
           skip-extraction: ${{ steps.cache-docker.outputs.cache-hit }}
 
