@@ -8,6 +8,7 @@ edition = "2024"
 anyhow = { workspace = true }
 serde = { workspace = true }
 log = { workspace = true }
+futures = { workspace = true }
 async-nats = { workspace = true }
 workload = { workspace = true }
 nats_utils = { workspace = true }
@@ -28,5 +29,6 @@ hyper-util = { version = "0.1.10", features = ["http1", "http2", "server", "toki
 holochain_http_gateway = "0.1.0"
 
 [dev-dependencies]
+mock_utils = { workspace = true }
 http-body-util = "0.1.2"
-reqwest = { version = "0.12", default-features = false }
+reqwest = { version = "0.12", features = ["json"] }

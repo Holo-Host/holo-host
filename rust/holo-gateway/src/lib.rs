@@ -10,6 +10,9 @@ use std::net::SocketAddr;
 use tokio::net::TcpListener;
 use types::http as http_types;
 
+#[cfg(test)]
+mod tests;
+
 pub async fn run() -> Result<()> {
     // Listen Address
     let holo_gw_port = 8000;
