@@ -1,6 +1,6 @@
-mod gateway;
+pub mod gateway;
 
-use crate::types::http::HoloHttpGatewayError;
+use crate::types::error::HoloHttpGatewayError;
 use anyhow::Result;
 use bytes::Bytes;
 use http_body_util::Full;
