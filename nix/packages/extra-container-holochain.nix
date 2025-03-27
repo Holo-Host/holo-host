@@ -25,7 +25,7 @@
   holochainFeatures ? null,
 
   # hc-http-gw related args
-  enablehttpGw ? false,
+  httpGwEnable ? false,
   httpGwAllowedAppIds ? [ ],
 }:
 
@@ -101,7 +101,7 @@ let
             ;
 
             holo.hc-http-gw = {
-              enable = enablehttpGw;
+              enable = httpGwEnable;
               adminWebsocketUrl = "ws://127.0.0.1:${builtins.toString adminWebsocketPort}";
               allowedAppIds = httpGwAllowedAppIds;
             };

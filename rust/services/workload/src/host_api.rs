@@ -632,7 +632,7 @@ mod util {
                     format!(r#"adminWebsocketPort = {}"#, HOLOCHAIN_ADMIN_PORT_DEFAULT),
                     // TODO: clarify if we want to autostart the container uncoditionally
                     format!(r#"autoStart = true"#),
-                    format!(r#"enablehttpGw = {}"#, http_gw_enable),
+                    format!(r#"httpGwEnable = {}"#, http_gw_enable),
                 ];
 
                 if let Some(url) = bootstrap_server_url {

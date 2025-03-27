@@ -133,7 +133,9 @@ host-agent-remote-hc desired-status +args="":
         --workload-id-override "{{WORKLOAD_ID}}" \
         --desired-status "{{desired-status}}" \
         --happ-binary-url "{{test-happ-url}}" \
-        --network-seed "holo" {{args}}
+        --network-seed "holo" {{args}} \
+        --holochain-feature-flags "unstable-functions,unstable-sharding,chc,unstable-countersigning" \
+        --http-gw-enable
 
 dev-host-host-agent-remote-hc desired-status +args="":
     #!/usr/bin/env bash
@@ -214,7 +216,6 @@ dev-install-app:
 
 cloud-install-app:
     DONT_WAIT=true just cloud-hub-host-agent-remote-hc reported WORKLOAD.add
-    DONT_WAIT=true just cloud-hub-host-agent-remote-hc reported WORKLOAD.update
     just cloud-hub-host-agent-remote-hc running WORKLOAD.insert
 
 cloud-uninstall-app:
@@ -242,10 +243,7 @@ dev-hub-host-agent-remote-hc-humm desired-status subject="WORKLOAD.update" +args
         --host-id "{{HOST_ID_DEV_HOST}}" \
         --bootstrap-server-url "https://bootstrap.holo.host" \
         --signal-server-url "wss://sbd.holo.host" \
-        --holochain-feature-flags "unstable-functions,unstable-sharding,chc,unstable-countersigning" \
-        --http-gw-enable \
         {{args}}
-
 
 
 dev-install-humm-hive:
@@ -257,7 +255,7 @@ dev-uninstall-humm-hive:
     just dev-hub-host-agent-remote-hc-humm deleted WORKLOAD.insert
 
 
-dev-host-http-gw-remote-hive:
+dev-host-http-gw-remote-hive nats-url="nats://dev-hub":
     #!/usr/bin/env bash
     set -xeE
     # curl -4v "http://dev-host:8090/{{HUMM_HIVE_DNA_HASH}}/{{WORKLOAD_ID}}/humm_earth_core/init"
@@ -265,8 +263,7 @@ dev-host-http-gw-remote-hive:
 
     payload="$(base64 -i -w0 <<<'{ "hive_id":"MTc0MTA4ODg5NDA5Ni1iZmVjZGEwZDUxYTMxMjgz", "content_type": "hummhive-extension-story-v1" }')"
 
-    export NATS_URL="nats://dev-hub"
-    # export NATS_URL="nats://dev-host"
+    export NATS_URL="{{nats-url}}"
     just host-agent-remote hc-http-gw-req \
       --dna-hash {{HUMM_HIVE_DNA_HASH}} \
       --coordinatior-identifier {{WORKLOAD_ID}} \
