@@ -1,9 +1,7 @@
 FROM rust:1.85.0 AS builder
 
 WORKDIR /usr/src/holo-dns
-COPY Cargo.toml .
-COPY Cargo.loc[k] .
-COPY src/ ./src
+COPY . .
 
 RUN --mount=type=cache,target=/root/.cargo \
     --mount=type=cache,target=/usr/src/holo-dns/target \
