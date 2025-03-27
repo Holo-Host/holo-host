@@ -60,8 +60,6 @@ jobs:
           file: ${{ inputs.path_to_dockerfile }}/dockerfile
           load: true
           push: false
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
           platforms: linux/amd64
           tags: registry.digitalocean.com/holo-host/${{ inputs.project }}:${{ inputs.environment }}
 
