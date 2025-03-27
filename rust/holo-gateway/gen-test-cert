@@ -1,0 +1,67 @@
+#!/bin/bash
+# Simple wrapper around openssl to generate signed cert useful for localised
+# testing and without needing connectivity to an ACME-capable server. This could
+# likely be made cleaner as a `build.rs` module, but ought to suffice for now.
+
+set -xe
+
+# location of holo-gateway's openssl.cnf
+base="rust/holo-gateway"
+# place to dump certs and keys
+prefix="target/insecure-certs"
+mkdir -p "$prefix"
+
+openssl req -nodes \
+          -x509 \
+          -days 3650 \
+          -newkey rsa:4096 \
+          -keyout "$prefix"/ca.key \
+          -out "$prefix"/ca.cert \
+          -sha256 \
+          -batch \
+          -subj "/CN=holodev RSA CA"
+
+openssl req -nodes \
+          -newkey rsa:3072 \
+          -keyout "$prefix"/inter.key \
+          -out "$prefix"/inter.req \
+          -sha256 \
+          -batch \
+          -subj "/CN=Holo Development CA"
+
+openssl req -nodes \
+          -newkey rsa:2048 \
+          -keyout "$prefix"/end.key \
+          -out "$prefix"/end.req \
+          -sha256 \
+          -batch \
+          -subj "/CN=testserver.holo"
+
+openssl rsa \
+          -in "$prefix"/end.key \
+          -out "$prefix"/private.key
+
+openssl x509 -req \
+            -in "$prefix"/inter.req \
+            -out "$prefix"/inter.cert \
+            -CA "$prefix"/ca.cert \
+            -CAkey "$prefix"/ca.key \
+            -sha256 \
+            -days 3650 \
+            -set_serial 123 \
+            -extensions v3_inter -extfile "$base"/openssl.cnf
+
+openssl x509 -req \
+            -in "$prefix"/end.req \
+            -out "$prefix"/end.cert \
+            -CA "$prefix"/inter.cert \
+            -CAkey "$prefix"/inter.key \
+            -sha256 \
+            -days 2000 \
+            -set_serial 456 \
+            -extensions v3_end -extfile "$base"/openssl.cnf
+
+cat "$prefix"/{end.cert,inter.cert,ca.cert} > "$prefix"/cert.pem
+cp "$prefix"/ca.cert "$prefix"/ca.pem
+rm "$prefix"/*.{cert,req} "$prefix"/{ca,inter,end}.key
+

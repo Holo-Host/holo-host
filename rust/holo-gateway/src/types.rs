@@ -2,7 +2,7 @@
 /// responses.
 use hyper::http::{Method, Request};
 use log::info;
-use serde::{Deserialize, Serialize};
+use serde_derive::{Deserialize, Serialize};
 use std::collections::HashMap;
 use url_parse::core::Parser;
 use uuid::Uuid;

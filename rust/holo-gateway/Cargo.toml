@@ -12,10 +12,14 @@ hyper = { version = "1.6.0", features = ["http1", "http2", "server"] }
 hyper-util = { version = "0.1.10", features = ["http1", "http2", "server", "tokio"] }
 lazy_static = "1.5.0"
 log = { workspace = true }
+rustls = { version = "0.23.25", features = ["ring"] }
+rustls-pemfile = "2.2.0"
+rustls-pki-types = "1.11.0"
 serde = { workspace = true }
 serde_derive = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }
+tokio-rustls = { version = "0.26.2", features = ["ring"] }
 url = "2.5.4"
 url-parse = "1.0.10"
 uuid = { version = "1.16.0", features = ["v4"] }
