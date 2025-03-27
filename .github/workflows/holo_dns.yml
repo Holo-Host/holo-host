@@ -42,7 +42,7 @@ jobs:
     name: Deploy to Dev
     needs: 
       - build
-    uses: ./.github/workflows/deploy_to_do_droplet.yml
+    uses: ./.github/workflows/deploy_to_digital_ocean.yml
     with:
       environment: dev
       project: holo-dns
