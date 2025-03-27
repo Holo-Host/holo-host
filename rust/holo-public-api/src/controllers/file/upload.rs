@@ -29,10 +29,10 @@ struct FileUploadRequest {
 
 #[utoipa::path(
     post,
-    path = "/protected/v1/happ/upload",
-    tag = "Happ",
-    summary = "Upload HAPP",
-    description = "Upload HAPP",
+    path = "/protected/v1/file/upload",
+    tag = "File",
+    summary = "Upload File",
+    description = "Upload a file",
     security(
         ("Bearer" = [])
     ),
