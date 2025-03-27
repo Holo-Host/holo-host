@@ -46,6 +46,6 @@ jobs:
     with:
       environment: dev
       project: holo-dns
-      working_directory: rust/holo-dns
+      path_to_dockerfile: rust/holo-dns
     secrets:
       DIGITAL_OCEAN_TOKEN: ${{ secrets.DIGITAL_OCEAN_TOKEN }}

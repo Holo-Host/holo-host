@@ -9,10 +9,10 @@ on:
       project:
         required: true
         type: string
-      working_directory:
+      path_to_dockerfile:
         required: false
         type: string
-        default: "."
+        default: "dockerfile"
     secrets:
       DIGITAL_OCEAN_TOKEN:
         required: true
@@ -49,7 +49,7 @@ jobs:
           cache-map: |
             {
               "docker-cargo": "/root/.cargo",
-              "docker-target": "/usr/src/${{ inputs.project }}/target"
+              "docker-target": "/usr/src/target"
             }
           skip-extraction: ${{ steps.cache-docker.outputs.cache-hit }}
 
@@ -57,7 +57,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: ${{ inputs.working_directory }}/dockerfile
+          file: ${{ inputs.path_to_dockerfile }}/dockerfile
           load: true
           push: false
           cache-from: type=gha
