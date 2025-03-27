@@ -76,7 +76,10 @@ pub async fn start_cache(source: DnsCacheSource) {
         info!("Selected JSON file source.");
         spawn(async move { start_json_cache(j).await });
     } else if let DnsCacheSource::MongoDb(m) = source {
-        info!("Selected MongoDB source.");
+        info!(
+            "Selected MongoDB source {}/{}",
+            &m.db_name, &m.db_collection
+        );
         spawn(async move { start_mongodb_cache(m).await });
     }
 }
