@@ -11,41 +11,41 @@ use crate::providers::{error_response::ErrorResponse, jwt::AccessTokenClaims};
 
 #[derive(OpenApi)]
 #[openapi(
-    paths(upload_file),
-    components(schemas(UploadFileResponse))
+    paths(upload_blob),
+    components(schemas(UploadBlobResponse))
 )]
 pub struct OpenApiSpec;
 
 #[derive(Serialize, ToSchema)]
-pub struct UploadFileResponse {
+pub struct UploadBlobResponse {
     pub hash: String,
 }
 
 #[derive(Serialize, ToSchema)]
-struct FileUploadRequest {
+struct BlobUploadRequest {
     #[schema(value_type = String, format = "binary")]
-    file: Vec<u8>,
+    blob: Vec<u8>,
 }
 
 #[utoipa::path(
     post,
-    path = "/protected/v1/file/upload",
-    tag = "File",
-    summary = "Upload File",
-    description = "Upload a file",
+    path = "/protected/v1/blob/upload",
+    tag = "Blob",
+    summary = "Upload Blob",
+    description = "Upload a blob",
     security(
         ("Bearer" = [])
     ),
     request_body(
-        content = FileUploadRequest,
+        content = BlobUploadRequest,
         content_type = "multipart/form-data",
     ),
     responses(
-        (status = 200, body = UploadFileResponse)
+        (status = 200, body = UploadBlobResponse)
     )
 )]
-#[post("/v1/file/upload")]
-pub async fn upload_file(
+#[post("/v1/blob/upload")]
+pub async fn upload_blob(
     req: HttpRequest,
     mut payload: Multipart
 ) -> impl Responder {
@@ -59,17 +59,17 @@ pub async fn upload_file(
     let auth = auth.unwrap();
     let temp_file_identifier = bson::uuid::Uuid::new().to_string();
     let mut hasher = blake3::Hasher::new();
-    let mut file = match fs::File::create(format!("/tmp/{}", temp_file_identifier)) {
-        Ok(file) => file,
+    let mut blob = match fs::File::create(format!("/tmp/{}", temp_file_identifier)) {
+        Ok(blob) => blob,
         Err(e) => {
-            tracing::error!("Error creating file: {:?}", e);
+            tracing::error!("Error creating blob: {:?}", e);
             return HttpResponse::InternalServerError().json(ErrorResponse {
                 message: "Internal server error".to_string(),
             });
         }
     };
 
-    // process the file
+    // process the blob
     while let Some(item) = payload.next().await {
         let mut field = match item {
             Ok(field) => field,
@@ -95,7 +95,7 @@ pub async fn upload_file(
 
             // Update hash and append to our accumulator.
             hasher.update(&chunk);
-            match file.write_all(&chunk) {
+            match blob.write_all(&chunk) {
                 Ok(_) => (),
                 Err(e) => {
                     tracing::error!("Error writing chunk: {:?}", e);
@@ -120,8 +120,8 @@ pub async fn upload_file(
     .to_string()
     .into_bytes();
 
-    // create directory for the file and metadata
-    let file_location = format!("/srv/holo-blobstore/{}", hash_hex);
+    // create directory for the blob and metadata
+    let file_location = format!("./srv/holo-blobstore");
     match fs::create_dir_all(file_location.clone()) {
         Ok(_) => (),
         Err(e) => {
@@ -129,27 +129,27 @@ pub async fn upload_file(
         }
     }
 
-    // move file to the correct location
+    // move blob to the correct location
     match fs::rename(
         format!("/tmp/{}", temp_file_identifier),
-        format!("{}/file", file_location)
+        format!("{}/{}", file_location, hash_hex)
     ) {
         Ok(_) => (),
         Err(e) => {
-            tracing::error!("Error moving file to the correct location: {:?}", e);
+            tracing::error!("Error moving blob to the correct location: {:?}", e);
             return HttpResponse::InternalServerError().json(ErrorResponse {
                 message: "Internal server error".to_string(),
             });
         }
     }
 
-    // create metadata file
+    // create metadata blob
     let mut metadata_file = match fs::File::create(
-        format!("{}/metadata.json", file_location)
+        format!("{}/{}.json", file_location, hash_hex)
     ) {
-        Ok(file) => file,
+        Ok(blob) => blob,
         Err(e) => {
-            tracing::error!("Error creating metadata file: {:?}", e);
+            tracing::error!("Error creating metadata blob: {:?}", e);
             return HttpResponse::InternalServerError().json(ErrorResponse {
                 message: "Internal server error".to_string(),
             });
@@ -158,7 +158,7 @@ pub async fn upload_file(
     match metadata_file.write_all(&metadata_body) {
         Ok(_) => (),
         Err(e) => {
-            tracing::error!("Error writing metadata file: {:?}", e);
+            tracing::error!("Error writing metadata blob: {:?}", e);
             return HttpResponse::InternalServerError().json(ErrorResponse {
                 message: "Internal server error".to_string(),
             });
@@ -166,7 +166,7 @@ pub async fn upload_file(
     }
 
     // return the hash
-    HttpResponse::Ok().json(UploadFileResponse {
+    HttpResponse::Ok().json(UploadBlobResponse {
         hash: hash_hex,
     })
 }
