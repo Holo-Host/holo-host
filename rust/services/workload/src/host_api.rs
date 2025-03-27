@@ -107,7 +107,16 @@ impl HostWorkloadApi {
                         let WorkloadManifestHolochainDhtV1 {
                             happ_binary_url,
                             network_seed,
-                            ..
+                            http_gw_enable,
+
+                            // acknowledge unused fields
+                            memproof: _,
+                            bootstrap_server_url: _,
+                            signal_server_url: _,
+                            stun_server_urls: _,
+                            holochain_feature_flags: _,
+                            holochain_version: _,
+                            http_gw_allowed_fns: _,
                         } = boxed.as_ref();
 
                         // TODO: wait until the container is considered booted
@@ -197,7 +206,7 @@ impl HostWorkloadApi {
                             ham_state
                         };
 
-                        {
+                        if *http_gw_enable {
                             /* TODO(feat: multiple workloads per host): dynamically allocate/retrieve ip:port
                                 multiple options
                                 a) we use privateNetwork = true in containers and can use the default hc-http-gw port
@@ -243,7 +252,7 @@ impl HostWorkloadApi {
                                 .await
                                 .context(format!(
                                     "creating entry with key {key} and value {value:?}"
-                                ))?
+                                ))?;
                         };
 
                         db_utils::schemas::WorkloadStatePayload::HolochainDhtV1(app_info_bson)
