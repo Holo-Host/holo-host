@@ -261,7 +261,7 @@ impl Ham {
 
                                 all_data.insert(key, data);
                         }
-                        Err(e) => eprintln!("error: {e}"),
+                        Err(e) => log::error!("error: {e}"),
                     };
                 }
             }

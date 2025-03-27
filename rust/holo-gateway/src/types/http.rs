@@ -1,23 +1,23 @@
 /// This module contains data structures and types representing forwarded/proxied requests and
 /// responses.
-use holochain_http_gateway::HcHttpGatewayError;
-use hyper::{
-    StatusCode,
-    http::{Method, Request},
+use async_nats::header::{
+    HeaderMap as NatsHeaderMap, HeaderName as NatsHeaderName, HeaderValue as NatsHeaderValue,
 };
+use hyper::header::{
+    HeaderMap as HyperHeaderMap, HeaderName as HyperHeaderName, HeaderValue as HyperHeaderValue,
+};
+use hyper::{Method, Request, body::Body};
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::error::Error;
-use std::fmt;
+use std::str::FromStr;
 use url_parse::core::Parser;
 use uuid::Uuid;
 use workload::WORKLOAD_SRV_SUBJ;
 
 use crate::types::nats::HTTP_GW_SUBJECT_NAME;
 
-use async_nats::{HeaderMap, HeaderValue};
-use std::str::FromStr;
+use super::error::HoloHttpGatewayError;
 
 lazy_static! {
     pub static ref NODE_ID: String = {
@@ -34,6 +34,56 @@ pub fn get_holo_gw_host() -> String {
     std::env::var("HC_GATEWAY_HOSTNAME").unwrap_or_else(|_| "localhost:8000".to_string())
 }
 
+/// The HTTP request method being used. Currently we only deal with GET requests.
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub enum HTTPMethod {
+    Get,
+    Put,
+    Post,
+    Delete,
+    Unsupported,
+}
+
+/// It's possible for protocols to be implemented on top of the HTTP protocol and we may want to
+/// use information within those protocols to aid in routing traffic to the right place. One
+/// example of this is the Holochain HTTP protocol, which encodes URLs and hostnames in a
+/// particular way, so as to allow generic code to query the contents of a DHT via a DNA.
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub enum SuperProtocol {
+    HolochainHTTP(HolochainHTTP),
+}
+
+/// Support for parts of the Holochain-over-HTTP protocol that we'll use to route the traffic to
+/// the correct place.
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct HolochainHTTP {
+    /// The hostname contains that Holo Hosting instance/job ID
+    hostname: String,
+    /// The domain portion of the hostname, minus the host portion
+    domain: String,
+    /// DNA hash
+    pub dna_hash: String,
+    /// Instance ID of the coordinator that is running this instance?
+    pub coordinator_id: String,
+    /// The name of the holochain zome within the hApp
+    pub zome_name: String,
+    /// Function to call within the Holochain zome
+    pub function_name: String,
+    /// base64url-encoded JSON payload for the zome call
+    pub payload: String,
+}
+impl HolochainHTTP {
+    pub fn into_gateway_request_subject(&self) -> String {
+        format!(
+            "{WORKLOAD_SRV_SUBJ}.{HTTP_GW_SUBJECT_NAME}.{}",
+            self.coordinator_id
+        )
+    }
+    pub fn into_gateway_reply_subject(&self) -> String {
+        format!("{}.reply", self.into_gateway_request_subject())
+    }
+}
+
 /// A serde-compatible structure for passing around a HTTP request.
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ForwardedHTTPRequest {
@@ -42,23 +92,51 @@ pub struct ForwardedHTTPRequest {
     /// URI path+params portion (eg, /dna/id:xxxxyyyy?call_name=something&param1=something_else).
     uri: String,
     /// A selection of HTTP headers passed in by the client, and some added by us.
-    pub headers: HashMap<String, Vec<u8>>,
+    pub headers: NatsHeaderMap,
     /// The request body
     body: Vec<u8>,
     /// Potential protocol implemented on top of HTTP, such as Holochain HTTP Gateway.
     pub super_proto: Option<SuperProtocol>,
 }
 
-impl TryFrom<ForwardedHTTPRequest> for HeaderMap {
-    type Error = HoloHttpGatewayError;
-    fn try_from(value: ForwardedHTTPRequest) -> Result<Self, Self::Error> {
-        let mut header_map = HeaderMap::new();
-        for (key, value) in value.headers {
-            let value = HeaderValue::from_str(&String::from_utf8(value)?)?;
-            header_map.insert(key, value);
+// Converts an `async_nats::HeaderMap` to a `hyper::HeaderMap`
+pub fn try_add_hyper_headers(
+    nats_headers: &NatsHeaderMap,
+) -> Result<HyperHeaderMap, HoloHttpGatewayError> {
+    let mut hyper_headers = HyperHeaderMap::new();
+
+    for (key, values) in nats_headers.iter() {
+        for value in values {
+            if let Ok(hyper_value) = HyperHeaderValue::from_bytes(value.as_ref()) {
+                hyper_headers.append(HyperHeaderName::from_str(key.as_ref())?, hyper_value);
+            } else {
+                log::error!(
+                    "Failed to convert NATS header value to hyper header value: {}",
+                    value
+                );
+            }
         }
-        Ok(header_map)
     }
+    Ok(hyper_headers)
+}
+
+// Converts a `hyper::HeaderMap` to an `async_nats::HeaderMap`
+pub fn try_into_nats_headers(
+    hyper_headers: &HyperHeaderMap,
+) -> Result<NatsHeaderMap, HoloHttpGatewayError> {
+    let mut nats_headers = NatsHeaderMap::new();
+
+    for (key, value) in hyper_headers.iter() {
+        if let Ok(value_str) = value.to_str() {
+            nats_headers.insert(key.as_str(), NatsHeaderValue::from_str(value_str)?);
+        } else {
+            log::error!(
+                "Failed to convert Hyper header value to Nats header value: {:?}",
+                value
+            );
+        }
+    }
+    Ok(nats_headers)
 }
 
 impl ForwardedHTTPRequest {
@@ -66,16 +144,11 @@ impl ForwardedHTTPRequest {
     /// attributes, it's just a one-for-one copy, but we'll also use this to add a few other
     /// headers for tracking/diagnostics, and potentially in the future add/filter parts of
     /// requests.
-    pub fn from_hyper(req: &Request<hyper::body::Incoming>, node_id: &str) -> ForwardedHTTPRequest {
-        // We'll likely want to filter certain headers out at some point, but for now, we'll just
-        // pass all headers through.
-        let mut headers: HashMap<String, Vec<u8>> = HashMap::new();
-        for (k, v) in req.headers().into_iter() {
-            headers.insert(k.to_string(), v.as_bytes().to_vec());
-        }
-        // HeaderName::from_static(k),
-        // HeaderValue::from(v.as_bytes().to_vec()),
-
+    pub fn from_hyper<B>(req: &Request<B>, node_id: &str) -> Self
+    where
+        B: Body + Send + Sync + 'static,
+        B::Error: Into<Box<dyn std::error::Error + Send + Sync>>,
+    {
         // Parse the path and query string portion to determine whether this is a holochain request
         // or not.
         let uri = Parser::new(None).parse(&req.uri().to_string()).unwrap();
@@ -83,11 +156,8 @@ impl ForwardedHTTPRequest {
 
         let super_proto = Self::is_super(req);
 
-        // Insert a header to uniquely identify this request and the response that comes back. This
-        // will be helpful in debugging and also in analytics later on.
-        let request_id = Uuid::new_v4();
-        headers.insert("X-Holo-RequestID".to_string(), request_id.into());
-        headers.insert("X-Holo-ForwarderID".to_string(), node_id.into());
+        let headers = Self::handle_headers(req.headers(), node_id).unwrap_or_default();
+
         ForwardedHTTPRequest {
             method: Self::method(req.method()),
             uri: req.uri().to_string(),
@@ -95,6 +165,29 @@ impl ForwardedHTTPRequest {
             headers,
             super_proto,
         }
+    }
+
+    fn handle_headers(
+        hyper_headers: &HyperHeaderMap,
+        node_id: &str,
+    ) -> Result<NatsHeaderMap, HoloHttpGatewayError> {
+        // We'll likely want to filter certain headers out at some point, but for now, we'll just
+        // pass all headers through.
+        let mut nats_headers: NatsHeaderMap = try_into_nats_headers(hyper_headers)?;
+
+        // Insert a header to uniquely identify this request and the response that comes back. This
+        // will be helpful in debugging and also in analytics later on.
+        let request_id = Uuid::new_v4();
+        nats_headers.insert(
+            NatsHeaderName::from_str("X-Holo-RequestID")?,
+            NatsHeaderValue::from_str(&request_id.to_string())?,
+        );
+        nats_headers.insert(
+            NatsHeaderName::from_str("X-Holo-ForwarderID")?,
+            NatsHeaderValue::from_str(node_id)?,
+        );
+
+        Ok(nats_headers)
     }
 
     fn method(method: &Method) -> HTTPMethod {
@@ -112,7 +205,11 @@ impl ForwardedHTTPRequest {
     /// parameters. This function could be split out to support others later, but for now just
     /// parses enough out of the HC GW request to allow us to successfully route the request to the
     /// right place and get a response back.
-    fn is_super(req: &Request<hyper::body::Incoming>) -> Option<SuperProtocol> {
+    fn is_super<B>(req: &Request<B>) -> Option<SuperProtocol>
+    where
+        B: Body + Send + Sync + 'static,
+        B::Error: Into<Box<dyn std::error::Error + Send + Sync>>,
+    {
         // TODO: remove unwrap()s
         let uri = Parser::new(None).parse(&req.uri().to_string()).unwrap();
 
@@ -175,94 +272,3 @@ impl ForwardedHTTPRequest {
         None
     }
 }
-
-/// The HTTP request method being used. Currently we only deal with GET requests.
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub enum HTTPMethod {
-    Get,
-    Put,
-    Post,
-    Delete,
-    Unsupported,
-}
-
-/// It's possible for protocols to be implemented on top of the HTTP protocol and we may want to
-/// use information within those protocols to aid in routing traffic to the right place. One
-/// example of this is the Holochain HTTP protocol, which encodes URLs and hostnames in a
-/// particular way, so as to allow generic code to query the contents of a DHT via a DNA.
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub enum SuperProtocol {
-    HolochainHTTP(HolochainHTTP),
-}
-
-/// Support for parts of the Holochain-over-HTTP protocol that we'll use to route the traffic to
-/// the correct place.
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct HolochainHTTP {
-    /// The hostname contains that Holo Hosting instance/job ID
-    hostname: String,
-    /// The domain portion of the hostname, minus the host portion
-    domain: String,
-    /// DNA hash
-    dna_hash: String,
-    /// Instance ID of the coordinator that is running this instance?
-    coordinator_id: String,
-    /// The name of the holochain zome within the hApp
-    zome_name: String,
-    /// Function to call within the Holochain zome
-    function_name: String,
-    /// base64url-encoded JSON payload for the zome call
-    payload: String,
-}
-impl HolochainHTTP {
-    pub fn into_subject(&self) -> String {
-        format!(
-            "{WORKLOAD_SRV_SUBJ}.{HTTP_GW_SUBJECT_NAME}.{}",
-            self.coordinator_id
-        )
-    }
-}
-
-#[derive(Debug)]
-pub enum HoloHttpGatewayError {
-    Holochain(HcHttpGatewayError),
-    BadRequest(String),
-    Nats(String),
-    Internal(String),
-}
-impl HoloHttpGatewayError {
-    pub fn into_status_code_and_body(self) -> (StatusCode, String) {
-        match self {
-            HoloHttpGatewayError::Holochain(e) => e.into_status_code_and_body(),
-            HoloHttpGatewayError::BadRequest(e) => (StatusCode::BAD_REQUEST, e.to_string()),
-            HoloHttpGatewayError::Nats(e) => (StatusCode::BAD_REQUEST, e.to_string()),
-            HoloHttpGatewayError::Internal(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
-        }
-    }
-}
-impl fmt::Display for HoloHttpGatewayError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", self)
-    }
-}
-impl From<async_nats::error::Error<async_nats::RequestErrorKind>> for HoloHttpGatewayError {
-    fn from(value: async_nats::error::Error<async_nats::RequestErrorKind>) -> Self {
-        Self::Nats(value.to_string())
-    }
-}
-impl From<serde_json::Error> for HoloHttpGatewayError {
-    fn from(value: serde_json::Error) -> Self {
-        Self::Internal(value.to_string())
-    }
-}
-impl From<async_nats::header::ParseHeaderValueError> for HoloHttpGatewayError {
-    fn from(value: async_nats::header::ParseHeaderValueError) -> Self {
-        Self::Internal(value.to_string())
-    }
-}
-impl From<std::string::FromUtf8Error> for HoloHttpGatewayError {
-    fn from(value: std::string::FromUtf8Error) -> Self {
-        Self::Internal(value.to_string())
-    }
-}
-impl Error for HoloHttpGatewayError {}
