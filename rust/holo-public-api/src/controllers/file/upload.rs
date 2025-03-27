@@ -11,14 +11,13 @@ use crate::providers::{error_response::ErrorResponse, jwt::AccessTokenClaims};
 
 #[derive(OpenApi)]
 #[openapi(
-    paths(upload_happ),
-    components(schemas(UploadHappResponse))
+    paths(upload_file),
+    components(schemas(UploadFileResponse))
 )]
 pub struct OpenApiSpec;
 
 #[derive(Serialize, ToSchema)]
-pub struct UploadHappResponse {
-    pub file_identifier: String,
+pub struct UploadFileResponse {
     pub hash: String,
 }
 
@@ -42,11 +41,11 @@ struct FileUploadRequest {
         content_type = "multipart/form-data",
     ),
     responses(
-        (status = 200, body = UploadHappResponse)
+        (status = 200, body = UploadFileResponse)
     )
 )]
-#[post("/v1/happ/upload")]
-pub async fn upload_happ(
+#[post("/v1/file/upload")]
+pub async fn upload_file(
     req: HttpRequest,
     mut payload: Multipart
 ) -> impl Responder {
@@ -58,10 +57,9 @@ pub async fn upload_happ(
         });
     }
     let auth = auth.unwrap();
-    let file_identifier = bson::uuid::Uuid::new().to_string();
+    let temp_file_identifier = bson::uuid::Uuid::new().to_string();
     let mut hasher = blake3::Hasher::new();
-    fs::create_dir_all(format!("tmp/{}", file_identifier)).unwrap();
-    let mut file = match fs::File::create(format!("tmp/{}/file.happ", file_identifier)) {
+    let mut file = match fs::File::create(format!("/tmp/{}", temp_file_identifier)) {
         Ok(file) => file,
         Err(e) => {
             tracing::error!("Error creating file: {:?}", e);
@@ -71,6 +69,7 @@ pub async fn upload_happ(
         }
     };
 
+    // process the file
     while let Some(item) = payload.next().await {
         let mut field = match item {
             Ok(field) => field,
@@ -108,20 +107,45 @@ pub async fn upload_happ(
         }
     }
 
+    // finalize the hash
     let hash_hex = hasher.finalize().to_hex().to_string();
 
+    // create metadata body
     let metadata_body = bson::doc! {
         "createdAt": bson::DateTime::now().to_string(),
         "updatedAt": bson::DateTime::now().to_string(),
-        "fileIdentifier": file_identifier.clone(),
         "userId": auth.sub.clone(),
         "hash": hash_hex.clone(),
     }
     .to_string()
     .into_bytes();
 
+    // create directory for the file and metadata
+    let file_location = format!("/srv/holo-blobstore/{}", hash_hex);
+    match fs::create_dir_all(file_location.clone()) {
+        Ok(_) => (),
+        Err(e) => {
+            tracing::error!("Error creating directory: {:?}", e);
+        }
+    }
+
+    // move file to the correct location
+    match fs::rename(
+        format!("/tmp/{}", temp_file_identifier),
+        format!("{}/file", file_location)
+    ) {
+        Ok(_) => (),
+        Err(e) => {
+            tracing::error!("Error moving file to the correct location: {:?}", e);
+            return HttpResponse::InternalServerError().json(ErrorResponse {
+                message: "Internal server error".to_string(),
+            });
+        }
+    }
+
+    // create metadata file
     let mut metadata_file = match fs::File::create(
-        format!("tmp/{}/metadata.json", file_identifier)
+        format!("{}/metadata.json", file_location)
     ) {
         Ok(file) => file,
         Err(e) => {
@@ -131,10 +155,18 @@ pub async fn upload_happ(
             });
         }
     };
-    metadata_file.write_all(&metadata_body).unwrap();
+    match metadata_file.write_all(&metadata_body) {
+        Ok(_) => (),
+        Err(e) => {
+            tracing::error!("Error writing metadata file: {:?}", e);
+            return HttpResponse::InternalServerError().json(ErrorResponse {
+                message: "Internal server error".to_string(),
+            });
+        }
+    }
 
-    HttpResponse::Ok().json(UploadHappResponse {
-        file_identifier,
+    // return the hash
+    HttpResponse::Ok().json(UploadFileResponse {
         hash: hash_hex,
     })
 }

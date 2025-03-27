@@ -4,7 +4,7 @@ use utoipa::OpenApi;
 pub mod upload;
 
 pub fn setup_private_controllers(cfg: &mut web::ServiceConfig) {
-    cfg.service(upload::upload_happ);
+    cfg.service(upload::upload_file);
 }
 
 pub fn setup_docs() -> utoipa::openapi::OpenApi {
