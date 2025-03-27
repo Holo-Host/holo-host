@@ -134,11 +134,7 @@ async fn start_mongodb_cache(input: MongoDbSourceParms) {
     let configured_delay: u64 = DNS_CACHE_UPDATE_TIME
         .parse::<u64>()
         .expect("DNS_CACHE_UPDATE_TIME environment variable cannot be parsed into a u64.");
-    // TODO: Remove this before merging -- URI containers the user's password....
-    info!(
-        "Starting DNS cache with MongoDB source using URL {}.",
-        input.db_uri,
-    );
+    info!("Starting DNS cache with MongoDB source.",);
     loop {
         tokio::select! {
             _ = tokio::time::sleep(Duration::from_secs(delay)) => {
