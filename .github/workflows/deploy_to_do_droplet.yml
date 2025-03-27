@@ -75,15 +75,3 @@ jobs:
 
       - name: Push Docker Image to DO Container Registry
         run: docker push registry.digitalocean.com/holo-host/${{ inputs.project }}:${{ inputs.environment }}
-      
-      - name: ssh proxy command
-        uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ secrets.DNS_HOST }}
-          username: ${{ secrets.DNS_USER }}
-          key: ${{ secrets.DO_SSH_KEY }}
-          script: |
-            docker pull registry.digitalocean.com/holo-host/${{ inputs.project }}:${{ inputs.environment }}
-            docker stop holo-${{ inputs.project }}
-            docker run -d --name holo-${{ inputs.project }} -p 53:53 --env-file .env registry.digitalocean.com/holo-host/${{ inputs.project }}:${{ inputs.environment }}
-            docker system prune -a
