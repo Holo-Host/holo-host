@@ -3,11 +3,10 @@ name: Holo DNS
 on:
   pull_request:
     branches:
-      - dev
+      - main
   push:
     branches:
-      - master
-      - dev
+      - main
 
 env:
   RUST_VERSION: 1.85.0
