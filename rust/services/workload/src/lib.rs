@@ -90,7 +90,20 @@ where
         // TODO: we probably don't want to lose this error information. instead, for now, return it in the WorkloadStatus
         let payload: T = match Self::convert_msg_to_type::<T>(msg.clone()) {
             Ok(t) => t,
-            Err(e) => todo!("transform this into Ok(WorkloadApiResult): {e}"),
+            Err(e) => {
+                return Ok(WorkloadApiResult {
+                    result: WorkloadResult {
+                        status: WorkloadStatus {
+                            id: None,
+                            desired: desired_state,
+                            actual: error_state(format!("error converting message {msg:?}: {e}")),
+                            payload: Default::default(),
+                        },
+                        workload: None,
+                    },
+                    maybe_response_tags: None,
+                })
+            }
         };
         let subject = msg.subject.clone().into_string();
 
