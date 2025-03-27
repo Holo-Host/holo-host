@@ -132,48 +132,17 @@ pub(crate) async fn run(args: RemoteArgs, command: RemoteCommands) -> anyhow::Re
             }
         }
 
+        // this immitates what the public holo-gateway is going to do
+        // 1. start subscribing on a subject that's used to receive async replies subsequently
+        // 2. send a message to the host-agent to request data from the local hc-http-gw instance
+        // 3. wait for the first message on the reply subject
         agent_cli::RemoteCommands::HcHttpGwReq { request } => {
             let destination_subject = request.nats_destination_subject();
             let reply_subject = request.nats_reply_subject();
 
-            /*
-                TODO: the response never arrives. it does get sent, twice!
-
-                [#7] Received on "WORKLOAD.HC_HTTP_GW.67d2ef2a67d4b619a54286c4" with reply ".MRyc5qStnwDMTVD9MABt7n.MRyc5qStnwDMTVD9MABt3x"
-                {"dna_hash":"uhC0kwENLeSuselWQJtywbYB1QyFK1d-ujmFFtxsq6CYY7_Ohri2u","coordinatior_identifier":"67d2ef2a67d4b619a54286c4","zome_name":"content","zome_fn_name":"list_by_hive_link","payload":"eyAiaGl2ZV9pZCI6Ik1UYzBNVEE0T0RnNU5EQTVOaTFpWm1WalpHRXdaRFV4WVRNeE1qZ3oiLCAiY29udGVudF90eXBlIjogImh1bW1oaXZlLWV4dGVuc2lvbi1zdG9yeS12MSIgfQo="}
-
-
-                [#8] Received JetStream message: consumer: WORKLOAD_SERVICE > HC_HTTP_GW_67d2ef2a67d4b619a542 / subject: WORKLOAD.HC_HTTP_GW.67d2ef2a67d4b619a54286c4 / delivered: 1 / consumer seq: 3 / stream seq: 7
-                {"dna_hash":"uhC0kwENLeSuselWQJtywbYB1QyFK1d-ujmFFtxsq6CYY7_Ohri2u","coordinatior_identifier":"67d2ef2a67d4b619a54286c4","zome_name":"content","zome_fn_name":"list_by_hive_link","payload":"eyAiaGl2ZV9pZCI6Ik1UYzBNVEE0T0RnNU5EQTVOaTFpWm1WalpHRXdaRFV4WVRNeE1qZ3oiLCAiY29udGVudF90eXBlIjogImh1bW1oaXZlLWV4dGVuc2lvbi1zdG9yeS12MSIgfQo="}
-
-
-
-                [#9] Received on "$JS.ACK.WORKLOAD_SERVICE.HC_HTTP_GW_67d2ef2a67d4b619a542.1.7.3.1743028830450804547.0" with reply "_HPOS_INBOX.f0b9a2b7a95848389fdb43eda8139569.npOEAagmpNBPTOEhZvHwpT.npOEAagmpNBPTOEhZvHxl3"
-
-                [#10] Received on "$JS.ACK.WORKLOAD_SERVICE.HC_HTTP_GW_67d2ef2a67d4b619a542.1.7.3.1743028830450804547.0.WORKLOAD.WORKLOAD.HC_HTTP_GW.67d2ef2a67d4b619a54286c4" with reply "_HPOS_INBOX.f0b9a2b7a95848389fdb43eda8139569.npOEAagmpNBPTOEhZvHwpT.npOEAagmpNBPTOEhZvHxmy"
-            */
-
-            // TODO: this didn't work, it's worth double-checking.
-            // let response = {
-            //     let data = serde_json::to_string(&request)?;
-            //     let msg = nats_client
-            //         .client
-            //         .request(destination_subject, data.into())
-            //         .await?;
-            //     let response: HcHttpGwResponse = serde_json::from_slice(&msg.payload)?;
-            //     response
-            // };
-
             let response = {
                 let data = serde_json::to_string(&request)?;
-                // let publish_info = PublishInfo {
-                //     subject: destination_subject,
-                //     msg_id: Default::default(),
-                //     data: data.as_bytes().to_vec(),
-                //     headers: None,
-                // };
 
-                // nats_client.publish(publish_info).await?;
                 let _ack = nats_client
                     .js_context
                     .publish_with_headers(
@@ -198,12 +167,7 @@ pub(crate) async fn run(args: RemoteArgs, command: RemoteCommands) -> anyhow::Re
                 response
             };
 
-            let stringified = String::from_utf8(response.response_bytes.to_vec());
-
-            // let response: HcHttpGwResponse =
-            //     nats_client.js_context.request(subject, &request).await?;
-
-            println!("{response:?}\n{stringified:?}");
+            println!("{response:?}");
         }
     }
 

@@ -555,7 +555,6 @@ impl HcHttpGwRequest {
 
     pub fn nats_destination_subject(&self) -> String {
         format!(
-            // TODO: create a constant for this and figure out why it's not WORKLOAD
             "WORKLOAD.{}",
             Self::nats_subject_suffix(&self.coordinatior_identifier)
         )
@@ -563,7 +562,6 @@ impl HcHttpGwRequest {
 
     pub fn nats_reply_subject(&self) -> String {
         format!(
-            // TODO: create a constant for this and figure out why it's not WORKLOAD
             "WORKLOAD.{}.reply",
             Self::nats_subject_suffix(&self.coordinatior_identifier)
         )
@@ -607,39 +605,46 @@ impl CreateResponse for HcHttpGwResponseMsg {
 
 impl EndpointTraits for HcHttpGwResponseMsg {}
 
-const NATS_NAME_MAX_LENGTH: usize = 31;
+/// helpers to sanitize NATS names
+/// see https://docs.nats.io/running-a-nats-service/nats_admin/jetstream_admin/naming
+pub mod sanitization {
+    const NATS_NAME_MAX_LENGTH: usize = 31;
+    const NATS_NAME_PROHIBITED_CHARS: [char; 7] = [' ', '/', '\\', '.', '>', '*', '\t'];
 
-const NATS_NAME_PROHIBITED_CHARS: [char; 7] = [' ', '/', '\\', '.', '>', '*', '\t'];
-
-// https://docs.nats.io/running-a-nats-service/nats_admin/jetstream_admin/naming
-pub fn sanity_check_nats_name(name: &str) -> Result<(), async_nats::Error> {
-    if name.len() > NATS_NAME_MAX_LENGTH {
-        return Err(async_nats::Error::from(format!(
-            "'{name}' must not be equal to or longer than {NATS_NAME_MAX_LENGTH} characters"
-        )));
-    }
-    for prohibited_char in NATS_NAME_PROHIBITED_CHARS {
-        if name.contains(prohibited_char) {
+    pub fn sanity_check_nats_name(name: &str) -> Result<(), async_nats::Error> {
+        if name.len() > NATS_NAME_MAX_LENGTH {
             return Err(async_nats::Error::from(format!(
-                "'{name}' must not contain '{prohibited_char}'"
+                "'{name}' must not be equal to or longer than {NATS_NAME_MAX_LENGTH} characters"
             )));
         }
+        for prohibited_char in NATS_NAME_PROHIBITED_CHARS {
+            if name.contains(prohibited_char) {
+                return Err(async_nats::Error::from(format!(
+                    "'{name}' must not contain '{prohibited_char}'"
+                )));
+            }
+        }
+
+        Ok(())
     }
 
-    Ok(())
-}
+    pub fn sanitize_nats_name(name: &str) -> String {
+        let mut final_name = name.to_string();
 
-// https://docs.nats.io/running-a-nats-service/nats_admin/jetstream_admin/naming
-pub fn sanitize_nats_name(name: &str) -> String {
-    let mut final_name = name.to_string();
+        for char in NATS_NAME_PROHIBITED_CHARS {
+            final_name = final_name.replace(char, "_");
+        }
 
-    for char in NATS_NAME_PROHIBITED_CHARS {
-        final_name = final_name.replace(char, "_");
-    }
+        final_name = if final_name.len() > NATS_NAME_MAX_LENGTH {
+            final_name.split_at(NATS_NAME_MAX_LENGTH).0.to_owned()
+        } else {
+            final_name
+        };
 
-    if final_name.len() > NATS_NAME_MAX_LENGTH {
-        final_name.split_at(NATS_NAME_MAX_LENGTH).0.to_owned()
-    } else {
+        if name != final_name {
+            log::debug!("sanitization changed from {name} -> {final_name}");
+        }
+
         final_name
     }
 }

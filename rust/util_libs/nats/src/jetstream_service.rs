@@ -1,4 +1,5 @@
-use crate::types::{sanity_check_nats_name, ServiceConsumerBuilder};
+use crate::types::sanitization::sanity_check_nats_name;
+use crate::types::ServiceConsumerBuilder;
 
 use super::types::{
     ConsumerBuilder, ConsumerExt, ConsumerExtTrait, EndpointTraits, EndpointType,
@@ -132,7 +133,7 @@ impl JsStreamService {
                 &builder_params.name,
             ))?;
 
-        // TODO(double-check) adding the Arc around the consumer with handler maybe solved the consumer timeout bug
+        // TODO(post-bug) adding the Arc around the consumer with handler maybe solved the consumer timeout bug
         let consumer_with_handler = Arc::new(ConsumerExt {
             consumer,
             handler: builder_params.handler,
@@ -157,7 +158,7 @@ impl JsStreamService {
                 &builder_params.name
             );
 
-            // TODO: clean it up if this was the last usage of the consumer
+            // TODO(correctness): clean it up if this was the last usage of the consumer?
         };
 
         log::debug!(

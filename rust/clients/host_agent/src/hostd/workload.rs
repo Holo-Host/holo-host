@@ -22,7 +22,7 @@ use nats_utils::{
     jetstream_client::JsClient,
     jetstream_service::JsStreamService,
     types::{
-        sanitize_nats_name, HcHttpGwRequest, HcHttpGwResponse, HcHttpGwResponseMsg,
+        sanitization::sanitize_nats_name, HcHttpGwRequest, HcHttpGwResponse, HcHttpGwResponseMsg,
         JsServiceBuilder, ServiceConsumerBuilder, ServiceError,
     },
 };
@@ -245,7 +245,7 @@ async fn spawn_hc_http_gw_watcher(
 
                 match desired_state {
                     WorkloadStateDiscriminants::Running => {
-                        // TODO: what if the consumer already exists?
+                        // TODO(correctness): what if the consumer already exists?
                         let consumer = nats_js_service
                             .add_consumer(
                                 ServiceConsumerBuilder::new(
