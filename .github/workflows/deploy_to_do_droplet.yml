@@ -1,0 +1,88 @@
+name: Deploy
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        required: true
+        type: string
+      project:
+        required: true
+        type: string
+      working_directory:
+        required: false
+        type: string
+        default: "."
+    secrets:
+      DIGITAL_OCEAN_TOKEN:
+        required: true
+
+env:
+  RUST_VERSION: 1.85.0
+
+jobs:
+  deploy:
+    name: Deploy to ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Cache Docker Build
+        id: cache-docker
+        uses: actions/cache@v4
+        with:
+          path: |
+            docker-cargo
+            docker-target
+          key: docker-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            docker-
+
+      - name: Map Docker Cache
+        uses: reproducible-containers/buildkit-cache-dance@v3.1.0
+        with:
+          cache-map: |
+            {
+              "docker-cargo": "/root/.cargo",
+              "docker-target": "/usr/src/holo-public-api/target"
+            }
+          skip-extraction: ${{ steps.cache-docker.outputs.cache-hit }}
+
+      - name: Build Docker Image
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ inputs.working_directory }}
+          load: true
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64
+          tags: registry.digitalocean.com/holo-host/${{ inputs.project }}:${{ inputs.environment }}
+
+      - name: Install Doctl
+        uses: digitalocean/action-doctl@v2
+        with:
+          token: ${{ secrets.DIGITAL_OCEAN_TOKEN }}
+
+      - name: Log in to DO Container Registry
+        run: doctl registry login --expiry-seconds 600
+
+      - name: Push Docker Image to DO Container Registry
+        run: docker push registry.digitalocean.com/holo-host/${{ inputs.project }}:${{ inputs.environment }}
+      
+      - name: ssh proxy command
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.DNS_HOST }}
+          username: ${{ secrets.DNS_USER }}
+          key: ${{ secrets.DO_SSH_KEY }}
+          script: |
+            docker pull registry.digitalocean.com/holo-host/${{ inputs.project }}:${{ inputs.environment }}
+            docker stop holo-${{ inputs.project }}
+            docker run -d --name holo-${{ inputs.project }} -p 53:53 --env-file .env registry.digitalocean.com/holo-host/${{ inputs.project }}:${{ inputs.environment }}
+            docker system prune -a
