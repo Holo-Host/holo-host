@@ -70,6 +70,12 @@ in
       type = lib.types.listOf lib.types.str;
       default = [ ];
     };
+
+    allowedFnsPerAppId = lib.mkOption {
+      description = "allowed functions given per app id";
+      type = lib.types.attrs;
+      default = pkgs.lib.genAttrs cfg.allowedAppIds (_: "*");
+    };
   };
 
   config = lib.mkIf cfg.enable {
@@ -105,11 +111,10 @@ in
           HC_GW_ALLOWED_APP_IDS = builtins.concatStringsSep "," cfg.allowedAppIds;
         }
         // (
-          # generate environment variables that allow all functions to be called per allowed app id
-          let
-            allowedAppFnsPerIdKeys = builtins.map (app_id: "HC_GW_ALLOWED_FNS_${app_id}") cfg.allowedAppIds;
-          in
-          pkgs.lib.genAttrs allowedAppFnsPerIdKeys (_key: "*")
+          # add the required prefix in front of each appId
+          lib.mapAttrs' (
+            appId: allowedFns: (lib.nameValuePair "HC_GW_ALLOWED_FNS_${appId}" allowedFns)
+          ) cfg.allowedFnsPerAppId
         );
 
       serviceConfig =

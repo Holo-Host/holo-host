@@ -216,6 +216,7 @@ dev-install-app:
 
 cloud-install-app:
     DONT_WAIT=true just cloud-hub-host-agent-remote-hc reported WORKLOAD.add
+    DONT_WAIT=true just cloud-hub-host-agent-remote-hc reported WORKLOAD.update
     just cloud-hub-host-agent-remote-hc running WORKLOAD.insert
 
 cloud-uninstall-app:
@@ -248,6 +249,7 @@ dev-hub-host-agent-remote-hc-humm desired-status subject="WORKLOAD.update" +args
 
 dev-install-humm-hive:
     DONT_WAIT=true just dev-hub-host-agent-remote-hc-humm reported WORKLOAD.add
+    DONT_WAIT=true just dev-hub-host-agent-remote-hc-humm reported WORKLOAD.update
     just dev-hub-host-agent-remote-hc-humm running WORKLOAD.insert
 
 dev-uninstall-humm-hive:

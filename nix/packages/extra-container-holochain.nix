@@ -27,6 +27,8 @@
   # hc-http-gw related args
   httpGwEnable ? false,
   httpGwAllowedAppIds ? [ ],
+# TODO: support
+# httpGwAllowedFns ? { },
 }:
 
 let
@@ -104,6 +106,7 @@ let
               enable = httpGwEnable;
               adminWebsocketUrl = "ws://127.0.0.1:${builtins.toString adminWebsocketPort}";
               allowedAppIds = httpGwAllowedAppIds;
+              # allowedFnsPerAppId = httpGwAllowedFns;
             };
           };
       };

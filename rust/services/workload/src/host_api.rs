@@ -625,8 +625,9 @@ mod util {
                     holochain_feature_flags,
                     stun_server_urls,
                     http_gw_enable,
-                    // TODO: support this
-                    http_gw_allowed_fns: _,
+                    http_gw_allowed_fns,
+
+                    // TODO(feat): support this
                     holochain_version: _,
 
                     // not relevant here
@@ -683,6 +684,20 @@ mod util {
                         .join(" ");
 
                     override_attrs.push(format!("httpGwAllowedAppIds = [{list_stringified}]"));
+
+                    if let Some(_allowed_fns) = http_gw_allowed_fns {
+                        // TODO(security)
+                        /* produce an attrset like this
+                        ```nix
+                        {
+                            ${appId} = [
+                                ${allowedFn0}
+                                ${allowedFn1}
+                            ];
+                        }
+                        ```
+                        */
+                    }
                 }
 
                 let override_attrs_stringified = override_attrs.join("; ") + ";";
