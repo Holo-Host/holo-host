@@ -107,8 +107,8 @@ jobs:
             docker pull registry.digitalocean.com/holo-host/${{ inputs.project }}:${{ inputs.environment }}
             docker run -d \
               --name ${inputs.project} \
-              -p ${inputs.port}:${inputs.port}/tcp \
-              -p ${inputs.port}:${inputs.port}/udp \
+              -p ${{ inputs.port }}:${{ inputs.port }}/tcp \
+              -p ${{ inputs.port }}:${{ inputs.port }}/udp \
               --env-file .env \
               registry.digitalocean.com/holo-host/${{ inputs.project }}:${{ inputs.environment }}
 
