@@ -10,7 +10,9 @@ This client is responsible for:
     - interfacing with mongodb DB
 */
 
-use anyhow::{anyhow, Result};
+use std::sync::Arc;
+
+use anyhow::Result;
 use inventory::{
     InventoryServiceApi, INVENTORY_SRV_DESC, INVENTORY_SRV_NAME, INVENTORY_SRV_SUBJ,
     INVENTORY_SRV_VERSION, INVENTORY_UPDATE_SUBJECT,
@@ -33,17 +35,10 @@ pub async fn run(
         version: INVENTORY_SRV_VERSION.to_string(),
         service_subject: INVENTORY_SRV_SUBJ.to_string(),
     };
-    nats_client.add_js_service(inventory_stream_service).await?;
-
-    let inventory_service = nats_client
-        .get_js_service(INVENTORY_SRV_NAME.to_string())
-        .await
-        .ok_or(anyhow!(
-            "Failed to start service. Unable to fetch inventory service."
-        ))?;
+    let inventory_service = nats_client.add_js_service(inventory_stream_service).await?;
 
     // Instantiate the Workload API (requires access to db client)
-    let inventory_api = InventoryServiceApi::new(&db_client).await?;
+    let inventory_api = Arc::new(InventoryServiceApi::new(&db_client).await?);
 
     // Subjects published by hosting agent:
     inventory_service

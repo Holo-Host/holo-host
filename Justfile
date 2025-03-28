@@ -10,6 +10,15 @@ state-file := "./ham.state"
 # test-happ-url := "https://gist.github.com/steveej/5443d6d15395aa23081f1ee04712b2b3/raw/fdacb9b723ba83743567f2a39a8bfbbffb46b1f0/test-zome.bundle"
 test-happ-url := "https://gist.github.com/steveej/5443d6d15395aa23081f1ee04712b2b3/raw/c82daf7f03ef459fa9ec4f28c8eeb9602596cc22/humm-earth-core-happ.happ"
 
+
+# using the "just-testing" network-seed
+# HUMM_HIVE_DNA_HASH := "uhC0k9QwFJiqMvUb8-0gZ2wv-9ccRtw-HiHLSssZ1LzTTIw9GAQEZ"
+
+# using the "holo" network-seed
+HUMM_HIVE_DNA_HASH := "uhC0kwENLeSuselWQJtywbYB1QyFK1d-ujmFFtxsq6CYY7_Ohri2u"
+
+WORKLOAD_ID := "67d2ef2a67d4b619a54286c4"
+
 help:
     just --list
 
@@ -55,18 +64,18 @@ ham-cycle i:
     just ham-install {{i}}
 
 dev-ham +args="":
-    sudo machinectl -M dev-host shell .host /usr/bin/env ham --addr 127.0.0.1 --port 8000 --state-path /var/lib/holo-host-agent/workloads/67d2ef2a67d4b619a54286c4/ham.state {{args}}
+    sudo machinectl -M dev-host shell .host /usr/bin/env ham --addr 127.0.0.1 --port 8000 --state-path /var/lib/holo-host-agent/workloads/{{WORKLOAD_ID}}/ham.state {{args}}
 
 dev-ham-init-humm:
     just dev-ham zome-calls --zome-calls "humm_earth_core:init"
 
 dev-ham-find-installed-app:
     # the installed-app-id is known because it's the hardcocded workload_id from `remote_cmds/mod.rs``
-    just dev-ham find-installed-app 67d2ef2a67d4b619a54286c4
+    just dev-ham find-installed-app {{WORKLOAD_ID}}
 
 
-dev-hcterm:
-    hcterm --bootstrap-url "http://dev-hub:50000" --dna-hash uhC0k9QwFJiqMvUb8-0gZ2wv-9ccRtw-HiHLSssZ1LzTTIw9GAQEZ
+dev-hcterm bootstrap-url="http://dev-hub:50000":
+    hcterm --bootstrap-url "{{bootstrap-url}}" --dna-hash "{{HUMM_HIVE_DNA_HASH}}"
 
 dev-destroy:
     #!/usr/bin/env bash
@@ -121,10 +130,12 @@ host-agent-remote-hc desired-status +args="":
     # dev_machine_id="$(sudo machinectl shell dev-host /bin/sh -c "cat /etc/machine-id" | grep -oE '[a-z0-9]+')"
 
     just host-agent-remote holochain-dht-v1-workload \
-        --workload-id-override "67d2ef2a67d4b619a54286c4" \
+        --workload-id-override "{{WORKLOAD_ID}}" \
         --desired-status "{{desired-status}}" \
         --happ-binary-url "{{test-happ-url}}" \
-        --network-seed "just-testing" {{args}}
+        --network-seed "holo" {{args}} \
+        --holochain-feature-flags "unstable-functions,unstable-sharding,chc,unstable-countersigning" \
+        --http-gw-enable
 
 dev-host-host-agent-remote-hc desired-status +args="":
     #!/usr/bin/env bash
@@ -170,6 +181,7 @@ dev-logs +args="-f -n200":
     sudo journalctl -m \
     --unit holo-orchestrator \
     --unit holo-host-agent \
+    --unit hc-http-gw \
     {{args}}
 
 # (compat) follows the logs for the applications services from the dev containers
@@ -207,7 +219,56 @@ cloud-install-app:
     DONT_WAIT=true just cloud-hub-host-agent-remote-hc reported WORKLOAD.update
     just cloud-hub-host-agent-remote-hc running WORKLOAD.insert
 
-
 cloud-uninstall-app:
-    DONT_WAIT=true just cloud-hub-host-agent-remote-hc uninstalled WORKLOAD.add
-    DONT_WAIT=true just cloud-hub-host-agent-remote-hc uninstalled WORKLOAD.insert
+    DONT_WAIT=true just cloud-hub-host-agent-remote-hc removed WORKLOAD.add
+    DONT_WAIT=true just cloud-hub-host-agent-remote-hc removed WORKLOAD.insert
+
+
+dev-host-http-gw-curl-hive:
+    #!/usr/bin/env bash
+    set -xeE
+    # curl -4v "http://dev-host:8090/{{HUMM_HIVE_DNA_HASH}}/{{WORKLOAD_ID}}/humm_earth_core/init"
+    # echo done
+
+    payload="$(base64 -i -w0 <<<'{ "hive_id":"MTc0MTA4ODg5NDA5Ni1iZmVjZGEwZDUxYTMxMjgz", "content_type": "hummhive-extension-story-v1" }')"
+    curl -4v "http://dev-host:8090/{{HUMM_HIVE_DNA_HASH}}/{{WORKLOAD_ID}}/content/list_by_hive_link?payload=$payload"
+    echo "done."
+
+
+dev-hub-host-agent-remote-hc-humm desired-status subject="WORKLOAD.update" +args="":
+    #!/usr/bin/env bash
+    set -xeE
+    export NATS_URL="wss://dev-hub:443"
+    export NATS_SKIP_TLS_VERIFICATION_DANGER="true"
+    just host-agent-remote-hc {{desired-status}} --subject-override {{subject}} --workload-only \
+        --host-id "{{HOST_ID_DEV_HOST}}" \
+        --bootstrap-server-url "https://bootstrap.holo.host" \
+        --signal-server-url "wss://sbd.holo.host" \
+        {{args}}
+
+
+dev-install-humm-hive:
+    DONT_WAIT=true just dev-hub-host-agent-remote-hc-humm reported WORKLOAD.add
+    DONT_WAIT=true just dev-hub-host-agent-remote-hc-humm reported WORKLOAD.update
+    just dev-hub-host-agent-remote-hc-humm running WORKLOAD.insert
+
+dev-uninstall-humm-hive:
+    DONT_WAIT=true just dev-hub-host-agent-remote-hc-humm deleted WORKLOAD.update
+    just dev-hub-host-agent-remote-hc-humm deleted WORKLOAD.insert
+
+
+dev-host-http-gw-remote-hive nats-url="nats://dev-hub":
+    #!/usr/bin/env bash
+    set -xeE
+    # curl -4v "http://dev-host:8090/{{HUMM_HIVE_DNA_HASH}}/{{WORKLOAD_ID}}/humm_earth_core/init"
+    # echo done
+
+    payload="$(base64 -i -w0 <<<'{ "hive_id":"MTc0MTA4ODg5NDA5Ni1iZmVjZGEwZDUxYTMxMjgz", "content_type": "hummhive-extension-story-v1" }')"
+
+    export NATS_URL="{{nats-url}}"
+    just host-agent-remote hc-http-gw-req \
+      --dna-hash {{HUMM_HIVE_DNA_HASH}} \
+      --coordinatior-identifier {{WORKLOAD_ID}} \
+      --zome-name "content" \
+      --zome-fn-name "list_by_hive_link" \
+      --payload "$payload"
