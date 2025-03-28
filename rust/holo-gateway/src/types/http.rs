@@ -3,11 +3,9 @@
 use async_nats::header::{
     HeaderMap as NatsHeaderMap, HeaderName as NatsHeaderName, HeaderValue as NatsHeaderValue,
 };
-use hyper::header::{
-    HeaderMap as HyperHeaderMap, HeaderName as HyperHeaderName, HeaderValue as HyperHeaderValue,
-};
-use hyper::{Method, Request, body::Body};
-use lazy_static::lazy_static;
+use hyper::header::HeaderMap as HyperHeaderMap;
+use hyper::{body::Body, Method, Request};
+use nats_utils::types::HcHttpGwRequest;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::str::FromStr;
@@ -18,14 +16,6 @@ use workload::WORKLOAD_SRV_SUBJ;
 use crate::types::nats::HTTP_GW_SUBJECT_NAME;
 
 use super::error::HoloHttpGatewayError;
-
-lazy_static! {
-    pub static ref NODE_ID: String = {
-        let n = std::env::var("NODE_ID")
-            .expect("Need NODE_ID environment variable set to a unique UUID");
-        n.to_string()
-    };
-}
 
 /// Static DNS hostname for holochain gateway nodes. TODO: Wrap in environment variable for
 /// override. Also pending discussion with holochain team.
@@ -50,7 +40,7 @@ pub enum HTTPMethod {
 /// particular way, so as to allow generic code to query the contents of a DHT via a DNA.
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum SuperProtocol {
-    HolochainHTTP(HolochainHTTP),
+    HolochainHTTP(HcHttpGwRequest),
 }
 
 /// Support for parts of the Holochain-over-HTTP protocol that we'll use to route the traffic to
@@ -73,14 +63,14 @@ pub struct HolochainHTTP {
     pub payload: String,
 }
 impl HolochainHTTP {
-    pub fn into_gateway_request_subject(&self) -> String {
+    pub fn nats_request_subject(&self) -> String {
         format!(
             "{WORKLOAD_SRV_SUBJ}.{HTTP_GW_SUBJECT_NAME}.{}",
             self.coordinator_id
         )
     }
-    pub fn into_gateway_reply_subject(&self) -> String {
-        format!("{}.reply", self.into_gateway_request_subject())
+    pub fn nats_reply_subject(&self) -> String {
+        format!("{}.reply", self.nats_request_subject())
     }
 }
 
@@ -97,27 +87,6 @@ pub struct ForwardedHTTPRequest {
     body: Vec<u8>,
     /// Potential protocol implemented on top of HTTP, such as Holochain HTTP Gateway.
     pub super_proto: Option<SuperProtocol>,
-}
-
-// Converts an `async_nats::HeaderMap` to a `hyper::HeaderMap`
-pub fn try_add_hyper_headers(
-    nats_headers: &NatsHeaderMap,
-) -> Result<HyperHeaderMap, HoloHttpGatewayError> {
-    let mut hyper_headers = HyperHeaderMap::new();
-
-    for (key, values) in nats_headers.iter() {
-        for value in values {
-            if let Ok(hyper_value) = HyperHeaderValue::from_bytes(value.as_ref()) {
-                hyper_headers.append(HyperHeaderName::from_str(key.as_ref())?, hyper_value);
-            } else {
-                log::error!(
-                    "Failed to convert NATS header value to hyper header value: {}",
-                    value
-                );
-            }
-        }
-    }
-    Ok(hyper_headers)
 }
 
 // Converts a `hyper::HeaderMap` to an `async_nats::HeaderMap`
@@ -144,7 +113,7 @@ impl ForwardedHTTPRequest {
     /// attributes, it's just a one-for-one copy, but we'll also use this to add a few other
     /// headers for tracking/diagnostics, and potentially in the future add/filter parts of
     /// requests.
-    pub fn from_hyper<B>(req: &Request<B>, node_id: &str) -> Self
+    pub fn from_hyper<B>(req: &Request<B>, node_id: &Uuid) -> Self
     where
         B: Body + Send + Sync + 'static,
         B::Error: Into<Box<dyn std::error::Error + Send + Sync>>,
@@ -169,7 +138,7 @@ impl ForwardedHTTPRequest {
 
     fn handle_headers(
         hyper_headers: &HyperHeaderMap,
-        node_id: &str,
+        node_id: &Uuid,
     ) -> Result<NatsHeaderMap, HoloHttpGatewayError> {
         // We'll likely want to filter certain headers out at some point, but for now, we'll just
         // pass all headers through.
@@ -184,7 +153,7 @@ impl ForwardedHTTPRequest {
         );
         nats_headers.insert(
             NatsHeaderName::from_str("X-Holo-ForwarderID")?,
-            NatsHeaderValue::from_str(node_id)?,
+            NatsHeaderValue::from(node_id.to_string()),
         );
 
         Ok(nats_headers)
@@ -216,9 +185,9 @@ impl ForwardedHTTPRequest {
         let fqdn = req.headers()["host"].to_str().unwrap().to_string();
         let parts: Vec<&str> = fqdn.split('.').collect();
         // first part is the hostname
-        let hostname = parts.first().unwrap().to_string();
+        let _hostname = parts.first().unwrap().to_string();
         // the rest is the domain name
-        let domain = parts.join(".");
+        let _domain = parts.join(".");
 
         let mut payload = "".to_string();
         // parse out the parameters, even though we don't use them yet.
@@ -255,16 +224,14 @@ impl ForwardedHTTPRequest {
             path_components.push(path[3].clone());
         }
 
-        // These may need adjusting, depending on feedback from the Holochain team and integration
-        // testing.
-        if hostname == get_holo_gw_host() && req.method() == Method::GET && path_len == 4 {
-            return Some(SuperProtocol::HolochainHTTP(HolochainHTTP {
-                hostname,
-                domain,
+        // These may need adjusting, depending on feedback from the Holochain team and integration testing.
+        // TODO: clarify hostname/domain requirements hostname == get_holo_gw_host() &&
+        if req.method() == Method::GET && path_len == 4 {
+            return Some(SuperProtocol::HolochainHTTP(HcHttpGwRequest {
                 dna_hash: path_components[0].clone(),
-                coordinator_id: path_components[1].clone(),
+                coordinatior_identifier: path_components[1].clone(),
                 zome_name: path_components[2].clone(),
-                function_name: path_components[3].clone(),
+                zome_fn_name: path_components[3].clone(),
                 payload,
             }));
         }

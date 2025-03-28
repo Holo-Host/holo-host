@@ -1,12 +1,12 @@
 use anyhow::Context;
-use async_nats::HeaderName;
 use db_utils::schemas::{
     Workload, WorkloadManifest, WorkloadState, WorkloadStateDiscriminants, WorkloadStatus,
 };
 use futures::StreamExt;
-use nats_utils::types::{HcHttpGwResponse, PublishInfo};
+use nats_utils::types::PublishInfo;
 use nats_utils::{jetstream_client::JsClient, types::JsClientBuilder};
 use std::str::FromStr;
+use std::sync::Arc;
 use workload::types::{WorkloadResult, WorkloadServiceSubjects};
 
 use crate::agent_cli::{self, RemoteArgs, RemoteCommands};
@@ -137,35 +137,12 @@ pub(crate) async fn run(args: RemoteArgs, command: RemoteCommands) -> anyhow::Re
         // 2. send a message to the host-agent to request data from the local hc-http-gw instance
         // 3. wait for the first message on the reply subject
         agent_cli::RemoteCommands::HcHttpGwReq { request } => {
-            let destination_subject = request.nats_destination_subject();
-            let reply_subject = request.nats_reply_subject();
-
-            let response = {
-                let data = serde_json::to_string(&request)?;
-
-                let _ack = nats_client
-                    .js_context
-                    .publish_with_headers(
-                        destination_subject.clone(),
-                        async_nats::HeaderMap::from_iter([(
-                            HeaderName::from_static(nats_utils::jetstream_service::JsStreamService::HEADER_NAME_REPLY_OVERRIDE),
-                            async_nats::HeaderValue::from_str(&reply_subject).unwrap(),
-                        )]),
-                        data.into(),
-                    )
-                    .await?;
-                log::info!("request published");
-
-                let mut response = nats_client.client.subscribe(reply_subject.clone()).await?;
-
-                let msg = response
-                    .next()
-                    .await
-                    .ok_or_else(|| anyhow::anyhow!("got no response on subject {reply_subject}"))?;
-
-                let response: HcHttpGwResponse = serde_json::from_slice(&msg.payload)?;
-                response
-            };
+            let response = nats_utils::types::hc_http_gw_nats_request(
+                Arc::new(nats_client),
+                request,
+                Default::default(),
+            )
+            .await?;
 
             println!("{response:?}");
         }
