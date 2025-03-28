@@ -40,12 +40,14 @@ jobs:
 
   deployDev:
     name: Deploy to Dev
-    needs: 
-      - build
+    needs: build
     uses: ./.github/workflows/deploy_to_digital_ocean.yml
     with:
       environment: dev
       project: holo-dns
       path_to_dockerfile: rust/holo-dns
+      droplets: '["46.101.64.62"]'
     secrets:
       DIGITAL_OCEAN_TOKEN: ${{ secrets.DIGITAL_OCEAN_TOKEN }}
+      SSH_KEY: ${{ secrets.SSH_KEY }}
+      SSH_USERNAME: ${{ secrets.SSH_USERNAME }}

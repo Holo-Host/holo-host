@@ -13,10 +13,20 @@ on:
         required: false
         type: string
         default: "dockerfile"
+      port:
+        required: false
+        type: number
+        default: 8080
+      droplets:
+        required: true
+        type: string
     secrets:
       DIGITAL_OCEAN_TOKEN:
         required: true
-
+      SSH_KEY:
+        required: true
+      SSH_USERNAME:
+        required: true
 env:
   RUST_VERSION: 1.85.0
 
@@ -73,3 +83,35 @@ jobs:
 
       - name: Push Docker Image to DO Container Registry
         run: docker push registry.digitalocean.com/holo-host/${{ inputs.project }}:${{ inputs.environment }}
+
+  update-droplets:
+    name: Update Droplets
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    needs: deploy
+    strategy:
+      matrix:
+        droplet: ${{ inputs.droplets }}
+    steps:
+      - name: Refresh Droplets
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ matrix.droplet }}
+          username: ${{ secrets.SSH_USERNAME }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            # stop and remove old container
+            docker stop ${{ inputs.project }}
+            docker rm ${{ inputs.project }}
+
+            # pull new image and run it
+            docker pull registry.digitalocean.com/holo-host/${{ inputs.project }}:${{ inputs.environment }}
+            docker run -d \
+              --name ${inputs.project} \
+              -p ${inputs.port}:${inputs.port}/tcp \
+              -p ${inputs.port}:${inputs.port}/udp \
+              --env-file .env \
+              registry.digitalocean.com/holo-host/${{ inputs.project }}:${{ inputs.environment }}
+
+            # clean up unused images
+            docker system prune -a
