@@ -36,6 +36,8 @@ let
         hostLocalAddress = "192.168.42.45";
         orchestratorHostAddress = "192.168.42.46";
         orchestratorLocalAddress = "192.168.42.47";
+        holoGwHostAddress = "192.168.42.48";
+        holoGwLocalAddress = "192.168.42.49";
         hostMachineId = "f0b9a2b7a95848389fdb43eda8139569";
 
         bootstrapPort = 50000;
@@ -43,6 +45,7 @@ let
 
         hosts = {
           "${hubLocalAddress}" = [ "dev-hub" ];
+          "${holoGwLocalAddress}" = [ "dev-gw" ];
         };
 
       in
@@ -92,14 +95,23 @@ let
                         password = "anon";
                       }
                       {
+                        user = "host";
+                        password = "$2a$11$n9GIsAxhun3dESl6QAW0feAyBjL4zdsROGyStO8EzbO5gjZg9ApOC";
+                      }
+                      {
                         user = "orchestrator";
                         password = "$2a$11$MhaeMYaGfTKPUphrsDHHwugySr/Z5PSEugH28ctqEYowGXiAq2eOO";
+                      }
+
+                      {
+                        user = "gateway";
+                        password = "$2a$11$K8SLsaSSqDw5LNxvKl64VeGm1FIJREr8Umg0qCrataTB.aAo65QHe";
                       }
                     ];
                   };
                 };
                 system_account = "SYS";
-                no_auth_user = "anon";
+                # no_auth_user = "anon";
 
                 jetstream = {
                   # TODO: use "hub" once we support different domains on hub and leafs
@@ -178,7 +190,7 @@ let
                 extraDaemonizeArgs.host-inventory-disable = false;
 
                 # dev-container
-                nats.hub.url = "wss://dev-hub:${builtins.toString config.containers.dev-hub.config.holo.nats-server.websocket.externalPort}";
+                nats.hub.url = "wss://host:eKonohFee5ahS6pah3iu1a@dev-hub:${builtins.toString config.containers.dev-hub.config.holo.nats-server.websocket.externalPort}";
                 nats.hub.tlsInsecure = true;
 
                 # cloud testing
@@ -236,6 +248,40 @@ let
                   "mongodb-ce"
                 ];
 
+            };
+        };
+
+        containers.dev-gw = {
+          inherit privateNetwork;
+
+          hostAddress = holoGwHostAddress;
+          localAddress = holoGwLocalAddress;
+
+          # `specialArgs` is available in nixpkgs > 22.11
+          # This is useful for importing flakes from modules (see nixpkgs/lib/modules.nix).
+          # specialArgs = { inherit inputs; };
+
+          config =
+            { ... }:
+            {
+              # in case the container shares the host network, don't mess with the firewall rules.
+              networking.firewall.enable = false;
+
+              imports = [
+                flake.nixosModules.holo-gateway
+              ];
+
+              networking.hosts = hosts;
+
+              holo.holo-gateway = {
+                enable = true;
+                logLevel = "trace";
+
+                nats.hub.url = "wss://dev-hub:${builtins.toString config.containers.dev-hub.config.holo.nats-server.websocket.externalPort}";
+                nats.hub.tlsInsecure = true;
+                nats.hub.user = "gateway";
+                nats.hub.passwordFile = builtins.toFile "nats.pw" "B_82eA5#Z7Om2J-LjqRT1B";
+              };
             };
         };
       };

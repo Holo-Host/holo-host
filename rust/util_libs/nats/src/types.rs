@@ -6,6 +6,7 @@ use async_nats::{HeaderMap, Message, ServerAddr};
 use async_trait::async_trait;
 use bytes::Bytes;
 use educe::Educe;
+use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use std::any::Any;
 use std::collections::HashMap;
@@ -438,7 +439,7 @@ impl From<bson::de::Error> for ServiceError {
         )
     }
 }
-#[derive(Deserialize, Clone, clap::Args, Educe)]
+#[derive(Debug, Deserialize, Clone, clap::Args, Educe)]
 #[educe(Default)]
 pub struct NatsRemoteArgs {
     #[clap(long, env = "NATS_PASSWORD_FILE")]
@@ -471,11 +472,16 @@ impl NatsRemoteArgs {
     }
 
     pub fn maybe_user_password(&self) -> anyhow::Result<Option<(String, String)>> {
-        let maybe = match (
-            &self.nats_user,
-            &self.nats_password,
-            &self.nats_password_file,
-        ) {
+        let maybe_user = self
+            .nats_user
+            .clone()
+            .or(self.nats_url.username().map(ToString::to_string));
+        let maybe_password = self
+            .nats_password
+            .clone()
+            .or(self.nats_url.password().map(ToString::to_string));
+
+        let maybe = match (maybe_user, maybe_password, &self.nats_password_file) {
             // incomplete data provided
             (None, None, None)
             | (None, None, Some(_))
@@ -505,15 +511,15 @@ impl NatsRemoteArgs {
 #[derive(Debug, Clone, Serialize, Deserialize, clap::Args)]
 pub struct HcHttpGwRequest {
     #[clap(long)]
-    dna_hash: String,
+    pub dna_hash: String,
     #[clap(long)]
     pub coordinatior_identifier: String,
     #[clap(long)]
-    zome_name: String,
+    pub zome_name: String,
     #[clap(long)]
-    zome_fn_name: String,
+    pub zome_fn_name: String,
     #[clap(long)]
-    payload: String,
+    pub payload: String,
 }
 
 impl HcHttpGwRequest {
@@ -579,6 +585,42 @@ pub struct HcHttpGwResponse {
 pub struct HcHttpGwResponseMsg {
     pub response_subject: Option<String>,
     pub response: HcHttpGwResponse,
+}
+
+/// send a request and asynchronously wait for the reply
+pub async fn hc_http_gw_nats_request(
+    nats_client: Arc<JsClient>,
+    request: HcHttpGwRequest,
+    mut converted_headers: async_nats::HeaderMap,
+) -> anyhow::Result<HcHttpGwResponse> {
+    let destination_subject = request.nats_destination_subject();
+    let reply_subject = request.nats_reply_subject();
+
+    let data = serde_json::to_string(&request)?;
+
+    converted_headers.append(
+        async_nats::HeaderName::from_static(
+            crate::jetstream_service::JsStreamService::HEADER_NAME_REPLY_OVERRIDE,
+        ),
+        async_nats::HeaderValue::from_str(&reply_subject)?,
+    );
+
+    let _ack = nats_client
+        .js_context
+        .publish_with_headers(destination_subject.clone(), converted_headers, data.into())
+        .await?;
+    log::info!("request published");
+
+    let mut response = nats_client.client.subscribe(reply_subject.clone()).await?;
+
+    let msg = response
+        .next()
+        .await
+        .ok_or_else(|| anyhow::anyhow!("got no response on subject {reply_subject}"))?;
+
+    let response: HcHttpGwResponse = serde_json::from_slice(&msg.payload)?;
+
+    Ok(response)
 }
 
 impl CreateTag for HcHttpGwResponseMsg {
