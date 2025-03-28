@@ -46,7 +46,7 @@ jobs:
       environment: dev
       project: holo-dns
       path_to_dockerfile: rust/holo-dns
-      droplets: '["46.101.64.62"]'
+      droplets: '["46.101.64.62"]' # json array
     secrets:
       DIGITAL_OCEAN_TOKEN: ${{ secrets.DIGITAL_OCEAN_TOKEN }}
       SSH_KEY: ${{ secrets.SSH_KEY }}

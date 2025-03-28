@@ -91,7 +91,7 @@ jobs:
     needs: deploy
     strategy:
       matrix:
-        droplet: ${{ inputs.droplets }}
+        droplet: ${{ fromJson(inputs.droplets) }}
     steps:
       - name: Refresh Droplets
         uses: appleboy/ssh-action@v1
