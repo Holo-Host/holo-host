@@ -83,6 +83,7 @@ dev-destroy:
     extra-container destroy dev-hub
     extra-container destroy dev-host
     extra-container destroy dev-orch
+    extra-container destroy dev-gw
 
 dev-cycle:
     #!/usr/bin/env bash
@@ -94,6 +95,7 @@ dev-cycle:
     ./result/bin/container start dev-hub
     ./result/bin/container start dev-host
     ./result/bin/container start dev-orch
+    ./result/bin/container start dev-gw
 
 
 dev-cycle-logs-host-only:
@@ -151,7 +153,7 @@ dev-host-host-agent-remote-hc desired-status +args="":
 dev-hub-host-agent-remote-hc desired-status subject="WORKLOAD.update" +args="":
     #!/usr/bin/env bash
     set -xeE
-    export NATS_URL="wss://dev-hub:443"
+    export NATS_URL="wss://anon:anon@dev-hub:443"
     export NATS_SKIP_TLS_VERIFICATION_DANGER="true"
     just host-agent-remote-hc {{desired-status}} --subject-override {{subject}} --workload-only \
         --host-id "{{HOST_ID_DEV_HOST}}" \
@@ -182,6 +184,7 @@ dev-logs +args="-f -n200":
     --unit holo-orchestrator \
     --unit holo-host-agent \
     --unit hc-http-gw \
+    --unit holo-gateway \
     {{args}}
 
 # (compat) follows the logs for the applications services from the dev containers
@@ -224,21 +227,22 @@ cloud-uninstall-app:
     DONT_WAIT=true just cloud-hub-host-agent-remote-hc removed WORKLOAD.insert
 
 
-dev-host-http-gw-curl-hive:
+dev-http-gw-curl-hive host="http://dev-host:8090":
     #!/usr/bin/env bash
     set -xeE
-    # curl -4v "http://dev-host:8090/{{HUMM_HIVE_DNA_HASH}}/{{WORKLOAD_ID}}/humm_earth_core/init"
-    # echo done
-
     payload="$(base64 -i -w0 <<<'{ "hive_id":"MTc0MTA4ODg5NDA5Ni1iZmVjZGEwZDUxYTMxMjgz", "content_type": "hummhive-extension-story-v1" }')"
-    curl -4v "http://dev-host:8090/{{HUMM_HIVE_DNA_HASH}}/{{WORKLOAD_ID}}/content/list_by_hive_link?payload=$payload"
-    echo "done."
+    curl --http1.1 -4v "{{host}}/{{HUMM_HIVE_DNA_HASH}}/{{WORKLOAD_ID}}/content/list_by_hive_link?payload=$payload"
+    printf ""
+
+
+dev-gw-curl-humm-hive:
+    curl -4v "http://dev-gw/{{HUMM_HIVE_DNA_HASH}}/{{WORKLOAD_ID}}/humm_earth_core/init"
 
 
 dev-hub-host-agent-remote-hc-humm desired-status subject="WORKLOAD.update" +args="":
     #!/usr/bin/env bash
     set -xeE
-    export NATS_URL="wss://dev-hub:443"
+    export NATS_URL="wss://anon:anon@dev-hub:443"
     export NATS_SKIP_TLS_VERIFICATION_DANGER="true"
     just host-agent-remote-hc {{desired-status}} --subject-override {{subject}} --workload-only \
         --host-id "{{HOST_ID_DEV_HOST}}" \
