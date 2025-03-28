@@ -87,7 +87,6 @@ jobs:
   update-droplets:
     name: Update Droplets
     runs-on: ubuntu-latest
-    environment: ${{ inputs.environment }}
     needs: deploy
     strategy:
       matrix:
@@ -114,4 +113,4 @@ jobs:
               registry.digitalocean.com/holo-host/${{ inputs.project }}:${{ inputs.environment }}
 
             # clean up unused images
-            docker system prune -a
+            docker system prune -a -f
