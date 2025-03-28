@@ -5,6 +5,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+clap = { workspace = true }
 anyhow = { workspace = true }
 serde = { workspace = true }
 log = { workspace = true }
@@ -25,7 +26,12 @@ url-parse = "1.0.10"
 http-body = "1.0.1"
 uuid = { version = "1.16.0", features = ["v4"] }
 hyper = { version = "1.6.0", features = ["http1", "http2", "server"] }
-hyper-util = { version = "0.1.10", features = ["http1", "http2", "server", "tokio"] }
+hyper-util = { version = "0.1.10", features = [
+  "http1",
+  "http2",
+  "server",
+  "tokio",
+] }
 holochain_http_gateway = "0.1.0"
 
 [[bin]]

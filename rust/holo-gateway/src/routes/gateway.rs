@@ -1,21 +1,25 @@
 use crate::types::{
     error::HoloHttpGatewayError,
-    http::{self as http_types, ForwardedHTTPRequest, NODE_ID, SuperProtocol},
-    nats as nats_types,
+    http::{ForwardedHTTPRequest, SuperProtocol},
 };
 use bytes::Bytes;
-use futures::StreamExt;
 use http_body_util::Full;
-use hyper::{Request, Response, body::Body};
-use std::fmt::Debug;
+use hyper::{body::Body, Request, Response};
+use nats_utils::jetstream_client::JsClient;
+use std::{fmt::Debug, sync::Arc};
 use tokio::time::{self, Duration};
+use uuid::Uuid;
 
-pub async fn run<B>(req: Request<B>) -> Result<Response<Full<Bytes>>, HoloHttpGatewayError>
+pub async fn run<B>(
+    node_id: &Uuid,
+    nats_client: Arc<JsClient>,
+    req: Request<B>,
+) -> Result<Response<Full<Bytes>>, HoloHttpGatewayError>
 where
     B: Body<Data = Bytes> + Send + Sync + 'static + Debug,
     B::Error: Into<Box<dyn std::error::Error + Send + Sync>>,
 {
-    let onward_request = ForwardedHTTPRequest::from_hyper(&req, &NODE_ID);
+    let onward_request = ForwardedHTTPRequest::from_hyper(&req, node_id);
     let request_headers = onward_request.headers.clone();
     log::info!("Created the Holo Gateway Forward Request. request={onward_request:?}");
 
@@ -25,61 +29,51 @@ where
     if let Some(protocol) = onward_request.super_proto.clone() {
         match protocol {
             SuperProtocol::HolochainHTTP(hc_payload) => {
-                let payload_bytes = serde_json::to_vec(&hc_payload)?;
-                let holo_gatway_subject = hc_payload.into_gateway_request_subject();
-                log::debug!(
-                    "About to send out a Holochain Gateway request via nats. subject={holo_gatway_subject}"
-                );
+                log::debug!("About to send out a Holochain Gateway request via nats");
 
-                let nats_client = nats_types::get_nats_client().await;
-                nats_client
-                    .publish_with_headers(
-                        holo_gatway_subject.clone(),
-                        onward_request.headers,
-                        payload_bytes.into(),
-                    )
-                    .await?;
-
-                let mut subscription = nats_client
-                    .subscribe(hc_payload.into_gateway_reply_subject())
-                    .await?;
-
-                let timeout_duration = Duration::from_secs(180);
-                let response = time::timeout(timeout_duration, subscription.next()).await;
+                let timeout_duration = Duration::from_secs(10);
+                let response = time::timeout(
+                    timeout_duration,
+                    nats_utils::types::hc_http_gw_nats_request(
+                        nats_client,
+                        hc_payload,
+                        request_headers,
+                    ),
+                )
+                .await;
 
                 match response {
-                    Ok(Some(nats_gateway_response)) => {
+                    Ok(Ok(nats_gateway_response)) => {
                         log::debug!("HC Gateway Response via Nats: {nats_gateway_response:?}");
 
-                        // Build response *with headers* from the forwarded request
+                        // Build response *with headers* from the request received via NATS
                         let mut response_builder = Response::builder();
-                        for (key, value) in
-                            http_types::try_add_hyper_headers(&request_headers)?.iter()
-                        {
-                            response_builder = response_builder.header(key, value);
+                        for (key, value) in nats_gateway_response.response_headers.iter() {
+                            response_builder = response_builder.header(key, value.to_vec());
                         }
 
-                        return Ok(response_builder
+                        match response_builder
                             .status(200)
-                            .body(Full::new(nats_gateway_response.payload))
-                            .unwrap_or_else(|_| Response::new(Full::new(Bytes::new()))));
+                            .body(Full::new(nats_gateway_response.response_bytes))
+                        {
+                            Ok(response) => Ok(response),
+                            Err(e) => Err(HoloHttpGatewayError::Internal(format!(
+                                "error assembling response: {e}"
+                            ))),
+                        }
                     }
-                    Ok(None) => {
-                        return Err(HoloHttpGatewayError::Nats(
-                            "NATS subscription closed before receiving a message".to_string(),
-                        ));
-                    }
-                    Err(_) => {
-                        return Err(HoloHttpGatewayError::Internal(
-                            "Timed out waiting for NATS response".to_string(),
-                        ));
-                    }
+                    Ok(Err(e)) => Err(HoloHttpGatewayError::Nats(format!(
+                        "NATS subscription closed before receiving a message: {e}",
+                    ))),
+                    Err(_) => Err(HoloHttpGatewayError::Internal(
+                        "Timed out waiting for NATS response".to_string(),
+                    )),
                 }
             }
         }
-    };
-
-    Err(HoloHttpGatewayError::BadRequest(
-        "Failed to locate required params for HoloHttpGateway request.".to_string(),
-    ))
+    } else {
+        Err(HoloHttpGatewayError::BadRequest(
+            "Failed to locate required params for HoloHttpGateway request.".to_string(),
+        ))
+    }
 }

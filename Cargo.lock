@@ -2230,6 +2230,7 @@ dependencies = [
  "anyhow",
  "async-nats",
  "bytes",
+ "clap 4.5.31",
  "env_logger",
  "futures",
  "holochain_http_gateway",
