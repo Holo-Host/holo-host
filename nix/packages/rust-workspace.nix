@@ -150,6 +150,23 @@ craneLib.buildPackage (
               cargoArtifacts = mkCargoArtifacts src;
             }
           );
+
+        holo-gateway =
+          let
+            src = fileSetForCrate [
+              (craneLib.fileset.commonCargoSources ../../rust/holo-gateway)
+            ];
+          in
+          craneLib.buildPackage (
+            individualCrateArgs
+            // {
+              inherit src;
+
+              pname = "holo-gateway";
+              cargoExtraArgs = "-p holo-gateway";
+              cargoArtifacts = mkCargoArtifacts src;
+            }
+          );
       };
 
     passthru.tests = {
