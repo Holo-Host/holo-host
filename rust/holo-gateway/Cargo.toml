@@ -2,7 +2,7 @@
 name = "holo-gateway"
 description = "A simple, extensible service to gateway HTTP and other traffic over NATS"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
 
 [dependencies]
 anyhow = { workspace = true }
@@ -28,7 +28,16 @@ hyper = { version = "1.6.0", features = ["http1", "http2", "server"] }
 hyper-util = { version = "0.1.10", features = ["http1", "http2", "server", "tokio"] }
 holochain_http_gateway = "0.1.0"
 
+[[bin]]
+name = "holo-gateway"
+path = "src/main.rs"
+
 [dev-dependencies]
 mock_utils = { workspace = true }
 http-body-util = "0.1.2"
 reqwest = { version = "0.12", features = ["json"] }
+
+[profile.release]
+lto = true
+strip = true
+codegen-units = 1
