@@ -1,0 +1,6 @@
+{
+	"gateway.web-bridge.holo.host": {
+		"aaaa": [ "::1" ],
+		"a": [ "127.0.0.1" ]
+	}
+}
