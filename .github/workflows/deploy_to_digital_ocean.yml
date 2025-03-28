@@ -106,7 +106,7 @@ jobs:
             # pull new image and run it
             docker pull registry.digitalocean.com/holo-host/${{ inputs.project }}:${{ inputs.environment }}
             docker run -d \
-              --name ${inputs.project} \
+              --name ${{ inputs.project }} \
               -p ${{ inputs.port }}:${{ inputs.port }}/tcp \
               -p ${{ inputs.port }}:${{ inputs.port }}/udp \
               --env-file .env \
