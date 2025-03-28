@@ -85,28 +85,16 @@ dev-destroy:
     extra-container destroy dev-orch
     extra-container destroy dev-gw
 
-dev-cycle:
+dev-cycle containers="dev-hub dev-host dev-orch dev-gw":
     #!/usr/bin/env bash
     set -xeE
     nix build .\#extra-container-dev
     just dev-destroy
     # ./result/bin/container build
     ./result/bin/container create
-    ./result/bin/container start dev-hub
-    ./result/bin/container start dev-host
-    ./result/bin/container start dev-orch
-    ./result/bin/container start dev-gw
-
-
-dev-cycle-logs-host-only:
-    #!/usr/bin/env bash
-    set -xeE
-    nix build .\#extra-container-dev
-    just dev-destroy
-    # ./result/bin/container build
-    ./result/bin/container create
-    ./result/bin/container start dev-host
-    just dev-logs
+    for container in {{containers}}; do
+        ./result/bin/container start "$container"
+    done
 
 host-agent-remote +args="":
     #!/usr/bin/env bash
@@ -165,6 +153,8 @@ cloud-hub-host-agent-remote-hc desired-status subject="WORKLOAD.update" +args=""
     #!/usr/bin/env bash
     set -xeE
     export NATS_URL="wss://nats-server-0.holotest.dev:443"
+    export NATS_USER="${NATS_USER:-anon}"
+    export NATS_PASSWORD="${NATS_PASSWORD:-anon}"
     just host-agent-remote-hc {{desired-status}} --subject-override {{subject}} --workload-only \
         {{args}}
 
@@ -202,8 +192,8 @@ dev-logs-compat +args="-f -n100":
 
 
 # re-create the dev containers and start following the relevant logs
-dev-cycle-logs:
-    just dev-cycle
+dev-cycle-logs +containers="":
+    just dev-cycle {{containers}}
     just dev-logs
 
 # re-create the dev containers and start following the relevant logs in compat mode
@@ -227,11 +217,11 @@ cloud-uninstall-app:
     DONT_WAIT=true just cloud-hub-host-agent-remote-hc removed WORKLOAD.insert
 
 
-dev-http-gw-curl-hive host="http://dev-host:8090":
+dev-http-gw-curl-hive host="http://dev-host:8090" +curl-args="--http1.1 -4v":
     #!/usr/bin/env bash
     set -xeE
     payload="$(base64 -i -w0 <<<'{ "hive_id":"MTc0MTA4ODg5NDA5Ni1iZmVjZGEwZDUxYTMxMjgz", "content_type": "hummhive-extension-story-v1" }')"
-    curl --http1.1 -4v "{{host}}/{{HUMM_HIVE_DNA_HASH}}/{{WORKLOAD_ID}}/content/list_by_hive_link?payload=$payload"
+    curl {{curl-args}} "{{host}}/{{HUMM_HIVE_DNA_HASH}}/{{WORKLOAD_ID}}/content/list_by_hive_link?payload=$payload"
     printf ""
 
 
@@ -276,3 +266,4 @@ dev-host-http-gw-remote-hive nats-url="nats://dev-hub":
       --zome-name "content" \
       --zome-fn-name "list_by_hive_link" \
       --payload "$payload"
+
