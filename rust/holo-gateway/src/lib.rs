@@ -1,4 +1,3 @@
-pub mod nats_client;
 pub mod routes;
 pub mod types;
 
