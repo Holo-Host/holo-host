@@ -1,0 +1,27 @@
+[package]
+name = "holo-dns"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "holo-dns"
+path = "bin/holo-dns.rs"
+
+
+[dependencies]
+dns-server = "0.2.4"
+env_logger = { workspace = true }
+log = { workspace = true }
+permit = "0.2.1"
+serde = { workspace = true }
+serde_derive = { workspace = true }
+serde_json = { workspace = true }
+signal-hook = "0.3.17"
+tokio = { workspace = true }
+mongodb = { workspace = true }
+thiserror = { workspace = true }
+db_utils = { path = "../util_libs/db" }
+nats_utils = { path = "../util_libs/nats" }
+
+[dev-dependencies]
+tempfile = "3.19.0"
