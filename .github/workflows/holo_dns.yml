@@ -7,7 +7,6 @@ on:
   push:
     branches:
       - main
-      - 142-dns-deployment
 
 env:
   RUST_VERSION: 1.85.0
