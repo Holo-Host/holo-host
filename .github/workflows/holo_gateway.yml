@@ -1,0 +1,50 @@
+name: Holo Gateway
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+      - 143-gateway-deployment
+
+env:
+  RUST_VERSION: 1.85.0
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Set up Rust
+        uses: hecrj/setup-rust-action@v2
+        with:
+          rust-version: ${{ env.RUST_VERSION }}
+          
+      - name: Cache Rust Dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo
+            ./target
+          key: rust-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            rust-
+
+      - name: Build Project
+        run: cargo build --verbose
+
+  deployDev:
+    name: Deploy to Dev
+    needs: build
+    uses: ./.github/workflows/deploy_to_digital_ocean.yml
+    with:
+      environment: dev
+      project: holo-gateway
+      path_to_dockerfile: rust/holo-gateway
+    secrets:
+      DIGITAL_OCEAN_TOKEN: ${{ secrets.DIGITAL_OCEAN_TOKEN }}
