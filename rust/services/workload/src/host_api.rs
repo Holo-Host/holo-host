@@ -318,7 +318,15 @@ impl HostWorkloadApi {
                     let extra_container_path =
                         provision_extra_container_closure_path(&workload_path_toplevel.into())?;
 
-                    bash(&format!("extra-container destroy {extra_container_path}")).await?;
+                    let extra_container_subcmd = match desired_state {
+                        WorkloadState::Deleted => "destroy",
+                        _ => "stop",
+                    };
+
+                    bash(&format!(
+                        "extra-container {extra_container_subcmd} {extra_container_path}"
+                    ))
+                    .await?;
 
                     if Path::new(&extra_container_path).exists() {
                         log::debug!("removing container path at {extra_container_path}");

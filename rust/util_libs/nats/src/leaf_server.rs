@@ -38,6 +38,7 @@ pub struct LoggingOptions {
 #[skip_serializing_none]
 #[derive(Debug, Clone, Serialize)]
 pub struct LeafNodeRemote {
+    // TODO: Leafnode URL (URL protocol should be nats-leaf).
     pub url: String,
     pub credentials: Option<PathBuf>,
     pub tls: LeafNodeRemoteTlsConfig,
