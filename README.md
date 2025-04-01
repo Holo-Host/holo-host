@@ -55,6 +55,24 @@ Reusable Pulumi modules with examples
 
 The CI system is driven by [buildbot-nix](https://github.com/nix-community/buildbot-nix/).
 
+### Checks and building them locally
+
+CI builds all Nix derivations exposed under the `checks` flake output.
+
+While the command is called `nix build`, it's also used to execute (i.e. run) various forms of tests.
+
+E.g., this runs the [holo-agent integration](nix/checks/holo-agent-integration-nixos.nix) test defined as NixOS VM test with verbose output:
+
+```
+nix build -vL .#checks.x86_64-linux.holo-agent-integration-nixos
+```
+
+Or this runs the [`extra-container-holochain` integration test](nix/packages/extra-container-holochain.nix#L123), which is another way to define a NixOS VM test that's attached defined in the package file directly.
+
+```
+nix build -vL .#checks.x86_64-linux.pkgs-extra-container-holochain-integration
+```
+
 ## Development and Conventions
 
 ### Formatting

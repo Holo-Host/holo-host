@@ -35,6 +35,15 @@
         rust-overlay.follows = "rust-overlay";
       };
     };
+
+    hc-http-gw = {
+      url = "github:holochain/hc-http-gw";
+      inputs = {
+        holonix.follows = "holonix_0_4";
+        nixpkgs.follows = "nixpkgs";
+        rust-overlay.follows = "rust-overlay";
+      };
+    };
   };
 
   outputs =

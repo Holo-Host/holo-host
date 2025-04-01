@@ -6,6 +6,7 @@ use futures::StreamExt;
 use nats_utils::types::PublishInfo;
 use nats_utils::{jetstream_client::JsClient, types::JsClientBuilder};
 use std::str::FromStr;
+use std::sync::Arc;
 use workload::types::{WorkloadResult, WorkloadServiceSubjects};
 
 use crate::agent_cli::{self, RemoteArgs, RemoteCommands};
@@ -129,6 +130,21 @@ pub(crate) async fn run(args: RemoteArgs, command: RemoteCommands) -> anyhow::Re
                 log::info!("waiting until ctrl+c is pressed.");
                 tokio::signal::ctrl_c().await?;
             }
+        }
+
+        // this immitates what the public holo-gateway is going to do
+        // 1. start subscribing on a subject that's used to receive async replies subsequently
+        // 2. send a message to the host-agent to request data from the local hc-http-gw instance
+        // 3. wait for the first message on the reply subject
+        agent_cli::RemoteCommands::HcHttpGwReq { request } => {
+            let response = nats_utils::types::hc_http_gw_nats_request(
+                Arc::new(nats_client),
+                request,
+                Default::default(),
+            )
+            .await?;
+
+            println!("{response:?}");
         }
     }
 
