@@ -1,0 +1,15 @@
+FROM rust:1.85.0 AS builder
+
+WORKDIR /usr/src
+COPY . .
+
+RUN --mount=type=cache,target=/root/.cargo \
+    --mount=type=cache,target=/usr/src/target \
+    cargo build --release && \
+    cp /usr/src/target/release/holo-gateway /usr/src/build
+
+FROM gcr.io/distroless/cc
+COPY --from=builder /usr/src/build /holo-gateway
+
+EXPOSE 8000
+CMD ["/holo-gateway"]
