@@ -152,7 +152,7 @@ impl JsClient {
 
         let mut connect_options = async_nats::ConnectOptions::new()
             .name(&p.name)
-            // required for websocket connections
+            .retry_on_initial_connect()
             .reconnect_delay_callback({
                 let nats_url = nats_url.clone();
                 move |i| {
