@@ -77,19 +77,20 @@ dev-ham-find-installed-app:
 dev-hcterm bootstrap-url="http://dev-hub:50000":
     hcterm --bootstrap-url "{{bootstrap-url}}" --dna-hash "{{HUMM_HIVE_DNA_HASH}}"
 
-dev-destroy:
+CONTAINERS := "dev-hub dev-orch dev-gw dev-host0 dev-host1 dev-host2"
+
+dev-destroy +containers=CONTAINERS:
     #!/usr/bin/env bash
     set -xeE
-    extra-container destroy dev-hub
-    extra-container destroy dev-host
-    extra-container destroy dev-orch
-    extra-container destroy dev-gw
+    for container in {{containers}}; do
+        extra-container destroy "${container}"
+    done
 
-dev-cycle containers="dev-hub dev-host dev-orch dev-gw":
+dev-cycle +containers=CONTAINERS:
     #!/usr/bin/env bash
     set -xeE
     nix build .\#extra-container-dev
-    just dev-destroy
+    just dev-destroy {{containers}}
     # ./result/bin/container build
     ./result/bin/container create
     for container in {{containers}}; do
@@ -107,7 +108,9 @@ host-agent-remote +args="":
 
 
 HOST_ID_STEVEEJ_HP := "5ba02d5ca17b416195e56e4f574644ba"
-HOST_ID_DEV_HOST := "f0b9a2b7a95848389fdb43eda8139569"
+HOST_ID_DEV_HOST0 := `nix eval --raw .\#extra-container-dev.passthru.settings.host0MachineId`
+HOST_ID_DEV_HOST1 := `nix eval --raw .\#extra-container-dev.passthru.settings.host1MachineId`
+HOST_ID_DEV_HOST2 := `nix eval --raw .\#extra-container-dev.passthru.settings.host2MachineId`
 
 host-agent-remote-hc desired-status +args="":
     #!/usr/bin/env bash
@@ -121,6 +124,7 @@ host-agent-remote-hc desired-status +args="":
 
     just host-agent-remote holochain-dht-v1-workload \
         --workload-id-override "{{WORKLOAD_ID}}" \
+        --workload-assigned-hosts-override \
         --desired-status "{{desired-status}}" \
         --happ-binary-url "{{test-happ-url}}" \
         --network-seed "holo" {{args}} \
@@ -132,7 +136,7 @@ dev-host-host-agent-remote-hc desired-status +args="":
     set -xeE
     export NATS_URL="nats://dev-host"
     just host-agent-remote-hc {{desired-status}} \
-        --host-id "{{HOST_ID_DEV_HOST}}" \
+        --host-id "{{HOST_ID_DEV_HOST0}}" \
         --bootstrap-server-url "http://dev-hub:50000" \
         --signal-server-url "ws://dev-hub:50001" {{args}}
         # TODO: stun server?
@@ -144,7 +148,7 @@ dev-hub-host-agent-remote-hc desired-status subject="WORKLOAD.update" +args="":
     export NATS_URL="wss://anon:anon@dev-hub:443"
     export NATS_SKIP_TLS_VERIFICATION_DANGER="true"
     just host-agent-remote-hc {{desired-status}} --subject-override {{subject}} --workload-only \
-        --host-id "{{HOST_ID_DEV_HOST}}" \
+        --host-id "{{HOST_ID_DEV_HOST0}}" \
         --bootstrap-server-url "http://dev-hub:50000" \
         --signal-server-url "ws://dev-hub:50001" \
         {{args}}
@@ -190,9 +194,8 @@ dev-logs-compat +args="-f -n100":
     echo press CTRL+C **twice** to exit
     waitpid $pid_hostagent $pid_orchestrator
 
-
 # re-create the dev containers and start following the relevant logs
-dev-cycle-logs +containers="":
+dev-cycle-logs +containers=CONTAINERS:
     just dev-cycle {{containers}}
     just dev-logs
 
@@ -235,7 +238,7 @@ dev-hub-host-agent-remote-hc-humm desired-status subject="WORKLOAD.update" +args
     export NATS_URL="wss://anon:anon@dev-hub:443"
     export NATS_SKIP_TLS_VERIFICATION_DANGER="true"
     just host-agent-remote-hc {{desired-status}} --subject-override {{subject}} --workload-only \
-        --host-id "{{HOST_ID_DEV_HOST}}" \
+        --host-id "{{HOST_ID_DEV_HOST0}}" \
         --bootstrap-server-url "https://bootstrap.holo.host" \
         --signal-server-url "wss://sbd.holo.host" \
         {{args}}
