@@ -40,6 +40,7 @@ pub(crate) async fn run(args: RemoteArgs, command: RemoteCommands) -> anyhow::Re
             workload_only,
             subject_override,
             maybe_wait_on_subject,
+            assigned_host_ids_override,
         } => {
             let id: bson::oid::ObjectId = workload_id_override.unwrap_or_default();
 
@@ -63,7 +64,11 @@ pub(crate) async fn run(args: RemoteArgs, command: RemoteCommands) -> anyhow::Re
                 assigned_developer: Default::default(),
                 version: Default::default(),
                 min_hosts: 1,
-                assigned_hosts: Default::default(),
+                max_hosts: assigned_host_ids_override
+                    .as_ref()
+                    .map(|ids| ids.len() as i32)
+                    .unwrap_or(1),
+                assigned_hosts: assigned_host_ids_override.unwrap_or_default(),
 
                 ..Default::default() // ---
                                      // these don't have defaults on their own

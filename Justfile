@@ -124,7 +124,6 @@ host-agent-remote-hc desired-status +args="":
 
     just host-agent-remote holochain-dht-v1-workload \
         --workload-id-override "{{WORKLOAD_ID}}" \
-        --workload-assigned-hosts-override \
         --desired-status "{{desired-status}}" \
         --happ-binary-url "{{test-happ-url}}" \
         --network-seed "holo" {{args}} \
@@ -206,6 +205,12 @@ dev-cycle-logs-compat:
 
 
 dev-install-app:
+    DONT_WAIT=true just dev-hub-host-agent-remote-hc reported WORKLOAD.add
+    just dev-hub-host-agent-remote-hc running WORKLOAD.insert
+
+dev-install-app-override:
+    #!/usr/bin/env bash
+    export ASSIGNED_HOST_IDS_OVERRIDE="{{HOST_ID_DEV_HOST0}},{{HOST_ID_DEV_HOST2}}"
     DONT_WAIT=true just dev-hub-host-agent-remote-hc reported WORKLOAD.add
     just dev-hub-host-agent-remote-hc running WORKLOAD.insert
 
