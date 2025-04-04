@@ -195,6 +195,9 @@ pub enum RemoteCommands {
         #[arg(long, default_value = "WORKLOAD.>")]
         /// If provided, the CLI will subscribe to the given subject on the remote NATS after publishing the workload message.
         maybe_wait_on_subject: Option<String>,
+
+        #[arg(long, env = "ASSIGNED_HOST_IDS_OVERRIDE", value_delimiter = ',')]
+        assigned_host_ids_override: Option<Vec<ObjectId>>,
     },
 
     HcHttpGwReq {

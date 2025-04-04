@@ -402,6 +402,8 @@ pub struct Workload {
     pub version: SemVer,
     /// Minimum number of hosts required
     pub min_hosts: i32,
+    /// Maximum number of hosts required
+    pub max_hosts: i32,
     /// System requirements for the workload
     pub system_specs: SystemSpecs,
     /// List of hosts this workload is assigned to
@@ -497,6 +499,7 @@ impl Default for Workload {
             version: semver,
             assigned_developer: ObjectId::new(),
             min_hosts: 1,
+            max_hosts: 3,
             system_specs: SystemSpecs {
                 capacity: Capacity { drive: 1, cores: 1 },
                 avg_network_speed: 0,

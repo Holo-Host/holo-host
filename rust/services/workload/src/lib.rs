@@ -78,7 +78,6 @@ where
     async fn process_request<T, Fut>(
         &self,
         msg: Arc<Message>,
-        desired_state: WorkloadState,
         error_state: impl Fn(String) -> WorkloadState + Send + Sync,
         cb_fn: impl Fn(T) -> Fut + Send + Sync,
     ) -> Result<WorkloadApiResult, ServiceError>
@@ -95,7 +94,7 @@ where
                     result: WorkloadResult {
                         status: WorkloadStatus {
                             id: None,
-                            desired: desired_state,
+                            desired: WorkloadState::Unknown("cannot know this here".to_string()),
                             actual: error_state(format!("error converting message {msg:?}: {e}")),
                             payload: Default::default(),
                         },
@@ -122,7 +121,7 @@ where
                     result: WorkloadResult {
                         status: WorkloadStatus {
                             id: None,
-                            desired: desired_state,
+                            desired: WorkloadState::Unknown("cannot know this here".to_string()),
                             actual: error_state(format!("{}: {}", err_msg, e)),
                             payload: Default::default(),
                         },

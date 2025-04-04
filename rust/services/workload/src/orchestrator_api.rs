@@ -57,7 +57,6 @@ impl OrchestratorWorkloadApi {
         log::debug!("Incoming message for 'WORKLOAD.add'");
         self.process_request(
             msg,
-            WorkloadState::Reported,
             WorkloadState::Error,
             |mut workload: schemas::Workload| async move {
                 let mut status = WorkloadStatus {
@@ -96,7 +95,6 @@ impl OrchestratorWorkloadApi {
 
         self.process_request(
             msg,
-            WorkloadState::Updating,
             WorkloadState::Error,
             |mut workload: schemas::Workload| async move {
                 let status = WorkloadStatus {
@@ -146,64 +144,59 @@ impl OrchestratorWorkloadApi {
         msg: Arc<Message>,
     ) -> Result<WorkloadApiResult, ServiceError> {
         log::debug!("Incoming message for 'WORKLOAD.delete'");
-        self.process_request(
-            msg,
-            WorkloadState::Deleted,
-            WorkloadState::Error,
-            |workload: Workload| async move {
-                let workload_id = if let Some(workload_id) = workload._id {
-                    workload_id
-                } else {
-                    return Ok(WorkloadApiResult {
-                        result: WorkloadResult {
-                            status: WorkloadStatus {
-                                ..workload.status.clone()
-                            },
-                            workload: Some(workload),
-                        },
-                        maybe_response_tags: None,
-                    });
-                };
-
-                let status = WorkloadStatus {
-                    id: Some(workload_id),
-                    desired: WorkloadState::Removed,
-                    actual: WorkloadState::Deleted,
-                    payload: Default::default(),
-                };
-
-                let updated_status_doc = bson::to_bson(&status).map_err(|e| {
-                    ServiceError::internal(
-                        e.to_string(),
-                        Some("Failed to serialize workload status".to_string()),
-                    )
-                })?;
-
-                self.workload_collection
-                    .update_one_within(
-                        doc! { "_id":  workload_id },
-                        UpdateModifications::Document(doc! {
-                            "$set": {
-                                "status": updated_status_doc
-                            }
-                        }),
-                        true,
-                    )
-                    .await?;
-
-                log::info!(
-                    "Successfully deleted workload. MongodDB Workload ID={:?}",
-                    workload_id
-                );
-                Ok(WorkloadApiResult {
+        self.process_request(msg, WorkloadState::Error, |workload: Workload| async move {
+            let workload_id = if let Some(workload_id) = workload._id {
+                workload_id
+            } else {
+                return Ok(WorkloadApiResult {
                     result: WorkloadResult {
-                        status,
-                        workload: None,
+                        status: WorkloadStatus {
+                            ..workload.status.clone()
+                        },
+                        workload: Some(workload),
                     },
                     maybe_response_tags: None,
-                })
-            },
-        )
+                });
+            };
+
+            let status = WorkloadStatus {
+                id: Some(workload_id),
+                desired: WorkloadState::Removed,
+                actual: WorkloadState::Deleted,
+                payload: Default::default(),
+            };
+
+            let updated_status_doc = bson::to_bson(&status).map_err(|e| {
+                ServiceError::internal(
+                    e.to_string(),
+                    Some("Failed to serialize workload status".to_string()),
+                )
+            })?;
+
+            self.workload_collection
+                .update_one_within(
+                    doc! { "_id":  workload_id },
+                    UpdateModifications::Document(doc! {
+                        "$set": {
+                            "status": updated_status_doc
+                        }
+                    }),
+                    true,
+                )
+                .await?;
+
+            log::info!(
+                "Successfully deleted workload. MongodDB Workload ID={:?}",
+                workload_id
+            );
+            Ok(WorkloadApiResult {
+                result: WorkloadResult {
+                    status,
+                    workload: None,
+                },
+                maybe_response_tags: None,
+            })
+        })
         .await
     }
 
@@ -215,31 +208,9 @@ impl OrchestratorWorkloadApi {
         log::debug!("Incoming message for 'WORKLOAD.insert'");
         self.process_request(
             msg,
-            WorkloadState::Installed,
             WorkloadState::Error,
             |workload: schemas::Workload| async move {
                 log::debug!("New workload to assign. Workload={:#?}", workload);
-
-                // Perform sanity check to ensure workload is not already assigned to a host and if so, exit fn
-                if !workload.assigned_hosts.is_empty() {
-                    log::warn!("Attempted to assign host for new workload, but host already exists.");
-                    return Ok(WorkloadApiResult {
-                        result: WorkloadResult {
-                            status: workload.status.clone(),
-                            workload: Some(workload),
-                        },
-                        maybe_response_tags: None,
-                    });
-                }
-
-                // call mongodb to get host collection to get hosts that meet the capacity requirements
-                let eligible_hosts = self
-                    .find_hosts_meeting_workload_criteria(workload.clone(), None)
-                    .await?;
-                log::debug!(
-                    "Eligible hosts for new workload. MongodDB Hosts={:?}",
-                    eligible_hosts
-                );
 
                 let workload_id = workload.clone()._id.ok_or_else(|| {
                     ServiceError::internal(
@@ -248,8 +219,29 @@ impl OrchestratorWorkloadApi {
                     )
                 })?;
 
-                // Update the selected host records with the assigned Workload ID
+                let pre_assigned_hosts = self.fetch_hosts_assigned_to_workload(workload_id).await
+                    .map_err(|e| {
+                        ServiceError::internal(
+                            e.to_string(),
+                            Some(format!("Failed to fetch assigned hosts for workload {workload_id}")),
+                        )
+                    })
+                ?;
+                log::debug!("workload inserted with pre-assigned hosts: {pre_assigned_hosts:?}");
+
+                // call mongodb to get host collection to get hosts that meet the capacity requirements
+                let eligible_hosts = self
+                    .find_hosts_meeting_workload_criteria(workload.clone(), Some(pre_assigned_hosts))
+                    .await?;
+                log::debug!(
+                    "Eligible hosts for new workload. MongodDB Hosts={:?}",
+                    eligible_hosts
+                );
+
                 let eligible_host_ids: Vec<ObjectId> = eligible_hosts.iter().map(|h| h._id).collect();
+
+
+                // Update the selected host records with the assigned Workload ID
                 let assigned_host_ids = self
                     .assign_workload_to_hosts(workload_id, eligible_host_ids, workload.min_hosts)
                     .await
@@ -258,7 +250,8 @@ impl OrchestratorWorkloadApi {
                             e.to_string(),
                             Some("Failed to assign workload to hosts".to_string()),
                         )
-                    })?;
+                    })
+                    ?;
 
                 // Update the Workload Collection with the assigned Host ID
                 let new_status = WorkloadStatus {
@@ -545,6 +538,7 @@ impl OrchestratorWorkloadApi {
     }
 
     // Verifies that a host meets the workload criteria
+    // TODO(design): introduce the notion of _free_ host resources. currently it looks at the _total_ resources.
     pub fn verify_host_meets_workload_criteria(
         &self,
         assigned_host_inventory: &HoloInventory,
@@ -589,14 +583,13 @@ impl OrchestratorWorkloadApi {
         Ok(())
     }
 
-    // Looks through existing hosts to find possible hosts for a given workload
-    // returns the minimum number of hosts required for workload
+    // Looks through existing hosts to find possible hosts for a given workload.
+    // returns all hosts eligible for the workload.
     async fn find_hosts_meeting_workload_criteria(
         &self,
         workload: Workload,
         maybe_existing_hosts: Option<Vec<Host>>,
     ) -> Result<Vec<HostIdJSON>, ServiceError> {
-        let mut needed_host_count = workload.min_hosts;
         let mut still_eligible_host_ids: Vec<HostIdJSON> = vec![];
 
         if let Some(hosts) = maybe_existing_hosts {
@@ -608,7 +601,7 @@ impl OrchestratorWorkloadApi {
                             ._id
                             .ok_or_else(|| {
                                 ServiceError::internal(
-                                    format!("No `_id` found for workload. Workload={:?}", workload),
+                                    format!("No `_id` found for host. Host={:?}", h),
                                     Some(
                                         "Unable to proceed verifying host eligibility.".to_string(),
                                     ),
@@ -625,7 +618,6 @@ impl OrchestratorWorkloadApi {
                     }
                 })
                 .collect();
-            needed_host_count -= still_eligible_host_ids.len() as i32;
         }
 
         let pipeline = vec![
@@ -639,7 +631,7 @@ impl OrchestratorWorkloadApi {
             doc! {
                 // the maximum number of hosts returned should be the minimum hosts required by workload
                 // sample randomized results and always return back at least 1 result
-                "$sample": { "size": std::cmp::max(needed_host_count, 1) }
+                "$sample": { "size": workload.max_hosts - (still_eligible_host_ids.len() as i32) }
             },
             doc! {
                 // only return the `host._id` and `host.device_id` fields
