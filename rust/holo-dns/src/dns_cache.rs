@@ -46,11 +46,19 @@ pub static DNS_CACHE: LazyLock<Arc<RwLock<HashMap<String, DnsCacheItem>>>> =
     LazyLock::new(|| Arc::new(RwLock::new(HashMap::new())));
 
 /// DnsCacheItem just represents a set of cached answers for a given query on the [DNS_CACHE]
-/// cache.
+/// cache. The cache itself is a HashMap of [DnsCacheItem]s with the key as an FQDN. We're
+/// deliberately conflating all RRs under a particular FQDN, and not enforcing some DNS strictness
+/// -- the dns-server crate enforces the right data type and we should make sure that the cache
+/// input is sane. Being flexible here gives us more options when it comes to testing and other
+/// nefarious deeds in the future.
+///
+/// The primary outcome of this is that the vectors below could be empty for any given record type.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DnsCacheItem {
     pub a: Vec<String>,
     pub aaaa: Vec<String>,
+    pub cname: Vec<String>,
+    pub ns: Vec<String>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -110,6 +118,8 @@ async fn mongo_db_inner(input: &MongoDbSourceParms) -> Result<(), CacheError> {
                             DnsCacheItem {
                                 a: service.a_addrs.clone(),
                                 aaaa: service.aaaa_addrs.clone(),
+                                cname: service.cname_addrs.clone(),
+                                ns: service.ns_addrs.clone(),
                             },
                         );
                     }

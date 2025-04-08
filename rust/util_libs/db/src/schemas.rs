@@ -567,6 +567,10 @@ pub struct PublicService {
     pub aaaa_addrs: Vec<String>,
     /// public IPv4 addresses the service is available on.
     pub a_addrs: Vec<String>,
+    /// FQDNs for CNAMES
+    pub cname_addrs: Vec<String>,
+    /// FQDNs for answers to NS record questions.
+    pub ns_addrs: Vec<String>,
 }
 
 /// Default implementation for PublicService to help initialise a few fields.
@@ -584,6 +588,8 @@ impl Default for PublicService {
             service_name: "".to_string(),
             aaaa_addrs: vec![],
             a_addrs: vec![],
+            cname_addrs: vec![],
+            ns_addrs: vec![],
         }
     }
 }

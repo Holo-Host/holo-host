@@ -51,6 +51,8 @@ mod test {
             dns_cache::DnsCacheItem {
                 a: vec!["127.0.0.1".to_string()],
                 aaaa: vec!["::1".to_string()],
+                cname: vec!["x-cname-test.dna.holo.host".to_string()],
+                ns: vec!["x-service-test.dna.holo.host".to_string()],
             },
         );
         file.seek(SeekFrom::Start(0)).unwrap();

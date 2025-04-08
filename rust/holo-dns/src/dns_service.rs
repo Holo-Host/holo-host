@@ -1,4 +1,4 @@
-use dns_server::{DnsClass, DnsQuestion, DnsRecord, DnsType};
+use dns_server::{DnsClass, DnsName, DnsQuestion, DnsRecord, DnsType};
 use log::{debug, info};
 use permit::Permit;
 
@@ -45,6 +45,34 @@ fn resolver_handler(question: &DnsQuestion) -> Vec<DnsRecord> {
                 // Add names to ret
                 for rec in cache[&question.name.to_string()].aaaa.iter() {
                     ret.push(DnsRecord::AAAA(question.name.clone(), rec.parse().unwrap()));
+                }
+            }
+            debug!("ret: {:?}", ret);
+            ret
+        }
+        DnsType::CNAME => {
+            let mut ret = vec![];
+            debug!("Confirming CNAME record lookup for {:?}", question);
+            if cache.contains_key(&question.name.to_string()) {
+                for rec in cache[&question.name.to_string()].cname.iter() {
+                    ret.push(DnsRecord::CNAME(
+                        question.name.clone(),
+                        DnsName::new(rec).unwrap(),
+                    ));
+                }
+            }
+            debug!("ret: {:?}", ret);
+            ret
+        }
+        DnsType::NS => {
+            let mut ret = vec![];
+            debug!("Confirming NS record lookup for {:?}", question);
+            if cache.contains_key(&question.name.to_string()) {
+                for rec in cache[&question.name.to_string()].ns.iter() {
+                    ret.push(DnsRecord::NS(
+                        question.name.clone(),
+                        DnsName::new(rec).unwrap(),
+                    ));
                 }
             }
             debug!("ret: {:?}", ret);
