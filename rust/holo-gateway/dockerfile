@@ -12,6 +12,4 @@ FROM gcr.io/distroless/cc
 COPY --from=builder /usr/src/build /holo-gateway
 
 EXPOSE 8000
-
-# Use JSON array format for CMD to pass environment variables at runtime
-CMD ["/holo-gateway", "--nats-password-file", "$NATS_PASSWORD_FILE", "--nats-password", "$NATS_PASSWORD", "--nats-user", "$NATS_USER", "--nats-url", "$NATS_URL"]
+CMD ["/holo-gateway"]
