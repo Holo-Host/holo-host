@@ -1,34 +1,14 @@
-# Use the Rust image to build the binary
 FROM rust:1.85.0 AS builder
-
-# Install musl-tools and dependencies
-RUN apt-get update && apt-get install -y \
-    musl-tools \
-    musl-dev \
-    curl \
-    pkg-config && \
-    rustup target add x86_64-unknown-linux-musl
-
-# Download and install musl-compatible OpenSSL
-RUN curl -LO https://musl.libc.org/releases/musl-1.2.5.tar.gz && \
-    tar -xzf musl-1.2.5.tar.gz && \
-    mv musl-1.2.5 /usr/local/musl
-
-# Set environment variables for musl-compatible OpenSSL
-ENV OPENSSL_DIR=/usr/local/musl \
-    OPENSSL_LIB_DIR=/usr/local/musl/lib \
-    OPENSSL_INCLUDE_DIR=/usr/local/musl/include
 
 WORKDIR /usr/src
 COPY . .
 
-# Build the binary with musl for static linking
-RUN CC=musl-gcc \
-    cargo build --release --target x86_64-unknown-linux-musl && \
-    cp /usr/src/target/x86_64-unknown-linux-musl/release/holo-gateway /usr/src/build
+RUN --mount=type=cache,target=/root/.cargo \
+    --mount=type=cache,target=/usr/src/target \
+    cargo build --release && \
+    cp /usr/src/target/release/holo-gateway /usr/src/build
 
-# Use a minimal base image for the final container
-FROM gcr.io/distroless/static:nonroot
+FROM gcr.io/distroless/cc
 COPY --from=builder /usr/src/build /holo-gateway
 
 EXPOSE 8000
