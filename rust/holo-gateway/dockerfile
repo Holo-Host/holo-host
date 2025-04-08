@@ -3,12 +3,16 @@ FROM rust:1.85.0 AS builder
 WORKDIR /usr/src
 COPY . .
 
+# Install musl-tools for static linking
+RUN apt-get update && apt-get install -y musl-tools && \
+    rustup target add x86_64-unknown-linux-musl
+
 RUN --mount=type=cache,target=/root/.cargo \
     --mount=type=cache,target=/usr/src/target \
-    cargo build --release && \
-    cp /usr/src/target/release/holo-gateway /usr/src/build
+    cargo build --release --target x86_64-unknown-linux-musl && \
+    cp /usr/src/target/x86_64-unknown-linux-musl/release/holo-gateway /usr/src/build
 
-FROM gcr.io/distroless/cc
+FROM gcr.io/distroless/static:nonroot
 COPY --from=builder /usr/src/build /holo-gateway
 
 EXPOSE 8000
