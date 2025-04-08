@@ -4,7 +4,7 @@ WORKDIR /usr/src
 COPY . .
 
 # Install musl-tools for static linking
-RUN apt-get update && apt-get install -y musl-tools && \
+RUN apt-get update && apt-get install -y musl-tools musl-dev libssl-dev && \
     rustup target add x86_64-unknown-linux-musl
 
 RUN --mount=type=cache,target=/root/.cargo \
