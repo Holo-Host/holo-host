@@ -7,6 +7,11 @@ COPY . .
 RUN apt-get update && apt-get install -y musl-tools musl-dev libssl-dev && \
     rustup target add x86_64-unknown-linux-musl
 
+# Set environment variables for OpenSSL
+ENV OPENSSL_DIR=/usr \
+    OPENSSL_LIB_DIR=/usr/lib \
+    OPENSSL_INCLUDE_DIR=/usr/include
+
 RUN --mount=type=cache,target=/root/.cargo \
     --mount=type=cache,target=/usr/src/target \
     cargo build --release --target x86_64-unknown-linux-musl && \
