@@ -3,8 +3,8 @@ FROM rust:1.85.0 AS builder
 WORKDIR /usr/src
 COPY . .
 
-# Install musl-tools for static linking
-RUN apt-get update && apt-get install -y musl-tools musl-dev libssl-dev && \
+# Install musl-tools and musl-compatible OpenSSL
+RUN apt-get update && apt-get install -y musl-tools musl-dev libssl-dev pkg-config && \
     rustup target add x86_64-unknown-linux-musl
 
 # Set environment variables for OpenSSL
@@ -12,8 +12,11 @@ ENV OPENSSL_DIR=/usr \
     OPENSSL_LIB_DIR=/usr/lib \
     OPENSSL_INCLUDE_DIR=/usr/include
 
+# Build the binary with musl for static linking
 RUN --mount=type=cache,target=/root/.cargo \
     --mount=type=cache,target=/usr/src/target \
+    CC=musl-gcc \
+    CFLAGS="-I/usr/include" \
     cargo build --release --target x86_64-unknown-linux-musl && \
     cp /usr/src/target/x86_64-unknown-linux-musl/release/holo-gateway /usr/src/build
 
