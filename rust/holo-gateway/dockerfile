@@ -3,25 +3,13 @@ FROM rust:1.85.0 AS builder
 WORKDIR /usr/src
 COPY . .
 
-# Install musl-tools and musl-compatible OpenSSL
-RUN apt-get update && apt-get install -y musl-tools musl-dev libssl-dev pkg-config && \
-    rustup target add x86_64-unknown-linux-musl
-
-# Set environment variables for OpenSSL
-ENV OPENSSL_DIR=/usr \
-    OPENSSL_LIB_DIR=/usr/lib \
-    OPENSSL_INCLUDE_DIR=/usr/include
-
-# Build the binary with musl for static linking
 RUN --mount=type=cache,target=/root/.cargo \
     --mount=type=cache,target=/usr/src/target \
-    CC=musl-gcc \
-    CFLAGS="-I/usr/include" \
-    cargo build --release --target x86_64-unknown-linux-musl && \
-    cp /usr/src/target/x86_64-unknown-linux-musl/release/holo-gateway /usr/src/build
+    cargo build --release && \
+    cp /usr/src/target/release/holo-gateway /usr/src/build
 
-FROM gcr.io/distroless/static:nonroot
+FROM gcr.io/distroless/cc
 COPY --from=builder /usr/src/build /holo-gateway
 
 EXPOSE 8000
-CMD sh -c "/holo-gateway --nats-password-file $NATS_PASSWORD_FILE --nats-password $NATS_PASSWORD --nats-user $NATS_USER --nats-url $NATS_URL"
+CMD ["/holo-gateway"]
