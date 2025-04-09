@@ -9,7 +9,11 @@ path = "bin/holo-dns.rs"
 
 
 [dependencies]
-dns-server = "0.2.4"
+# I have an open merge request with the upstream package maintainer for the NS record changes.
+# Once merged and a new crate is published, we ought to be able to use crate v0.2.5 instead of
+# the gitlab link below.
+#dns-server = "0.2.4"
+dns-server = { git = "https://gitlab.com/matt.geddes/ops.git", branch = "add-in-ns-rr" }
 env_logger = { workspace = true }
 log = { workspace = true }
 permit = "0.2.1"
