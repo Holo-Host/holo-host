@@ -84,7 +84,10 @@ pub async fn start_cache(source: DnsCacheSource) {
         info!("Selected JSON file source.");
         spawn(async move { start_json_cache(j).await });
     } else if let DnsCacheSource::MongoDb(m) = source {
-        info!("Selected MongoDB source.");
+        info!(
+            "Selected MongoDB source {}/{}",
+            &m.db_name, &m.db_collection
+        );
         spawn(async move { start_mongodb_cache(m).await });
     }
 }
@@ -144,11 +147,7 @@ async fn start_mongodb_cache(input: MongoDbSourceParms) {
     let configured_delay: u64 = DNS_CACHE_UPDATE_TIME
         .parse::<u64>()
         .expect("DNS_CACHE_UPDATE_TIME environment variable cannot be parsed into a u64.");
-    // TODO: Remove this before merging -- URI containers the user's password....
-    info!(
-        "Starting DNS cache with MongoDB source using URL {}.",
-        input.db_uri,
-    );
+    info!("Starting DNS cache with MongoDB source.",);
     loop {
         tokio::select! {
             _ = tokio::time::sleep(Duration::from_secs(delay)) => {

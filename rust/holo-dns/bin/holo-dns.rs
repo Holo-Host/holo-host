@@ -15,7 +15,7 @@ const DNS_SERVER_PORT: &str = match option_env!("DNS_SERVER_PORT") {
     None => "53",
 };
 
-#[tokio::main]
+#[tokio::main(flavor = "multi_thread", worker_threads = 8)]
 async fn main() {
     env_logger::init();
     info!("Starting Holo-DNS version {}", env!["CARGO_PKG_VERSION"]);
