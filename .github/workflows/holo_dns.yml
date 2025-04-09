@@ -46,7 +46,6 @@ jobs:
     with:
       environment: dev
       project: holo-dns
-      path_to_dockerfile: rust/holo-dns
       droplets: '["46.101.64.62"]' # json array
       port: 53
     secrets:

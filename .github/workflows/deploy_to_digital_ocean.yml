@@ -9,10 +9,6 @@ on:
       project:
         required: true
         type: string
-      path_to_dockerfile:
-        required: false
-        type: string
-        default: "dockerfile"
       port:
         required: false
         type: number
@@ -70,7 +66,6 @@ jobs:
           build-args: |
             PROJECT_NAME:${{ inputs.project }}
           context: .
-          file: ${{ inputs.path_to_dockerfile }}/dockerfile
           load: true
           push: false
           platforms: linux/amd64
