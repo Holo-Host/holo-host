@@ -30,12 +30,13 @@ jobs:
           path: |
             ~/.cargo
             ./target
-          key: rust-${{ hashFiles('Cargo.lock') }}
+          key: rust-holo-dns-${{ hashFiles('Cargo.lock') }}
           restore-keys: |
+            rust-holo-dns-
             rust-
 
       - name: Build Project
-        run: cargo build --verbose
+        run: cargo build -p holo-dns --verbose
 
   deployDev:
     name: Deploy to Dev

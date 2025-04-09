@@ -5,7 +5,7 @@ COPY . .
 
 RUN --mount=type=cache,target=/root/.cargo \
     --mount=type=cache,target=/usr/src/target \
-    cargo build --release && \
+    cargo build -p holo-dns --release && \
     cp /usr/src/target/release/holo-dns /usr/src/build
 
 FROM gcr.io/distroless/cc
