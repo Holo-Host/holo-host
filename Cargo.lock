@@ -1445,9 +1445,8 @@ dependencies = [
 
 [[package]]
 name = "dns-server"
-version = "0.2.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eaeda8a7efcfb0ff123fcad959beaec55aa6d1be1d535f54b5b8b873f3cf1680"
+version = "0.2.5"
+source = "git+https://gitlab.com/matt.geddes/ops.git?branch=add-in-ns-rr#859924ebe6f989278d8a7b979574c9132cf8b100"
 dependencies = [
  "fixed-buffer",
  "oorandom",
@@ -4654,8 +4653,7 @@ dependencies = [
 [[package]]
 name = "prob-rate-limiter"
 version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "22624ab4acf3a452d4452a1eb5efbdc9d2dbb18bdcafce67fcd59b3f7ecf6238"
+source = "git+https://gitlab.com/matt.geddes/ops.git?branch=add-in-ns-rr#859924ebe6f989278d8a7b979574c9132cf8b100"
 dependencies = [
  "oorandom",
 ]
