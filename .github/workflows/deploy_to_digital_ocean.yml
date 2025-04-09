@@ -67,6 +67,8 @@ jobs:
       - name: Build Docker Image
         uses: docker/build-push-action@v6
         with:
+          build-args: |
+            PROJECT_NAME:${{ inputs.project }}
           context: .
           file: ${{ inputs.path_to_dockerfile }}/dockerfile
           load: true
