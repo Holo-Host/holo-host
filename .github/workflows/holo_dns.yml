@@ -41,6 +41,7 @@ jobs:
     name: Deploy to Dev
     needs: build
     uses: ./.github/workflows/deploy_to_digital_ocean.yml
+    if: github.ref == 'refs/heads/main'
     with:
       environment: dev
       project: holo-dns
