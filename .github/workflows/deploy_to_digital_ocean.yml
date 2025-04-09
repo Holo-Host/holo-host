@@ -64,7 +64,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           build-args: |
-            PROJECT_NAME:${{ inputs.project }}
+            PROJECT_NAME=${{ inputs.project }}
           context: .
           load: true
           push: false
