@@ -20,6 +20,7 @@ pub trait MutMetadata {
   fn mut_metadata(&mut self) -> &mut Metadata;
 }
 
+// todo: we should generate mongodb validation rules based on the schema
 pub trait Validation {
   fn build_validation(&self) -> Result<bson::Document>;
 }
