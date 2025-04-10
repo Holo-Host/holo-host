@@ -21,7 +21,9 @@ use async_nats::Message;
 use bson::{self, doc, oid::ObjectId, DateTime};
 use db_utils::{
     mongodb::{IntoIndexes, MongoCollection, MongoDbAPI, MutMetadata},
-    schemas::{self, Host, Workload},
+    schemas::{
+        self, host::{Host, HOST_COLLECTION_NAME}, workload::{Workload, WORKLOAD_COLLECTION_NAME}
+    },
 };
 use hpos_hal::inventory::HoloInventory;
 use mongodb::{options::UpdateModifications, Client as MongoDBClient};
@@ -47,9 +49,9 @@ pub struct InventoryServiceApi {
 impl InventoryServiceApi {
     pub async fn new(client: &MongoDBClient) -> Result<Self> {
         Ok(Self {
-            workload_collection: Self::init_collection(client, schemas::WORKLOAD_COLLECTION_NAME)
+            workload_collection: Self::init_collection(client, WORKLOAD_COLLECTION_NAME)
                 .await?,
-            host_collection: Self::init_collection(client, schemas::HOST_COLLECTION_NAME).await?,
+            host_collection: Self::init_collection(client, HOST_COLLECTION_NAME).await?,
         })
     }
 
@@ -65,7 +67,7 @@ impl InventoryServiceApi {
 
         let subject_sections: Vec<&str> = msg_subject.split('.').collect();
         let host_id_index = 1;
-        let host_id: schemas::PubKey = subject_sections
+        let host_id: schemas::alias::PubKey = subject_sections
             .get(host_id_index)
             .ok_or_else(|| {
                 ServiceError::internal(

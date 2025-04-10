@@ -5,12 +5,10 @@ use anyhow::Result;
 
 use crate::mongodb::{MutMetadata, IntoIndexes};
 use super::metadata::Metadata;
+use super::alias::PubKey;
 
 /// Collection name for user documents
 pub const USER_COLLECTION_NAME: &str = "user";
-
-/// Type alias for public keys used in the system
-pub use String as PubKey;
 
 /// Information about a user's role (hoster or developer) in the system
 #[derive(Serialize, Deserialize, Clone, Debug)]

@@ -3,7 +3,9 @@ mod tests {
     use crate::{orchestrator_api::OrchestratorWorkloadApi, types::WorkloadResult};
     use anyhow::Result;
     use bson::doc;
-    use db_utils::schemas::{WorkloadState, WorkloadStatePayload, WorkloadStatus};
+    use db_utils::schemas::workload::{
+        Capacity, WorkloadState, WorkloadStatePayload, WorkloadStatus,
+    };
     use hpos_hal::inventory::{HoloDriveInventory, HoloInventory};
     use mock_utils::{
         host::{create_test_host, gen_mock_processors},
@@ -13,7 +15,7 @@ mod tests {
     };
     use std::sync::Arc;
 
-    use db_utils::{mongodb::MongoDbAPI, schemas::Capacity};
+    use db_utils::mongodb::MongoDbAPI;
 
     #[tokio::test]
     async fn test_add_workload() -> Result<()> {

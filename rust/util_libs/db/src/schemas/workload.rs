@@ -11,11 +11,10 @@ use url::Url;
 
 use crate::mongodb::{MutMetadata, IntoIndexes};
 use super::metadata::Metadata;
+use super::alias::SemVer;
 
 /// Collection name for workload documents
 pub const WORKLOAD_COLLECTION_NAME: &str = "workload";
-
-pub use String as SemVer;
 
 /// Enumeration of possible workload states
 #[derive(

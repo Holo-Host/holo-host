@@ -1,4 +1,4 @@
-use db_utils::schemas::{DATABASE_NAME, PUBLIC_SERVICE_COLLECTION_NAME};
+use db_utils::schemas::{DATABASE_NAME, public_service::PUBLIC_SERVICE_COLLECTION_NAME};
 use holo_dns::{dns_cache, dns_service};
 use log::info;
 use permit::Permit;
