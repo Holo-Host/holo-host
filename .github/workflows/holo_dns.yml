@@ -9,15 +9,16 @@ on:
       - main
 
 jobs:
-  CI:
-    name: CI
+  #holo-dns
+  HOLO_DNS_CI:
+    name: holo-dns
     uses: ./.github/workflows/shared/ci.yml
     with:
       project: holo-dns
 
-  CD_DEV:
-    name: CD [Dev]
-    needs: CI
+  HOLO_DNS_DEPLOY_DEV:
+    name: holo-dns Dev
+    needs: HOLO_DNS_CI
     uses: ./.github/workflows/shared/deploy_to_digital_ocean.yml
     if: github.ref == 'refs/heads/main'
     with:
@@ -29,3 +30,22 @@ jobs:
       DIGITAL_OCEAN_TOKEN: ${{ secrets.DIGITAL_OCEAN_TOKEN }}
       SSH_KEY: ${{ secrets.SSH_KEY }}
       SSH_USERNAME: ${{ secrets.SSH_USERNAME }}
+
+  
+  # holo-gateway
+  HOLO_GATEWAY_CI:
+    name: holo-gateway
+    uses: ./.github/workflows/shared/ci.yml
+    with:
+      project: holo-gateway
+
+  HOLO_GATEWAY_DEPLOY_DEV:
+    name: holo-gateway Dev
+    needs: HOLO_GATEWAY_CI
+    uses: ./.github/workflows/shared/deploy_to_digital_ocean.yml
+    if: github.ref == 'refs/heads/main'
+    with:
+      environment: dev
+      project: holo-gateway
+    secrets:
+      DIGITAL_OCEAN_TOKEN: ${{ secrets.DIGITAL_OCEAN_TOKEN }}
