@@ -5,7 +5,7 @@
 ```yml
   job1:
     name: CI
-    uses: ./.github/workflows/shared/ci.yml
+    uses: ./.github/workflows/reuseable_ci.yml
     with:
       # rust project location (assumes path to be rust/holo-dns)
       project: holo-dns
@@ -18,7 +18,7 @@
   job2:
     name: Deploy to Dev
     needs: CI
-    uses: ./.github/workflows/deploy_to_digital_ocean.yml
+    uses: ./.github/workflows/reuseable_do_deployment.yml
     if: github.ref == 'refs/heads/main'
     with:
       # github environment to use when deploying
@@ -35,7 +35,7 @@
   job2:
     name: Deploy to Dev
     needs: CI
-    uses: ./.github/workflows/deploy_to_digital_ocean.yml
+    uses: ./.github/workflows/reuseable_do_deployment.yml
     if: github.ref == 'refs/heads/main'
     with:
       environment: dev
