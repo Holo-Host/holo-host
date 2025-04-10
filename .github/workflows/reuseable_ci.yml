@@ -27,7 +27,7 @@ jobs:
           path: |
             ~/.cargo
             ./target
-          key: rust-${{ inputs.project }}-${{ hashFiles('Cargo.lock') }} }}
+          key: rust-${{ inputs.project }}-${{ hashFiles('Cargo.lock') }}
           restore-keys: |
             rust-${{ inputs.project }}-
             rust-
