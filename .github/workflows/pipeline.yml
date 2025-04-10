@@ -20,7 +20,6 @@ jobs:
     name: holo-dns Dev
     needs: HOLO_DNS_CI
     uses: ./.github/workflows/reuseable_do_deployment.yml
-    if: github.ref == 'refs/heads/main'
     with:
       environment: dev
       project: holo-dns
@@ -43,7 +42,6 @@ jobs:
     name: holo-gateway Dev
     needs: HOLO_GATEWAY_CI
     uses: ./.github/workflows/reuseable_do_deployment.yml
-    if: github.ref == 'refs/heads/main'
     with:
       environment: dev
       project: holo-gateway
