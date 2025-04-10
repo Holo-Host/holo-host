@@ -12,8 +12,8 @@ env:
   RUST_VERSION: 1.85.0
 
 jobs:
-  build:
-    name: Build
+  CI:
+    name: CI
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
@@ -23,7 +23,7 @@ jobs:
         uses: hecrj/setup-rust-action@v2
         with:
           rust-version: ${{ env.RUST_VERSION }}
-          
+
       - name: Cache Rust Dependencies
         uses: actions/cache@v4
         with:
@@ -38,9 +38,18 @@ jobs:
       - name: Build Project
         run: cargo build -p holo-dns --verbose
 
-  deployDev:
+      - name: Run Tests
+        run: cargo test -p holo-dns --verbose
+
+      - name: Run Clippy
+        run: cargo clippy -p holo-dns -- -D warnings
+
+      - name: Run Linter
+        run: cargo fmt -- --check
+
+  CD:
     name: Deploy to Dev
-    needs: build
+    needs: CI
     uses: ./.github/workflows/deploy_to_digital_ocean.yml
     if: github.ref == 'refs/heads/main'
     with:
