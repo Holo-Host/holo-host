@@ -1,4 +1,4 @@
-use db_utils::mongodb::{MongoCollection, MongoDbAPI};
+use db_utils::mongodb::{api::MongoDbAPI, collection::MongoCollection};
 use db_utils::schemas::public_service::PublicService;
 use log::{debug, info};
 use mongodb::bson::doc;

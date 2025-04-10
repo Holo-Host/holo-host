@@ -9,7 +9,7 @@ use strum::{EnumDiscriminants, EnumString, FromRepr};
 use strum_macros::AsRefStr;
 use url::Url;
 
-use crate::mongodb::{MutMetadata, IntoIndexes};
+use crate::mongodb::traits::{MutMetadata, IntoIndexes};
 use super::metadata::Metadata;
 use super::alias::SemVer;
 

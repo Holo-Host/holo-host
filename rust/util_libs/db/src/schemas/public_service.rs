@@ -3,7 +3,7 @@ use mongodb::options::IndexOptions;
 use serde::{Deserialize, Serialize};
 use anyhow::Result;
 
-use crate::mongodb::{MutMetadata, IntoIndexes};
+use crate::mongodb::traits::{MutMetadata, IntoIndexes};
 use super::metadata::Metadata;
 
 /// Collection for tracking public services and their public IPs

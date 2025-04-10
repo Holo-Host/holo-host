@@ -20,9 +20,15 @@ use async_nats::jetstream::ErrorCode;
 use async_nats::Message;
 use bson::{self, doc, oid::ObjectId, DateTime};
 use db_utils::{
-    mongodb::{IntoIndexes, MongoCollection, MongoDbAPI, MutMetadata},
+    mongodb::{
+        api::MongoDbAPI,
+        collection::MongoCollection,
+        traits::{IntoIndexes, MutMetadata},
+    },
     schemas::{
-        self, host::{Host, HOST_COLLECTION_NAME}, workload::{Workload, WORKLOAD_COLLECTION_NAME}
+        self,
+        host::{Host, HOST_COLLECTION_NAME},
+        workload::{Workload, WORKLOAD_COLLECTION_NAME},
     },
 };
 use hpos_hal::inventory::HoloInventory;
@@ -49,8 +55,7 @@ pub struct InventoryServiceApi {
 impl InventoryServiceApi {
     pub async fn new(client: &MongoDBClient) -> Result<Self> {
         Ok(Self {
-            workload_collection: Self::init_collection(client, WORKLOAD_COLLECTION_NAME)
-                .await?,
+            workload_collection: Self::init_collection(client, WORKLOAD_COLLECTION_NAME).await?,
             host_collection: Self::init_collection(client, HOST_COLLECTION_NAME).await?,
         })
     }

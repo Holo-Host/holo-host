@@ -4,7 +4,7 @@ use mongodb::options::IndexOptions;
 use serde::{Deserialize, Serialize};
 use anyhow::Result;
 
-use crate::mongodb::{MutMetadata, IntoIndexes};
+use crate::mongodb::traits::{MutMetadata, IntoIndexes};
 use super::metadata::Metadata;
 
 /// Collection name for host documents

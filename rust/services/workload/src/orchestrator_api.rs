@@ -18,13 +18,17 @@ use async_nats::Message;
 use bson::{self, doc, oid::ObjectId, to_document, Bson};
 use core::option::Option::None;
 use db_utils::{
-    mongodb::{IntoIndexes, MongoCollection, MongoDbAPI, MutMetadata},
+    mongodb::{
+        api::MongoDbAPI,
+        collection::MongoCollection,
+        traits::{IntoIndexes, MutMetadata},
+    },
     schemas::{
-        DATABASE_NAME,
         developer::{Developer, DEVELOPER_COLLECTION_NAME},
         host::{Host, HOST_COLLECTION_NAME},
         user::{User, USER_COLLECTION_NAME},
         workload::{Workload, WorkloadState, WorkloadStatus, WORKLOAD_COLLECTION_NAME},
+        DATABASE_NAME,
     },
 };
 use hpos_hal::inventory::HoloInventory;

@@ -15,7 +15,7 @@ mod tests {
     };
     use std::sync::Arc;
 
-    use db_utils::mongodb::MongoDbAPI;
+    use db_utils::mongodb::api::MongoDbAPI;
 
     #[tokio::test]
     async fn test_add_workload() -> Result<()> {

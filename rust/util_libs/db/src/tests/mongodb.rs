@@ -1,5 +1,5 @@
 use crate::{
-    mongodb::{MongoCollection, MongoDbAPI},
+    mongodb::{collection::MongoCollection, api::MongoDbAPI},
     schemas::{self, metadata::Metadata},
 };
 use anyhow::Result;
