@@ -12,14 +12,14 @@ jobs:
   #holo-dns
   HOLO_DNS_CI:
     name: holo-dns
-    uses: ./.github/workflows/shared/ci.yml
+    uses: ./.github/workflows/reuseable_ci.yml
     with:
       project: holo-dns
 
   HOLO_DNS_DEPLOY_DEV:
     name: holo-dns Dev
     needs: HOLO_DNS_CI
-    uses: ./.github/workflows/shared/deploy_to_digital_ocean.yml
+    uses: ./.github/workflows/reuseable_do_deployment.yml
     if: github.ref == 'refs/heads/main'
     with:
       environment: dev
@@ -35,14 +35,14 @@ jobs:
   # holo-gateway
   HOLO_GATEWAY_CI:
     name: holo-gateway
-    uses: ./.github/workflows/shared/ci.yml
+    uses: ./.github/workflows/reuseable_ci.yml
     with:
       project: holo-gateway
 
   HOLO_GATEWAY_DEPLOY_DEV:
     name: holo-gateway Dev
     needs: HOLO_GATEWAY_CI
-    uses: ./.github/workflows/shared/deploy_to_digital_ocean.yml
+    uses: ./.github/workflows/reuseable_do_deployment.yml
     if: github.ref == 'refs/heads/main'
     with:
       environment: dev
