@@ -1,4 +1,4 @@
-name: Holo DNS
+name: Pipeline
 
 on:
   pull_request:
