@@ -34,7 +34,7 @@ use nats_utils::types::ServiceError;
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 
-use crate::schemas::Metadata;
+use crate::schemas::metadata::Metadata;
 
 /// Returns the MongoDB connection URL from environment variables.
 ///
