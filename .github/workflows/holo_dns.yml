@@ -45,7 +45,7 @@ jobs:
         run: cargo clippy -p holo-dns -- -D warnings
 
       - name: Run Linter
-        run: cargo fmt -- --check
+        run: cargo fmt -p holo-dns -- --check
 
   CD:
     name: Deploy to Dev
