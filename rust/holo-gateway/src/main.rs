@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use anyhow::Result;
-use clap::Parser;
 use nats_utils::{jetstream_client::JsClient, types::JsClientBuilder};
 
 #[tokio::main]
