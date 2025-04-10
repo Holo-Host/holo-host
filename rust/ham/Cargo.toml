@@ -21,7 +21,7 @@ tokio = { workspace = true }
 tracing = "0.1"
 clap = { workspace = true }
 tracing-subscriber = "0.3"
-reqwest = { version = "0.12", features = ["blocking"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "blocking"] }
 tempfile = "3.1"
 url = "2.5"
 serde = { workspace = true }
