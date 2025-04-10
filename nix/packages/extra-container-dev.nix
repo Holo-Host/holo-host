@@ -11,6 +11,27 @@
 let
   privateNetwork = true;
 
+  settings = {
+    hubHostAddress = "192.168.42.42";
+    hubLocalAddress = "192.168.42.43";
+    orchestratorHostAddress = "192.168.42.46";
+    orchestratorLocalAddress = "192.168.42.47";
+    holoGwHostAddress = "192.168.42.48";
+    holoGwLocalAddress = "192.168.42.49";
+
+    host0MachineId = "f0b9a2b7a95848389fdb43eda8139570";
+    host0HostAddress = "192.168.42.70";
+    host0LocalAddress = "192.168.42.71";
+
+    host1MachineId = "f0b9a2b7a95848389fdb43eda8139571";
+    host1HostAddress = "192.168.42.72";
+    host1LocalAddress = "192.168.42.73";
+
+    host2MachineId = "f0b9a2b7a95848389fdb43eda8139572";
+    host2HostAddress = "192.168.42.74";
+    host2LocalAddress = "192.168.42.75";
+  };
+
   package = inputs.extra-container.lib.buildContainers {
 
     # The system of the container host
@@ -30,31 +51,87 @@ let
     config =
       { config, ... }:
       let
-        hubHostAddress = "192.168.42.42";
-        hubLocalAddress = "192.168.42.43";
-        hostHostAddress = "192.168.42.44";
-        hostLocalAddress = "192.168.42.45";
-        orchestratorHostAddress = "192.168.42.46";
-        orchestratorLocalAddress = "192.168.42.47";
-        holoGwHostAddress = "192.168.42.48";
-        holoGwLocalAddress = "192.168.42.49";
-        hostMachineId = "f0b9a2b7a95848389fdb43eda8139569";
 
         bootstrapPort = 50000;
         signalPort = 50001;
 
         hosts = {
-          "${hubLocalAddress}" = [ "dev-hub" ];
-          "${holoGwLocalAddress}" = [ "dev-gw" ];
+          "${settings.hubLocalAddress}" = [ "dev-hub" ];
+          "${settings.holoGwLocalAddress}" = [ "dev-gw" ];
         };
+
+        mkHost =
+          {
+            hostAddress,
+            localAddress,
+            machineId,
+          }:
+          {
+            inherit
+              privateNetwork
+              hostAddress
+              localAddress
+              ;
+
+            # Forward requests from the container's external interface
+            # to the container's localhost.
+            # Useful to test internal services from outside the container.
+
+            # WARNING: This exposes the container's localhost to all users.
+            # Only use in a trusted environment.
+            extra.exposeLocalhost = true;
+
+            # `specialArgs` is available in nixpkgs > 22.11
+            # This is useful for importing flakes from modules (see nixpkgs/lib/modules.nix).
+            # specialArgs = { inherit inputs; };
+
+            config =
+              { ... }:
+              {
+                # in case the container shares the host network, don't mess with the firewall rules.
+                networking.firewall.enable = false;
+
+                imports = [
+                  flake.nixosModules.holo-host-agent
+                ];
+
+                networking.hosts = hosts;
+
+                environment.etc."machine-id" = {
+                  mode = "0644";
+                  text = machineId;
+                };
+
+                environment.systemPackages = [
+                  perSystem.self.rust-workspace.individual.ham
+                ];
+
+                holo.host-agent = {
+                  enable = true;
+                  logLevel = "trace";
+
+                  extraDaemonizeArgs.host-inventory-disable = false;
+
+                  # dev-container
+                  nats.hub.url = "wss://host:eKonohFee5ahS6pah3iu1a@dev-hub:${builtins.toString config.containers.dev-hub.config.holo.nats-server.websocket.externalPort}";
+                  nats.hub.tlsInsecure = true;
+
+                  # cloud testing
+                  # nats.hub.url = "wss://nats-server-0.holotest.dev:443";
+                  # nats.hub.tlsInsecure = false;
+
+                  nats.store_dir = "/var/lib/holo-host-agent/store_dir";
+                };
+              };
+          };
 
       in
       {
         containers.dev-hub = {
           inherit privateNetwork;
 
-          hostAddress = hubHostAddress;
-          localAddress = hubLocalAddress;
+          hostAddress = settings.hubHostAddress;
+          localAddress = settings.hubLocalAddress;
           # `specialArgs` is available in nixpkgs > 22.11
           # This is useful for importing flakes from modules (see nixpkgs/lib/modules.nix).
           # specialArgs = { inherit inputs; };
@@ -145,67 +222,28 @@ let
             };
         };
 
-        containers.dev-host = {
-          inherit privateNetwork;
-          hostAddress = hostHostAddress;
-          localAddress = hostLocalAddress;
+        containers.dev-host0 = mkHost {
+          hostAddress = settings.host0HostAddress;
+          localAddress = settings.host0LocalAddress;
+          machineId = settings.host0MachineId;
+        };
 
-          # Forward requests from the container's external interface
-          # to the container's localhost.
-          # Useful to test internal services from outside the container.
+        containers.dev-host1 = mkHost {
+          hostAddress = settings.host0HostAddress;
+          localAddress = settings.host0LocalAddress;
+          machineId = settings.host1MachineId;
+        };
 
-          # WARNING: This exposes the container's localhost to all users.
-          # Only use in a trusted environment.
-          extra.exposeLocalhost = true;
-
-          # `specialArgs` is available in nixpkgs > 22.11
-          # This is useful for importing flakes from modules (see nixpkgs/lib/modules.nix).
-          # specialArgs = { inherit inputs; };
-
-          config =
-            { ... }:
-            {
-              # in case the container shares the host network, don't mess with the firewall rules.
-              networking.firewall.enable = false;
-
-              imports = [
-                flake.nixosModules.holo-host-agent
-              ];
-
-              networking.hosts = hosts;
-
-              environment.etc."machine-id" = {
-                mode = "0644";
-                text = hostMachineId;
-              };
-
-              environment.systemPackages = [
-                perSystem.self.rust-workspace.individual.ham
-              ];
-
-              holo.host-agent = {
-                enable = true;
-                logLevel = "trace";
-
-                extraDaemonizeArgs.host-inventory-disable = false;
-
-                # dev-container
-                nats.hub.url = "wss://host:eKonohFee5ahS6pah3iu1a@dev-hub:${builtins.toString config.containers.dev-hub.config.holo.nats-server.websocket.externalPort}";
-                nats.hub.tlsInsecure = true;
-
-                # cloud testing
-                # nats.hub.url = "wss://nats-server-0.holotest.dev:443";
-                # nats.hub.tlsInsecure = false;
-
-                nats.store_dir = "/var/lib/holo-host-agent/store_dir";
-              };
-            };
+        containers.dev-host2 = mkHost {
+          hostAddress = settings.host0HostAddress;
+          localAddress = settings.host0LocalAddress;
+          machineId = settings.host2MachineId;
         };
 
         containers.dev-orch = {
           inherit privateNetwork;
-          hostAddress = orchestratorHostAddress;
-          localAddress = orchestratorLocalAddress;
+          hostAddress = settings.orchestratorHostAddress;
+          localAddress = settings.orchestratorLocalAddress;
 
           # `specialArgs` is available in nixpkgs > 22.11
           # This is useful for importing flakes from modules (see nixpkgs/lib/modules.nix).
@@ -254,8 +292,8 @@ let
         containers.dev-gw = {
           inherit privateNetwork;
 
-          hostAddress = holoGwHostAddress;
-          localAddress = holoGwLocalAddress;
+          hostAddress = settings.holoGwHostAddress;
+          localAddress = settings.holoGwLocalAddress;
 
           # `specialArgs` is available in nixpkgs > 22.11
           # This is useful for importing flakes from modules (see nixpkgs/lib/modules.nix).
@@ -290,6 +328,9 @@ let
     meta.platforms =
       with nixpkgs.lib;
       lists.intersectLists platforms.linux (platforms.x86_64 ++ platforms.aarch64);
+    passthru = {
+      inherit settings;
+    };
   };
 
   packageWithPlatformFilterAndTest = packageWithPlatformFilter.overrideAttrs {
