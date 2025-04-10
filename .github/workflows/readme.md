@@ -1,4 +1,17 @@
-## Re-useable digital ocean pipeline
+## Re-useable Pipelines
+
+### reuseable rust build, test, lint and formatting pipeline
+
+```yml
+  job1:
+    name: CI
+    uses: ./.github/workflows/shared/ci.yml
+    with:
+      # rust project location (assumes path to be rust/holo-dns)
+      project: holo-dns
+```
+
+### digital ocean deployment pipeline
 
 ```yml
   # push docker image to digital ocean registry
