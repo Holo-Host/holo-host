@@ -48,7 +48,7 @@ jobs:
         run: cargo fmt -p holo-dns -- --check
 
   CD:
-    name: Deploy to Dev
+    name: CD [Dev]
     needs: CI
     uses: ./.github/workflows/deploy_to_digital_ocean.yml
     if: github.ref == 'refs/heads/main'
