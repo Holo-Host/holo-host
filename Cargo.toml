@@ -16,6 +16,7 @@ members = [
   "rust/netdiag",
   "rust/holo-dns",
   "rust/holo-gateway",
+  "rust/holo-public-api",
 
   "rust/holochain_zome_testing_0",
   "rust/holochain_zome_testing_0_integrity",
