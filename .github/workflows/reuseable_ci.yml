@@ -1,0 +1,45 @@
+on:
+  workflow_call:
+    inputs:
+      project:
+        required: true
+        type: string
+
+env:
+  RUST_VERSION: 1.85.0
+
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Set up Rust
+        uses: hecrj/setup-rust-action@v2
+        with:
+          rust-version: ${{ env.RUST_VERSION }}
+      
+      - name: Cache Rust Dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo
+            ./target
+          key: rust-${{ inputs.project }}-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            rust-${{ inputs.project }}-
+            rust-
+
+      - name: Build Project
+        run: cargo build -p ${{ inputs.project }} --verbose
+      
+      - name: Run Tests
+        run: cargo test -p ${{ inputs.project }} --verbose
+      
+      - name: Run Clippy
+        run: cargo clippy -p ${{ inputs.project }} -- -D warnings
+      
+      - name: Run Linter
+        run: cargo fmt -p ${{ inputs.project }} -- --check
