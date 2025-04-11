@@ -33,7 +33,7 @@ bytes = "1.8.0"
 nkeys = "=0.4.4"
 chrono = "0.4.0"
 ham = { workspace = true }
-reqwest = { version = "0.12" }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
 
 [dev-dependencies]
 mock_utils = { workspace = true }

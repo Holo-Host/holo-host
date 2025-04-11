@@ -1,5 +1,7 @@
 # holo-host main repository
 
+![pipeline](https://github.com/holo-host/holo-host/actions/workflows/pipeline.yml/badge.svg)
+
 This is an experiment to contain the code for all components in a single repository, also known as a monorepository.
 
 Please run `sh setup-hooks.sh` to enforce correct naming convention for branches.

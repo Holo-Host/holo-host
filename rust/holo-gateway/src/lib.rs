@@ -7,7 +7,10 @@ use hyper::service::service_fn;
 use hyper_util::rt::TokioIo;
 use nats_utils::jetstream_client::JsClient;
 use nats_utils::types::NatsRemoteArgs;
+use std::env;
 use std::net::SocketAddr;
+use std::path::PathBuf;
+use std::str::FromStr;
 use std::sync::Arc;
 use tokio::net::TcpListener;
 use uuid::Uuid;
@@ -31,6 +34,29 @@ pub struct RunArgs {
 
     #[clap(flatten)]
     pub nats_remote_args: NatsRemoteArgs,
+}
+
+impl RunArgs {
+    pub fn populate_from_environment() -> Self {
+        let password_file = env::var("NATS_PASSWORD_FILE")
+            .map(PathBuf::from)
+            .expect("NATS_PASSWORD_FILE must be set");
+        let password = env::var("NATS_PASSWORD").expect("NATS_PASSWORD must be set");
+        let username = env::var("NATS_USERNAME").expect("NATS_USERNAME must be set");
+        let nats_url = env::var("NATS_URL").expect("NATS_URL must be set");
+        RunArgs {
+            node_id: Uuid::new_v4(),
+            listen: SocketAddr::from_str("0.0.0.0:8000").expect("Invalid address"),
+            nats_remote_args: nats_utils::types::NatsRemoteArgs {
+                nats_url: nats_utils::types::DeServerAddr::from_str(&nats_url)
+                    .expect("Invalid NATS URL"),
+                nats_user: Some(username),
+                nats_password: Some(password),
+                nats_password_file: Some(password_file),
+                nats_skip_tls_verification_danger: false,
+            },
+        }
+    }
 }
 
 pub async fn run(nats_client: Arc<JsClient>, args: RunArgs) -> Result<()> {

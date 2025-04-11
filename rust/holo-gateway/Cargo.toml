@@ -41,7 +41,7 @@ path = "src/main.rs"
 [dev-dependencies]
 mock_utils = { workspace = true }
 http-body-util = "0.1.2"
-reqwest = { version = "0.12", features = ["json"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
 
 [profile.release]
 lto = true
