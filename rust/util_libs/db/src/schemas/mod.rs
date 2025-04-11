@@ -1,13 +1,13 @@
-pub mod metadata;
+pub mod alias;
+pub mod api_logs;
 pub mod developer;
 pub mod host;
 pub mod hoster;
+pub mod metadata;
 pub mod public_service;
-pub mod user_info;
 pub mod user;
+pub mod user_info;
 pub mod workload;
-pub mod alias;
-pub mod api_logs;
 
 /// Name of the main database for the Holo Hosting system
 pub const DATABASE_NAME: &str = "holo-hosting";

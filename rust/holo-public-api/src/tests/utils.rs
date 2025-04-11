@@ -118,7 +118,7 @@ pub fn create_credentials(secret: &str, user_id: bson::oid::ObjectId) -> (String
         },
         secret,
     )
-    .expect(&format!("signing {secret} for {user_id:#?}"));
+    .unwrap_or_else(|_| panic!("signing {secret} for {user_id:#?}"));
     let refresh_token = sign_refresh_token(
         RefreshTokenClaims {
             sub: user_id.to_string(),
@@ -127,6 +127,6 @@ pub fn create_credentials(secret: &str, user_id: bson::oid::ObjectId) -> (String
         },
         secret,
     )
-    .expect(&format!("signing {secret} for {user_id:#?}"));
+    .unwrap_or_else(|_| panic!("signing {secret} for {user_id:#?}"));
     (access_token, refresh_token)
 }

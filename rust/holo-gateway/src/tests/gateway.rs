@@ -4,7 +4,7 @@ use crate::types::nats::HTTP_GW_SUBJECT_NAME;
 use futures::StreamExt;
 use hyper::StatusCode;
 use mock_utils::test_nats_server::TestNatsServer;
-use tokio::time::{Duration, sleep};
+use tokio::time::{sleep, Duration};
 use uuid::Uuid;
 use workload::WORKLOAD_SRV_SUBJ;
 

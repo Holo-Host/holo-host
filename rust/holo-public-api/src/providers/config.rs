@@ -1,5 +1,5 @@
+use config::{Config, Environment, File};
 use serde::{Deserialize, Serialize};
-use config::{Config, File, Environment};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct AppConfig {
@@ -21,7 +21,7 @@ pub fn load_config() -> Result<AppConfig, config::ConfigError> {
         .add_source(Environment::default())
         .build()
         .unwrap();
-    
+
     let config: AppConfig = settings.try_deserialize()?;
     Ok(config)
 }

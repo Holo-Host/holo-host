@@ -10,8 +10,7 @@ pub fn setup_public_controllers(cfg: &mut web::ServiceConfig) {
 }
 
 pub fn setup_docs() -> utoipa::openapi::OpenApi {
-  let mut openapi = utoipa::openapi::OpenApi::default();
-  openapi.merge(health_check::OpenApiSpec::openapi());
-  openapi
-
+    let mut openapi = utoipa::openapi::OpenApi::default();
+    openapi.merge(health_check::OpenApiSpec::openapi());
+    openapi
 }

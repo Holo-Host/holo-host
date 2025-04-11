@@ -1,5 +1,5 @@
 use crate::{
-    mongodb::{collection::MongoCollection, api::MongoDbAPI},
+    mongodb::{api::MongoDbAPI, collection::MongoCollection},
     schemas::{self, metadata::Metadata},
 };
 use anyhow::Result;
@@ -21,7 +21,8 @@ async fn test_indexing_and_api() -> Result<()> {
     let database_name = "holo-hosting-test";
     let collection_name = "host";
     let mut host_api =
-        MongoCollection::<schemas::host::Host>::new(&client, database_name, collection_name).await?;
+        MongoCollection::<schemas::host::Host>::new(&client, database_name, collection_name)
+            .await?;
 
     // set index
     host_api.apply_indexing().await?;

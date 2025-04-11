@@ -8,11 +8,15 @@ mod tests {
 
     #[test]
     fn should_succeed_to_sign_access_token() {
-        let token = sign_jwt::<AccessTokenClaims>(AccessTokenClaims {
-            sub: USER_ID.to_string(),
-            exp: 0,
-            permissions: vec![],
-        }, SECRET).unwrap();
+        let token = sign_jwt::<AccessTokenClaims>(
+            AccessTokenClaims {
+                sub: USER_ID.to_string(),
+                exp: 0,
+                permissions: vec![],
+            },
+            SECRET,
+        )
+        .unwrap();
         assert_eq!(token, TOKEN);
     }
 }

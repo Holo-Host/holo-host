@@ -62,14 +62,16 @@ pub async fn logging_middleware(
     }
     let mut conn = pool.unwrap();
 
-    let mut log = ApiLog::default();
-    log.path = path.clone();
-    log.method = method_str.clone();
-    log.ip = ip.clone();
-    log.user_agent = user_agent.clone();
-    log.authorization = authorization.clone();
-    log.user_id = user_id.clone();
-    log.response_status = status as i32;
+    let log = ApiLog {
+        path: path.clone(),
+        method: method_str.clone(),
+        ip: ip.clone(),
+        user_agent: user_agent.clone(),
+        authorization: authorization.clone(),
+        user_id: user_id.clone(),
+        response_status: status as i32,
+        ..Default::default()
+    };
 
     let log_json = match bson::to_document(&log).map_err(|e| {
         tracing::error!("failed to serialize log: {}", e);
