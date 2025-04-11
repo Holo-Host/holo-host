@@ -1,5 +1,5 @@
 use anyhow::Context;
-use db_utils::schemas::{
+use db_utils::schemas::workload::{
     Workload, WorkloadManifest, WorkloadState, WorkloadStateDiscriminants, WorkloadStatus,
 };
 use futures::StreamExt;

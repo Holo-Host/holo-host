@@ -44,8 +44,8 @@ pub fn create_test_host(
     holo_inventory: Option<HoloInventory>,
     avg_network_speed: Option<i64>,
     avg_uptime: Option<f64>,
-) -> schemas::Host {
-    let mut host = schemas::Host {
+) -> schemas::host::Host {
+    let mut host = schemas::host::Host {
         device_id: device_id.to_string(),
         ..Default::default()
     };

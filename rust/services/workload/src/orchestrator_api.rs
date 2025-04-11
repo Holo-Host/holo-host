@@ -18,8 +18,18 @@ use async_nats::Message;
 use bson::{self, doc, oid::ObjectId, to_document, Bson};
 use core::option::Option::None;
 use db_utils::{
-    mongodb::{IntoIndexes, MongoCollection, MongoDbAPI, MutMetadata},
-    schemas::{self, Host, Workload, WorkloadState, WorkloadStatus},
+    mongodb::{
+        api::MongoDbAPI,
+        collection::MongoCollection,
+        traits::{IntoIndexes, MutMetadata},
+    },
+    schemas::{
+        developer::{Developer, DEVELOPER_COLLECTION_NAME},
+        host::{Host, HOST_COLLECTION_NAME},
+        user::{User, USER_COLLECTION_NAME},
+        workload::{Workload, WorkloadState, WorkloadStatus, WORKLOAD_COLLECTION_NAME},
+        DATABASE_NAME,
+    },
 };
 use hpos_hal::inventory::HoloInventory;
 use mongodb::{options::UpdateModifications, Client as MongoDBClient};
@@ -33,10 +43,10 @@ use std::{
 
 #[derive(Debug, Clone)]
 pub struct OrchestratorWorkloadApi {
-    pub workload_collection: MongoCollection<schemas::Workload>,
-    pub host_collection: MongoCollection<schemas::Host>,
-    pub user_collection: MongoCollection<schemas::User>,
-    pub developer_collection: MongoCollection<schemas::Developer>,
+    pub workload_collection: MongoCollection<Workload>,
+    pub host_collection: MongoCollection<Host>,
+    pub user_collection: MongoCollection<User>,
+    pub developer_collection: MongoCollection<Developer>,
 }
 
 impl WorkloadServiceApi for OrchestratorWorkloadApi {}
@@ -44,12 +54,10 @@ impl WorkloadServiceApi for OrchestratorWorkloadApi {}
 impl OrchestratorWorkloadApi {
     pub async fn new(client: &MongoDBClient) -> Result<Self> {
         Ok(Self {
-            workload_collection: Self::init_collection(client, schemas::WORKLOAD_COLLECTION_NAME)
-                .await?,
-            host_collection: Self::init_collection(client, schemas::HOST_COLLECTION_NAME).await?,
-            user_collection: Self::init_collection(client, schemas::USER_COLLECTION_NAME).await?,
-            developer_collection: Self::init_collection(client, schemas::DEVELOPER_COLLECTION_NAME)
-                .await?,
+            workload_collection: Self::init_collection(client, WORKLOAD_COLLECTION_NAME).await?,
+            host_collection: Self::init_collection(client, HOST_COLLECTION_NAME).await?,
+            user_collection: Self::init_collection(client, USER_COLLECTION_NAME).await?,
+            developer_collection: Self::init_collection(client, DEVELOPER_COLLECTION_NAME).await?,
         })
     }
 
@@ -59,7 +67,7 @@ impl OrchestratorWorkloadApi {
             msg,
             WorkloadState::Reported,
             WorkloadState::Error,
-            |mut workload: schemas::Workload| async move {
+            |mut workload: Workload| async move {
                 let mut status = WorkloadStatus {
                     id: None,
                     desired: WorkloadState::Running,
@@ -98,7 +106,7 @@ impl OrchestratorWorkloadApi {
             msg,
             WorkloadState::Updating,
             WorkloadState::Error,
-            |mut workload: schemas::Workload| async move {
+            |mut workload: Workload| async move {
                 let status = WorkloadStatus {
                     id: workload._id,
                     desired: WorkloadState::Updated,
@@ -217,7 +225,7 @@ impl OrchestratorWorkloadApi {
             msg,
             WorkloadState::Installed,
             WorkloadState::Error,
-            |workload: schemas::Workload| async move {
+            |workload: Workload| async move {
                 log::debug!("New workload to assign. Workload={:#?}", workload);
 
                 // Perform sanity check to ensure workload is not already assigned to a host and if so, exit fn
@@ -303,7 +311,7 @@ impl OrchestratorWorkloadApi {
         msg: Arc<Message>,
     ) -> Result<WorkloadApiResult, ServiceError> {
         log::debug!("Incoming message for 'WORKLOAD.modify'");
-        let workload = Self::convert_msg_to_type::<schemas::Workload>(msg)?;
+        let workload = Self::convert_msg_to_type::<Workload>(msg)?;
 
         let workload_id = workload.clone()._id.ok_or_else(|| {
             ServiceError::internal(
@@ -771,6 +779,6 @@ impl OrchestratorWorkloadApi {
             + IntoIndexes
             + MutMetadata,
     {
-        Ok(MongoCollection::<T>::new(client, schemas::DATABASE_NAME, collection_name).await?)
+        Ok(MongoCollection::<T>::new(client, DATABASE_NAME, collection_name).await?)
     }
 }

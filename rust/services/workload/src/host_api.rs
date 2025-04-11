@@ -13,7 +13,7 @@ use anyhow::{Context, Result};
 use async_nats::{jetstream::kv::Store, Message};
 use bson::oid::ObjectId;
 use core::option::Option::None;
-use db_utils::schemas::{
+use db_utils::schemas::workload::{
     Workload, WorkloadManifest, WorkloadManifestHolochainDhtV1, WorkloadState,
     WorkloadStateDiscriminants, WorkloadStatePayload, WorkloadStatus,
 };
@@ -255,7 +255,7 @@ impl HostWorkloadApi {
                                 ))?;
                         };
 
-                        db_utils::schemas::WorkloadStatePayload::HolochainDhtV1(app_info_bson)
+                        WorkloadStatePayload::HolochainDhtV1(app_info_bson)
                     }
 
                     _ => WorkloadStatePayload::None,
@@ -462,7 +462,7 @@ impl HostWorkloadApi {
 mod util {
     use anyhow::Context;
     use bson::oid::ObjectId;
-    use db_utils::schemas::{WorkloadManifest, WorkloadManifestHolochainDhtV1};
+    use db_utils::schemas::workload::{WorkloadManifest, WorkloadManifestHolochainDhtV1};
     use futures::{AsyncBufReadExt, StreamExt};
     use std::{path::PathBuf, process::Stdio, str::FromStr};
     use tokio::process::Command;

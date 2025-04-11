@@ -1,6 +1,6 @@
 use bson::oid::ObjectId;
 use clap::{Args, Parser, Subcommand};
-use db_utils::schemas::WorkloadManifestHolochainDhtV1;
+use db_utils::schemas::workload::WorkloadManifestHolochainDhtV1;
 use nats_utils::{
     leaf_server::LEAF_SERVER_DEFAULT_LISTEN_PORT,
     types::{HcHttpGwRequest, NatsRemoteArgs},
