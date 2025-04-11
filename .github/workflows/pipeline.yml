@@ -24,7 +24,7 @@ jobs:
     with:
       environment: dev
       project: holo-dns
-      droplets: '["46.101.64.62"]' # json array
+      droplets: '["ns1.web-bridge.holo.host"]' # json array
       port: 53
     secrets:
       DIGITAL_OCEAN_TOKEN: ${{ secrets.DIGITAL_OCEAN_TOKEN }}
