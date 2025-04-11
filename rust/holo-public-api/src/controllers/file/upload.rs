@@ -121,7 +121,7 @@ pub async fn upload_blob(
     .into_bytes();
 
     // create directory for the blob and metadata
-    let file_location = format!("./srv/holo-blobstore");
+    let file_location = format!("/srv/holo-blobstore");
     match fs::create_dir_all(file_location.clone()) {
         Ok(_) => (),
         Err(e) => {
