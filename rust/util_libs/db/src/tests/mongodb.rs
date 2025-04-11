@@ -1,6 +1,6 @@
 use crate::{
-    mongodb::{MongoCollection, MongoDbAPI},
-    schemas::{self, Metadata},
+    mongodb::{collection::MongoCollection, api::MongoDbAPI},
+    schemas::{self, metadata::Metadata},
 };
 use anyhow::Result;
 use bson::{self, doc, oid, DateTime};
@@ -21,13 +21,13 @@ async fn test_indexing_and_api() -> Result<()> {
     let database_name = "holo-hosting-test";
     let collection_name = "host";
     let mut host_api =
-        MongoCollection::<schemas::Host>::new(&client, database_name, collection_name).await?;
+        MongoCollection::<schemas::host::Host>::new(&client, database_name, collection_name).await?;
 
     // set index
     host_api.apply_indexing().await?;
 
-    fn get_mock_host() -> schemas::Host {
-        schemas::Host {
+    fn get_mock_host() -> schemas::host::Host {
+        schemas::host::Host {
             _id: Some(oid::ObjectId::new()),
             metadata: Metadata {
                 is_deleted: false,

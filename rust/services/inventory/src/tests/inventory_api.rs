@@ -4,8 +4,8 @@ mod tests {
     use anyhow::Result;
     use bson::doc;
     use bson::oid::ObjectId;
-    use db_utils::mongodb::MongoDbAPI;
-    use db_utils::schemas::{Capacity, Host};
+    use db_utils::mongodb::api::MongoDbAPI;
+    use db_utils::schemas::{workload::Capacity, host::Host};
     use mock_utils::{
         host::create_mock_inventory, mongodb_runner::MongodRunner, nats_message::NatsMessage,
         workload::create_test_workload,
