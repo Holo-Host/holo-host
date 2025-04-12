@@ -1,11 +1,11 @@
+use anyhow::Result;
 use bson::{doc, oid::ObjectId, Document};
 use mongodb::options::IndexOptions;
 use serde::{Deserialize, Serialize};
-use anyhow::Result;
 
-use crate::mongodb::traits::{MutMetadata, IntoIndexes};
-use super::metadata::Metadata;
 use super::alias::PubKey;
+use super::metadata::Metadata;
+use crate::mongodb::traits::{IntoIndexes, MutMetadata};
 
 /// Collection name for user documents
 pub const USER_COLLECTION_NAME: &str = "user";
@@ -19,14 +19,12 @@ pub struct RoleInfo {
     pub pubkey: PubKey,
 }
 
-
 /// Enumeration of possible user permission levels
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum UserPermission {
     /// Administrator level permissions
     Admin,
 }
-
 
 /// User document schema representing a user in the system
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]

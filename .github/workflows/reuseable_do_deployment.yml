@@ -1,19 +1,24 @@
 on:
   workflow_call:
     inputs:
-      environment:
-        required: true
-        type: string
       project:
         required: true
         type: string
-      port:
-        required: false
-        type: number
-        default: 8080
+        description: Rust package to build and deploy (assumes path is rust/{project})
+      environment:
+        required: true
+        type: string
+        description: Environment to deploy to, this maps to github environments
       droplets:
         required: false
         type: string
+        description: |
+          json list of droplets to deploy the docker image to.
+          These droplets will be updated to use the new image automatically.
+      dockerArgs:
+        required: false
+        type: string
+        description: Docker arguments to pass when starting the container
     secrets:
       DIGITAL_OCEAN_TOKEN:
         required: true
@@ -103,10 +108,10 @@ jobs:
             # pull new image and run it
             docker pull registry.digitalocean.com/holo-host/${{ inputs.project }}:${{ inputs.environment }}
             docker run -d \
-              --name ${{ inputs.project }} \
-              -p ${{ inputs.port }}:${{ inputs.port }}/tcp \
-              -p ${{ inputs.port }}:${{ inputs.port }}/udp \
+              --restart unless-stopped \
               --env-file .env \
+              --name ${{ inputs.project }} \
+              ${{ inputs.dockerArgs }} \
               registry.digitalocean.com/holo-host/${{ inputs.project }}:${{ inputs.environment }}
 
             # clean up unused images

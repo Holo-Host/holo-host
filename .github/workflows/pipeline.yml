@@ -22,16 +22,15 @@ jobs:
     uses: ./.github/workflows/reuseable_do_deployment.yml
     if: github.ref == 'refs/heads/main'
     with:
-      environment: dev
       project: holo-dns
+      environment: dev
       droplets: '["ns1.web-bridge.holo.host"]' # json array
-      port: 53
+      dockerArgs: "-p 53:53/tcp -p 53:53/udp" # docker args
     secrets:
       DIGITAL_OCEAN_TOKEN: ${{ secrets.DIGITAL_OCEAN_TOKEN }}
       SSH_KEY: ${{ secrets.SSH_KEY }}
       SSH_USERNAME: ${{ secrets.SSH_USERNAME }}
 
-  
   # holo-gateway
   HOLO_GATEWAY_CI:
     name: holo-gateway
@@ -45,7 +44,31 @@ jobs:
     uses: ./.github/workflows/reuseable_do_deployment.yml
     if: github.ref == 'refs/heads/main'
     with:
-      environment: dev
       project: holo-gateway
+      environment: dev
     secrets:
       DIGITAL_OCEAN_TOKEN: ${{ secrets.DIGITAL_OCEAN_TOKEN }}
+
+  # holo-public api
+  HOLO_PUBLIC_API_CI:
+    name: holo-public-api
+    uses: ./.github/workflows/reuseable_ci.yml
+    with:
+      project: holo-public-api
+      mongo: true
+      redis: true
+
+  HOLO_PUBLIC_API_DEPLOY_DEV:
+    name: holo-public-api Dev
+    needs: HOLO_PUBLIC_API_CI
+    uses: ./.github/workflows/reuseable_do_deployment.yml
+    if: github.ref == 'refs/heads/main'
+    with:
+      project: holo-public-api
+      environment: dev
+      droplets: '["api.dev.holo.host"]'
+      dockerArgs: "-p 3000:3000 -v /srv/holo-blobstore:/srv/holo-blobstore" # docker args
+    secrets:
+      DIGITAL_OCEAN_TOKEN: ${{ secrets.DIGITAL_OCEAN_TOKEN }}
+      SSH_KEY: ${{ secrets.SSH_KEY }}
+      SSH_USERNAME: ${{ secrets.SSH_USERNAME }}

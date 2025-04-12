@@ -1,17 +1,17 @@
+use anyhow::Result;
 use bson::{doc, oid::ObjectId, Bson, DateTime, Document};
 use mongodb::options::IndexOptions;
-use serde::{Deserialize, Serialize};
-use anyhow::Result;
 use semver::{BuildMetadata, Prerelease};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use strum::{EnumDiscriminants, EnumString, FromRepr};
 use strum_macros::AsRefStr;
 use url::Url;
 
-use crate::mongodb::traits::{MutMetadata, IntoIndexes};
-use super::metadata::Metadata;
 use super::alias::SemVer;
+use super::metadata::Metadata;
+use crate::mongodb::traits::{IntoIndexes, MutMetadata};
 
 /// Collection name for workload documents
 pub const WORKLOAD_COLLECTION_NAME: &str = "workload";

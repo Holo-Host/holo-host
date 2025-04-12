@@ -1,11 +1,11 @@
+use anyhow::Result;
 use bson::{doc, oid::ObjectId, Document};
 use hpos_hal::inventory::HoloInventory;
 use mongodb::options::IndexOptions;
 use serde::{Deserialize, Serialize};
-use anyhow::Result;
 
-use crate::mongodb::traits::{MutMetadata, IntoIndexes};
 use super::metadata::Metadata;
+use crate::mongodb::traits::{IntoIndexes, MutMetadata};
 
 /// Collection name for host documents
 pub const HOST_COLLECTION_NAME: &str = "host";

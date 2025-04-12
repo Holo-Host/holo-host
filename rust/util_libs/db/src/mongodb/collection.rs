@@ -1,13 +1,12 @@
+use anyhow::Result;
 use bson::{doc, Bson, DateTime, Document};
 use mongodb::{options::UpdateModifications, Client, Collection, IndexModel};
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
-use anyhow::Result;
 
 use super::traits::{IntoIndexes, MutMetadata};
 
-use nats_utils::types::ServiceError;// todo: remove this
-
+use nats_utils::types::ServiceError; // todo: remove this
 
 /// Wrapper type for MongoDB collections providing additional functionality.
 ///
@@ -65,7 +64,8 @@ where
         client: &Client,
         db_name: &str,
         collection_name: &str,
-    ) -> Result<Self, ServiceError> { // todo: remove nats service error from mongodb lib
+    ) -> Result<Self, ServiceError> {
+        // todo: remove nats service error from mongodb lib
         log::debug!(
             "Creating new MongoDB collection: {}.{}",
             db_name,

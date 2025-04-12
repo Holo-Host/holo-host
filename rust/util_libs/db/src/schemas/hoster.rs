@@ -1,10 +1,10 @@
+use anyhow::Result;
 use bson::{oid::ObjectId, Document};
 use mongodb::options::IndexOptions;
 use serde::{Deserialize, Serialize};
-use anyhow::Result;
 
-use crate::mongodb::traits::{MutMetadata, IntoIndexes};
 use super::metadata::Metadata;
+use crate::mongodb::traits::{IntoIndexes, MutMetadata};
 
 /// Collection name for hoster documents
 pub const HOSTER_COLLECTION_NAME: &str = "hoster";
