@@ -49,3 +49,22 @@ jobs:
       project: holo-gateway
     secrets:
       DIGITAL_OCEAN_TOKEN: ${{ secrets.DIGITAL_OCEAN_TOKEN }}
+
+
+  # holo-public api
+  HOLO_PUBLIC_API_CI:
+    name: holo-public-api
+    uses: ./.github/workflows/reuseable_ci.yml
+    with:
+      project: holo-public-api
+
+  HOLO_PUBLIC_API_DEPLOY_DEV:
+    name: holo-public-api Dev
+    needs: HOLO_PUBLIC_API_CI
+    uses: ./.github/workflows/reuseable_do_deployment.yml
+    if: github.ref == 'refs/heads/main'
+    with:
+      environment: dev
+      project: holo-public-api
+    secrets:
+      DIGITAL_OCEAN_TOKEN: ${{ secrets.DIGITAL_OCEAN_TOKEN }}
