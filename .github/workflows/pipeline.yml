@@ -57,6 +57,8 @@ jobs:
     uses: ./.github/workflows/reuseable_ci.yml
     with:
       project: holo-public-api
+      mongo: true
+      redis: true
 
   HOLO_PUBLIC_API_DEPLOY_DEV:
     name: holo-public-api Dev
