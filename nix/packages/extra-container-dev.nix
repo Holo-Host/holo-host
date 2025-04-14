@@ -231,23 +231,7 @@ let
                 nats.hub.tlsInsecure = true;
                 nats.hub.user = "orchestrator";
                 nats.hub.passwordFile = builtins.toFile "nats.pw" "yooveihuQuai4ziphiel4F";
-
-                # TODO: actually provide an instance
-                mongo.url = "mongodb://127.0.0.1";
               };
-
-              services.mongodb = {
-                enable = true;
-                package = pkgs.mongodb-ce;
-                bind_ip = "0.0.0.0";
-              };
-
-              nixpkgs.config.allowUnfreePredicate =
-                pkg:
-                builtins.elem (lib.getName pkg) [
-                  "mongodb-ce"
-                ];
-
             };
         };
 
