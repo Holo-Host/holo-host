@@ -1,10 +1,10 @@
 use async_trait::async_trait;
 use bson::{oid::ObjectId, DateTime, Document};
+use futures::stream::TryStreamExt;
 use mongodb::{options::UpdateModifications, results::UpdateResult};
 use nats_utils::types::ServiceError;
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
-use futures::stream::TryStreamExt;
 
 use super::{
     collection::MongoCollection,
