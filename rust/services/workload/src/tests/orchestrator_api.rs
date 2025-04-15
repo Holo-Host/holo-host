@@ -19,12 +19,12 @@ mod tests {
 
     #[tokio::test]
     async fn test_add_workload() -> Result<()> {
-        let mongod = MongodRunner::run().unwrap();
-        let db_client = mongod.client().unwrap();
+        let mongod = MongodRunner::run().await?;
+        let db_client = mongod.client()?;
+        let api = OrchestratorWorkloadApi::new(db_client).await?;
 
-        let api = OrchestratorWorkloadApi::new(&db_client).await?;
         let workload = create_test_workload_default();
-        let msg_payload = serde_json::to_vec(&workload).unwrap();
+        let msg_payload = serde_json::to_vec(&workload)?;
         let msg = Arc::new(NatsMessage::new("WORKLOAD.add", msg_payload).into_message());
         let r = api.add_workload(msg).await?;
 
@@ -32,15 +32,16 @@ mod tests {
         assert!(matches!(r.result.status.actual, WorkloadState::Reported));
         assert!(matches!(r.result.status.desired, WorkloadState::Running));
 
+        // Clean up the database
+        mongod.database().drop().await?;
         Ok(())
     }
 
     #[tokio::test]
     async fn test_update_workload() -> Result<()> {
-        let mongod = MongodRunner::run().unwrap();
-        let db_client = mongod.client().unwrap();
-
-        let api = OrchestratorWorkloadApi::new(&db_client).await?;
+        let mongod = MongodRunner::run().await?;
+        let db_client = mongod.client()?;
+        let api = OrchestratorWorkloadApi::new(db_client).await?;
 
         // First add a workload
         let mut workload = create_test_workload_default();
@@ -51,22 +52,23 @@ mod tests {
         workload._id = Some(workload_id);
 
         // Then update it
-        let msg_payload = serde_json::to_vec(&workload).unwrap();
+        let msg_payload = serde_json::to_vec(&workload)?;
         let msg = Arc::new(NatsMessage::new("WORKLOAD.update", msg_payload).into_message());
 
         let r = api.update_workload(msg).await?;
         assert!(matches!(r.result.status.actual, WorkloadState::Updating));
         assert!(matches!(r.result.status.desired, WorkloadState::Updated));
 
+        // Clean up the database
+        mongod.database().drop().await?;
         Ok(())
     }
 
     #[tokio::test]
     async fn test_delete_workload() -> Result<()> {
-        let mongod = MongodRunner::run().expect("Failed to run mongod");
-        let db_client = mongod.client().expect("Failed to create db client");
-
-        let api = OrchestratorWorkloadApi::new(&db_client).await?;
+        let mongod = MongodRunner::run().await?;
+        let db_client = mongod.client()?;
+        let api = OrchestratorWorkloadApi::new(db_client).await?;
 
         // First add a workload
         let mut workload = create_test_workload_default();
@@ -77,7 +79,7 @@ mod tests {
         workload._id = Some(workload_id);
 
         // Then remove it
-        let msg_payload = serde_json::to_vec(&workload).expect("Failed to serialize workload id");
+        let msg_payload = serde_json::to_vec(&workload)?;
         let msg = Arc::new(NatsMessage::new("WORKLOAD.delete", msg_payload).into_message());
 
         let r = api.delete_workload(msg).await?;
@@ -94,15 +96,17 @@ mod tests {
         assert!(deleted_workload.metadata.is_deleted);
         assert!(deleted_workload.metadata.deleted_at.is_some());
 
+        // Clean up the database
+        mongod.database().drop().await?;
         Ok(())
     }
 
     #[tokio::test]
     async fn test_verify_host_meets_workload_criteria() -> Result<()> {
-        let mongod = MongodRunner::run().unwrap();
-        let db_client = mongod.client().unwrap();
+        let mongod = MongodRunner::run().await?;
+        let db_client = mongod.client()?;
+        let api = OrchestratorWorkloadApi::new(db_client).await?;
 
-        let api = OrchestratorWorkloadApi::new(&db_client).await?;
         let required_avg_network_speed = 100;
         let required_avg_uptime = 0.85;
         let required_capacity = Capacity {
@@ -160,15 +164,17 @@ mod tests {
         ineligible_host.inventory.cpus = gen_mock_processors(14); // Less than workload requirement
         assert!(!api.verify_host_meets_workload_criteria(&ineligible_host.inventory, &workload));
 
+        // Clean up the database
+        mongod.database().drop().await?;
         Ok(())
     }
 
     #[tokio::test]
     async fn test_handle_db_insertion() -> Result<()> {
-        let mongod = MongodRunner::run().unwrap();
-        let db_client = mongod.client().unwrap();
+        let mongod = MongodRunner::run().await?;
+        let db_client = mongod.client()?;
+        let api = OrchestratorWorkloadApi::new(db_client).await?;
 
-        let api = OrchestratorWorkloadApi::new(&db_client).await?;
         let required_avg_network_speed = 500;
         let required_avg_uptime = 0.90;
         let required_capacity = Capacity {
@@ -231,15 +237,17 @@ mod tests {
             .unwrap();
 
         assert!(updated_host.assigned_workloads.contains(&workload_id));
+
+        // Clean up the database
+        mongod.database().drop().await?;
         Ok(())
     }
 
     #[tokio::test]
     async fn test_handle_status_update() -> Result<()> {
-        let mongod = MongodRunner::run().unwrap();
-        let db_client = mongod.client().unwrap();
-
-        let api = OrchestratorWorkloadApi::new(&db_client).await?;
+        let mongod = MongodRunner::run().await?;
+        let db_client = mongod.client()?;
+        let api = OrchestratorWorkloadApi::new(db_client).await?;
 
         // Create and add a workload first
         let workload = create_test_workload_default();
@@ -280,6 +288,8 @@ mod tests {
             WorkloadState::Running
         ));
 
+        // Clean up the database
+        mongod.database().drop().await?;
         Ok(())
     }
 }
