@@ -1,78 +1,77 @@
 #![allow(dead_code)]
 
 use anyhow::Context;
-use mongodb::{options::ClientOptions, Client as MongoDBClient};
-use std::{path::PathBuf, process::Stdio, str::FromStr};
-use tempfile::TempDir;
+use mongodb::{options::ClientOptions, Client as MongoDBClient, Database};
+use std::env;
+use uuid::Uuid;
 
-/// This module implements running ephemeral Mongod instances.
-/// It disables TCP and relies only unix domain sockets.
+/// This struct now handles connections to MongoDB Atlas for testing
 pub struct MongodRunner {
-    _child: std::process::Child,
-    // this is stored to prevent premature removing of the tempdir
-    tempdir: TempDir,
+    client: MongoDBClient,
+    db_name: String,
 }
 
 impl MongodRunner {
-    fn socket_path(tempdir: &TempDir) -> anyhow::Result<String> {
-        Ok(format!(
-            "{}/mongod.sock",
-            tempdir
-                .path()
-                .canonicalize()?
-                .as_mut_os_str()
-                .to_str()
-                .ok_or_else(|| anyhow::anyhow!("can't convert path to str"))?
-        ))
+    pub async fn run() -> anyhow::Result<Self> {
+        let uri = env::var("TEST_MONGODB_ATLAS_URI")
+            .context("TEST_MONGODB_ATLAS_URI environment variable not set")?;
+
+        let mut client_options = ClientOptions::parse(uri)
+            .await
+            .context("Failed to parse MongoDB Atlas URI")?;
+
+        // Set a unique database name for each test run to prevent conflicts
+        let db_name = format!("test_db_{}", Uuid::new_v4());
+        client_options.default_database = Some(db_name.clone());
+
+        let client = MongoDBClient::with_options(client_options)
+            .context("Failed to create MongoDB client")?;
+
+        // Verify we can connect
+        client
+            .list_database_names()
+            .await
+            .context("Failed to connect to MongoDB Atlas")?;
+
+        Ok(Self { client, db_name })
     }
 
-    pub fn run() -> anyhow::Result<Self> {
-        let tempdir = TempDir::new().unwrap();
-        std::fs::File::create_new(Self::socket_path(&tempdir)?)?;
-
-        let mut cmd = std::process::Command::new("mongod");
-        cmd.args([
-            "--unixSocketPrefix",
-            &tempdir.path().to_string_lossy(),
-            "--dbpath",
-            &tempdir.path().to_string_lossy(),
-            "--bind_ip",
-            &Self::socket_path(&tempdir)?,
-            "--port",
-            &0.to_string(),
-        ])
-        .stdout(Stdio::null())
-        .stderr(Stdio::null());
-
-        let child = cmd
-            .spawn()
-            .unwrap_or_else(|e| panic!("Failed to spawn {cmd:?}: {e}"));
-
-        let new_self = Self {
-            _child: child,
-            tempdir,
-        };
-
-        std::fs::exists(Self::socket_path(&new_self.tempdir)?)
-            .context("mongod socket should exist")?;
-
-        log::info!(
-            "MongoDB Server is running at {:?}",
-            new_self.socket_pathbuf()
-        );
-
-        Ok(new_self)
+    pub fn client(&self) -> anyhow::Result<&MongoDBClient> {
+        Ok(&self.client)
     }
 
-    fn socket_pathbuf(&self) -> anyhow::Result<PathBuf> {
-        Ok(PathBuf::from_str(&Self::socket_path(&self.tempdir)?)?)
+    pub fn database(&self) -> Database {
+        self.client.database(&self.db_name)
     }
 
-    pub fn client(&self) -> anyhow::Result<MongoDBClient> {
-        let server_address = mongodb::options::ServerAddress::Unix {
-            path: self.socket_pathbuf()?,
-        };
-        let client_options = ClientOptions::builder().hosts(vec![server_address]).build();
-        Ok(MongoDBClient::with_options(client_options)?)
+    /// Cleans up all collections in the test database
+    pub async fn cleanup_collections(&self) -> anyhow::Result<()> {
+        let db = self.database();
+
+        // Get all collections in the database
+        let collections = db.list_collection_names().await?;
+
+        // Drop each collection
+        for collection in collections {
+            db.collection::<bson::Document>(&collection)
+                .drop()
+                .await
+                .with_context(|| format!("Failed to drop collection {}", collection))?;
+        }
+
+        Ok(())
+    }
+}
+
+impl Drop for MongodRunner {
+    fn drop(&mut self) {
+        // Create a new runtime for cleanup since we can't use async in drop
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on(async {
+            // Drop the entire test database
+            if let Err(e) = self.client.database(&self.db_name).drop().await {
+                log::error!("Failed to drop test database {}: {}", self.db_name, e);
+            }
+        });
     }
 }

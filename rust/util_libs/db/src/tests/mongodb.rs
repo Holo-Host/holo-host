@@ -13,15 +13,13 @@ async fn test_indexing_and_api() -> Result<()> {
     dotenv().ok();
     env_logger::init();
 
-    let mongod = MongodRunner::run().expect("Failed to run Mongodb Runner");
-    let client = mongod
-        .client()
-        .expect("Failed to connect client to Mongodb");
+    let mongod = MongodRunner::run().await?;
+    let client = mongod.client()?;
 
-    let database_name = "holo-hosting-test";
+    let database_name = mongod.database().name().to_string();
     let collection_name = "host";
     let mut host_api =
-        MongoCollection::<schemas::host::Host>::new(&client, database_name, collection_name)
+        MongoCollection::<schemas::host::Host>::new(client, &database_name, collection_name)
             .await?;
 
     // set index
@@ -87,8 +85,7 @@ async fn test_indexing_and_api() -> Result<()> {
     assert!(updated_ids.contains(&ids[1]));
     assert!(updated_ids.contains(&ids[2]));
 
-    // Delete collection and all documents therein.
-    let _ = host_api.inner.drop();
-
+    // Clean up database
+    mongod.database().drop().await?;
     Ok(())
 }
