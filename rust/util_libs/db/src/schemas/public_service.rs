@@ -1,10 +1,10 @@
+use anyhow::Result;
 use bson::{oid::ObjectId, DateTime, Document};
 use mongodb::options::IndexOptions;
 use serde::{Deserialize, Serialize};
-use anyhow::Result;
 
-use crate::mongodb::traits::{MutMetadata, IntoIndexes};
 use super::metadata::Metadata;
+use crate::mongodb::traits::{IntoIndexes, MutMetadata};
 
 /// Collection for tracking public services and their public IPs
 pub const PUBLIC_SERVICE_COLLECTION_NAME: &str = "public_services";
