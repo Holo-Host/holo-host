@@ -10,12 +10,22 @@ mod tests {
         host::create_mock_inventory, mongodb_runner::MongodRunner, nats_message::NatsMessage,
         workload::create_test_workload,
     };
+    use serial_test::serial;
     use std::sync::Arc;
 
+    #[ctor::ctor]
+    fn init() {
+        dotenv::dotenv().ok();
+        env_logger::init();
+    }
+
     #[tokio::test]
+    #[serial]
+
     async fn test_handle_authenticated_inventory_update() -> Result<()> {
         let mongod = MongodRunner::run().await?;
-        let db_client = mongod.client()?;
+        let db_client = mongod.client();
+        std::env::set_var("MONGODB_NAME", mongod.db_name());
         let api = InventoryServiceApi::new(db_client).await?;
 
         // Create a host id to reference in the workload collection
@@ -33,13 +43,15 @@ mod tests {
             Some(100),
             Some(0.9),
         );
+
         let workload_id = api.workload_collection.insert_one_into(workload).await?;
 
         // Create initial host with reference to workload (id) created above
         let initial_inventory = create_mock_inventory(Some(1000), Some(3), Some(20));
+
         let host = Host {
             _id: Some(host_id),
-            device_id: "mock_pubkey".to_string(),
+            device_id: format!("machine_id_{host_id}"),
             inventory: initial_inventory.clone(),
             assigned_workloads: vec![workload_id],
             ..Default::default()
@@ -55,6 +67,7 @@ mod tests {
         );
 
         let result = api.handle_host_inventory_update(msg).await?;
+
         assert!(matches!(
             result.status,
             crate::types::InventoryUpdateStatus::Ok
@@ -66,18 +79,23 @@ mod tests {
             .get_one_from(doc! { "_id": host_id })
             .await?
             .expect("Failed to fetch updated host");
+
         assert_eq!(updated_host.assigned_workloads.len(), 1);
         assert!(updated_host.assigned_workloads.contains(&workload_id));
 
         // Clean up database
-        mongod.database().drop().await?;
+        mongod.cleanup().await?;
+
         Ok(())
     }
 
     #[tokio::test]
+    #[serial]
+
     async fn test_handle_inventory_update_with_insufficient_resources() -> Result<()> {
         let mongod = MongodRunner::run().await?;
-        let db_client = mongod.client()?;
+        let db_client = mongod.client();
+        std::env::set_var("MONGODB_NAME", mongod.db_name());
         let api = InventoryServiceApi::new(db_client).await?;
 
         // Create a host id to reference in the workload collection
@@ -101,7 +119,7 @@ mod tests {
         let initial_inventory = create_mock_inventory(Some(1000), Some(3), Some(20));
         let host = Host {
             _id: Some(host_id),
-            device_id: "mock_pubkey".to_string(),
+            device_id: format!("machine_id_{host_id}"),
             assigned_workloads: vec![workload_id],
             inventory: initial_inventory.clone(),
             ..Default::default()
@@ -126,12 +144,14 @@ mod tests {
         let updated_host = api
             .host_collection
             .get_one_from(doc! { "_id": host_id })
-            .await?
-            .unwrap();
+            .await?;
+        assert!(updated_host.is_some());
+
+        let updated_host = updated_host.unwrap();
         assert!(updated_host.assigned_workloads.is_empty());
 
         // Clean up database
-        mongod.database().drop().await?;
+        mongod.cleanup().await?;
         Ok(())
     }
 }

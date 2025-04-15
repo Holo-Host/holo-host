@@ -13,7 +13,7 @@ jobs:
   ci:
     runs-on: ubuntu-latest
     env:
-      MONGODB_URI: "mongodb+srv://ci_test_runner:${{ secrets.CI_MONGODB_ATLAS_PASSWORD }}@cluster0.${{ secrets.DEV_MONGODB_ATLAS_CLUSTER_ID }}.mongodb.net"
+      TEST_MONGODB_URI: "mongodb+srv://ci_test_runner:${{ secrets.CI_MONGODB_ATLAS_PASSWORD }}@cluster0.${{ secrets.DEV_MONGODB_ATLAS_CLUSTER_ID }}.mongodb.net"
 
     steps:
       - name: Checkout Repository

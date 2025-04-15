@@ -5,7 +5,7 @@ use mongodb::{options::ClientOptions, Client as MongoDBClient, Database};
 use std::env;
 use uuid::Uuid;
 
-/// This struct now handles connections to MongoDB Atlas for testing
+/// This struct connects to MongoDB Atlas for testing
 pub struct MongodRunner {
     client: MongoDBClient,
     db_name: String,
@@ -13,8 +13,8 @@ pub struct MongodRunner {
 
 impl MongodRunner {
     pub async fn run() -> anyhow::Result<Self> {
-        let uri = env::var("TEST_MONGODB_ATLAS_URI")
-            .context("TEST_MONGODB_ATLAS_URI environment variable not set")?;
+        let uri = env::var("TEST_MONGODB_URI")
+            .context("TEST_MONGODB_URI environment variable not set")?;
 
         let mut client_options = ClientOptions::parse(uri)
             .await
@@ -36,8 +36,12 @@ impl MongodRunner {
         Ok(Self { client, db_name })
     }
 
-    pub fn client(&self) -> anyhow::Result<&MongoDBClient> {
-        Ok(&self.client)
+    pub fn client(&self) -> &MongoDBClient {
+        &self.client
+    }
+
+    pub fn db_name(&self) -> &String {
+        &self.db_name
     }
 
     pub fn database(&self) -> Database {
@@ -61,17 +65,13 @@ impl MongodRunner {
 
         Ok(())
     }
-}
 
-impl Drop for MongodRunner {
-    fn drop(&mut self) {
-        // Create a new runtime for cleanup since we can't use async in drop
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        rt.block_on(async {
-            // Drop the entire test database
-            if let Err(e) = self.client.database(&self.db_name).drop().await {
-                log::error!("Failed to drop test database {}: {}", self.db_name, e);
-            }
-        });
+    pub async fn cleanup(&self) -> anyhow::Result<()> {
+        // Drop the entire test database
+        self.client
+            .database(&self.db_name)
+            .drop()
+            .await
+            .with_context(|| format!("Failed to drop test database {}", self.db_name))
     }
 }

@@ -3,6 +3,8 @@ mod tests {
     use crate::{orchestrator_api::OrchestratorWorkloadApi, types::WorkloadResult};
     use anyhow::Result;
     use bson::doc;
+    use bson::oid::ObjectId;
+    use db_utils::mongodb::api::MongoDbAPI;
     use db_utils::schemas::workload::{
         Capacity, WorkloadState, WorkloadStatePayload, WorkloadStatus,
     };
@@ -13,14 +15,21 @@ mod tests {
         nats_message::NatsMessage,
         workload::{create_test_workload, create_test_workload_default},
     };
+    use serial_test::serial;
     use std::sync::Arc;
 
-    use db_utils::mongodb::api::MongoDbAPI;
+    #[ctor::ctor]
+    fn init() {
+        dotenv::dotenv().ok();
+        env_logger::init();
+    }
 
     #[tokio::test]
+    #[serial]
     async fn test_add_workload() -> Result<()> {
         let mongod = MongodRunner::run().await?;
-        let db_client = mongod.client()?;
+        let db_client = mongod.client();
+        std::env::set_var("MONGODB_NAME", mongod.db_name());
         let api = OrchestratorWorkloadApi::new(db_client).await?;
 
         let workload = create_test_workload_default();
@@ -33,14 +42,16 @@ mod tests {
         assert!(matches!(r.result.status.desired, WorkloadState::Running));
 
         // Clean up the database
-        mongod.database().drop().await?;
+        mongod.cleanup().await?;
         Ok(())
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_update_workload() -> Result<()> {
         let mongod = MongodRunner::run().await?;
-        let db_client = mongod.client()?;
+        let db_client = mongod.client();
+        std::env::set_var("MONGODB_NAME", mongod.db_name());
         let api = OrchestratorWorkloadApi::new(db_client).await?;
 
         // First add a workload
@@ -60,119 +71,16 @@ mod tests {
         assert!(matches!(r.result.status.desired, WorkloadState::Updated));
 
         // Clean up the database
-        mongod.database().drop().await?;
+        mongod.cleanup().await?;
         Ok(())
     }
 
     #[tokio::test]
-    async fn test_delete_workload() -> Result<()> {
-        let mongod = MongodRunner::run().await?;
-        let db_client = mongod.client()?;
-        let api = OrchestratorWorkloadApi::new(db_client).await?;
-
-        // First add a workload
-        let mut workload = create_test_workload_default();
-        let workload_id = api
-            .workload_collection
-            .insert_one_into(workload.clone())
-            .await?;
-        workload._id = Some(workload_id);
-
-        // Then remove it
-        let msg_payload = serde_json::to_vec(&workload)?;
-        let msg = Arc::new(NatsMessage::new("WORKLOAD.delete", msg_payload).into_message());
-
-        let r = api.delete_workload(msg).await?;
-
-        assert!(matches!(r.result.status.actual, WorkloadState::Deleted));
-        assert!(matches!(r.result.status.desired, WorkloadState::Removed));
-
-        // Verify workload is marked as deleted
-        let deleted_workload = api
-            .workload_collection
-            .get_one_from(doc! { "_id": workload_id })
-            .await?
-            .unwrap();
-        assert!(deleted_workload.metadata.is_deleted);
-        assert!(deleted_workload.metadata.deleted_at.is_some());
-
-        // Clean up the database
-        mongod.database().drop().await?;
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn test_verify_host_meets_workload_criteria() -> Result<()> {
-        let mongod = MongodRunner::run().await?;
-        let db_client = mongod.client()?;
-        let api = OrchestratorWorkloadApi::new(db_client).await?;
-
-        let required_avg_network_speed = 100;
-        let required_avg_uptime = 0.85;
-        let required_capacity = Capacity {
-            drive: 200,
-            cores: 18,
-        };
-        #[allow(clippy::field_reassign_with_default)]
-        let mut valid_host_remaining_capacity = HoloInventory::default();
-        let mut mock_holo_drive = HoloDriveInventory {
-            capacity_bytes: Some(100),
-            ..Default::default()
-        };
-        valid_host_remaining_capacity.drives = vec![
-            mock_holo_drive.clone(),
-            mock_holo_drive.clone(),
-            mock_holo_drive.clone(),
-        ];
-        valid_host_remaining_capacity.cpus = gen_mock_processors(20);
-
-        let workload = create_test_workload(
-            None,
-            None,
-            Some(1),
-            Some(required_capacity),
-            Some(required_avg_network_speed),
-            Some(required_avg_uptime),
-        );
-
-        let device_id = "host_inventory_machine_id_1";
-        let host = create_test_host(
-            device_id,
-            None,
-            None,
-            Some(valid_host_remaining_capacity),
-            Some(required_avg_network_speed),
-            Some(required_avg_uptime),
-        );
-
-        // Test when host meets criteria
-        assert!(api.verify_host_meets_workload_criteria(&host.inventory, &workload));
-
-        // Test when host drive space doesn't meet disk criteria
-        let mut ineligible_host = host.clone();
-        // Create new holo drive with available capacity less than workload requirement
-        mock_holo_drive.capacity_bytes = Some(0);
-        ineligible_host.inventory.drives = vec![
-            mock_holo_drive.clone(),
-            mock_holo_drive.clone(),
-            mock_holo_drive,
-        ];
-        assert!(!api.verify_host_meets_workload_criteria(&ineligible_host.inventory, &workload));
-
-        // Test when host cores count doesn't meet cores criteria
-        let mut ineligible_host = host.clone();
-        ineligible_host.inventory.cpus = gen_mock_processors(14); // Less than workload requirement
-        assert!(!api.verify_host_meets_workload_criteria(&ineligible_host.inventory, &workload));
-
-        // Clean up the database
-        mongod.database().drop().await?;
-        Ok(())
-    }
-
-    #[tokio::test]
+    #[serial]
     async fn test_handle_db_insertion() -> Result<()> {
         let mongod = MongodRunner::run().await?;
-        let db_client = mongod.client()?;
+        let db_client = mongod.client();
+        std::env::set_var("MONGODB_NAME", mongod.db_name());
         let api = OrchestratorWorkloadApi::new(db_client).await?;
 
         let required_avg_network_speed = 500;
@@ -195,9 +103,9 @@ mod tests {
         valid_host_remaining_capacity.cpus = gen_mock_processors(20);
 
         // Create and add a host first
-        let device_id = "host_inventory_machine_id_2";
+        let device_id = format!("host_inventory_machine_id_{}", ObjectId::new());
         let host = create_test_host(
-            device_id,
+            &device_id,
             None,
             None,
             Some(valid_host_remaining_capacity),
@@ -239,14 +147,122 @@ mod tests {
         assert!(updated_host.assigned_workloads.contains(&workload_id));
 
         // Clean up the database
-        mongod.database().drop().await?;
+        mongod.cleanup().await?;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_delete_workload() -> Result<()> {
+        let mongod = MongodRunner::run().await?;
+        let db_client = mongod.client();
+        std::env::set_var("MONGODB_NAME", mongod.db_name());
+        let api = OrchestratorWorkloadApi::new(db_client).await?;
+
+        // First add a workload
+        let mut workload = create_test_workload_default();
+        let workload_id = api
+            .workload_collection
+            .insert_one_into(workload.clone())
+            .await?;
+        workload._id = Some(workload_id);
+
+        // Then remove it
+        let msg_payload = serde_json::to_vec(&workload)?;
+        let msg = Arc::new(NatsMessage::new("WORKLOAD.delete", msg_payload).into_message());
+
+        let r = api.delete_workload(msg).await?;
+
+        assert!(matches!(r.result.status.actual, WorkloadState::Deleted));
+        assert!(matches!(r.result.status.desired, WorkloadState::Removed));
+
+        // Verify workload is marked as deleted
+        let deleted_workload = api
+            .workload_collection
+            .get_one_from(doc! { "_id": workload_id })
+            .await?
+            .unwrap();
+        assert!(deleted_workload.metadata.is_deleted);
+        assert!(deleted_workload.metadata.deleted_at.is_some());
+
+        // Clean up the database
+        mongod.cleanup().await?;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_verify_host_meets_workload_criteria() -> Result<()> {
+        let mongod = MongodRunner::run().await?;
+        let db_client = mongod.client();
+        std::env::set_var("MONGODB_NAME", mongod.db_name());
+        let api = OrchestratorWorkloadApi::new(db_client).await?;
+
+        let required_avg_network_speed = 100;
+        let required_avg_uptime = 0.85;
+        let required_capacity = Capacity {
+            drive: 200,
+            cores: 18,
+        };
+        #[allow(clippy::field_reassign_with_default)]
+        let mut valid_host_remaining_capacity = HoloInventory::default();
+        let mut mock_holo_drive = HoloDriveInventory {
+            capacity_bytes: Some(100),
+            ..Default::default()
+        };
+        valid_host_remaining_capacity.drives = vec![
+            mock_holo_drive.clone(),
+            mock_holo_drive.clone(),
+            mock_holo_drive.clone(),
+        ];
+        valid_host_remaining_capacity.cpus = gen_mock_processors(20);
+
+        let workload = create_test_workload(
+            None,
+            None,
+            Some(1),
+            Some(required_capacity),
+            Some(required_avg_network_speed),
+            Some(required_avg_uptime),
+        );
+
+        let device_id = format!("host_inventory_machine_id_{}", ObjectId::new());
+        let host = create_test_host(
+            &device_id,
+            None,
+            None,
+            Some(valid_host_remaining_capacity),
+            Some(required_avg_network_speed),
+            Some(required_avg_uptime),
+        );
+
+        // Test when host meets criteria
+        assert!(api.verify_host_meets_workload_criteria(&host.inventory, &workload));
+
+        // Test when host drive space doesn't meet disk criteria
+        let mut ineligible_host = host.clone();
+        // Create new holo drive with available capacity less than workload requirement
+        mock_holo_drive.capacity_bytes = Some(0);
+        ineligible_host.inventory.drives = vec![
+            mock_holo_drive.clone(),
+            mock_holo_drive.clone(),
+            mock_holo_drive,
+        ];
+        assert!(!api.verify_host_meets_workload_criteria(&ineligible_host.inventory, &workload));
+
+        // Test when host cores count doesn't meet cores criteria
+        let mut ineligible_host = host.clone();
+        ineligible_host.inventory.cpus = gen_mock_processors(14); // Less than workload requirement
+        assert!(!api.verify_host_meets_workload_criteria(&ineligible_host.inventory, &workload));
+
+        // Clean up the database
+        mongod.cleanup().await?;
         Ok(())
     }
 
     #[tokio::test]
     async fn test_handle_status_update() -> Result<()> {
         let mongod = MongodRunner::run().await?;
-        let db_client = mongod.client()?;
+        let db_client = mongod.client();
+        std::env::set_var("MONGODB_NAME", mongod.db_name());
         let api = OrchestratorWorkloadApi::new(db_client).await?;
 
         // Create and add a workload first
@@ -289,7 +305,7 @@ mod tests {
         ));
 
         // Clean up the database
-        mongod.database().drop().await?;
+        mongod.cleanup().await?;
         Ok(())
     }
 }

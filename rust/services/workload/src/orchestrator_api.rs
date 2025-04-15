@@ -779,6 +779,7 @@ impl OrchestratorWorkloadApi {
             + IntoIndexes
             + MutMetadata,
     {
-        Ok(MongoCollection::<T>::new(client, DATABASE_NAME, collection_name).await?)
+        let db_name = std::env::var("MONGODB_NAME").unwrap_or(DATABASE_NAME.to_string());
+        Ok(MongoCollection::<T>::new(client, &db_name, collection_name).await?)
     }
 }

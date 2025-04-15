@@ -16,6 +16,7 @@ serde_json = { workspace = true }
 db_utils = { workspace = true }
 nats_utils = { workspace = true }
 hpos-hal = { workspace = true }
+env_logger = { workspace = true }
 bson = { version = "2.6.1", features = ["chrono-0_4"] }
 mongodb = "3.1"
 base32 = "0.5.1"
@@ -28,4 +29,7 @@ bytes = "1.8.0"
 
 [dev-dependencies]
 tempfile = "3.8"
+ctor = "0.2"
+serial_test = "2.0"
+dotenv = { workspace = true }
 mock_utils = { workspace = true }

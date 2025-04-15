@@ -71,9 +71,9 @@ impl InventoryServiceApi {
         );
 
         let subject_sections: Vec<&str> = msg_subject.split('.').collect();
-        let host_id_index = 1;
-        let host_id: schemas::alias::PubKey = subject_sections
-            .get(host_id_index)
+        let host_device_id_index = 1;
+        let host_device_id: schemas::alias::PubKey = subject_sections
+            .get(host_device_id_index)
             .ok_or_else(|| {
                 ServiceError::internal(
                     "Invalid subject format",
@@ -82,11 +82,11 @@ impl InventoryServiceApi {
             })?
             .to_string();
 
-        log::debug!("Processing inventory update for host: {host_id}");
+        log::debug!("Processing inventory update for host: {host_device_id}");
 
         // Update host inventory and get the host record
         let host = self
-            .update_host_inventory(&host_id, &host_inventory)
+            .update_host_inventory(&host_device_id, &host_inventory)
             .await?;
 
         // Handle workloads that are no longer compatible with the host
@@ -99,26 +99,26 @@ impl InventoryServiceApi {
     }
 
     // Update Host's Holo Inventory in Host collection,
-    // creating a new Host entry if one doesn't already exist for the provided host_id
+    // creating a new Host entry if one doesn't already exist for the provided host_device_id
     async fn update_host_inventory(
         &self,
-        host_id: &str,
+        host_device_id: &str,
         inventory: &HoloInventory,
     ) -> Result<Host, ServiceError> {
         // Create a default Host instance to extract default values
         let default_host = Host::default();
-        let filter = doc! { "device_id": host_id };
+        let filter = doc! { "device_id": host_device_id };
         let update = doc! {
             "$set": {
                 "inventory": bson::to_bson(inventory)
                     .map_err(|e| ServiceError::internal(e.to_string(), None))?,
                 "metadata.updated_at": DateTime::now(),
             },
-            // If the document doesn't exist, also set the device_id (host_id)
+            // If the document doesn't exist, also set the device_id (host_device_id)
             "$setOnInsert": {
                 "metadata.is_deleted": false,
                 "metadata.created_at": DateTime::now(),
-                "device_id": host_id,
+                "device_id": host_device_id,
                 "avg_uptime": default_host.avg_uptime,
                 "avg_network_speed": default_host.avg_network_speed,
                 "avg_latency": default_host.avg_latency,
@@ -227,7 +227,8 @@ impl InventoryServiceApi {
             + IntoIndexes
             + MutMetadata,
     {
-        Ok(MongoCollection::<T>::new(client, schemas::DATABASE_NAME, collection_name).await?)
+        let db_name = std::env::var("MONGODB_NAME").unwrap_or(schemas::DATABASE_NAME.to_string());
+        Ok(MongoCollection::<T>::new(client, &db_name, collection_name).await?)
     }
 
     fn convert_msg_to_type<T>(msg: Arc<Message>) -> Result<T, ServiceError>
