@@ -33,3 +33,6 @@ ctor = "0.2"
 serial_test = "2.0"
 dotenv = { workspace = true }
 mock_utils = { workspace = true }
+
+[features]
+tests_integration_inventory_service = []

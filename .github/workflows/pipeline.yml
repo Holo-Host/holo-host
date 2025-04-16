@@ -31,7 +31,6 @@ jobs:
       SSH_KEY: ${{ secrets.SSH_KEY }}
       SSH_USERNAME: ${{ secrets.SSH_USERNAME }}
 
-  
   # holo-gateway
   HOLO_GATEWAY_CI:
     name: holo-gateway

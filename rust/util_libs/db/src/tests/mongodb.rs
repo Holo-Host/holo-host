@@ -17,6 +17,12 @@ mod tests {
 
     #[tokio::test]
     async fn test_indexing_and_api() -> Result<()> {
+        // Skip the db test if the db connection string is not set
+        if std::env::var("TEST_MONGODB_URI").is_err() {
+            log::warn!("Skipping test: TEST_MONGODB_URI not set");
+            return Ok(());
+        }
+
         let mongod = MongodRunner::run().await?;
         let client = mongod.client();
 
