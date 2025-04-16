@@ -25,7 +25,7 @@ mod tests {
     async fn test_handle_authenticated_inventory_update() -> Result<()> {
         let mongod = MongodRunner::run().await?;
         let db_client = mongod.client();
-        std::env::set_var("MONGODB_NAME", mongod.db_name());
+        std::env::set_var("HOLO_DATABASE_NAME", mongod.db_name());
         let api = InventoryServiceApi::new(db_client).await?;
 
         // Create a host id to reference in the workload collection
@@ -95,7 +95,7 @@ mod tests {
     async fn test_handle_inventory_update_with_insufficient_resources() -> Result<()> {
         let mongod = MongodRunner::run().await?;
         let db_client = mongod.client();
-        std::env::set_var("MONGODB_NAME", mongod.db_name());
+        std::env::set_var("HOLO_DATABASE_NAME", mongod.db_name());
         let api = InventoryServiceApi::new(db_client).await?;
 
         // Create a host id to reference in the workload collection
