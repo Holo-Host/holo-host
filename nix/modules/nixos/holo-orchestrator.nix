@@ -51,8 +51,21 @@ in
     };
 
     mongo = {
-      url = lib.mkOption {
+      username = lib.mkOption {
         type = lib.types.str;
+        default = "orchestrator";
+      };
+
+      clusterIdFile = lib.mkOption {
+        type = lib.types.str;
+        default = "/var/lib/config/mongo/cluster_id.txt";
+        description = "Path to the file containing the Orchestrator MongoDB cluster id";
+      };
+
+      passwordFile = lib.mkOption {
+        type = lib.types.path;
+        default = "/var/lib/config/mongo/password.txt";
+        description = "Path to the file containing the Orchestrator MongoDB password";
       };
     };
 
@@ -61,6 +74,7 @@ in
         url = lib.mkOption {
           type = lib.types.str;
         };
+
         tlsInsecure = lib.mkOption {
           type = lib.types.bool;
         };
@@ -100,7 +114,9 @@ in
               "${cfg.logLevel},tungstenite=error,async_nats=error,mio=error";
 
           RUST_BACKTRACE = cfg.rust.backtrace;
-          MONGO_URI = cfg.mongo.url;
+          MONGODB_USERNAME = cfg.mongo.username;
+          MONGODB_CLUSTER_ID_FILE = cfg.mongo.clusterIdFile;
+          MONGODB_PASSWORD_FILE = cfg.mongo.passwordFile;
         }
         // lib.attrsets.optionalAttrs (cfg.nats.hub.url != null) {
           NATS_URL = cfg.nats.hub.url;

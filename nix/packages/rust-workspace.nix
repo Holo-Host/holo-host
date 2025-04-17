@@ -220,8 +220,6 @@ craneLib.buildPackage (
                   ln -s $bin $out/bin/
                 done
               '')
-
-              pkgs.mongodb-ce
             ];
 
           partitions = 1;
