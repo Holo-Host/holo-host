@@ -1,12 +1,13 @@
 use std::sync::Arc;
 
 use anyhow::Result;
+use clap::Parser;
 use nats_utils::{jetstream_client::JsClient, types::JsClientBuilder};
 
 #[tokio::main]
 async fn main() -> Result<()> {
     env_logger::init();
-    let args = holo_gateway::RunArgs::populate_from_environment();
+    let args = holo_gateway::RunArgs::parse();
     log::info!("Starting Holo Gateway Service with args");
 
     let nats_client = {

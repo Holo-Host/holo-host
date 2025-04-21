@@ -1,5 +1,5 @@
 use db_utils::mongodb::{api::MongoDbAPI, collection::MongoCollection};
-use db_utils::schemas::public_service::PublicService;
+use db_utils::schemas::public_service::{PublicService, SCHEMA_VERSION};
 use log::{debug, info};
 use mongodb::bson::doc;
 use mongodb::Client;
@@ -105,26 +105,28 @@ async fn mongo_db_inner(input: &MongoDbSourceParms) -> Result<(), CacheError> {
         MongoCollection::<PublicService>::new(&client, &input.db_name, &input.db_collection)
             .await
             .unwrap();
-    let filter = doc! { "service_type": "GatewayServer" };
+    let filter = doc! { "service_type": "GatewayServer", "schema_version": SCHEMA_VERSION };
     let gateway_nodes = collection.get_one_from(filter).await;
     match gateway_nodes {
         Ok(ret) => {
             // Success, parse and update cache.
             match ret {
-                Some(service) => {
+                Some(services) => {
                     // Take write lock, update cache and we're done.
                     {
                         let mut cache = DNS_CACHE.write().unwrap();
                         cache.clear();
-                        cache.insert(
-                            service.service_name,
-                            DnsCacheItem {
-                                a: service.a_addrs.clone(),
-                                aaaa: service.aaaa_addrs.clone(),
-                                cname: service.cname_addrs.clone(),
-                                ns: service.ns_addrs.clone(),
-                            },
-                        );
+                        for record in services.records {
+                            cache.insert(
+                                record.service_name,
+                                DnsCacheItem {
+                                    a: record.a_addrs.clone(),
+                                    aaaa: record.aaaa_addrs.clone(),
+                                    cname: record.cname_addrs.clone(),
+                                    ns: record.ns_addrs.clone(),
+                                },
+                            );
+                        }
                     }
                 }
                 None => {

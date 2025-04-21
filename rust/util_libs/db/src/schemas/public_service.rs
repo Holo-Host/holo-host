@@ -6,6 +6,9 @@ use serde::{Deserialize, Serialize};
 use super::metadata::Metadata;
 use crate::mongodb::traits::{IntoIndexes, MutMetadata};
 
+/// Current schema version. Used internally and monotonically increases.
+pub const SCHEMA_VERSION: i32 = 1;
+
 /// Collection for tracking public services and their public IPs
 pub const PUBLIC_SERVICE_COLLECTION_NAME: &str = "public_services";
 
@@ -25,10 +28,18 @@ pub struct PublicService {
     /// MongoDB ObjectId of the workload document
     #[serde(skip_serializing_if = "Option::is_none")]
     pub _id: Option<ObjectId>,
-    /// Common metadata fields
-    pub metadata: Metadata,
+    /// Schema version.
+    pub schema_version: i32,
     /// Service Type
     pub service_type: PublicServiceType,
+    /// Common metadata fields
+    pub metadata: Metadata,
+    /// List of records
+    pub records: Vec<ServiceRecord>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct ServiceRecord {
     /// DNS name to associate with service
     pub service_name: String,
     /// public IPv6 addresses the service is available on.
@@ -46,18 +57,15 @@ impl Default for PublicService {
     fn default() -> Self {
         Self {
             _id: None,
+            schema_version: SCHEMA_VERSION,
+            service_type: PublicServiceType::Default,
             metadata: Metadata {
                 is_deleted: false,
                 created_at: Some(DateTime::now()),
                 updated_at: Some(DateTime::now()),
                 deleted_at: None,
             },
-            service_type: PublicServiceType::Default,
-            service_name: "".to_string(),
-            aaaa_addrs: vec![],
-            a_addrs: vec![],
-            cname_addrs: vec![],
-            ns_addrs: vec![],
+            records: vec![],
         }
     }
 }
