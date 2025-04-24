@@ -25,6 +25,8 @@ pub struct UserInfo {
     pub given_names: String,
     /// User's family name
     pub family_name: String,
+    // User's jurisdiction
+    pub jurisdiction: String,
 }
 
 impl IntoIndexes for UserInfo {

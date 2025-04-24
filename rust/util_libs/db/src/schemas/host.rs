@@ -30,8 +30,8 @@ pub struct Host {
     pub avg_latency: i64,
     /// IP address of the host
     pub ip_address: Option<String>,
-    /// Reference to the assigned hoster
-    pub assigned_hoster: Option<ObjectId>,
+    /// Reference to the user that owns this host
+    pub owner: Option<ObjectId>,
     /// List of workloads running on this host
     pub assigned_workloads: Vec<ObjectId>,
 }
@@ -47,7 +47,7 @@ impl Default for Host {
             avg_network_speed: 100, // Start at decent network speed (mbps)
             avg_latency: 100,       // Start at decent latency time
             assigned_workloads: vec![],
-            assigned_hoster: None,
+            owner: None,
             ip_address: None,
         }
     }
