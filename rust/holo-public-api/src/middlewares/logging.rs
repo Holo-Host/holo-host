@@ -5,7 +5,7 @@ use actix_web::{
     middleware::Next,
     web, Error, HttpMessage,
 };
-use db_utils::schemas::api_logs::{ApiLog, LOG_COLLECTION_NAME};
+use db_utils::schemas::api_log::{ApiLog, LOG_COLLECTION_NAME};
 use deadpool_redis::{redis::AsyncCommands, Pool};
 
 use crate::providers::jwt::AccessTokenClaims;

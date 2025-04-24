@@ -1,5 +1,5 @@
 pub mod alias;
-pub mod api_logs;
+pub mod api_log;
 pub mod developer;
 pub mod host;
 pub mod hoster;

@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     use actix_web::{http::StatusCode, middleware::from_fn, test::TestRequest, web};
-    use db_utils::schemas::api_logs::{ApiLog, LOG_COLLECTION_NAME};
+    use db_utils::schemas::api_log::{ApiLog, LOG_COLLECTION_NAME};
     use deadpool_redis::redis::AsyncCommands;
 
     use crate::{
