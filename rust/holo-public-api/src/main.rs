@@ -28,10 +28,6 @@ async fn main() -> std::io::Result<()> {
             utoipa::openapi::security::HttpAuthScheme::Bearer,
         )),
     );
-    docs.components.as_mut().unwrap().security_schemes.insert(
-        "ApiKey".to_string(),
-        SecurityScheme::ApiKey(ApiKey::Header(ApiKeyValue::new("API-KEY"))),
-    );
     docs.info.title = "Holo Public API".to_string();
     docs.info.version = "0.0.1".to_string();
     docs.servers = Some(vec![utoipa::openapi::Server::new(app_config.host.clone())]);

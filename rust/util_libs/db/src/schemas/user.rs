@@ -4,7 +4,7 @@ use mongodb::options::IndexOptions;
 use serde::{Deserialize, Serialize};
 use strum::{AsRefStr, EnumDiscriminants, EnumString, FromRepr};
 
-use super::alias::PubKey;
+use super::{alias::PubKey, user_permissions::UserPermission};
 use super::metadata::Metadata;
 use crate::mongodb::traits::{IntoIndexes, MutMetadata};
 
@@ -36,29 +36,6 @@ pub struct PublicKeyWithRole {
     pub pubkey: PubKey,
 }
 
-/// Represents the type of permission the user has for each resources
-#[derive(
-    Debug, Clone, Serialize, Deserialize, PartialEq, AsRefStr, EnumDiscriminants, FromRepr,
-)]
-#[strum_discriminants(
-    derive(EnumString, Serialize, Deserialize),
-    repr(usize),
-    strum(serialize_all = "snake_case")
-)]
-pub enum PermissionType {
-    Read,
-    Create,
-    Update,
-    Delete,
-}
-
-/// Represents what the resource is and what type of permission the user has
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct UserPermission {
-    pub resource: String,
-    pub permission_type: PermissionType,
-}
-
 /// Enumeration of possible user roles
 /// Roles will apply a predefined set of permissions to the user automatically
 #[derive(
@@ -87,6 +64,8 @@ pub struct User {
     pub roles: Vec<UserRole>,
     // contains a list of pairs of public keys and their roles
     pub public_key: Vec<PublicKeyWithRole>,
+    // this is used to invalidate all refresh tokens by incrementing the version by 1
+    pub refresh_token_version: i32,
 }
 
 impl IntoIndexes for User {

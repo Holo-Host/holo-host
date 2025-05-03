@@ -1,0 +1,134 @@
+use actix_web::HttpRequest;
+use bson::{doc, oid::ObjectId};
+use db_utils::{
+    mongodb::{api::MongoDbAPI, collection::MongoCollection},
+    schemas::{
+        api_key::{ApiKey, API_KEY_COLLECTION_NAME},
+        user::{User, USER_COLLECTION_NAME},
+        user_permissions::UserPermission,
+    },
+};
+
+use super::jwt::{sign_access_token, sign_refresh_token, AccessTokenClaims, RefreshTokenClaims};
+
+const API_KEY_HEADER: &str = "x-api-key";
+
+/// This function is used to get the refresh token version
+/// if it cannot locate the refresh token version, it returns 0
+pub async fn get_refresh_token_version(db: &mongodb::Client, user_id: String) -> i32 {
+    let collection = match MongoCollection::<User>::new(db, "holo", USER_COLLECTION_NAME).await {
+        Ok(collection) => collection,
+        Err(_err) => {
+            return 0;
+        }
+    };
+    let oid = match ObjectId::parse_str(user_id) {
+        Ok(oid) => oid,
+        Err(_err) => {
+            return 0;
+        }
+    };
+    let doc = match collection.get_one_from(doc! { "_id": oid }).await {
+        Ok(doc) => doc,
+        Err(_err) => {
+            return 0;
+        }
+    };
+    if doc.is_none() {
+        return 0;
+    }
+    let doc = doc.unwrap();
+    doc.refresh_token_version
+}
+
+/// This function is used to get the user id and permissions from the api key
+/// It returns an Option<ApiKey> which contains the user id and permissions
+/// If the api key is not found, it returns None
+pub async fn get_user_id_and_permissions_from_apikey(
+    db: &mongodb::Client,
+    api_key_hash: String,
+) -> Result<Option<ApiKey>, anyhow::Error> {
+    let collection = match MongoCollection::<ApiKey>::new(db, "holo", API_KEY_COLLECTION_NAME).await
+    {
+        Ok(collection) => collection,
+        Err(_err) => {
+            return Err(anyhow::anyhow!("Failed to get MongoDB collection"));
+        }
+    };
+    let result = match collection
+        .get_one_from(doc! { "api_key": api_key_hash })
+        .await
+    {
+        Ok(result) => result,
+        Err(_err) => {
+            return Err(anyhow::anyhow!("Failed to get MongoDB collection"));
+        }
+    };
+    if result.is_none() {
+        return Ok(None);
+    }
+    let result = result.unwrap();
+    Ok(Some(result))
+}
+
+/// This function signs a access and a refresh token
+/// and returns them as a tuple
+pub fn sign_jwt_tokens(
+    user_id: String,
+    permissions: Vec<UserPermission>,
+    version: i32,
+    allow_extending_refresh_token: bool,
+    jwt_secret: &str,
+) -> Option<(String, String)> {
+    const ACCESS_TOKEN_EXPIRATION: usize = 60 * 5; // 5 minutes
+    const REFRESH_TOKEN_EXPIRATION: usize = 60 * 60 * 24 * 30; // 30 days
+    let access_token = match sign_access_token(
+        AccessTokenClaims {
+            sub: user_id.clone(),
+            permissions: permissions.clone(),
+            exp: bson::DateTime::now().to_chrono().timestamp() as usize + ACCESS_TOKEN_EXPIRATION,
+        },
+        jwt_secret,
+    ) {
+        Ok(claims) => claims,
+        Err(_err) => {
+            tracing::error!("failed to sign access token");
+            return None;
+        }
+    };
+    let refresh_token = match sign_refresh_token(
+        RefreshTokenClaims {
+            sub: user_id.clone(),
+            exp: bson::DateTime::now().to_chrono().timestamp() as usize + REFRESH_TOKEN_EXPIRATION,
+            version,
+            allow_extending_refresh_token,
+        },
+        jwt_secret,
+    ) {
+        Ok(token) => token,
+        Err(_err) => {
+            tracing::error!("failed to sign refresh token");
+            return None;
+        }
+    };
+    Some((access_token, refresh_token))
+}
+
+/// This function is used to get the API key hash from the api key header and the API key
+pub fn get_apikey_hash(header: String, api_key: String) -> Option<String> {
+    if header == "v0" {
+        return Some(api_key);
+    }
+    None
+}
+
+/// This function is used to get the API key from the headers
+pub fn get_apikey_from_headers(req: &HttpRequest) -> Option<String> {
+    match req.headers().get(API_KEY_HEADER) {
+        None => None,
+        Some(apikey) => match apikey.to_str() {
+            Err(_err) => None,
+            Ok(api_key) => Some(api_key.to_string()),
+        },
+    }
+}
