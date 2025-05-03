@@ -18,7 +18,7 @@ pub fn create_test_workload(
 ) -> schemas::workload::Workload {
     let mut workload = schemas::workload::Workload::default();
     if let Some(assigned_developer) = assigned_developer {
-        workload.assigned_developer = assigned_developer;
+        workload.owner = assigned_developer;
     }
     if let Some(assigned_hosts) = assigned_hosts {
         workload.assigned_hosts = assigned_hosts;

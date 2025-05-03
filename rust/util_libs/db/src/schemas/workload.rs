@@ -94,8 +94,8 @@ pub struct Workload {
     pub _id: Option<ObjectId>,
     /// Common metadata fields
     pub metadata: Metadata,
-    /// Reference to the developer who created this workload
-    pub assigned_developer: ObjectId,
+    /// Reference to the user who created this workload
+    pub owner: ObjectId,
     /// Semantic version of the workload
     pub version: SemVer,
     /// Minimum number of hosts required
@@ -193,7 +193,7 @@ impl Default for Workload {
                 deleted_at: None,
             },
             version: semver,
-            assigned_developer: ObjectId::new(),
+            owner: ObjectId::new(),
             min_hosts: 1,
             system_specs: SystemSpecs {
                 capacity: Capacity { drive: 1, cores: 1 },
@@ -220,14 +220,14 @@ impl IntoIndexes for Workload {
     fn into_indices(self) -> Result<Vec<(Document, Option<IndexOptions>)>> {
         let mut indices = vec![];
 
-        //  Add Assigned Developer Index
-        let developer_index_doc = doc! { "assigned_developer": 1 };
-        let developer_index_opts = Some(
+        //  Add Owner Index
+        let owner_index_doc = doc! { "owner": 1 };
+        let owner_index_opts = Some(
             IndexOptions::builder()
-                .name(Some("assigned_developer_index".to_string()))
+                .name(Some("owner_index".to_string()))
                 .build(),
         );
-        indices.push((developer_index_doc, developer_index_opts));
+        indices.push((owner_index_doc, owner_index_opts));
 
         Ok(indices)
     }
