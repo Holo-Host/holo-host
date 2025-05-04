@@ -1,6 +1,6 @@
 use actix_web::{middleware::from_fn, web, App, HttpServer};
 use utoipa::openapi::security::SecurityScheme;
-use utoipa_swagger_ui::SwaggerUi;
+use utoipa_scalar::Servable;
 
 #[cfg(test)]
 #[allow(dead_code)]
@@ -33,6 +33,7 @@ async fn main() -> std::io::Result<()> {
     docs.info.title = "Holo Public API".to_string();
     docs.info.version = "0.0.1".to_string();
     docs.servers = Some(vec![utoipa::openapi::Server::new(app_config.host.clone())]);
+
 
     // setup database
     let mongodb_client = mongodb::Client::with_uri_str(&app_config.mongo_url)
@@ -70,11 +71,9 @@ async fn main() -> std::io::Result<()> {
         if app_config.enable_swagger {
             app = app.route(
                 "/",
-                web::get().to(|| async { web::Redirect::to("/swagger/") }),
+                web::get().to(|| async { web::Redirect::to("/scalar") }),
             );
-            app = app.service(
-                SwaggerUi::new("/swagger/{_:.*}").url("/api-docs/openapi.json", docs.clone()),
-            );
+            app = app.service(utoipa_scalar::Scalar::with_url("/scalar", docs.clone()));
         }
 
         // public routes

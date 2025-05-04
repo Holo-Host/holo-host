@@ -8,7 +8,7 @@ edition = "2021"
 actix-web = "4.10.2"
 actix-cors = "0.7.1"
 utoipa = "5.3.1"
-utoipa-swagger-ui = { version = "9.0.1", features = ["actix-web"] }
+utoipa-scalar = { version = "0.3", features = ["actix-web"] }
 tracing = "0.1.41"
 tracing-subscriber = "0.3.19"
 anyhow = "1.0.97"
