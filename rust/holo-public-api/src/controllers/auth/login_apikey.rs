@@ -3,7 +3,7 @@ use bson::doc;
 use utoipa::OpenApi;
 
 use super::auth_dto::AuthLoginResponse;
-use crate::providers::{auth, config::AppConfig, error_response::ErrorResponse, jwt};
+use crate::providers::{auth, config::AppConfig, error_response::ErrorResponse};
 
 #[derive(OpenApi)]
 #[openapi(paths(login_with_apikey))]
@@ -66,11 +66,13 @@ pub async fn login_with_apikey(
     let version = auth::get_refresh_token_version(db.get_ref(), user_id.clone()).await;
     let permissions = result.permissions.clone();
     let jwt_tokens = auth::sign_jwt_tokens(
+        &config.get_ref().jwt_secret,
         user_id.clone(),
         permissions.clone(),
         version,
         false,
-        &config.get_ref().jwt_secret,
+        result.expire_at as usize,
+        Some(result._id.unwrap().to_string()),
     );
     if jwt_tokens.is_none() {
         return HttpResponse::InternalServerError().json(ErrorResponse {

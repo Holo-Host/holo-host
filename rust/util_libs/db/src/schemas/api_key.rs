@@ -26,8 +26,9 @@ pub struct ApiKey {
     pub permissions: Vec<UserPermission>,
     /// description of the API key (this is optional and set by the user)
     pub description: Option<String>,
-    /// when the api key expires (this is optional and set by the user)
-    pub expire_at: Option<i64>,
+    /// when the api key expires in unixtimestamp (seconds) (this is optional and set by the user)
+    /// bson::DateTime::now().to_chrono().timestamp()
+    pub expire_at: i32,
 }
 
 impl Default for ApiKey {
@@ -39,7 +40,8 @@ impl Default for ApiKey {
             api_key: String::new(),
             permissions: vec![],
             description: None,
-            expire_at: None,
+            // default expire_at is 30 day
+            expire_at: bson::DateTime::now().to_chrono().timestamp() as i32 + 60 + 60 * 24 * 30,
         }
     }
 }

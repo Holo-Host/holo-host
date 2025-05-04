@@ -13,8 +13,15 @@ pub struct AccessTokenClaims {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct RefreshTokenClaims {
+    /// mongodb user id
     pub sub: String,
+    /// how long until token expires
     pub exp: usize,
+    /// this is used to invalidate previously generated access tokens
     pub version: i32,
+    /// When auth/refresh is called should it extend the refresh token
     pub allow_extending_refresh_token: bool,
+    /// mongodb id of api key collection.
+    /// if refresh token was not created using an api key then it is None
+    pub api_key: Option<String>,
 }

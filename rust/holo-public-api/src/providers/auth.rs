@@ -74,14 +74,15 @@ pub async fn get_user_id_and_permissions_from_apikey(
 /// This function signs a access and a refresh token
 /// and returns them as a tuple
 pub fn sign_jwt_tokens(
+    jwt_secret: &str,
     user_id: String,
     permissions: Vec<UserPermission>,
     version: i32,
     allow_extending_refresh_token: bool,
-    jwt_secret: &str,
+    expires_at: usize,
+    api_key: Option<String>,
 ) -> Option<(String, String)> {
     const ACCESS_TOKEN_EXPIRATION: usize = 60 * 5; // 5 minutes
-    const REFRESH_TOKEN_EXPIRATION: usize = 60 * 60 * 24 * 30; // 30 days
     let access_token = match sign_access_token(
         AccessTokenClaims {
             sub: user_id.clone(),
@@ -99,9 +100,10 @@ pub fn sign_jwt_tokens(
     let refresh_token = match sign_refresh_token(
         RefreshTokenClaims {
             sub: user_id.clone(),
-            exp: bson::DateTime::now().to_chrono().timestamp() as usize + REFRESH_TOKEN_EXPIRATION,
+            exp: expires_at,
             version,
             allow_extending_refresh_token,
+            api_key,
         },
         jwt_secret,
     ) {
@@ -131,4 +133,33 @@ pub fn get_apikey_from_headers(req: &HttpRequest) -> Option<String> {
             Ok(api_key) => Some(api_key.to_string()),
         },
     }
+}
+
+/// get an api key using mongodb id
+pub async fn get_api_key(
+    db: &mongodb::Client,
+    api_key_id: String,
+) -> Result<Option<ApiKey>, anyhow::Error> {
+    let collection = match MongoCollection::<ApiKey>::new(db, "holo", API_KEY_COLLECTION_NAME).await
+    {
+        Ok(collection) => collection,
+        Err(_err) => {
+            return Err(anyhow::anyhow!("Failed to get MongoDB collection"));
+        }
+    };
+    let oid = match ObjectId::parse_str(api_key_id) {
+        Ok(value) => value,
+        Err(_err) => return Err(anyhow::anyhow!("Failed to get object id")),
+    };
+    let result = match collection.get_one_from(doc! { "_id": oid }).await {
+        Ok(result) => result,
+        Err(_err) => {
+            return Err(anyhow::anyhow!("Failed to get MongoDB collection"));
+        }
+    };
+    if result.is_none() {
+        return Ok(None);
+    }
+    let result = result.unwrap();
+    Ok(Some(result))
 }
