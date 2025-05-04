@@ -11,10 +11,10 @@ pub struct AuthLoginResponseSpec;
 
 pub fn setup_public_controllers(cfg: &mut web::ServiceConfig) {
     cfg.service(login_apikey::login_with_apikey);
+    cfg.service(refresh::refresh);
 }
 
-pub fn setup_private_controllers(cfg: &mut web::ServiceConfig) {
-    cfg.service(refresh::refresh);
+pub fn setup_private_controllers(_cfg: &mut web::ServiceConfig) {
 }
 
 pub fn setup_docs() -> utoipa::openapi::OpenApi {

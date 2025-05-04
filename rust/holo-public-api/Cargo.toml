@@ -10,6 +10,7 @@ actix-cors = "0.7.1"
 utoipa = "5.3.1"
 utoipa-swagger-ui = { version = "9.0.1", features = ["actix-web"] }
 tracing = "0.1.41"
+tracing-subscriber = "0.3.19"
 anyhow = "1.0.97"
 config = "0.15.11"
 dotenvy = "0.15.7"

@@ -2405,6 +2405,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tracing",
+ "tracing-subscriber",
  "utoipa",
  "utoipa-swagger-ui",
 ]

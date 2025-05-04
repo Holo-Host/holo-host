@@ -50,9 +50,11 @@ pub async fn login_with_apikey(
             .await
         {
             Ok(result) => result,
-            Err(_err) => {
-                return HttpResponse::InternalServerError().json(ErrorResponse {
-                    message: "failed to get user id and permissions".to_string(),
+            Err(err) => {
+                tracing::error!("failed to get user id and permissions: {}", err);
+                return HttpResponse::InternalServerError().json(bson::doc! {
+                    "error": err.to_string(),
+                    "message": "failed to get user id and permissions".to_string(),
                 });
             }
         };

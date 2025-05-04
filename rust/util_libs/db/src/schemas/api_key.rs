@@ -7,7 +7,7 @@ use super::{metadata::Metadata, user_permissions::UserPermission};
 use crate::mongodb::traits::{IntoIndexes, MutMetadata};
 
 /// Collection name for API key documents
-pub const API_KEY_COLLECTION_NAME: &str = "api_keys";
+pub const API_KEY_COLLECTION_NAME: &str = "api_key";
 
 /// API key document schema representing an API key in the system
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -28,7 +28,7 @@ pub struct ApiKey {
     pub description: Option<String>,
     /// when the api key expires in unixtimestamp (seconds) (this is optional and set by the user)
     /// bson::DateTime::now().to_chrono().timestamp()
-    pub expire_at: i32,
+    pub expire_at: i64,
 }
 
 impl Default for ApiKey {
@@ -41,7 +41,7 @@ impl Default for ApiKey {
             permissions: vec![],
             description: None,
             // default expire_at is 30 day
-            expire_at: bson::DateTime::now().to_chrono().timestamp() as i32 + 60 + 60 * 24 * 30,
+            expire_at: bson::DateTime::now().to_chrono().timestamp() + 60 + 60 * 24 * 30,
         }
     }
 }

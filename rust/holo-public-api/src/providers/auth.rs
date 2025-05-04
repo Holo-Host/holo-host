@@ -28,7 +28,10 @@ pub async fn get_refresh_token_version(db: &mongodb::Client, user_id: String) ->
             return 0;
         }
     };
-    let doc = match collection.get_one_from(doc! { "_id": oid }).await {
+    let doc = match collection
+        .get_one_from(doc! { "_id": oid, "metadata.is_deleted": false })
+        .await
+    {
         Ok(doc) => doc,
         Err(_err) => {
             return 0;
@@ -52,15 +55,17 @@ pub async fn get_user_id_and_permissions_from_apikey(
     {
         Ok(collection) => collection,
         Err(_err) => {
+            print!("Failed to get MongoDB collection");
             return Err(anyhow::anyhow!("Failed to get MongoDB collection"));
         }
     };
     let result = match collection
-        .get_one_from(doc! { "api_key": api_key_hash })
+        .get_one_from(doc! { "api_key": api_key_hash, "metadata.is_deleted": false })
         .await
     {
         Ok(result) => result,
         Err(_err) => {
+            print!("Failed to get MongoDB collection 2");
             return Err(anyhow::anyhow!("Failed to get MongoDB collection"));
         }
     };
@@ -151,7 +156,10 @@ pub async fn get_api_key(
         Ok(value) => value,
         Err(_err) => return Err(anyhow::anyhow!("Failed to get object id")),
     };
-    let result = match collection.get_one_from(doc! { "_id": oid }).await {
+    let result = match collection
+        .get_one_from(doc! { "_id": oid, "metadata.is_deleted": false })
+        .await
+    {
         Ok(result) => result,
         Err(_err) => {
             return Err(anyhow::anyhow!("Failed to get MongoDB collection"));

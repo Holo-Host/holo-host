@@ -1,5 +1,5 @@
 use actix_web::{middleware::from_fn, web, App, HttpServer};
-use utoipa::openapi::security::{ApiKey, ApiKeyValue, SecurityScheme};
+use utoipa::openapi::security::SecurityScheme;
 use utoipa_swagger_ui::SwaggerUi;
 
 #[cfg(test)]
@@ -14,6 +14,8 @@ mod scheduler;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
+    tracing_subscriber::fmt().init();
+
     // load config
     let app_config = providers::config::load_config().unwrap_or_else(|err| {
         tracing::error!("Error loading config: {}", err);

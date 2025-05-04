@@ -81,7 +81,7 @@ pub async fn refresh(
     };
     if access_token_result.exp > current_time + 60 {
         return HttpResponse::BadRequest().json(ErrorResponse {
-            message: "access token is valid for 60 seconds".to_string(),
+            message: "access token is still valid for 60 seconds or longer".to_string(),
         });
     }
     if access_token_result.sub.clone() != refresh_token_result.sub.clone() {
