@@ -1,6 +1,7 @@
 use actix_web::{middleware::from_fn, web, App, HttpServer};
 use utoipa::openapi::security::SecurityScheme;
-use utoipa_scalar::Servable;
+use utoipa_redoc::Servable as Redoc;
+use utoipa_scalar::Servable as Scalar;
 
 #[cfg(test)]
 #[allow(dead_code)]
@@ -72,6 +73,7 @@ async fn main() -> std::io::Result<()> {
                 "/",
                 web::get().to(|| async { web::Redirect::to("/scalar") }),
             );
+            app = app.service(utoipa_redoc::Redoc::with_url("/redoc", docs.clone()));
             app = app.service(utoipa_scalar::Scalar::with_url("/scalar", docs.clone()));
         }
 
