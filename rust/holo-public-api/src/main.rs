@@ -34,7 +34,6 @@ async fn main() -> std::io::Result<()> {
     docs.info.version = "0.0.1".to_string();
     docs.servers = Some(vec![utoipa::openapi::Server::new(app_config.host.clone())]);
 
-
     // setup database
     let mongodb_client = mongodb::Client::with_uri_str(&app_config.mongo_url)
         .await
