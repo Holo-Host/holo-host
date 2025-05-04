@@ -1,4 +1,5 @@
 {
+  "editor.tabSize": 4,
   "editor.defaultFormatter": "ibecker.treefmt-vscode",
   "direnv.restart.automatic": true,
   "[nix]": {

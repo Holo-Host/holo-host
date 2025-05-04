@@ -1352,6 +1352,7 @@ dependencies = [
  "tokio",
  "tokio-retry",
  "url",
+ "utoipa",
 ]
 
 [[package]]

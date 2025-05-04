@@ -4,8 +4,8 @@ use mongodb::options::IndexOptions;
 use serde::{Deserialize, Serialize};
 use strum::{AsRefStr, EnumDiscriminants, EnumString, FromRepr};
 
-use super::{alias::PubKey, user_permissions::UserPermission};
 use super::metadata::Metadata;
+use super::{alias::PubKey, user_permissions::UserPermission};
 use crate::mongodb::traits::{IntoIndexes, MutMetadata};
 
 /// Collection name for user documents
@@ -47,7 +47,12 @@ pub struct PublicKeyWithRole {
     strum(serialize_all = "snake_case")
 )]
 pub enum UserRole {
+    // WARNING: This role will give full access to the system
     Admin,
+    // Role for customers to manage their own data
+    User,
+    // Role for developers or support team to have limited access over others data
+    Support,
 }
 
 /// User document schema representing a user in the system
