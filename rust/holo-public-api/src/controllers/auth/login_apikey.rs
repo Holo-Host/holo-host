@@ -43,12 +43,16 @@ pub async fn login_with_apikey(
         });
     }
     let api_key_hash = auth::get_apikey_hash(api_key[0].to_string(), api_key[1].to_string());
+    if api_key_hash.is_none() {
+        return HttpResponse::Unauthorized().json(ErrorResponse {
+            message: "missing or invalid 'api-key'".to_string(),
+        });
+    }
+    let api_key_hash = api_key_hash.unwrap();
 
     // get user id and permissions from the api key hash
     let result =
-        match auth::get_user_id_and_permissions_from_apikey(db.get_ref(), api_key_hash.unwrap())
-            .await
-        {
+        match auth::get_user_id_and_permissions_from_apikey(db.get_ref(), api_key_hash).await {
             Ok(result) => result,
             Err(err) => {
                 tracing::error!("failed to get user id and permissions: {}", err);
