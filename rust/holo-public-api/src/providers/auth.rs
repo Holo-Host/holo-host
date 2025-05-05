@@ -307,3 +307,33 @@ pub fn generate_api_key() -> String {
     let key = uuid::Uuid::new().to_string();
     key.replace("-", "")
 }
+
+/// This function is used to get all the owners of a resource
+/// It filters the permissions by resource and action
+/// It returns a vector of ObjectId
+pub fn get_all_accessible_owners_from_permissions(
+    user_permissions: Vec<UserPermission>,
+    resource: String,
+    action: PermissionAction,
+    user_id: String,
+) -> Vec<ObjectId> {
+    let mut owner: Vec<ObjectId> = user_permissions
+        .into_iter()
+        .filter_map(|claim| {
+            if claim.resource != resource && claim.resource != "all" {
+                return None;
+            }
+            if claim.action != action && claim.action != PermissionAction::All {
+                return None;
+            }
+
+            match ObjectId::parse_str(claim.owner) {
+                Ok(id) => Some(id),
+                Err(_) => None,
+            }
+        })
+        .collect();
+    let user_oid = ObjectId::parse_str(user_id).expect("failed to parse user id");
+    owner.push(user_oid);
+    owner
+}

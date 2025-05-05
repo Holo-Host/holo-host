@@ -43,6 +43,9 @@ pub struct OpenApiSpec;
     tag = "Apikey",
     summary = "Create API key",
     description = "Create a new API key for the user",
+    security(
+        ("Bearer" = [])
+    ),
     request_body = CreateApiKeyRequest,
     responses(
         (status = 200, body = CreateApiKeyResponse)
@@ -54,10 +57,7 @@ pub async fn create_api_key(
     payload: web::Json<CreateApiKeyRequest>,
     db: web::Data<mongodb::Client>,
 ) -> impl Responder {
-    let claims = req
-        .extensions()
-        .get::<AccessTokenClaims>()
-        .cloned();
+    let claims = req.extensions().get::<AccessTokenClaims>().cloned();
     if claims.is_none() {
         return HttpResponse::Unauthorized().json(ErrorResponse {
             message: "Unauthorized".to_string(),
