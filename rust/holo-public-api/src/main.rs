@@ -18,8 +18,8 @@ async fn main() -> std::io::Result<()> {
     tracing_subscriber::fmt().init();
 
     // load config
-    let app_config = providers::config::load_config().unwrap_or_else(|err| {
-        tracing::error!("Error loading config: {}", err);
+    let app_config = providers::config::load_config().unwrap_or_else(|error| {
+        tracing::error!("{:?}", error);
         std::process::exit(1);
     });
 
@@ -32,7 +32,8 @@ async fn main() -> std::io::Result<()> {
         )),
     );
     docs.info.title = "Holo Public API".to_string();
-    docs.info.version = "0.0.1".to_string();
+    docs.info.version = "0.5.3".to_string();
+    docs.tags = Some(vec![utoipa::openapi::Tag::new("Auth")]);
     docs.servers = Some(vec![utoipa::openapi::Server::new(app_config.host.clone())]);
 
     // setup database

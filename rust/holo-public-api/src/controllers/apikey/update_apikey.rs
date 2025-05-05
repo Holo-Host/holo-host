@@ -20,7 +20,7 @@ pub struct UpdateApiKeyDto {
     /// If you do not have the same permissions then the request will throw 403
     pub permissions: Vec<UserPermission>,
     /// When the Api key expires, this is a unix timestamp in seconds
-    #[schema(example = "1672531199")]
+    #[schema(example = 1672531199)]
     pub expire_at: i64,
     /// The description of the api key
     /// This is used to identify the api key

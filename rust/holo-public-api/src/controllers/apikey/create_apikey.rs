@@ -19,7 +19,7 @@ pub struct CreateApiKeyRequest {
     #[schema(example = "v0")]
     pub version: String,
     /// When the Api key expires, this is a unix timestamp in seconds
-    #[schema(example = "1672531199")]
+    #[schema(example = 1672531199)]
     pub expire_at: i64,
     /// The description of the api key
     /// This is used to identify the api key
