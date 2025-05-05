@@ -277,12 +277,6 @@ pub fn get_role_permissions(role: UserRole) -> Vec<UserPermission> {
                 owner: String::from(""),
                 all_owners: true,
             },
-            UserPermission {
-                resource: String::from("all"),
-                action: PermissionAction::Update,
-                owner: String::from(""),
-                all_owners: true,
-            },
         ],
     }
 }
