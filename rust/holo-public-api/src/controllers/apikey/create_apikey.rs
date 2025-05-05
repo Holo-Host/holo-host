@@ -78,7 +78,8 @@ pub async fn create_api_key(
     let api_key = providers::auth::generate_api_key();
     let owner_oid = match ObjectId::parse_str(claims.sub.clone()) {
         Ok(oid) => oid,
-        Err(_) => {
+        Err(error) => {
+            tracing::error!("{:?}", error);
             return HttpResponse::BadRequest().json(ErrorResponse {
                 message: "invalid owner id".to_string(),
             });
@@ -109,8 +110,8 @@ pub async fn create_api_key(
     .await
     {
         Ok(value) => value,
-        Err(e) => {
-            tracing::error!("Failed to create api key: {}", e);
+        Err(error) => {
+            tracing::error!("{:?}", error);
             return HttpResponse::InternalServerError().json(ErrorResponse {
                 message: "Failed to create api key".to_string(),
             });

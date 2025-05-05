@@ -51,8 +51,8 @@ pub async fn get_api_key(
     .await
     {
         Ok(api_key) => api_key,
-        Err(e) => {
-            tracing::error!("Failed to get API key: {}", e);
+        Err(error) => {
+            tracing::error!("{:?}", error);
             return HttpResponse::InternalServerError().json(ErrorResponse {
                 message: "Internal server error".to_string(),
             });

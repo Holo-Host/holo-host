@@ -82,8 +82,8 @@ pub async fn get_multiple_apikey(
     .await
     {
         Ok(api_keys) => api_keys,
-        Err(e) => {
-            tracing::error!("Failed to get API keys: {}", e);
+        Err(error) => {
+            tracing::error!("{:?}", error);
             return HttpResponse::InternalServerError().json(ErrorResponse {
                 message: "Internal server error".to_string(),
             });
@@ -102,8 +102,8 @@ pub async fn get_multiple_apikey(
     .await
     {
         Ok(count) => count,
-        Err(e) => {
-            tracing::error!("Failed to count API keys: {}", e);
+        Err(error) => {
+            tracing::error!("{:?}", error);
             return HttpResponse::InternalServerError().json(ErrorResponse {
                 message: "Internal server error".to_string(),
             });

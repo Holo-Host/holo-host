@@ -70,8 +70,8 @@ pub async fn update_apikey(
     .await
     {
         Ok(owner) => owner,
-        Err(e) => {
-            tracing::error!("Failed to get API key: {}", e);
+        Err(error) => {
+            tracing::error!("{:?}", error);
             return HttpResponse::InternalServerError().json(ErrorResponse {
                 message: "Internal server error".to_string(),
             });
@@ -128,8 +128,8 @@ pub async fn update_apikey(
         Ok(update_result) => {
             tracing::error!("{:?}", update_result)
         }
-        Err(e) => {
-            tracing::error!("Failed to update API key: {}", e);
+        Err(error) => {
+            tracing::error!("{:?}", error);
             return HttpResponse::InternalServerError().json(ErrorResponse {
                 message: "Internal server error".to_string(),
             });
