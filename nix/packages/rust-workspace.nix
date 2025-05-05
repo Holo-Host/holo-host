@@ -37,6 +37,7 @@ let
 
     # Additional environment variables can be set directly
     # MY_CUSTOM_VAR = "some value";
+    TEST_MONGODB_URI = "mongodb+srv://ci_test_runner:${pkgs.lib.getEnv "CI_MONGODB_ATLAS_PASSWORD"}@cluster0.${pkgs.lib.getEnv "DEV_MONGODB_ATLAS_CLUSTER_ID"}.mongodb.net";
 
     meta.platforms = pkgs.lib.platforms.linux;
   };

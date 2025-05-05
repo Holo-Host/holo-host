@@ -9,7 +9,7 @@ pub mod traits;
 /// - If `MONGO_URI` environment variable is set, returns its value
 /// - Otherwise, returns the default local MongoDB URL: "mongodb://127.0.0.1:27017"
 pub fn get_mongodb_url() -> String {
-    let url: Result<String, Box<dyn std::error::Error>>  = (|| {
+    let url: Result<String, Box<dyn std::error::Error>> = (|| {
         let username = std::env::var("MONGODB_USERNAME")?;
 
         let cluster_file = std::env::var("MONGODB_CLUSTER_ID_FILE")?;
