@@ -12,9 +12,6 @@ env:
 jobs:
   ci:
     runs-on: ubuntu-latest
-    env:
-      TEST_MONGODB_URI: "mongodb+srv://ci_test_runner:${{ secrets.CI_MONGODB_ATLAS_PASSWORD }}@cluster0.${{ secrets.DEV_MONGODB_ATLAS_CLUSTER_ID }}.mongodb.net"
-
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v3
@@ -42,26 +39,8 @@ jobs:
         id: ip
         run: echo "IP=$(curl -s ifconfig.me)" >> $GITHUB_ENV
 
-      - name: Whitelist CI runner IP in Atlas
-        run: |
-          curl -s -u "${{ secrets.CI_MONGODB_ATLAS_PUBLIC_KEY }}:${{ secrets.CI_MONGODB_ATLAS_PRIVATE_KEY }}" \
-            --digest \
-            --header "Content-Type: application/json" \
-            --request POST \
-            --data "{\"ipAddress\":\"$IP\",\"comment\":\"CI temporary access\"}" \
-            "https://cloud.mongodb.com/api/atlas/v1.0/groups/${{ secrets.MONGODB_ATLAS_PROJECT_ID }}/accessList"
-
       - name: Run Tests
         run: cargo test -p ${{ inputs.project }} --verbose
-
-      - name: Remove CI runner IP from Atlas
-        if: always()
-        run: |
-          curl -s -u "${{ secrets.CI_MONGODB_ATLAS_PUBLIC_KEY }}:${{ secrets.CI_MONGODB_ATLAS_PRIVATE_KEY }}" \
-            --digest \
-            --header "Content-Type: application/json" \
-            --request DELETE \
-            "https://cloud.mongodb.com/api/atlas/v1.0/groups/${{ secrets.DEV_MONGODB_ATLAS_PROJECT_ID }}/accessList/$IP"
         
       - name: Run Clippy
         run: cargo clippy -p ${{ inputs.project }} -- -D warnings

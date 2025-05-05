@@ -227,7 +227,8 @@ impl InventoryServiceApi {
             + IntoIndexes
             + MutMetadata,
     {
-        let db_name = std::env::var("MONGODB_NAME").unwrap_or(schemas::DATABASE_NAME.to_string());
+        let db_name =
+            std::env::var("HOLO_DATABASE_NAME").unwrap_or(schemas::DATABASE_NAME.to_string());
         Ok(MongoCollection::<T>::new(client, &db_name, collection_name).await?)
     }
 

@@ -29,7 +29,7 @@ mod tests {
     async fn test_add_workload() -> Result<()> {
         let mongod = MongodRunner::run().await?;
         let db_client = mongod.client();
-        std::env::set_var("MONGODB_NAME", mongod.db_name());
+        std::env::set_var("HOLO_DATABASE_NAME", mongod.db_name());
         let api = OrchestratorWorkloadApi::new(db_client).await?;
 
         let workload = create_test_workload_default();
@@ -51,7 +51,7 @@ mod tests {
     async fn test_update_workload() -> Result<()> {
         let mongod = MongodRunner::run().await?;
         let db_client = mongod.client();
-        std::env::set_var("MONGODB_NAME", mongod.db_name());
+        std::env::set_var("HOLO_DATABASE_NAME", mongod.db_name());
         let api = OrchestratorWorkloadApi::new(db_client).await?;
 
         // First add a workload
@@ -80,7 +80,7 @@ mod tests {
     async fn test_handle_db_insertion() -> Result<()> {
         let mongod = MongodRunner::run().await?;
         let db_client = mongod.client();
-        std::env::set_var("MONGODB_NAME", mongod.db_name());
+        std::env::set_var("HOLO_DATABASE_NAME", mongod.db_name());
         let api = OrchestratorWorkloadApi::new(db_client).await?;
 
         let required_avg_network_speed = 500;
@@ -155,7 +155,7 @@ mod tests {
     async fn test_delete_workload() -> Result<()> {
         let mongod = MongodRunner::run().await?;
         let db_client = mongod.client();
-        std::env::set_var("MONGODB_NAME", mongod.db_name());
+        std::env::set_var("HOLO_DATABASE_NAME", mongod.db_name());
         let api = OrchestratorWorkloadApi::new(db_client).await?;
 
         // First add a workload
@@ -193,7 +193,7 @@ mod tests {
     async fn test_verify_host_meets_workload_criteria() -> Result<()> {
         let mongod = MongodRunner::run().await?;
         let db_client = mongod.client();
-        std::env::set_var("MONGODB_NAME", mongod.db_name());
+        std::env::set_var("HOLO_DATABASE_NAME", mongod.db_name());
         let api = OrchestratorWorkloadApi::new(db_client).await?;
 
         let required_avg_network_speed = 100;
@@ -262,7 +262,7 @@ mod tests {
     async fn test_handle_status_update() -> Result<()> {
         let mongod = MongodRunner::run().await?;
         let db_client = mongod.client();
-        std::env::set_var("MONGODB_NAME", mongod.db_name());
+        std::env::set_var("HOLO_DATABASE_NAME", mongod.db_name());
         let api = OrchestratorWorkloadApi::new(db_client).await?;
 
         // Create and add a workload first

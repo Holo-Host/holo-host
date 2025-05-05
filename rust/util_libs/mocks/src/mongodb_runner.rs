@@ -5,7 +5,7 @@ use mongodb::{options::ClientOptions, Client as MongoDBClient, Database};
 use std::env;
 use uuid::Uuid;
 
-/// This struct connects to MongoDB Atlas for testing
+// This struct connects to MongoDB Atlas for testing
 pub struct MongodRunner {
     client: MongoDBClient,
     db_name: String,
