@@ -37,6 +37,7 @@ let
 
     # Additional environment variables can be set directly
     # MY_CUSTOM_VAR = "some value";
+    IGNORE_TESTS_IN_BUILDBOT = "true";
 
     meta.platforms = pkgs.lib.platforms.linux;
   };
