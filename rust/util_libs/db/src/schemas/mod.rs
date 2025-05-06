@@ -1,4 +1,5 @@
 pub mod alias;
+pub mod api_log;
 pub mod host;
 pub mod metadata;
 pub mod public_service;

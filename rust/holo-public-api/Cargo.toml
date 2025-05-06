@@ -1,0 +1,22 @@
+[package]
+name = "holo-public-api"
+description = ""
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+actix-web = "4.10.2"
+actix-cors = "0.7.1"
+utoipa = "5.3.1"
+utoipa-swagger-ui = { version = "9.0.1", features = ["actix-web"] }
+tracing = "0.1.41"
+anyhow = "1.0.97"
+config = "0.15.11"
+dotenvy = "0.15.7"
+bson = "2.14"
+serde_json = { workspace = true }
+jsonwebtoken = "9.3.1"
+deadpool-redis = "0.20.0"
+mongodb = { workspace = true }
+serde = { workspace = true }
+db_utils = { path = "../util_libs/db" }

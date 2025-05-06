@@ -29,5 +29,11 @@
   "files.readonlyInclude": {
     "**/.cargo/registry/src/**/*.rs": true,
     "**/lib/rustlib/src/rust/library/**/*.rs": true
+  },
+  "[toml]": {
+    "editor.defaultFormatter": "tamasfe.even-better-toml"
+  },
+  "[github-actions-workflow]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
   }
 }
