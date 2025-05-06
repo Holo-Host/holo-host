@@ -66,8 +66,7 @@ pub async fn get_api_key(
     let api_key_result = api_key_result.unwrap();
 
     let permission_result = providers::auth::verify_all_permissions(
-        claims.sub.clone(),
-        claims.permissions.clone(),
+        claims.clone(),
         vec![UserPermission {
             resource: API_KEY_COLLECTION_NAME.to_string(),
             action: PermissionAction::Read,

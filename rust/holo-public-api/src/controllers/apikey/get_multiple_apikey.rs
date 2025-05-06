@@ -42,6 +42,7 @@ pub async fn get_multiple_apikey(
     query: web::Query<PaginationRequest>,
     db: web::Data<mongodb::Client>,
 ) -> impl Responder {
+    // get pagination parameters
     let PaginationRequest { page, limit } = query.into_inner();
     if page < 1 || limit < 1 {
         return HttpResponse::BadRequest().json(ErrorResponse {
@@ -54,6 +55,7 @@ pub async fn get_multiple_apikey(
         });
     }
 
+    // get all owners that the user has access to
     let claims = req.extensions().get::<AccessTokenClaims>().cloned();
     if claims.is_none() {
         return HttpResponse::Unauthorized().json(ErrorResponse {
@@ -67,6 +69,8 @@ pub async fn get_multiple_apikey(
         PermissionAction::Read,
         claims.sub,
     );
+
+    // get a page if items accessible by the user from the database
     let api_keys = match providers::crud::get_many::<ApiKey>(
         db.get_ref().clone(),
         API_KEY_COLLECTION_NAME.to_string(),
@@ -90,6 +94,7 @@ pub async fn get_multiple_apikey(
         }
     };
 
+    // get the total amount of api keys accessible by the user
     let total_count = match providers::crud::count::<ApiKey>(
         db.get_ref().clone(),
         API_KEY_COLLECTION_NAME.to_string(),
@@ -110,14 +115,13 @@ pub async fn get_multiple_apikey(
         }
     };
 
+    // map api keys to DTOs and return Pagination Response
     let api_keys_mapped = api_keys.into_iter().map(map_api_key_to_dto).collect();
-
     let result: PaginationResponse<ApiKeyDto> = PaginationResponse {
         total: total_count,
         page,
         limit,
         items: api_keys_mapped,
     };
-
     HttpResponse::Ok().json(result)
 }

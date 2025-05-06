@@ -67,8 +67,7 @@ pub async fn delete_apikey(
 
     // verify user has permission to delete resource
     let permission_result = providers::auth::verify_all_permissions(
-        claims.sub,
-        claims.permissions,
+        claims.clone(),
         vec![UserPermission {
             resource: API_KEY_COLLECTION_NAME.to_string(),
             action: PermissionAction::Delete,

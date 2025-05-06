@@ -85,8 +85,7 @@ pub async fn update_apikey(
     let owner = owner.unwrap();
 
     let permission_result = providers::auth::verify_all_permissions(
-        claims.sub.clone(),
-        claims.permissions.clone(),
+        claims.clone(),
         vec![UserPermission {
             resource: API_KEY_COLLECTION_NAME.to_string(),
             action: PermissionAction::Update,
@@ -102,8 +101,7 @@ pub async fn update_apikey(
 
     // verify user has the permissions that are being set for the api key
     let permission_result = providers::auth::verify_all_permissions(
-        claims.sub.clone(),
-        claims.permissions.clone(),
+        claims.clone(),
         payload.permissions.clone(),
     );
     if !permission_result {

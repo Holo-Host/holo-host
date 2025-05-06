@@ -57,6 +57,7 @@ pub async fn create_api_key(
     payload: web::Json<CreateApiKeyRequest>,
     db: web::Data<mongodb::Client>,
 ) -> impl Responder {
+    // get current user claims (permissions and user info)
     let claims = req.extensions().get::<AccessTokenClaims>().cloned();
     if claims.is_none() {
         return HttpResponse::Unauthorized().json(ErrorResponse {
@@ -65,26 +66,18 @@ pub async fn create_api_key(
     }
     let claims = claims.unwrap();
 
-    let permission_result = providers::auth::verify_all_permissions(
-        claims.sub.clone(),
-        claims.permissions.clone(),
+    // verify user permissions
+    if !providers::auth::verify_all_permissions(
+        claims.clone(),
         payload.permissions.clone(),
-    );
-    if !permission_result {
+    ) {
         return HttpResponse::Forbidden().json(ErrorResponse {
             message: "Permission denied".to_string(),
         });
     }
+
+    // generate api key
     let api_key = providers::auth::generate_api_key();
-    let owner_oid = match ObjectId::parse_str(claims.sub.clone()) {
-        Ok(oid) => oid,
-        Err(error) => {
-            tracing::error!("{:?}", error);
-            return HttpResponse::BadRequest().json(ErrorResponse {
-                message: "invalid owner id".to_string(),
-            });
-        }
-    };
     let api_key_hash =
         match providers::auth::get_apikey_hash(payload.version.clone(), api_key.clone()) {
             Some(hash) => hash,
@@ -94,6 +87,17 @@ pub async fn create_api_key(
                 });
             }
         };
+
+    // create api key in db
+    let owner_oid = match ObjectId::parse_str(claims.sub.clone()) {
+        Ok(oid) => oid,
+        Err(error) => {
+            tracing::error!("{:?}", error);
+            return HttpResponse::BadRequest().json(ErrorResponse {
+                message: "invalid owner id".to_string(),
+            });
+        }
+    };
     let result = match providers::crud::create(
         db.get_ref().clone(),
         API_KEY_COLLECTION_NAME.to_string(),
@@ -118,6 +122,7 @@ pub async fn create_api_key(
         }
     };
 
+    // return api key
     HttpResponse::Ok().json(CreateApiKeyResponse {
         id: result.to_hex(),
         api_key: format!("{}-{}", payload.version, api_key),

@@ -189,10 +189,11 @@ pub async fn get_api_key(
 /// - `true` if the user has any of the required permissions
 /// - `false` if the user does not have any of the required permissions
 pub fn verify_any_permissions(
-    user_id: String,
-    user_permissions: Vec<UserPermission>,
+    claims: AccessTokenClaims,
     required_permissions: Vec<UserPermission>,
 ) -> bool {
+    let user_id = claims.sub;
+    let user_permissions = claims.permissions;
     for required_permission in required_permissions {
         for user_permission in user_permissions.clone() {
             if required_permission.resource != user_permission.resource
@@ -234,16 +235,11 @@ pub fn verify_any_permissions(
 /// - `true` if the user has all the required permissions
 /// - `false` if the user does not have all the required permissions
 pub fn verify_all_permissions(
-    user_id: String,
-    user_permissions: Vec<UserPermission>,
+    claims: AccessTokenClaims,
     required_permissions: Vec<UserPermission>,
 ) -> bool {
     for required_permission in required_permissions {
-        if !verify_any_permissions(
-            user_id.clone(),
-            user_permissions.clone(),
-            vec![required_permission],
-        ) {
+        if !verify_any_permissions(claims.clone(), vec![required_permission]) {
             return false;
         }
     }
