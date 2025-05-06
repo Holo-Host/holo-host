@@ -175,12 +175,14 @@ craneLib.buildPackage (
         pkgs.lib.attrsets.recursiveUpdate commonArgs {
           inherit cargoArtifacts;
           cargoClippyExtraArgs = "--all-targets -- --deny warnings";
+          IGNORE_TESTS_IN_BUILDBOT = "true";
         }
       );
 
       doc = craneLib.cargoDoc (
         pkgs.lib.attrsets.recursiveUpdate commonArgs {
           inherit cargoArtifacts;
+          IGNORE_TESTS_IN_BUILDBOT = "true";
         }
       );
 
@@ -227,6 +229,7 @@ craneLib.buildPackage (
 
           partitions = 1;
           partitionType = "count";
+          IGNORE_TESTS_IN_BUILDBOT = "true";
         }
       );
     };
