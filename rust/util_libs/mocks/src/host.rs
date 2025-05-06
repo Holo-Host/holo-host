@@ -42,8 +42,8 @@ pub fn create_test_host(
     assigned_hoster: Option<ObjectId>,
     assigned_workloads: Option<Vec<ObjectId>>,
     holo_inventory: Option<HoloInventory>,
-    avg_network_speed: Option<i64>,
-    avg_uptime: Option<f64>,
+    avg_network_speed: Option<i32>,
+    avg_uptime: Option<f32>,
 ) -> schemas::host::Host {
     let mut host = schemas::host::Host {
         device_id: device_id.to_string(),

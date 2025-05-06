@@ -23,11 +23,11 @@ pub struct Host {
     /// Hardware inventory information
     pub inventory: HoloInventory,
     /// Average uptime as a percentage
-    pub avg_uptime: f64,
+    pub avg_uptime: f32,
     /// Average network speed in Mbps
-    pub avg_network_speed: i64,
+    pub avg_network_speed: i32,
     /// Average latency in milliseconds
-    pub avg_latency: i64,
+    pub avg_latency: i32,
     /// IP address of the host
     pub ip_address: Option<String>,
     /// Reference to the user that owns this host

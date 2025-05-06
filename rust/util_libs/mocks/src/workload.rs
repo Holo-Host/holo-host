@@ -13,8 +13,8 @@ pub fn create_test_workload(
     assigned_hosts: Option<Vec<ObjectId>>,
     min_hosts: Option<i32>,
     needed_capacity: Option<Capacity>,
-    avg_network_speed: Option<i64>,
-    avg_uptime: Option<f64>,
+    avg_network_speed: Option<i32>,
+    avg_uptime: Option<f32>,
 ) -> schemas::workload::Workload {
     let mut workload = schemas::workload::Workload::default();
     if let Some(assigned_developer) = assigned_developer {

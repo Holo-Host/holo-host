@@ -557,7 +557,7 @@ impl OrchestratorWorkloadApi {
     ) -> bool {
         let host_drive_capacity = assigned_host_inventory.drives.iter().fold(0, |mut acc, d| {
             if let Some(capacity) = d.capacity_bytes {
-                acc += capacity as i64;
+                acc += capacity as i32;
             }
             acc
         });
@@ -637,8 +637,8 @@ impl OrchestratorWorkloadApi {
             doc! {
                 "$match": {
                     // verify there are enough system resources
-                    "$expr": { "$gte": [{ "$sum": "$inventory.drive" }, Bson::Int64(workload.system_specs.capacity.drive)]},
-                    "$expr": { "$gte": [{ "$size": "$inventory.cpus" }, Bson::Int64(workload.system_specs.capacity.cores)]},
+                    "$expr": { "$gte": [{ "$sum": "$inventory.drive" }, workload.system_specs.capacity.drive]},
+                    "$expr": { "$gte": [{ "$size": "$inventory.cpus" }, workload.system_specs.capacity.cores]},
                 }
             },
             doc! {
