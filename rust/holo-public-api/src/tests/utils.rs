@@ -94,6 +94,7 @@ pub fn get_app_config() -> AppConfig {
         enable_scheduler: true,
         host: "http://localhost".to_string(),
         jwt_secret: "jwt_secret".to_string(),
+        blob_storage_location: None,
     }
 }
 

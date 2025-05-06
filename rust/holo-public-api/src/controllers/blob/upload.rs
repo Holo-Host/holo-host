@@ -2,10 +2,11 @@ use std::fs;
 use std::io::Write;
 
 use crate::providers::{
-    auth::verify_all_permissions, error_response::ErrorResponse, jwt::AccessTokenClaims,
+    auth::verify_all_permissions, config::AppConfig, error_response::ErrorResponse,
+    jwt::AccessTokenClaims,
 };
 use actix_multipart::Multipart;
-use actix_web::{post, HttpMessage, HttpRequest, HttpResponse, Responder};
+use actix_web::{post, web, HttpMessage, HttpRequest, HttpResponse, Responder};
 use db_utils::schemas::user_permissions::{PermissionAction, UserPermission};
 use futures_util::StreamExt;
 use serde::Serialize;
@@ -44,7 +45,12 @@ struct BlobUploadRequest {
     )
 )]
 #[post("/v1/blob/upload")]
-pub async fn upload_blob(req: HttpRequest, mut payload: Multipart) -> impl Responder {
+pub async fn upload_blob(
+    req: HttpRequest,
+    mut payload: Multipart,
+    config: web::Data<AppConfig>,
+) -> impl Responder {
+    // get user claims from the request
     let claims = req.extensions().get::<AccessTokenClaims>().cloned();
     if claims.is_none() {
         return HttpResponse::Unauthorized().json(ErrorResponse {
@@ -53,6 +59,8 @@ pub async fn upload_blob(req: HttpRequest, mut payload: Multipart) -> impl Respo
     }
     let claims = claims.unwrap();
     let owner = claims.sub.clone();
+
+    // check if the user has permission to upload blobs
     if !verify_all_permissions(
         claims,
         vec![UserPermission {
@@ -71,7 +79,7 @@ pub async fn upload_blob(req: HttpRequest, mut payload: Multipart) -> impl Respo
     let mut blob = match fs::File::create(format!("/tmp/{}", temp_file_identifier)) {
         Ok(blob) => blob,
         Err(e) => {
-            tracing::error!("Error creating blob: {:?}", e);
+            tracing::error!("{:?}", e);
             return HttpResponse::InternalServerError().json(ErrorResponse {
                 message: "Internal server error".to_string(),
             });
@@ -83,7 +91,7 @@ pub async fn upload_blob(req: HttpRequest, mut payload: Multipart) -> impl Respo
         let mut field = match item {
             Ok(field) => field,
             Err(e) => {
-                tracing::error!("Error processing multipart field: {:?}", e);
+                tracing::error!("{:?}", e);
                 return HttpResponse::BadRequest().json(ErrorResponse {
                     message: "Invalid request".to_string(),
                 });
@@ -95,7 +103,7 @@ pub async fn upload_blob(req: HttpRequest, mut payload: Multipart) -> impl Respo
             let chunk = match chunk {
                 Ok(data) => data,
                 Err(e) => {
-                    tracing::error!("Error reading chunk: {:?}", e);
+                    tracing::error!("{:?}", e);
                     return HttpResponse::BadRequest().json(ErrorResponse {
                         message: "Invalid request".to_string(),
                     });
@@ -107,7 +115,7 @@ pub async fn upload_blob(req: HttpRequest, mut payload: Multipart) -> impl Respo
             match blob.write_all(&chunk) {
                 Ok(_) => (),
                 Err(e) => {
-                    tracing::error!("Error writing chunk: {:?}", e);
+                    tracing::error!("{:?}", e);
                     return HttpResponse::InternalServerError().json(ErrorResponse {
                         message: "Internal server error".to_string(),
                     });
@@ -130,33 +138,54 @@ pub async fn upload_blob(req: HttpRequest, mut payload: Multipart) -> impl Respo
     .into_bytes();
 
     // create directory for the blob and metadata
-    let file_location = "/srv/holo-blobstore";
-    match fs::create_dir_all(file_location) {
-        Ok(_) => (),
-        Err(e) => {
-            tracing::error!("Error creating directory: {:?}", e);
+    let file_location = match config.blob_storage_location {
+        Some(ref location) => location.clone(),
+        None => ".".to_string(),
+    };
+    let exists = fs::metadata(&file_location).is_ok();
+    if !exists {
+        match fs::create_dir_all(&file_location) {
+            Ok(_) => (),
+            Err(e) => {
+                tracing::error!("{:?}", e);
+                return HttpResponse::InternalServerError().json(ErrorResponse {
+                    message: "Internal server error".to_string(),
+                });
+            }
         }
-    }
+    };
 
-    // move blob to the correct location
-    match fs::rename(
+    // copy blob to the correct location
+    match fs::copy(
         format!("/tmp/{}", temp_file_identifier),
         format!("{}/{}", file_location, hash_hex),
     ) {
         Ok(_) => (),
         Err(e) => {
-            tracing::error!("Error moving blob to the correct location: {:?}", e);
+            tracing::error!("{:?}", format!("{}/{}", file_location, hash_hex));
+            tracing::error!("{:?}", e);
             return HttpResponse::InternalServerError().json(ErrorResponse {
                 message: "Internal server error".to_string(),
             });
         }
     }
 
+    // remove the temp file
+    match fs::remove_file(format!("/tmp/{}", temp_file_identifier)) {
+        Ok(_) => (),
+        Err(e) => {
+            tracing::error!("{:?}", e);
+            return HttpResponse::InternalServerError().json(ErrorResponse {
+                message: "Internal server error".to_string(),
+            });
+        }
+    };
+
     // create metadata blob
     let mut metadata_file = match fs::File::create(format!("{}/{}.json", file_location, hash_hex)) {
         Ok(blob) => blob,
         Err(e) => {
-            tracing::error!("Error creating metadata blob: {:?}", e);
+            tracing::error!("{:?}", e);
             return HttpResponse::InternalServerError().json(ErrorResponse {
                 message: "Internal server error".to_string(),
             });
@@ -165,7 +194,7 @@ pub async fn upload_blob(req: HttpRequest, mut payload: Multipart) -> impl Respo
     match metadata_file.write_all(&metadata_body) {
         Ok(_) => (),
         Err(e) => {
-            tracing::error!("Error writing metadata blob: {:?}", e);
+            tracing::error!("{:?}", e);
             return HttpResponse::InternalServerError().json(ErrorResponse {
                 message: "Internal server error".to_string(),
             });
