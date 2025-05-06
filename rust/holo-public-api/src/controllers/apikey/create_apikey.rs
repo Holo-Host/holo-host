@@ -2,7 +2,7 @@ use actix_web::{post, web, HttpMessage, HttpRequest, HttpResponse, Responder};
 use bson::oid::ObjectId;
 use db_utils::schemas::{
     api_key::{ApiKey, API_KEY_COLLECTION_NAME},
-    user_permissions::UserPermission,
+    user_permissions::{PermissionAction, UserPermission},
 };
 use serde::{Deserialize, Serialize};
 use utoipa::{OpenApi, ToSchema};
@@ -69,8 +69,18 @@ pub async fn create_api_key(
     // verify user permissions
     if !providers::auth::verify_all_permissions(
         claims.clone(),
-        payload.permissions.clone(),
+        vec![UserPermission {
+            resource: API_KEY_COLLECTION_NAME.to_string(),
+            action: PermissionAction::Create,
+            owner: claims.sub.clone(),
+            all_owners: false,
+        }],
     ) {
+        return HttpResponse::Forbidden().json(ErrorResponse {
+            message: "Permission denied".to_string(),
+        });
+    }
+    if !providers::auth::verify_all_permissions(claims.clone(), payload.permissions.clone()) {
         return HttpResponse::Forbidden().json(ErrorResponse {
             message: "Permission denied".to_string(),
         });
