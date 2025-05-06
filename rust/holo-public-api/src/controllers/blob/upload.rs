@@ -1,9 +1,12 @@
 use std::fs;
 use std::io::Write;
 
-use crate::providers::{error_response::ErrorResponse, jwt::AccessTokenClaims};
+use crate::providers::{
+    auth::verify_all_permissions, error_response::ErrorResponse, jwt::AccessTokenClaims,
+};
 use actix_multipart::Multipart;
 use actix_web::{post, HttpMessage, HttpRequest, HttpResponse, Responder};
+use db_utils::schemas::user_permissions::{PermissionAction, UserPermission};
 use futures_util::StreamExt;
 use serde::Serialize;
 use utoipa::{OpenApi, ToSchema};
@@ -42,13 +45,27 @@ struct BlobUploadRequest {
 )]
 #[post("/v1/blob/upload")]
 pub async fn upload_blob(req: HttpRequest, mut payload: Multipart) -> impl Responder {
-    let auth = req.extensions().get::<AccessTokenClaims>().cloned();
-    if auth.is_none() {
+    let claims = req.extensions().get::<AccessTokenClaims>().cloned();
+    if claims.is_none() {
         return HttpResponse::Unauthorized().json(ErrorResponse {
             message: "Unauthorized".to_string(),
         });
     }
-    let auth = auth.unwrap();
+    let claims = claims.unwrap();
+    let owner = claims.sub.clone();
+    if !verify_all_permissions(
+        claims,
+        vec![UserPermission {
+            resource: "blob".to_string(),
+            action: PermissionAction::Create,
+            owner: owner.clone(),
+            all_owners: false,
+        }],
+    ) {
+        return HttpResponse::Forbidden().json(ErrorResponse {
+            message: "forbidden".to_string(),
+        });
+    }
     let temp_file_identifier = bson::uuid::Uuid::new().to_string();
     let mut hasher = blake3::Hasher::new();
     let mut blob = match fs::File::create(format!("/tmp/{}", temp_file_identifier)) {
@@ -106,7 +123,7 @@ pub async fn upload_blob(req: HttpRequest, mut payload: Multipart) -> impl Respo
     let metadata_body = bson::doc! {
         "createdAt": bson::DateTime::now().to_string(),
         "updatedAt": bson::DateTime::now().to_string(),
-        "userId": auth.sub.clone(),
+        "userId": owner.clone(),
         "hash": hash_hex.clone(),
     }
     .to_string()
