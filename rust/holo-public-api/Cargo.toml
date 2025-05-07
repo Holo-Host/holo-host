@@ -26,3 +26,8 @@ deadpool-redis = { version = "0.20.0", features = ["tokio-rustls-comp"] }
 mongodb = { workspace = true }
 serde = { workspace = true }
 db_utils = { path = "../util_libs/db" }
+
+[[bin]]
+name = "holo-public-api"
+path = "src/main.rs"
+

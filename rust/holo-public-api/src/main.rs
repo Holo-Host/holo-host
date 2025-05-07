@@ -8,6 +8,7 @@ mod tests;
 
 mod controllers;
 mod middlewares;
+
 #[allow(dead_code)]
 mod providers;
 mod scheduler;
