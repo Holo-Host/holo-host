@@ -86,8 +86,8 @@ pub async fn perform_integration_test<C: HttpServiceFactory + 'static>(
 }
 
 pub fn get_app_config() -> AppConfig {
-    /// hack to disable tests in build bot
-    /// disables all tests if the 'IGNORE_TESTS_IN_BUILDBOT' environment variable is set
+    // hack to disable tests in build bot
+    // disables all tests if the 'IGNORE_TESTS_IN_BUILDBOT' environment variable is set
     if std::env::var("IGNORE_TESTS_IN_BUILDBOT").is_ok() {
         std::process::exit(0);
     }
