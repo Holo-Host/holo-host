@@ -60,8 +60,8 @@ pub async fn get_user_id_and_permissions_from_apikey(
     let collection = match MongoCollection::<ApiKey>::new(db, "holo", API_KEY_COLLECTION_NAME).await
     {
         Ok(collection) => collection,
-        Err(_err) => {
-            print!("Failed to get MongoDB collection");
+        Err(error) => {
+            tracing::error!("{:?}", error);
             return Err(anyhow::anyhow!("Failed to get MongoDB collection"));
         }
     };
@@ -70,8 +70,8 @@ pub async fn get_user_id_and_permissions_from_apikey(
         .await
     {
         Ok(result) => result,
-        Err(_err) => {
-            print!("Failed to get MongoDB collection 2");
+        Err(error) => {
+            tracing::error!("{:?}", error);
             return Err(anyhow::anyhow!("Failed to get MongoDB collection"));
         }
     };
