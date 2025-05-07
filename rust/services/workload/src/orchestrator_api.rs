@@ -15,7 +15,7 @@ use crate::{
 };
 use anyhow::Result;
 use async_nats::Message;
-use bson::{self, doc, oid::ObjectId, to_document, Bson};
+use bson::{self, doc, oid::ObjectId, to_document};
 use core::option::Option::None;
 use db_utils::{
     mongodb::{
