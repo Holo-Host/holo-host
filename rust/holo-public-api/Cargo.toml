@@ -20,3 +20,8 @@ deadpool-redis = "0.20.0"
 mongodb = { workspace = true }
 serde = { workspace = true }
 db_utils = { path = "../util_libs/db" }
+
+[[bin]]
+name = "holo-public-api"
+path = "src/main.rs"
+
