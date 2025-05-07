@@ -21,11 +21,8 @@ dotenvy = "0.15.7"
 bson = "2.14"
 serde_json = { workspace = true }
 jsonwebtoken = "9.3.1"
-redis = { version = "0.30.0", features = [
-    "tls-native-tls",
-    "tokio-native-tls-comp",
-] }
-deadpool-redis = "0.20.0"
+redis = { version = "0.30.0", features = ["tokio-rustls-comp"] }
+deadpool-redis = { version = "0.20.0", features = ["tokio-rustls-comp"] }
 mongodb = { workspace = true }
 serde = { workspace = true }
 db_utils = { path = "../util_libs/db" }
