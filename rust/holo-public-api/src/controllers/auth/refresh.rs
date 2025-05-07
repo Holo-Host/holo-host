@@ -23,7 +23,7 @@ pub struct OpenApiSpec;
     path = "/public/v1/auth/refresh",
     tag = "Auth",
     summary = "Refresh access token",
-    description = "Refresh the access token using the refresh token",
+    description = "Use this endpoint when your access token is expired to get a new one",
     request_body = AuthLoginResponse,
     responses(
         (status = 200, body = AuthLoginResponse)

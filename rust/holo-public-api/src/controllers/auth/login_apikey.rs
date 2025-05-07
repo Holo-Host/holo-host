@@ -14,7 +14,7 @@ pub struct OpenApiSpec;
     path = "/public/v1/auth/login-with-apikey",
     tag = "Auth",
     summary = "Login with API key",
-    description = "Authenticate user with API key",
+    description = "Use an api key to login and get an access token + refresh token",
     params(
       ("x-api-key", Header, description = "API key to authenticate user", example = "v0-1234567890abcdef12345678"),
     ),

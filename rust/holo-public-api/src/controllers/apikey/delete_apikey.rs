@@ -16,7 +16,7 @@ pub struct OpenApiSpec;
     path = "/protected/v1/apikey/{id}",
     tag = "Apikey",
     summary = "Delete API key",
-    description = "Delete a specific API key",
+    description = "Requires 'api_key.Delete' permission",
     security(
         ("Bearer" = [])
     ),

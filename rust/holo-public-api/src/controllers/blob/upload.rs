@@ -32,7 +32,7 @@ struct BlobUploadRequest {
     path = "/protected/v1/blob/upload",
     tag = "Blob",
     summary = "Upload Blob",
-    description = "Upload a blob",
+    description = "Requires 'blob.Create' permission",
     security(
         ("Bearer" = [])
     ),

@@ -33,7 +33,7 @@ pub struct UpdateApiKeyDto {
     path = "/protected/v1/apikey/{id}",
     tag = "Apikey",
     summary = "Update API key",
-    description = "Update details of a specific API key",
+    description = "Requires 'api_key.Update' permission",
     security(
         ("Bearer" = [])
     ),

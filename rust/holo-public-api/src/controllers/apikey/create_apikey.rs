@@ -42,7 +42,7 @@ pub struct OpenApiSpec;
     path = "/protected/v1/apikey",
     tag = "Apikey",
     summary = "Create API key",
-    description = "Create a new API key for the user",
+    description = "Requires 'api_key.Create' permission",
     security(
         ("Bearer" = [])
     ),

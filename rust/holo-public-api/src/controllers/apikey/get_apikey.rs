@@ -18,7 +18,7 @@ pub struct OpenApiSpec;
     path = "/protected/v1/apikey/{id}",
     tag = "Apikey",
     summary = "Get API key",
-    description = "Get details of a specific API key",
+    description = "Requires 'api_key.Read' permission",
     security(
         ("Bearer" = [])
     ),

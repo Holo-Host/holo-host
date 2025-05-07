@@ -39,5 +39,6 @@
   },
   "[xml]": {
     "editor.defaultFormatter": "redhat.vscode-xml"
-  }
+  },
+  "rust-analyzer.checkOnSave": true
 }

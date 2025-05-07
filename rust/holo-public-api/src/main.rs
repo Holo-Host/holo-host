@@ -1,5 +1,4 @@
 use actix_web::{middleware::from_fn, web, App, HttpServer};
-use utoipa::openapi::security::SecurityScheme;
 use utoipa_redoc::Servable as Redoc;
 use utoipa_scalar::Servable as Scalar;
 
@@ -24,17 +23,8 @@ async fn main() -> std::io::Result<()> {
     });
 
     // setup docs
-    let mut docs = controllers::setup_docs();
-    docs.components.as_mut().unwrap().security_schemes.insert(
-        "Bearer".to_string(),
-        SecurityScheme::Http(utoipa::openapi::security::Http::new(
-            utoipa::openapi::security::HttpAuthScheme::Bearer,
-        )),
-    );
-    docs.info.title = "Holo Public API".to_string();
-    docs.info.version = "0.5.3".to_string();
-    docs.tags = Some(vec![utoipa::openapi::Tag::new("Auth")]);
-    docs.servers = Some(vec![utoipa::openapi::Server::new(app_config.host.clone())]);
+    let docs =
+        providers::docs::build_open_api_spec(controllers::setup_docs(), app_config.host.clone());
 
     // setup database
     let mongodb_client = mongodb::Client::with_uri_str(&app_config.mongo_url)

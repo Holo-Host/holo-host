@@ -54,7 +54,7 @@ pub struct OpenApiSpec;
     path = "/protected/v1/workload",
     tag = "Workload",
     summary = "Create workload",
-    description = "Create a new workload",
+    description = "Requires 'workload.Create' permission",
     security(
         ("Bearer" = [])
     ),

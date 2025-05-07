@@ -24,7 +24,7 @@ pub struct OpenApiSpec;
     path = "/protected/v1/apikeys",
     tag = "Apikey",
     summary = "Retrieve multiple API keys",
-    description = "Retrieve a list of API keys for the user",
+    description = "Requires 'api_key.Read' permission",
     security(
         ("Bearer" = [])
     ),
