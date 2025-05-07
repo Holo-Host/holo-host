@@ -2,18 +2,6 @@ use actix_web::{middleware::from_fn, web, App, HttpServer};
 use utoipa::openapi::security::{ApiKey, ApiKeyValue, SecurityScheme};
 use utoipa_swagger_ui::SwaggerUi;
 
-/// hack to disable tests in build bot
-/// disables all tests if the 'IGNORE_TESTS_IN_BUILDBOT' environment variable is set
-#[cfg(test)]
-#[actix_web::test]
-async fn maybe_disable_tests() {
-    use std::env;
-
-    if env::var("IGNORE_TESTS_IN_BUILDBOT").is_ok() {
-        std::process::exit(0);
-    }
-}
-
 #[cfg(test)]
 #[allow(dead_code)]
 mod tests;
