@@ -1,7 +1,5 @@
 # This is an opinionated module to configure Hetzner Cloud CPX instances.
-{ flake, ... }:
-{ lib, ... }:
-{
+{flake, ...}: {lib, ...}: {
   imports = [
     flake.nixosModules.hardware-hetzner-cloud
   ];
@@ -10,7 +8,7 @@
   boot.loader.grub.efiSupport = false;
 
   # forcing seems required or else there's an error about duplicated devices
-  boot.loader.grub.devices = lib.mkForce [ "/dev/sda" ];
+  boot.loader.grub.devices = lib.mkForce ["/dev/sda"];
 
   disko.devices.disk.sda = {
     device = "/dev/sda";
@@ -26,14 +24,14 @@
           size = "100%";
           content = {
             type = "btrfs";
-            extraArgs = [ "-f" ]; # Override existing partition
+            extraArgs = ["-f"]; # Override existing partition
             subvolumes = {
               # Subvolume name is different from mountpoint
               "/rootfs" = {
                 mountpoint = "/";
               };
               "/nix" = {
-                mountOptions = [ "noatime" ];
+                mountOptions = ["noatime"];
                 mountpoint = "/nix";
               };
               "/boot" = {

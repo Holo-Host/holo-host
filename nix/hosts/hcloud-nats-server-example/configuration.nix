@@ -1,5 +1,4 @@
-{ flake, ... }:
-{
+{flake, ...}: {
   imports = [
     flake.nixosModules.hardware-hetzner-cloud-cpx
     flake.nixosModules.holo-nats-server

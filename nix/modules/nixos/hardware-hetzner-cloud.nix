@@ -1,7 +1,5 @@
 # This is an opinionated module to configure Hetzner Cloud instances.
-{ inputs, ... }:
-{ lib, ... }:
-{
+{inputs, ...}: {lib, ...}: {
   imports = [
     inputs.srvos.nixosModules.server
     inputs.srvos.nixosModules.mixins-terminfo
@@ -39,6 +37,6 @@
   system.switch.enableNg = true;
   virtualisation.vmVariant.virtualisation.graphics = false;
 
-  environment.systemPackages = [ ];
+  environment.systemPackages = [];
   system.stateVersion = "24.11";
 }

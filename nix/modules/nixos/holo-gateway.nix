@@ -1,22 +1,13 @@
 # Module to configure a machine as a holo-gateway.
-
 # blueprint specific first level argument that's referred to as "publisherArgs"
-{
-  inputs,
-  ...
-}:
-
-{
+{inputs, ...}: {
   lib,
   config,
   pkgs,
   ...
-}:
-
-let
+}: let
   cfg = config.holo.holo-gateway;
-in
-{
+in {
   options.holo.holo-gateway = {
     enable = lib.mkOption {
       description = "enable holo-gateway";
@@ -99,9 +90,8 @@ in
 
     extraAttrs = lib.mkOption {
       description = "extra attributes passed to `services.nats`";
-      default = { };
+      default = {};
     };
-
   };
 
   config = lib.mkIf cfg.enable {
@@ -119,10 +109,9 @@ in
       environment =
         {
           RUST_LOG =
-            if cfg.rust.log != null then
-              cfg.rust.log
-            else
-              "${cfg.logLevel},tungstenite=error,async_nats=error,mio=error";
+            if cfg.rust.log != null
+            then cfg.rust.log
+            else "${cfg.logLevel},tungstenite=error,async_nats=error,mio=error";
 
           RUST_BACKTRACE = cfg.rust.backtrace;
 
@@ -161,7 +150,7 @@ in
 
     networking.firewall.allowedTCPPorts =
       # need port 80 to receive well-known ACME requests
-      [ cfg.port ]
+      [cfg.port]
       ++ (lib.optionals cfg.caddy.enable [
         80
         443
@@ -177,38 +166,33 @@ in
           level ${cfg.caddy.logLevel}
         '';
 
-        virtualHosts =
-          let
-            maybe_fqdn = builtins.tryEval config.networking.fqdn;
-            domain =
-              if maybe_fqdn.success then
-                maybe_fqdn.value
-              else
-                builtins.trace "WARNING: FQDN is not available, this will most likely lead to an invalid caddy configuration. falling back to hostname ${config.networking.hostName}" config.networking.hostName;
-          in
-          {
-            "http://${domain}:80".extraConfig = ''
-              tls {
-                issuer acme
-                issuer internal
-              }
-              reverse_proxy http://127.0.0.1:${builtins.toString cfg.port}
-            '';
+        virtualHosts = let
+          maybe_fqdn = builtins.tryEval config.networking.fqdn;
+          domain =
+            if maybe_fqdn.success
+            then maybe_fqdn.value
+            else builtins.trace "WARNING: FQDN is not available, this will most likely lead to an invalid caddy configuration. falling back to hostname ${config.networking.hostName}" config.networking.hostName;
+        in {
+          "http://${domain}:80".extraConfig = ''
+            tls {
+              issuer acme
+              issuer internal
+            }
+            reverse_proxy http://127.0.0.1:${builtins.toString cfg.port}
+          '';
 
-            "https://${domain}".extraConfig = ''
-              tls {
-                issuer acme
-                issuer internal
-              }
-              reverse_proxy http://127.0.0.1:${builtins.toString cfg.port}
-            '';
-          };
+          "https://${domain}".extraConfig = ''
+            tls {
+              issuer acme
+              issuer internal
+            }
+            reverse_proxy http://127.0.0.1:${builtins.toString cfg.port}
+          '';
+        };
       }
       // lib.attrsets.optionalAttrs cfg.caddy.staging {
         acmeCA = "https://acme-staging-v02.api.letsencrypt.org/directory";
       }
     );
-
   };
-
 }

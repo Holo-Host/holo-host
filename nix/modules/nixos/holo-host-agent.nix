@@ -1,22 +1,13 @@
 # Module to configure a machine as a holo-host-agent.
-
 # blueprint specific first level argument that's referred to as "publisherArgs"
-{
-  inputs,
-  ...
-}:
-
-{
+{inputs, ...}: {
   lib,
   config,
   pkgs,
   ...
-}:
-
-let
+}: let
   cfg = config.holo.host-agent;
-in
-{
+in {
   imports = [
     inputs.extra-container.nixosModules.default
   ];
@@ -90,7 +81,6 @@ in
       default = {
       };
     };
-
   };
 
   config = lib.mkIf cfg.enable {
@@ -108,10 +98,9 @@ in
       environment =
         {
           RUST_LOG =
-            if cfg.rust.log != null then
-              cfg.rust.log
-            else
-              "${cfg.logLevel},request=error,tungstenite=error,async_nats=error,mio=error,tokio_tungstenite=error";
+            if cfg.rust.log != null
+            then cfg.rust.log
+            else "${cfg.logLevel},request=error,tungstenite=error,async_nats=error,mio=error,tokio_tungstenite=error";
           RUST_BACKTRACE = cfg.rust.backtrace;
           NATS_LISTEN_PORT = builtins.toString cfg.nats.listenPort;
           NIX_REMOTE = "daemon";
@@ -120,25 +109,27 @@ in
           NATS_URL = cfg.nats.url;
         };
 
-      path = config.environment.systemPackages ++ [
-        pkgs.git
-        pkgs.nats-server
-      ];
+      path =
+        config.environment.systemPackages
+        ++ [
+          pkgs.git
+          pkgs.nats-server
+        ];
 
-      script =
-        let
-          extraDaemonizeArgsList = lib.attrsets.mapAttrsToList (
+      script = let
+        extraDaemonizeArgsList =
+          lib.attrsets.mapAttrsToList (
             name: value:
-            if lib.types.bool.check value then
-              (lib.optionalString value "--${name}")
-            else if (value == lib.types.int.check value || lib.types.path.check value) then
-              "--${name}=${builtins.toString value}"
-            else if (lib.types.str.check value) then
-              "--${name}=${value}"
-            else
-              throw "${name}: don't know how to handle type ${value}"
-          ) cfg.extraDaemonizeArgs;
-        in
+              if lib.types.bool.check value
+              then (lib.optionalString value "--${name}")
+              else if (value == lib.types.int.check value || lib.types.path.check value)
+              then "--${name}=${builtins.toString value}"
+              else if (lib.types.str.check value)
+              then "--${name}=${value}"
+              else throw "${name}: don't know how to handle type ${value}"
+          )
+          cfg.extraDaemonizeArgs;
+      in
         builtins.toString (
           pkgs.writeShellScript "holo-host-agent" ''
             ${lib.getExe' cfg.package "host_agent"} daemonize \

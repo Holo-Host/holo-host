@@ -1,22 +1,13 @@
 # Module to configure a hc-http-gw service on a nixos machine.
-
 # blueprint specific first level argument that's referred to as "publisherArgs"
-{
-  flake,
-  ...
-}:
-
-{
+{flake, ...}: {
   lib,
   config,
   pkgs,
   ...
-}:
-
-let
+}: let
   cfg = config.holo.hc-http-gw;
-in
-{
+in {
   options.holo.hc-http-gw = {
     enable = lib.mkOption {
       description = "enable hc-http-gw";
@@ -68,7 +59,7 @@ in
     allowedAppIds = lib.mkOption {
       description = "list of installed app ids that are allowed to be used by the gateway.";
       type = lib.types.listOf lib.types.str;
-      default = [ ];
+      default = [];
     };
 
     allowedFnsPerAppId = lib.mkOption {
@@ -79,7 +70,7 @@ in
   };
 
   config = lib.mkIf cfg.enable {
-    users.groups.${cfg.group} = { };
+    users.groups.${cfg.group} = {};
     users.users.${cfg.user} = {
       isSystemUser = true;
       inherit (cfg) group;
@@ -114,25 +105,24 @@ in
           # add the required prefix in front of each appId
           lib.mapAttrs' (
             appId: allowedFns: (lib.nameValuePair "HC_GW_ALLOWED_FNS_${appId}" allowedFns)
-          ) cfg.allowedFnsPerAppId
+          )
+          cfg.allowedFnsPerAppId
         );
 
-      serviceConfig =
-        let
-          StateDirectory = "hc-http-gw";
-        in
-        {
-          User = cfg.user;
-          Group = cfg.user;
-          # %S is short for StateDirectory
-          WorkingDirectory = "%S/${StateDirectory}";
-          inherit StateDirectory;
-          StateDirectoryMode = "0700";
-          Restart = "always";
-          RestartSec = 1;
-          Type = "simple"; # The hc-http-gw does *not* send a notify signal to systemd when it is ready
-          NotifyAccess = "all";
-        };
+      serviceConfig = let
+        StateDirectory = "hc-http-gw";
+      in {
+        User = cfg.user;
+        Group = cfg.user;
+        # %S is short for StateDirectory
+        WorkingDirectory = "%S/${StateDirectory}";
+        inherit StateDirectory;
+        StateDirectoryMode = "0700";
+        Restart = "always";
+        RestartSec = 1;
+        Type = "simple"; # The hc-http-gw does *not* send a notify signal to systemd when it is ready
+        NotifyAccess = "all";
+      };
 
       script = builtins.toString (
         pkgs.writeShellScript "hc-http-gw-wrapper" ''

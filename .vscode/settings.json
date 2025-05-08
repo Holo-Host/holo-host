@@ -1,5 +1,5 @@
 {
-  "editor.defaultFormatter": "ibecker.treefmt-vscode",
+  "editor.defaultFormatter": "kamadorueda.alejandra",
   "direnv.restart.automatic": true,
   "[nix]": {
     "editor.defaultFormatter": "jnoortheen.nix-ide",
@@ -8,6 +8,12 @@
   "nix.enableLanguageServer": true,
   "nix.serverPath": "nixd",
   "nix.serverSettings": {
+    // settings for 'nixd' LSP
+    "nixd": {
+      "formatting": {
+          "command": ["alejandra"]
+      }
+    },
     // settings for 'nil' LSP
     "nil": {
       "formatting": {

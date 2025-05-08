@@ -1,22 +1,13 @@
 # Module to configure a holochain service on a nixos machine.
-
 # blueprint specific first level argument that's referred to as "publisherArgs"
-{
-  inputs,
-  ...
-}:
-
-{
+{inputs, ...}: {
   lib,
   config,
   pkgs,
   ...
-}:
-
-let
+}: let
   cfg = config.holo.holochain;
-in
-{
+in {
   options.holo.holochain = {
     enable = lib.mkOption {
       description = "enable holochain";
@@ -99,7 +90,7 @@ in
           # This is OPTIONAL. If this is not specified, it will default
           # to what you can see here:
           webrtc_config = {
-            iceServers = lib.lists.map (url: { urls = [ url ]; }) cfg.webrtcTransportPoolIceServers;
+            iceServers = lib.lists.map (url: {urls = [url];}) cfg.webrtcTransportPoolIceServers;
           };
         };
     };
@@ -133,14 +124,14 @@ in
           network_type = "quic_bootstrap";
 
           # Setup a specific network configuration.
-          transport_pool = [ cfg.webrtcTransportPool ];
+          transport_pool = [cfg.webrtcTransportPool];
         };
       };
     };
 
     conductorConfigOverrides = lib.mkOption {
       type = lib.types.attrs;
-      default = { };
+      default = {};
     };
 
     conductorConfigEffective = lib.mkOption {
@@ -150,7 +141,7 @@ in
 
     conductorConfigYaml = lib.mkOption {
       type = lib.types.path;
-      default = (pkgs.formats.yaml { }).generate "holochain.yml" cfg.conductorConfigEffective;
+      default = (pkgs.formats.yaml {}).generate "holochain.yml" cfg.conductorConfigEffective;
     };
 
     user = lib.mkOption {
@@ -162,7 +153,7 @@ in
   };
 
   config = lib.mkIf cfg.enable {
-    users.groups.${cfg.group} = { };
+    users.groups.${cfg.group} = {};
     users.users.${cfg.user} = {
       isSystemUser = true;
       inherit (cfg) group;
@@ -196,22 +187,20 @@ in
         fi
       '';
 
-      serviceConfig =
-        let
-          StateDirectory = "holochain";
-        in
-        {
-          User = cfg.user;
-          Group = cfg.user;
-          # %S is short for StateDirectory
-          WorkingDirectory = "%S/${StateDirectory}";
-          inherit StateDirectory;
-          StateDirectoryMode = "0700";
-          Restart = "always";
-          RestartSec = 1;
-          Type = "notify"; # The conductor sends a notify signal to systemd when it is ready
-          NotifyAccess = "all";
-        };
+      serviceConfig = let
+        StateDirectory = "holochain";
+      in {
+        User = cfg.user;
+        Group = cfg.user;
+        # %S is short for StateDirectory
+        WorkingDirectory = "%S/${StateDirectory}";
+        inherit StateDirectory;
+        StateDirectoryMode = "0700";
+        Restart = "always";
+        RestartSec = 1;
+        Type = "notify"; # The conductor sends a notify signal to systemd when it is ready
+        NotifyAccess = "all";
+      };
 
       script = builtins.toString (
         pkgs.writeShellScript "holochain-wrapper" ''

@@ -13,7 +13,7 @@ pkgs.mkShell {
   ];
 
   # Add environment variables
-  env = { };
+  env = {};
 
   # Load custom bash code
   shellHook =

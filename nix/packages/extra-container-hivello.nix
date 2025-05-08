@@ -1,97 +1,90 @@
 /*
-  this can be run on a nixos machine (that has extra-containers installed ?) using:
-  $ nix run --refresh github:holo-host/holo-host/hivello-package#extra-container-hivello -- --restart-changed
+this can be run on a nixos machine (that has extra-containers installed ?) using:
+$ nix run --refresh github:holo-host/holo-host/hivello-package#extra-container-hivello -- --restart-changed
 
-  it exposes the following services on the host interfaces:
-  * SSH - port TCP 2200 - inherits authorized keys from the host
-  * VNC - port TCP 5900 - unauthenticated
+it exposes the following services on the host interfaces:
+* SSH - port TCP 2200 - inherits authorized keys from the host
+* VNC - port TCP 5900 - unauthenticated
 */
-
 {
   flake,
   inputs,
   system,
-}:
-
-let
+}: let
   nixpkgs = inputs.nixpkgs-2405;
 
   privateNetwork = false;
 in
+  (inputs.extra-container.lib.buildContainers {
+    # The system of the container host
+    inherit system;
 
-(inputs.extra-container.lib.buildContainers {
+    # Optional: Set nixpkgs.
+    # If unset, the nixpkgs input of extra-container flake is used
+    inherit nixpkgs;
 
-  # The system of the container host
-  inherit system;
+    # Only set this if the `system.stateVersion` of your container
+    # host is < 22.05
+    # legacyInstallDirs = true;
 
-  # Optional: Set nixpkgs.
-  # If unset, the nixpkgs input of extra-container flake is used
-  inherit nixpkgs;
+    # Set this to disable `nix run` support
+    # addRunner = false;
 
-  # Only set this if the `system.stateVersion` of your container
-  # host is < 22.05
-  # legacyInstallDirs = true;
+    config = {
+      containers.demo = {
+        inherit privateNetwork;
 
-  # Set this to disable `nix run` support
-  # addRunner = false;
+        # `specialArgs` is available in nixpkgs > 22.11
+        # This is useful for importing flakes from modules (see nixpkgs/lib/modules.nix).
+        # specialArgs = { inherit inputs; };
 
-  config = {
-    containers.demo = {
-      inherit privateNetwork;
+        bindMounts."/etc/ssh/authorized_keys.d/root" = {
+          isReadOnly = true;
+        };
+        bindMounts."/etc/ssh/authorized_keys.d/dev" = {
+          isReadOnly = true;
+          hostPath = "/etc/ssh/authorized_keys.d/root";
+        };
 
-      # `specialArgs` is available in nixpkgs > 22.11
-      # This is useful for importing flakes from modules (see nixpkgs/lib/modules.nix).
-      # specialArgs = { inherit inputs; };
+        bindMounts."/dev/dri/renderD128" = {
+          isReadOnly = false;
+        };
+        bindMounts."/dev/dri/card0 " = {
+          isReadOnly = false;
+        };
+        bindMounts."/dev/udmabuf" = {
+          isReadOnly = false;
+        };
 
-      bindMounts."/etc/ssh/authorized_keys.d/root" = {
-        isReadOnly = true;
-      };
-      bindMounts."/etc/ssh/authorized_keys.d/dev" = {
-        isReadOnly = true;
-        hostPath = "/etc/ssh/authorized_keys.d/root";
-      };
+        allowedDevices = [
+          {
+            node = "/dev/dri/renderD128";
+            modifier = "rw";
+          }
+          {
+            node = "/dev/dri/card0";
+            modifier = "rw";
+          }
+          {
+            node = "/dev/udmabuf";
+            modifier = "rw";
+          }
+        ];
 
-      bindMounts."/dev/dri/renderD128" = {
-        isReadOnly = false;
-      };
-      bindMounts."/dev/dri/card0 " = {
-        isReadOnly = false;
-      };
-      bindMounts."/dev/udmabuf" = {
-        isReadOnly = false;
-      };
+        # required by podman
+        enableTun = true;
 
-      allowedDevices = [
-        {
-          node = "/dev/dri/renderD128";
-          modifier = "rw";
-        }
-        {
-          node = "/dev/dri/card0";
-          modifier = "rw";
-        }
-        {
-          node = "/dev/udmabuf";
-          modifier = "rw";
-        }
-      ];
+        additionalCapabilities = [
+          # TODO: i saw ptrace used in the strace, not sure if it's a requirement for the happy path
+          "CAP_SYS_PTRACE"
+        ];
 
-      # required by podman
-      enableTun = true;
-
-      additionalCapabilities = [
-        # TODO: i saw ptrace used in the strace, not sure if it's a requirement for the happy path
-        "CAP_SYS_PTRACE"
-      ];
-
-      config =
-        {
+        config = {
           config,
           pkgs,
           lib,
           ...
-        }:
-        {
+        }: {
           # in case the container shares the host network, don't mess with the firewall rules.
           networking.firewall.enable = privateNetwork;
 
@@ -125,14 +118,12 @@ in
             (pkgs.writeShellScriptBin "hivello-strace" ''
               strace --follow-forks --no-abbrev --string-limit=128 --decode-fds=all --decode-pids=comm Hivello "$@" 2>&1 | tee ~/hivello.strace
             '')
-
           ];
 
           programs.nix-ld = {
             enable = true;
-            libraries =
-              with pkgs;
-              # TODO: not sure if this is required
+            libraries = with pkgs;
+            # TODO: not sure if this is required
               [
                 intel-vaapi-driver
                 libvdpau-va-gl
@@ -196,7 +187,7 @@ in
                   "Ubuntu"
                   "Vazirmatn"
                 ];
-                monospace = [ "Ubuntu Mono" ];
+                monospace = ["Ubuntu Mono"];
               };
             };
           };
@@ -208,7 +199,7 @@ in
 
             enable = true;
 
-            after = [ "network.target" ];
+            after = ["network.target"];
             wantedBy = [
               "default.target"
               "multi-user.target"
@@ -219,17 +210,16 @@ in
             # TODO: not sure if this is required
             environment.LIBVA_DRIVER_NAME = "iHD";
 
-            script =
-              let
-                xsession = pkgs.writeShellScript "inner" ''
-                  # run a terminal by default.
-                  alacritty &
+            script = let
+              xsession = pkgs.writeShellScript "inner" ''
+                # run a terminal by default.
+                alacritty &
 
-                  # TODO: fluxbox is rudimentary and we might need something
-                  # richer it works for testing for now.
-                  exec fluxbox
-                '';
-              in
+                # TODO: fluxbox is rudimentary and we might need something
+                # richer it works for testing for now.
+                exec fluxbox
+              '';
+            in
               builtins.toString (
                 pkgs.writeShellScript "xvnc" ''
                   set -xeE -o pipefail
@@ -247,19 +237,17 @@ in
                   DISPLAY=":0" ${config.services.xserver.displayManager.sessionData.wrapper} ${xsession}
                 ''
               );
-
           };
 
           services.openssh.enable = true;
-          services.openssh.ports = [ 2200 ];
+          services.openssh.ports = [2200];
 
           # disabled in favor of the Xvnc solution
           services.openssh.settings.X11Forwarding = false;
         };
+      };
     };
-  };
-
-}).overrideAttrs
+  }).overrideAttrs
   {
     meta.platforms = with nixpkgs.lib; lists.intersectLists platforms.linux platforms.x86_64;
   }

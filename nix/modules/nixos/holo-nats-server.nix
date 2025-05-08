@@ -1,13 +1,15 @@
 /*
-  Opinionated module to configure a NATS server to be used with other holo-host components.
-  The main use-case for this module will be to host a NATS cluster that is reachable by all hosts.
+Opinionated module to configure a NATS server to be used with other holo-host components.
+The main use-case for this module will be to host a NATS cluster that is reachable by all hosts.
 */
-{ lib, config, ... }:
-let
-  cfg = config.holo.nats-server;
-in
 {
-  imports = [ ];
+  lib,
+  config,
+  ...
+}: let
+  cfg = config.holo.nats-server;
+in {
+  imports = [];
 
   options.holo.nats-server = {
     enable = lib.mkOption {
@@ -70,7 +72,7 @@ in
 
     extraAttrs = lib.mkOption {
       description = "extra attributes passed to `services.nats`";
-      default = { };
+      default = {};
     };
   };
 
@@ -111,24 +113,21 @@ in
           level DEBUG
         '';
 
-        virtualHosts =
-          let
-            maybe_fqdn = builtins.tryEval config.networking.fqdn;
-            domain =
-              if maybe_fqdn.success then
-                maybe_fqdn.value
-              else
-                builtins.trace "WARNING: FQDN is not available, this will most likely lead to an invalid caddy configuration. falling back to hostname ${config.networking.hostName}" config.networking.hostName;
-          in
-          {
-            "https://${domain}:${builtins.toString cfg.websocket.externalPort}".extraConfig = ''
-              tls {
-                issuer acme
-                issuer internal
-              }
-              reverse_proxy http://127.0.0.1:${builtins.toString cfg.websocket.port}
-            '';
-          };
+        virtualHosts = let
+          maybe_fqdn = builtins.tryEval config.networking.fqdn;
+          domain =
+            if maybe_fqdn.success
+            then maybe_fqdn.value
+            else builtins.trace "WARNING: FQDN is not available, this will most likely lead to an invalid caddy configuration. falling back to hostname ${config.networking.hostName}" config.networking.hostName;
+        in {
+          "https://${domain}:${builtins.toString cfg.websocket.externalPort}".extraConfig = ''
+            tls {
+              issuer acme
+              issuer internal
+            }
+            reverse_proxy http://127.0.0.1:${builtins.toString cfg.websocket.port}
+          '';
+        };
       }
       // lib.attrsets.optionalAttrs cfg.caddy.staging {
         acmeCA = "https://acme-staging-v02.api.letsencrypt.org/directory";

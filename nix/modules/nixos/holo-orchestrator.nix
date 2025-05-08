@@ -1,22 +1,13 @@
 # Module to configure a machine as a holo-orchestrator.
-
 # blueprint specific first level argument that's referred to as "publisherArgs"
-{
-  inputs,
-  ...
-}:
-
-{
+{inputs, ...}: {
   lib,
   config,
   pkgs,
   ...
-}:
-
-let
+}: let
   cfg = config.holo.orchestrator;
-in
-{
+in {
   options.holo.orchestrator = {
     enable = lib.mkOption {
       description = "enable holo-orchestrator";
@@ -76,7 +67,6 @@ in
         };
       };
     };
-
   };
 
   config = lib.mkIf cfg.enable {
@@ -94,10 +84,9 @@ in
       environment =
         {
           RUST_LOG =
-            if cfg.rust.log != null then
-              cfg.rust.log
-            else
-              "${cfg.logLevel},tungstenite=error,async_nats=error,mio=error";
+            if cfg.rust.log != null
+            then cfg.rust.log
+            else "${cfg.logLevel},tungstenite=error,async_nats=error,mio=error";
 
           RUST_BACKTRACE = cfg.rust.backtrace;
           MONGO_URI = cfg.mongo.url;

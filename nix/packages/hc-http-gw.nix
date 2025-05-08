@@ -1,24 +1,20 @@
 # Losely following the tutorial at https://crane.dev/examples/quick-start-workspace.html
-
 {
   flake,
   pkgs,
   system,
   perSystem,
   ...
-}:
-let
-  craneLib = flake.lib.mkCraneLib { inherit pkgs system; };
+}: let
+  craneLib = flake.lib.mkCraneLib {inherit pkgs system;};
   srcDeps = craneLib.cleanCargoSource flake.inputs.hc-http-gw;
-  src =
-    let
-      # Only keeps markdown files
-      markdownFilter =
-        path: _type:
-        # the build relies on this file
-        path != "spec.md";
-      markdownOrCargo = path: type: (markdownFilter path type) || (craneLib.filterCargoSources path type);
-    in
+  src = let
+    # Only keeps markdown files
+    markdownFilter = path: _type:
+    # the build relies on this file
+      path != "spec.md";
+    markdownOrCargo = path: type: (markdownFilter path type) || (craneLib.filterCargoSources path type);
+  in
     pkgs.lib.cleanSourceWith {
       src = flake.inputs.hc-http-gw;
       filter = markdownOrCargo;
@@ -30,10 +26,13 @@ let
     # strictDeps = true;
 
     # assume the rust-workspace has all dependencies required for this package as well
-    nativeBuildInputs = [
-      pkgs.go
-    ] ++ perSystem.self.rust-workspace.nativeBuildInputs;
-    inherit (perSystem.self.rust-workspace)
+    nativeBuildInputs =
+      [
+        pkgs.go
+      ]
+      ++ perSystem.self.rust-workspace.nativeBuildInputs;
+    inherit
+      (perSystem.self.rust-workspace)
       buildInputs
       ;
 
@@ -48,9 +47,9 @@ let
   # cache misses when building individual top-level-crates
   cargoArtifacts = craneLib.buildDepsOnly commonArgs;
 in
-craneLib.buildPackage (
-  pkgs.lib.attrsets.recursiveUpdate commonArgs {
-    doCheck = false;
-    inherit src cargoArtifacts;
-  }
-)
+  craneLib.buildPackage (
+    pkgs.lib.attrsets.recursiveUpdate commonArgs {
+      doCheck = false;
+      inherit src cargoArtifacts;
+    }
+  )
