@@ -1,3 +1,4 @@
+pub mod jurisdiction;
 pub mod alias;
 pub mod user_permissions;
 pub mod api_log;

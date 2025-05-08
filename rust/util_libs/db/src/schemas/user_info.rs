@@ -3,7 +3,7 @@ use bson::{doc, oid::ObjectId, Document};
 use mongodb::options::IndexOptions;
 use serde::{Deserialize, Serialize};
 
-use super::metadata::Metadata;
+use super::{jurisdiction::Jurisdiction, metadata::Metadata};
 use crate::mongodb::traits::{IntoIndexes, MutMetadata};
 
 /// Collection name for developer documents
@@ -26,7 +26,7 @@ pub struct UserInfo {
     /// User's family name
     pub family_name: String,
     // User's jurisdiction
-    pub jurisdiction: String,
+    pub geographic_jurisdiction: Jurisdiction,
 }
 
 impl IntoIndexes for UserInfo {

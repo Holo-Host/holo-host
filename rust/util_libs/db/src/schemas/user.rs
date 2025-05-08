@@ -14,13 +14,18 @@ pub const USER_COLLECTION_NAME: &str = "user";
 
 /// Enumeration of possible user roles
 #[derive(
-    Debug, Clone, Serialize, Deserialize, PartialEq, AsRefStr, EnumDiscriminants, FromRepr, ToSchema,
+    Debug,
+    Clone,
+    Serialize,
+    Deserialize,
+    EnumString,
+    PartialEq,
+    AsRefStr,
+    EnumDiscriminants,
+    FromRepr,
+    ToSchema,
 )]
-#[strum_discriminants(
-    derive(EnumString, Serialize, Deserialize),
-    repr(usize),
-    strum(serialize_all = "snake_case")
-)]
+#[serde(rename_all = "snake_case")]
 pub enum PublicKeyRole {
     /// Role for hosters
     Hoster,
@@ -40,13 +45,18 @@ pub struct PublicKeyWithRole {
 /// Enumeration of possible user roles
 /// Roles will apply a predefined set of permissions to the user automatically
 #[derive(
-    Debug, Clone, Serialize, Deserialize, PartialEq, AsRefStr, EnumDiscriminants, FromRepr, ToSchema,
+    Debug,
+    Clone,
+    EnumString,
+    Serialize,
+    Deserialize,
+    PartialEq,
+    AsRefStr,
+    EnumDiscriminants,
+    FromRepr,
+    ToSchema,
 )]
-#[strum_discriminants(
-    derive(EnumString, Serialize, Deserialize),
-    repr(usize),
-    strum(serialize_all = "snake_case")
-)]
+#[serde(rename_all = "snake_case")]
 pub enum UserRole {
     // WARNING: This role will give full access to the system
     Admin,

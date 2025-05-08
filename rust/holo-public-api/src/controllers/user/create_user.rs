@@ -9,7 +9,29 @@ use utoipa::{OpenApi, ToSchema};
 use crate::providers::{self, error_response::ErrorResponse, jwt::AccessTokenClaims};
 
 #[derive(Serialize, Deserialize, ToSchema)]
+pub struct UserInfo {
+    /// the email of the user, this can be used as a login flow
+    #[schema(example = "john.doe@email.com")]
+    email: String,
+
+    /// the given names of the user, this can be used as a login flow
+    #[schema(example = "John")]
+    given_names: String,
+
+    /// the family name of the user, this can be used as a login flow
+    #[schema(example = "Doe")]
+    family_name: String,
+
+    /// the jurisdiction of the user, this is used to determine the user's permissions
+    #[schema(example = json!(db_utils::schemas::jurisdiction::Jurisdiction::default()))]
+    geographic_jurisdiction: db_utils::schemas::jurisdiction::Jurisdiction,
+}
+
+#[derive(Serialize, Deserialize, ToSchema)]
 pub struct CreateUserRequest {
+    /// user info
+    user_info: UserInfo,
+
     /// additional permissions to give the user
     #[schema(example = json!([]))]
     permissions: Vec<UserPermission>,

@@ -4,13 +4,18 @@ use utoipa::ToSchema;
 
 /// Represents the type of permission the user has for each resources
 #[derive(
-    Debug, Clone, Serialize, Deserialize, ToSchema, PartialEq, AsRefStr, EnumDiscriminants, FromRepr,
+    Debug,
+    Clone,
+    Serialize,
+    Deserialize,
+    EnumString,
+    ToSchema,
+    PartialEq,
+    AsRefStr,
+    EnumDiscriminants,
+    FromRepr,
 )]
-#[strum_discriminants(
-    derive(EnumString, Serialize, Deserialize),
-    repr(usize),
-    strum(serialize_all = "snake_case")
-)]
+#[serde(rename_all = "snake_case")]
 pub enum PermissionAction {
     All,
     Read,
