@@ -3,6 +3,7 @@ use bson::{doc, oid::ObjectId, Document};
 use mongodb::options::IndexOptions;
 use serde::{Deserialize, Serialize};
 use strum::{AsRefStr, EnumDiscriminants, EnumString, FromRepr};
+use utoipa::ToSchema;
 
 use super::metadata::Metadata;
 use super::{alias::PubKey, user_permissions::UserPermission};
@@ -13,7 +14,7 @@ pub const USER_COLLECTION_NAME: &str = "user";
 
 /// Enumeration of possible user roles
 #[derive(
-    Debug, Clone, Serialize, Deserialize, PartialEq, AsRefStr, EnumDiscriminants, FromRepr,
+    Debug, Clone, Serialize, Deserialize, PartialEq, AsRefStr, EnumDiscriminants, FromRepr, ToSchema,
 )]
 #[strum_discriminants(
     derive(EnumString, Serialize, Deserialize),
@@ -28,7 +29,7 @@ pub enum PublicKeyRole {
 }
 
 /// Key pair of public key and it's role
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, ToSchema)]
 pub struct PublicKeyWithRole {
     // Role of the public key
     pub role: PublicKeyRole,
@@ -39,7 +40,7 @@ pub struct PublicKeyWithRole {
 /// Enumeration of possible user roles
 /// Roles will apply a predefined set of permissions to the user automatically
 #[derive(
-    Debug, Clone, Serialize, Deserialize, PartialEq, AsRefStr, EnumDiscriminants, FromRepr,
+    Debug, Clone, Serialize, Deserialize, PartialEq, AsRefStr, EnumDiscriminants, FromRepr, ToSchema,
 )]
 #[strum_discriminants(
     derive(EnumString, Serialize, Deserialize),
