@@ -1,12 +1,11 @@
 /*
-  this can be run on a nixos machine (that has extra-containers installed ?) using:
-  $ nix run --extra-experimental-features "nix-command flakes" --refresh github:holo-host/holo-host#extra-container-holochain -- --restart-changed
+this can be run on a nixos machine (that has extra-containers installed ?) using:
+$ nix run --extra-experimental-features "nix-command flakes" --refresh github:holo-host/holo-host#extra-container-holochain -- --restart-changed
 
-  optionally deploy locally to a dev machine:
+optionally deploy locally to a dev machine:
 
-  $ nix copy --no-check-sigs "$(nix build --print-out-paths .#packages.x86_64-linux.extra-container-holochain)" --to  'ssh-ng://root@towards-allograph.dmz.internal'
+$ nix copy --no-check-sigs "$(nix build --print-out-paths .#packages.x86_64-linux.extra-container-holochain)" --to  'ssh-ng://root@towards-allograph.dmz.internal'
 */
-
 {
   inputs,
   system,
@@ -23,18 +22,13 @@
   signalUrl ? null,
   stunUrls ? null,
   holochainFeatures ? null,
-
   # hc-http-gw related args
   httpGwEnable ? false,
-  httpGwAllowedAppIds ? [ ],
-# TODO: support
-# httpGwAllowedFns ? { },
-}:
-
-let
-
+  httpGwAllowedAppIds ? [],
+  # TODO: support
+  # httpGwAllowedFns ? { },
+}: let
   package = inputs.extra-container.lib.buildContainers {
-
     # The system of the container host
     inherit system;
 
@@ -62,77 +56,76 @@ let
           isReadOnly = true;
         };
 
-        config =
-          { lib, options, ... }:
-          {
-            # in case the container shares the host network, don't mess with the firewall rules.
-            networking.firewall.enable = privateNetwork;
-            networking.useHostResolvConf = true;
+        config = {
+          lib,
+          options,
+          ...
+        }: {
+          # in case the container shares the host network, don't mess with the firewall rules.
+          networking.firewall.enable = privateNetwork;
+          networking.useHostResolvConf = true;
 
-            imports = [
-              flake.nixosModules.holochain
-              flake.nixosModules.hc-http-gw
-            ];
+          imports = [
+            flake.nixosModules.holochain
+            flake.nixosModules.hc-http-gw
+          ];
 
-            holo.holochain =
-              {
-                inherit adminWebsocketPort;
-                package =
-                  let
-                    # TODO: choose according to the requested version. maybe by overriding the holonix branch?
-                    versioned = options.holo.holochain.package.default;
+          holo.holochain =
+            {
+              inherit adminWebsocketPort;
+              package = let
+                # TODO: choose according to the requested version. maybe by overriding the holonix branch?
+                versioned = options.holo.holochain.package.default;
 
-                    featured =
-                      if holochainFeatures != null then
-                        let
-                          features = builtins.concatStringsSep "," holochainFeatures;
-                          cargoExtraArgs = "--features ${features}";
-                        in
-                        versioned.override { inherit cargoExtraArgs; }
-                      else
-                        versioned;
-
-                    finalPkg = featured;
+                featured =
+                  if holochainFeatures != null
+                  then let
+                    features = builtins.concatStringsSep "," holochainFeatures;
+                    cargoExtraArgs = "--features ${features}";
                   in
-                  finalPkg;
-              }
-              // (lib.optionalAttrs (bootstrapUrl != null) { bootstrapServiceUrl = bootstrapUrl; })
-              // (lib.optionalAttrs (signalUrl != null) { webrtcTransportPoolSignalUrl = signalUrl; })
-              // (lib.optionalAttrs (stunUrls != null) { webrtcTransportPoolIceServers = stunUrls; })
+                    versioned.override {inherit cargoExtraArgs;}
+                  else versioned;
+
+                finalPkg = featured;
+              in
+                finalPkg;
+            }
+            // (lib.optionalAttrs (bootstrapUrl != null) {bootstrapServiceUrl = bootstrapUrl;})
+            // (lib.optionalAttrs (signalUrl != null) {webrtcTransportPoolSignalUrl = signalUrl;})
+            // (lib.optionalAttrs (stunUrls != null) {webrtcTransportPoolIceServers = stunUrls;})
             #
             ;
 
-            holo.hc-http-gw = {
-              enable = httpGwEnable;
-              adminWebsocketUrl = "ws://127.0.0.1:${builtins.toString adminWebsocketPort}";
-              allowedAppIds = httpGwAllowedAppIds;
-              # allowedFnsPerAppId = httpGwAllowedFns;
-            };
+          holo.hc-http-gw = {
+            enable = httpGwEnable;
+            adminWebsocketUrl = "ws://127.0.0.1:${builtins.toString adminWebsocketPort}";
+            allowedAppIds = httpGwAllowedAppIds;
+            # allowedFnsPerAppId = httpGwAllowedFns;
           };
+        };
       };
     };
-
   };
   packageWithPlatformFilter = package.overrideAttrs {
-    meta.platforms =
-      with nixpkgs.lib;
+    meta.platforms = with nixpkgs.lib;
       lists.intersectLists platforms.linux (platforms.x86_64 ++ platforms.aarch64);
   };
 
   packageWithPlatformFilterAndTest = packageWithPlatformFilter.overrideAttrs {
     passthru.tests.integration = pkgs.testers.runNixOSTest (
-      { nodes, lib, ... }:
       {
+        _nodes,
+        lib,
+        ...
+      }: {
         name = "host-agent-integration-nixos";
         meta.platforms = lib.lists.intersectLists lib.platforms.linux lib.platforms.x86_64;
 
-        nodes.host =
-          { ... }:
-          {
-            imports = [
-              inputs.extra-container.nixosModules.default
-            ];
-          };
+        nodes.host = {...}: {
+          imports = [
+            inputs.extra-container.nixosModules.default
+          ];
+        };
 
         testScript = _: ''
           host.start()
@@ -150,7 +143,6 @@ let
         '';
       }
     );
-
   };
 in
-packageWithPlatformFilterAndTest
+  packageWithPlatformFilterAndTest

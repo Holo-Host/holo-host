@@ -34,10 +34,6 @@ jobs:
 
       - name: Build Project
         run: cargo build -p ${{ inputs.project }} --verbose
-      
-      - name: Get CI runner IP
-        id: ip
-        run: echo "IP=$(curl -s ifconfig.me)" >> $GITHUB_ENV
 
       - name: Run Tests
         run: cargo test -p ${{ inputs.project }} --verbose
