@@ -6,7 +6,7 @@
     "editor.formatOnSave": true
   },
   "nix.enableLanguageServer": true,
-  "nix.serverPath": "nil",
+  "nix.serverPath": "nixd",
   "nix.serverSettings": {
     // settings for 'nil' LSP
     "nil": {

@@ -3,31 +3,36 @@
   inputs,
   perSystem,
   ...
-}:
-let
+}: let
   settingsNix = {
     package = perSystem.nixpkgs.treefmt2;
 
     projectRootFile = ".git/config";
 
-    programs = {
-      nixfmt.enable = true;
-      deadnix = {
-        enable = true;
-        no-underscore = true;
-      };
-      statix.enable = true;
+    programs =
+      {
+        deadnix = {
+          enable = true;
+          no-underscore = true;
+        };
 
-      rustfmt.enable = true;
+        alejandra.enable = true;
 
-      gofmt.enable = true;
+        nixfmt.enable = true;
 
-      shfmt.enable = true;
+        statix.enable = true;
 
-      prettier.enable = true;
+        rustfmt.enable = true;
 
-      taplo.enable = true;
-    } // pkgs.lib.optionalAttrs (pkgs.system != "riscv64-linux") { shellcheck.enable = true; };
+        gofmt.enable = true;
+
+        shfmt.enable = true;
+
+        prettier.enable = true;
+
+        taplo.enable = true;
+      }
+      // pkgs.lib.optionalAttrs (pkgs.system != "riscv64-linux") {shellcheck.enable = true;};
 
     settings = {
       global.excludes = [
@@ -41,12 +46,16 @@ let
           priority = 1;
         };
 
-        nixfmt = {
+        alejandra = {
           priority = 2;
         };
 
-        statix = {
+        nixfmt = {
           priority = 3;
+        };
+
+        statix = {
+          priority = 4;
         };
 
         prettier = {
@@ -54,19 +63,18 @@ let
             "--tab-width"
             "2"
           ];
-          includes = [ "*.{css,html,js,json,jsx,md,mdx,scss,ts,yaml}" ];
+          includes = ["*.{css,html,js,json,jsx,md,mdx,scss,ts,yaml}"];
         };
       };
     };
   };
 
   treefmtEval = inputs.treefmt-nix.lib.evalModule pkgs settingsNix;
-
 in
-treefmtEval.config.build.wrapper.overrideAttrs (_: {
-  passthru = {
-    inherit (treefmtEval.config) package settings;
-    inherit (treefmtEval) config;
-    inherit settingsNix;
-  };
-})
+  treefmtEval.config.build.wrapper.overrideAttrs (_: {
+    passthru = {
+      inherit (treefmtEval.config) package settings;
+      inherit (treefmtEval) config;
+      inherit settingsNix;
+    };
+  })
