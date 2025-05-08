@@ -2,22 +2,16 @@
   "editor.defaultFormatter": "kamadorueda.alejandra",
   "direnv.restart.automatic": true,
   "[nix]": {
-    "editor.defaultFormatter": "jnoortheen.nix-ide",
+    "editor.defaultFormatter": "kamadorueda.alejandra",
     "editor.formatOnSave": true
   },
   "nix.enableLanguageServer": true,
   "nix.serverPath": "nixd",
   "nix.serverSettings": {
-    // settings for 'nixd' LSP
+    // Settings for 'nixd' LSP
     "nixd": {
       "formatting": {
-          "command": ["alejandra"]
-      }
-    },
-    // settings for 'nil' LSP
-    "nil": {
-      "formatting": {
-        "command": ["treefmt-nix", "--stdin", "neverexists.nix"]
+        "command": ["alejandra"]
       }
     }
   },
