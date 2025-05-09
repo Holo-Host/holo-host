@@ -35,6 +35,7 @@ Losely following the tutorial at https://crane.dev/examples/quick-start-workspac
 
     # Additional environment variables can be set directly
     # MY_CUSTOM_VAR = "some value";
+    IGNORE_TESTS_IN_BUILDBOT = "true";
 
     meta.platforms = pkgs.lib.platforms.linux;
   };
@@ -164,12 +165,14 @@ in
           pkgs.lib.attrsets.recursiveUpdate commonArgs {
             inherit cargoArtifacts;
             cargoClippyExtraArgs = "--all-targets -- --deny warnings";
+            IGNORE_TESTS_IN_BUILDBOT = "true";
           }
         );
 
         doc = craneLib.cargoDoc (
           pkgs.lib.attrsets.recursiveUpdate commonArgs {
             inherit cargoArtifacts;
+            IGNORE_TESTS_IN_BUILDBOT = "true";
           }
         );
 
@@ -218,6 +221,7 @@ in
 
             partitions = 1;
             partitionType = "count";
+            IGNORE_TESTS_IN_BUILDBOT = "true";
           }
         );
       };
