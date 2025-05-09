@@ -57,14 +57,14 @@ jobs:
             rust-${{ inputs.project }}-
             rust-
       
-      - name: Run Clippy
-        run: cargo clippy -p ${{ inputs.project }} -- -D warnings
-      
       - name: Run Linter
         run: cargo fmt -p ${{ inputs.project }} -- --check
 
       - name: Build Project
         run: cargo build -p ${{ inputs.project }} --verbose
+      
+      - name: Run Clippy
+        run: cargo clippy -p ${{ inputs.project }} -- -D warnings
       
       - name: Run Tests
         run: cargo test -p ${{ inputs.project }} --verbose
