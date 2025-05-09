@@ -73,30 +73,6 @@ impl IntoIndexes for User {
     fn into_indices(self) -> Result<Vec<(Document, Option<IndexOptions>)>> {
         let mut indices = vec![];
 
-        let public_key_role_doc = doc! { "public_key.role": 1 };
-        let public_key_role_opts = Some(
-            IndexOptions::builder()
-                .name(Some("public_key_role_index".to_string()))
-                .build(),
-        );
-        indices.push((public_key_role_doc, public_key_role_opts));
-
-        let public_key_role_pubkey_doc = doc! { "public_key.pubkey": 1 };
-        let public_key_role_pubkey_opts = Some(
-            IndexOptions::builder()
-                .name(Some("public_key.pubkey".to_string()))
-                .build(),
-        );
-        indices.push((public_key_role_pubkey_doc, public_key_role_pubkey_opts));
-
-        let public_key_role_pubkey_doc = doc! { "user_info": 1 };
-        let public_key_role_pubkey_opts = Some(
-            IndexOptions::builder()
-                .name(Some("public_key.pubkey".to_string()))
-                .build(),
-        );
-        indices.push((public_key_role_pubkey_doc, public_key_role_pubkey_opts));
-
         // add developer index
         let developer_index_doc = doc! { "developer": 1 };
         let developer_index_opts = Some(
