@@ -59,10 +59,10 @@ jobs:
 
       - name: Build Project
         run: cargo build -p ${{ inputs.project }} --verbose
-      
+
       - name: Run Tests
         run: cargo test -p ${{ inputs.project }} --verbose
-      
+        
       - name: Run Clippy
         run: cargo clippy -p ${{ inputs.project }} -- -D warnings
       

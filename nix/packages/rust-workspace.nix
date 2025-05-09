@@ -224,6 +224,7 @@ craneLib.buildPackage (
                 done
               '')
 
+              # MongoDB only needed for tests
               pkgs.mongodb-ce
             ];
 
