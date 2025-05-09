@@ -100,10 +100,8 @@ pub async fn update_apikey(
     }
 
     // verify user has the permissions that are being set for the api key
-    let permission_result = providers::auth::verify_all_permissions(
-        claims.clone(),
-        payload.permissions.clone(),
-    );
+    let permission_result =
+        providers::auth::verify_all_permissions(claims.clone(), payload.permissions.clone());
     if !permission_result {
         return HttpResponse::Forbidden().json(ErrorResponse {
             message: "Permission denied".to_string(),

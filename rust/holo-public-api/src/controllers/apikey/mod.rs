@@ -2,10 +2,10 @@ use actix_web::web;
 use utoipa::OpenApi;
 mod apikey_dto;
 mod create_apikey;
+mod delete_apikey;
 mod get_apikey;
 mod get_multiple_apikey;
 mod update_apikey;
-mod delete_apikey;
 
 pub fn setup_public_controllers(_cfg: &mut web::ServiceConfig) {}
 
