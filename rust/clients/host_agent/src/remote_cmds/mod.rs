@@ -60,7 +60,7 @@ pub(crate) async fn run(args: RemoteArgs, command: RemoteCommands) -> anyhow::Re
                 manifest: WorkloadManifest::HolochainDhtV1(manifest),
 
                 metadata: Default::default(),
-                owner: Default::default(),
+                assigned_developer: Default::default(),
                 version: Default::default(),
                 min_hosts: 1,
                 assigned_hosts: Default::default(),
