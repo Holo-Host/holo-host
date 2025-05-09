@@ -95,7 +95,7 @@ pub struct Workload {
     /// Common metadata fields
     pub metadata: Metadata,
     /// Reference to the user who created this workload
-    pub owner: ObjectId,
+    pub assigned_developer: ObjectId,
     /// Semantic version of the workload
     pub version: SemVer,
     /// Minimum number of hosts required
@@ -193,7 +193,7 @@ impl Default for Workload {
                 deleted_at: None,
             },
             version: semver,
-            owner: ObjectId::new(),
+            assigned_developer: ObjectId::new(),
             min_hosts: 1,
             system_specs: SystemSpecs {
                 capacity: Capacity { drive: 1, cores: 1 },

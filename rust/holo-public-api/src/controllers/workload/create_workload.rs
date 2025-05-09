@@ -110,7 +110,7 @@ pub async fn create_workload(
         WORKLOAD_COLLECTION_NAME.to_string(),
         Workload {
             _id: None,
-            owner: owner_oid,
+            assigned_developer: owner_oid,
             metadata: db_utils::schemas::metadata::Metadata::default(),
             assigned_hosts: vec![],
             manifest: db_utils::schemas::workload::WorkloadManifest::None,

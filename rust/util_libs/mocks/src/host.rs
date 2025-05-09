@@ -51,7 +51,7 @@ pub fn create_test_host(
     };
 
     if let Some(assigned_hoster) = assigned_hoster {
-        host.owner = Some(assigned_hoster);
+        host.assigned_hoster = Some(assigned_hoster);
     }
     if let Some(assigned_workloads) = assigned_workloads {
         host.assigned_workloads = assigned_workloads;

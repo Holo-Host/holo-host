@@ -45,7 +45,7 @@ async fn test_indexing_and_api() -> Result<()> {
             avg_network_speed: 500,
             avg_latency: 10,
             assigned_workloads: vec![oid::ObjectId::new()],
-            owner: Some(oid::ObjectId::new()),
+            assigned_hoster: Some(oid::ObjectId::new()),
         }
     }
 
