@@ -104,8 +104,7 @@ pub async fn create_user(
         vec![UserPermission {
             resource: USER_COLLECTION_NAME.to_string(),
             action: PermissionAction::Create,
-            owner: "unknown".to_string(),
-            all_owners: true,
+            owner: "all".to_string(),
         }],
     ) {
         return HttpResponse::Forbidden().json(ErrorResponse {

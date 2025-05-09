@@ -97,7 +97,6 @@ pub async fn create_workload(
             resource: WORKLOAD_COLLECTION_NAME.to_string(),
             action: PermissionAction::Create,
             owner,
-            all_owners: false,
         }],
     ) {
         return HttpResponse::Forbidden().json(ErrorResponse {

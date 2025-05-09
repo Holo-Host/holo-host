@@ -72,7 +72,6 @@ pub async fn delete_apikey(
             resource: API_KEY_COLLECTION_NAME.to_string(),
             action: PermissionAction::Delete,
             owner,
-            all_owners: false,
         }],
     );
     if !permission_result {

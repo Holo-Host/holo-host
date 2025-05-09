@@ -67,7 +67,6 @@ pub async fn upload_blob(
             resource: "blob".to_string(),
             action: PermissionAction::Create,
             owner: owner.clone(),
-            all_owners: false,
         }],
     ) {
         return HttpResponse::Forbidden().json(ErrorResponse {

@@ -35,9 +35,7 @@ pub struct UserPermission {
     pub action: PermissionAction,
     /// Who owns the resource, This refers to the user id.
     /// If this is set to "self", it means the user has access to their own resources
+    /// If set to "all" it means the user has access to resources owned by all users
     #[schema(example = "self")]
     pub owner: String,
-    /// If true, then the owner field is ignored, mainly used by admin
-    #[schema(example = false)]
-    pub all_owners: bool,
 }

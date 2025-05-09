@@ -71,7 +71,6 @@ pub async fn get_api_key(
             resource: API_KEY_COLLECTION_NAME.to_string(),
             action: PermissionAction::Read,
             owner: api_key_result.owner.to_hex(),
-            all_owners: false,
         }],
     );
     if !permission_result {

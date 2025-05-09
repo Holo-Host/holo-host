@@ -206,7 +206,7 @@ pub fn verify_any_permissions(
             {
                 continue;
             }
-            if user_permission.all_owners {
+            if user_permission.owner == "all" {
                 return true;
             }
             if user_id.clone() == required_permission.owner && user_permission.owner == "self" {
@@ -215,7 +215,7 @@ pub fn verify_any_permissions(
             if required_permission.owner != user_permission.owner {
                 continue;
             }
-            if required_permission.all_owners && !user_permission.all_owners {
+            if required_permission.owner == "all" && user_permission.owner != "all" {
                 continue;
             }
             return true;
@@ -251,27 +251,23 @@ pub fn get_role_permissions(role: UserRole) -> Vec<UserPermission> {
         UserRole::Admin => vec![UserPermission {
             resource: String::from("all"),
             action: PermissionAction::All,
-            owner: String::from(""),
-            all_owners: true,
+            owner: String::from("all"),
         }],
         UserRole::User => vec![UserPermission {
             resource: String::from("all"),
             action: PermissionAction::All,
             owner: String::from("self"),
-            all_owners: false,
         }],
         UserRole::Support => vec![
             UserPermission {
                 resource: String::from("all"),
                 action: PermissionAction::All,
                 owner: String::from("self"),
-                all_owners: false,
             },
             UserPermission {
                 resource: String::from("all"),
                 action: PermissionAction::Read,
-                owner: String::from(""),
-                all_owners: true,
+                owner: String::from("all"),
             },
         ],
     }

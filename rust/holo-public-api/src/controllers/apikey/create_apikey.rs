@@ -73,7 +73,6 @@ pub async fn create_api_key(
             resource: API_KEY_COLLECTION_NAME.to_string(),
             action: PermissionAction::Create,
             owner: claims.sub.clone(),
-            all_owners: false,
         }],
     ) {
         return HttpResponse::Forbidden().json(ErrorResponse {
