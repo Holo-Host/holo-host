@@ -90,7 +90,6 @@ pub async fn update_apikey(
             resource: API_KEY_COLLECTION_NAME.to_string(),
             action: PermissionAction::Update,
             owner: owner.clone(),
-            all_owners: false,
         }],
     );
     if !permission_result {
