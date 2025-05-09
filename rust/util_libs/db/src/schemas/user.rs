@@ -2,28 +2,45 @@ use anyhow::Result;
 use bson::{doc, oid::ObjectId, Document};
 use mongodb::options::IndexOptions;
 use serde::{Deserialize, Serialize};
+use strum::{AsRefStr, EnumDiscriminants, EnumString, FromRepr};
+use utoipa::ToSchema;
 
-use super::alias::PubKey;
 use super::metadata::Metadata;
+use super::{alias::PubKey, user_permissions::UserPermission};
 use crate::mongodb::traits::{IntoIndexes, MutMetadata};
 
 /// Collection name for user documents
 pub const USER_COLLECTION_NAME: &str = "user";
 
+/// Enumeration of possible user roles
+/// Roles will apply a predefined set of permissions to the user automatically
+#[derive(
+    Debug,
+    Clone,
+    EnumString,
+    Serialize,
+    Deserialize,
+    PartialEq,
+    AsRefStr,
+    EnumDiscriminants,
+    FromRepr,
+    ToSchema,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum UserRole {
+    // WARNING: This role will give full access to the system
+    Admin,
+    // Role for customers to manage their own data
+    User,
+    // Role for developers or support team to have limited access over others data
+    Support,
+}
+
 /// Information about a user's role (hoster or developer) in the system
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct RoleInfo {
-    /// MongoDB ObjectId reference to the role collection (hoster/developer)
     pub collection_id: ObjectId,
-    /// Public key associated with the role
     pub pubkey: PubKey,
-}
-
-/// Enumeration of possible user permission levels
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub enum UserPermission {
-    /// Administrator level permissions
-    Admin,
 }
 
 /// User document schema representing a user in the system
@@ -34,36 +51,27 @@ pub struct User {
     pub _id: Option<ObjectId>,
     /// Common metadata fields
     pub metadata: Metadata,
-    /// User's jurisdiction
-    pub jurisdiction: String,
-    /// List of user permissions
+    /// List of permissions the user has been granted
     pub permissions: Vec<UserPermission>,
-    /// Reference to additional user information
-    pub user_info_id: Option<ObjectId>,
-    /// Developer role information if user is a developer
+    // A list of roles attached to the user
+    pub roles: Vec<UserRole>,
+    // this is used to invalidate all refresh tokens by incrementing the version by 1
+    pub refresh_token_version: i32,
+
+    // legacy fields
     pub developer: Option<RoleInfo>,
-    /// Hoster role information if user is a hoster
     pub hoster: Option<RoleInfo>,
+    pub jurisdiction: String,
 }
 
 impl IntoIndexes for User {
     /// Defines MongoDB indices for the User collection
     ///
     /// Creates indices for:
-    /// - user_info_id
-    /// - developer role
-    /// - hoster role
+    /// - public_key.role
+    /// - public_key.pubkey
     fn into_indices(self) -> Result<Vec<(Document, Option<IndexOptions>)>> {
         let mut indices = vec![];
-
-        // add user_info_id index
-        let user_info_id_index_doc = doc! { "user_info_id": 1 };
-        let user_info_id_index_opts = Some(
-            IndexOptions::builder()
-                .name(Some("user_info_id_index".to_string()))
-                .build(),
-        );
-        indices.push((user_info_id_index_doc, user_info_id_index_opts));
 
         // add developer index
         let developer_index_doc = doc! { "developer": 1 };

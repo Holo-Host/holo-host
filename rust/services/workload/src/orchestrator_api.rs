@@ -24,7 +24,6 @@ use db_utils::{
         traits::{IntoIndexes, MutMetadata},
     },
     schemas::{
-        developer::{Developer, DEVELOPER_COLLECTION_NAME},
         host::{Host, HOST_COLLECTION_NAME},
         user::{User, USER_COLLECTION_NAME},
         workload::{Workload, WorkloadState, WorkloadStatus, WORKLOAD_COLLECTION_NAME},
@@ -46,7 +45,6 @@ pub struct OrchestratorWorkloadApi {
     pub workload_collection: MongoCollection<Workload>,
     pub host_collection: MongoCollection<Host>,
     pub user_collection: MongoCollection<User>,
-    pub developer_collection: MongoCollection<Developer>,
 }
 
 impl WorkloadServiceApi for OrchestratorWorkloadApi {}
@@ -57,7 +55,6 @@ impl OrchestratorWorkloadApi {
             workload_collection: Self::init_collection(client, WORKLOAD_COLLECTION_NAME).await?,
             host_collection: Self::init_collection(client, HOST_COLLECTION_NAME).await?,
             user_collection: Self::init_collection(client, USER_COLLECTION_NAME).await?,
-            developer_collection: Self::init_collection(client, DEVELOPER_COLLECTION_NAME).await?,
         })
     }
 

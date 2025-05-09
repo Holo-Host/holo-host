@@ -30,7 +30,7 @@ pub struct Host {
     pub avg_latency: i64,
     /// IP address of the host
     pub ip_address: Option<String>,
-    /// Reference to the assigned hoster
+    /// Reference to the user that owns this host
     pub assigned_hoster: Option<ObjectId>,
     /// List of workloads running on this host
     pub assigned_workloads: Vec<ObjectId>,

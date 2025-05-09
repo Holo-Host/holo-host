@@ -99,6 +99,7 @@ pub fn get_app_config() -> AppConfig {
         enable_scheduler: true,
         host: "http://localhost".to_string(),
         jwt_secret: "jwt_secret".to_string(),
+        blob_storage_location: None,
     }
 }
 
@@ -129,6 +130,8 @@ pub fn create_credentials(secret: &str, user_id: bson::oid::ObjectId) -> (String
             sub: user_id.to_string(),
             exp: 900000000000,
             version: 0,
+            allow_extending_refresh_token: true,
+            api_key: None,
         },
         secret,
     )

@@ -16,7 +16,7 @@ pub struct HealthCheckResponse {
     path = "/public/v1/general/health-check",
     tag = "General",
     summary = "Health check",
-    description = "Health check",
+    description = "Publicly accessible health check endpoint",
     responses(
         (status = 200, body = HealthCheckResponse)
     )

@@ -10,6 +10,7 @@ path = "src/lib.rs"
 async-nats = { workspace = true }
 anyhow = { workspace = true }
 nats-jwt = "0.3.0"
+utoipa = "5.3.1"
 serde = { workspace = true }
 serde_json = { workspace = true }
 serde_with = { version = "3.1", features = ["macros"] }

@@ -85,6 +85,10 @@ jobs:
       - name: Push Docker Image to DO Container Registry
         run: docker push registry.digitalocean.com/holo-host/${{ inputs.project }}:${{ inputs.environment }}
 
+      # removes built image so it is not stored in the cache
+      - name: Clean up
+        run: rm /usr/src/target/release/${{ inputs.project }}
+
   update-droplets:
     name: Update Droplets
     runs-on: ubuntu-latest

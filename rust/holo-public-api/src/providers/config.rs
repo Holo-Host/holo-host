@@ -8,6 +8,7 @@ pub struct AppConfig {
     pub mongo_url: String,
     pub redis_url: String,
     pub jwt_secret: String,
+    pub blob_storage_location: Option<String>, // defaults to '.'
     pub enable_swagger: bool,
     pub enable_scheduler: bool,
 }

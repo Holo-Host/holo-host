@@ -1,6 +1,6 @@
 use actix_web::{middleware::from_fn, web, App, HttpServer};
-use utoipa::openapi::security::{ApiKey, ApiKeyValue, SecurityScheme};
-use utoipa_swagger_ui::SwaggerUi;
+use utoipa_redoc::Servable as Redoc;
+use utoipa_scalar::Servable as Scalar;
 
 #[cfg(test)]
 #[allow(dead_code)]
@@ -15,27 +15,17 @@ mod scheduler;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
+    tracing_subscriber::fmt().init();
+
     // load config
-    let app_config = providers::config::load_config().unwrap_or_else(|err| {
-        tracing::error!("Error loading config: {}", err);
+    let app_config = providers::config::load_config().unwrap_or_else(|error| {
+        tracing::error!("{:?}", error);
         std::process::exit(1);
     });
 
     // setup docs
-    let mut docs = controllers::setup_docs();
-    docs.components.as_mut().unwrap().security_schemes.insert(
-        "Bearer".to_string(),
-        SecurityScheme::Http(utoipa::openapi::security::Http::new(
-            utoipa::openapi::security::HttpAuthScheme::Bearer,
-        )),
-    );
-    docs.components.as_mut().unwrap().security_schemes.insert(
-        "ApiKey".to_string(),
-        SecurityScheme::ApiKey(ApiKey::Header(ApiKeyValue::new("API-KEY"))),
-    );
-    docs.info.title = "Holo Public API".to_string();
-    docs.info.version = "0.0.1".to_string();
-    docs.servers = Some(vec![utoipa::openapi::Server::new(app_config.host.clone())]);
+    let docs =
+        providers::docs::build_open_api_spec(controllers::setup_docs(), app_config.host.clone());
 
     // setup database
     let mongodb_client = mongodb::Client::with_uri_str(&app_config.mongo_url)
@@ -73,11 +63,10 @@ async fn main() -> std::io::Result<()> {
         if app_config.enable_swagger {
             app = app.route(
                 "/",
-                web::get().to(|| async { web::Redirect::to("/swagger/") }),
+                web::get().to(|| async { web::Redirect::to("/scalar") }),
             );
-            app = app.service(
-                SwaggerUi::new("/swagger/{_:.*}").url("/api-docs/openapi.json", docs.clone()),
-            );
+            app = app.service(utoipa_redoc::Redoc::with_url("/redoc", docs.clone()));
+            app = app.service(utoipa_scalar::Scalar::with_url("/scalar", docs.clone()));
         }
 
         // public routes
