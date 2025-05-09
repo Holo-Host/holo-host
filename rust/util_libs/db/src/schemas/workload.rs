@@ -221,13 +221,13 @@ impl IntoIndexes for Workload {
         let mut indices = vec![];
 
         //  Add Owner Index
-        let owner_index_doc = doc! { "owner": 1 };
-        let owner_index_opts = Some(
+        let assigned_developer_index_doc = doc! { "assigned_developer": 1 };
+        let assigned_developer_index_opts = Some(
             IndexOptions::builder()
-                .name(Some("owner_index".to_string()))
+                .name(Some("assigned_developer_index".to_string()))
                 .build(),
         );
-        indices.push((owner_index_doc, owner_index_opts));
+        indices.push((assigned_developer_index_doc, assigned_developer_index_opts));
 
         Ok(indices)
     }
