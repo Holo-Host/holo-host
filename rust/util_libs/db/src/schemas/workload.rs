@@ -70,9 +70,9 @@ pub struct WorkloadStatus {
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct Capacity {
     /// Required drive space in GiB
-    pub drive: i32,
+    pub drive: i64,
     /// Required CPU cores
-    pub cores: i32,
+    pub cores: i64,
 }
 
 /// System specifications for a workload
@@ -81,9 +81,9 @@ pub struct SystemSpecs {
     /// Resource capacity requirements
     pub capacity: Capacity,
     /// Required network speed in Mbps
-    pub avg_network_speed: i32,
+    pub avg_network_speed: i64,
     /// Required uptime as a decimal between 0-1
-    pub avg_uptime: f32,
+    pub avg_uptime: f64,
 }
 
 /// Workload document schema representing a deployable application
@@ -198,7 +198,7 @@ impl Default for Workload {
             system_specs: SystemSpecs {
                 capacity: Capacity { drive: 1, cores: 1 },
                 avg_network_speed: 0,
-                avg_uptime: 0f32,
+                avg_uptime: 0f64,
             },
             assigned_hosts: Vec::new(),
             status: WorkloadStatus {

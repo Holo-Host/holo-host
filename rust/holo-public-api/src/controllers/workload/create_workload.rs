@@ -123,11 +123,11 @@ pub async fn create_workload(
             },
             system_specs: db_utils::schemas::workload::SystemSpecs {
                 capacity: db_utils::schemas::workload::Capacity {
-                    drive: payload.min_disk_space,
-                    cores: payload.min_cpu_cores,
+                    drive: payload.min_disk_space as i64,
+                    cores: payload.min_cpu_cores as i64,
                 },
-                avg_network_speed: payload.avg_network_speed_required,
-                avg_uptime: payload.avg_uptime_required,
+                avg_network_speed: payload.avg_network_speed_required as i64,
+                avg_uptime: payload.avg_uptime_required as f64,
             },
             version: payload.version.clone(),
         },

@@ -103,6 +103,9 @@ pub async fn create_user(
             roles: payload.roles.clone(),
             public_key: payload.public_keys.clone(),
             refresh_token_version: 0,
+            developer: None,
+            hoster: None,
+            jurisdiction: "".to_string(),
         },
     )
     .await

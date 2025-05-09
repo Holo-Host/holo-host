@@ -66,6 +66,13 @@ pub enum UserRole {
     Support,
 }
 
+/// Information about a user's role (hoster or developer) in the system
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct RoleInfo {
+    pub collection_id: ObjectId,
+    pub pubkey: PubKey,
+}
+
 /// User document schema representing a user in the system
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct User {
@@ -82,6 +89,11 @@ pub struct User {
     pub public_key: Vec<PublicKeyWithRole>,
     // this is used to invalidate all refresh tokens by incrementing the version by 1
     pub refresh_token_version: i32,
+
+    // legacy fields
+    pub developer: Option<RoleInfo>,
+    pub hoster: Option<RoleInfo>,
+    pub jurisdiction: String,
 }
 
 impl IntoIndexes for User {
