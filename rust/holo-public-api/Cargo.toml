@@ -25,6 +25,7 @@ redis = { version = "0.30.0", features = ["tokio-rustls-comp"] }
 deadpool-redis = { version = "0.20.0", features = ["tokio-rustls-comp"] }
 mongodb = { workspace = true }
 serde = { workspace = true }
+url = { version = "2", features = ["serde"] }
 db_utils = { path = "../util_libs/db" }
 
 [[bin]]

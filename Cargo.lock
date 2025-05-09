@@ -2473,6 +2473,7 @@ dependencies = [
  "serde_json",
  "tracing",
  "tracing-subscriber",
+ "url",
  "utoipa",
  "utoipa-redoc",
  "utoipa-scalar",

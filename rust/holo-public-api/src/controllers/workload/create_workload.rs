@@ -1,44 +1,14 @@
 use actix_web::{post, web, HttpMessage, HttpRequest, HttpResponse, Responder};
-use bson::oid::ObjectId;
-use db_utils::schemas::{
-    user_permissions::{PermissionAction, UserPermission},
-    workload::{Workload, WORKLOAD_COLLECTION_NAME},
-};
+use db_utils::schemas;
 use serde::{Deserialize, Serialize};
 use utoipa::{OpenApi, ToSchema};
 
-use crate::providers::{self, error_response::ErrorResponse, jwt::AccessTokenClaims};
+use crate::{
+    controllers::workload::workload_dto::{from_workload_dto, WorkloadDto},
+    providers::{self, error_response::ErrorResponse, jwt::AccessTokenClaims},
+};
 
-#[derive(Serialize, Deserialize, ToSchema)]
-pub struct CreateWorkloadRequest {
-    /// the owner of this object, if not set then the logged in user is the owner
-    #[serde(skip_serializing_if = "Option::is_none")]
-    owner: Option<String>,
-
-    /// minimum number of hosts required for the workload
-    #[schema(example = 1)]
-    min_hosts: i32,
-
-    /// minimum disk space required for the workload
-    #[schema(example = 1)]
-    min_disk_space: i32,
-
-    /// minimum network speed required for the workload
-    #[schema(example = 1)]
-    min_cpu_cores: i32,
-
-    /// average uptime required for the node
-    #[schema(example = 0.8)]
-    avg_uptime_required: f32,
-
-    /// average network speed required for the node
-    #[schema(example = 1)]
-    avg_network_speed_required: i32,
-
-    /// workload version (defined by the user)
-    #[schema(example = "0.0.0")]
-    version: String,
-}
+use super::workload_dto::{SystemSpecsDto, WorkloadManifestDto, WorkloadStatusDto};
 
 #[derive(Serialize, Deserialize, ToSchema)]
 pub struct CreateWorkloadResponse {
@@ -48,6 +18,18 @@ pub struct CreateWorkloadResponse {
 #[derive(OpenApi)]
 #[openapi(paths(create_workload))]
 pub struct OpenApiSpec;
+
+#[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub struct CreateWorkloadRequest {
+    assigned_developer: String,
+    version: String,
+    min_hosts: i32,
+    system_specs: SystemSpecsDto,
+    assigned_hosts: Vec<String>,
+    status: WorkloadStatusDto,
+    manifest: WorkloadManifestDto,
+}
 
 #[utoipa::path(
     post,
@@ -77,26 +59,34 @@ pub async fn create_workload(
     }
     let claims = claims.unwrap();
 
-    let owner = match payload.owner.clone() {
-        Some(owner) => owner,
-        None => claims.sub.clone(),
-    };
-
-    let owner_oid = match ObjectId::parse_str(owner.clone()) {
-        Ok(oid) => oid,
-        Err(_) => {
-            return HttpResponse::BadRequest().json(ErrorResponse {
-                message: "invalid owner id".to_string(),
+    let developer = match providers::crud::get::<schemas::developer::Developer>(
+        db.get_ref().clone(),
+        schemas::workload::WORKLOAD_COLLECTION_NAME.to_string(),
+        payload.assigned_developer.clone(),
+    )
+    .await
+    {
+        Ok(developer) => developer,
+        Err(e) => {
+            tracing::error!("{:?}", e);
+            return HttpResponse::InternalServerError().json(ErrorResponse {
+                message: "internal server error".to_string(),
             });
         }
     };
+    if developer.is_none() {
+        return HttpResponse::NotFound().json(ErrorResponse {
+            message: "developer not found".to_string(),
+        });
+    }
 
+    let developer = developer.unwrap();
     if !providers::auth::verify_all_permissions(
         claims.clone(),
-        vec![UserPermission {
-            resource: WORKLOAD_COLLECTION_NAME.to_string(),
-            action: PermissionAction::Create,
-            owner,
+        vec![schemas::user_permissions::UserPermission {
+            resource: schemas::developer::DEVELOPER_COLLECTION_NAME.to_string(),
+            action: schemas::user_permissions::PermissionAction::Read,
+            owner: developer.user_id.to_hex(),
         }],
     ) {
         return HttpResponse::Forbidden().json(ErrorResponse {
@@ -104,32 +94,19 @@ pub async fn create_workload(
         });
     }
 
-    let result = match providers::crud::create::<Workload>(
+    let result = match providers::crud::create::<schemas::workload::Workload>(
         db.get_ref().clone(),
-        WORKLOAD_COLLECTION_NAME.to_string(),
-        Workload {
-            _id: None,
-            assigned_developer: owner_oid,
-            metadata: db_utils::schemas::metadata::Metadata::default(),
-            assigned_hosts: vec![],
-            manifest: db_utils::schemas::workload::WorkloadManifest::None,
+        schemas::workload::WORKLOAD_COLLECTION_NAME.to_string(),
+        from_workload_dto(WorkloadDto {
+            id: None,
+            assigned_developer: payload.assigned_developer.clone(),
+            assigned_hosts: payload.assigned_hosts.clone(),
             min_hosts: payload.min_hosts,
-            status: db_utils::schemas::workload::WorkloadStatus {
-                id: None,
-                desired: db_utils::schemas::workload::WorkloadState::Reported,
-                actual: db_utils::schemas::workload::WorkloadState::Reported,
-                payload: db_utils::schemas::workload::WorkloadStatePayload::None,
-            },
-            system_specs: db_utils::schemas::workload::SystemSpecs {
-                capacity: db_utils::schemas::workload::Capacity {
-                    drive: payload.min_disk_space as i64,
-                    cores: payload.min_cpu_cores as i64,
-                },
-                avg_network_speed: payload.avg_network_speed_required as i64,
-                avg_uptime: payload.avg_uptime_required as f64,
-            },
+            status: payload.status.clone(),
             version: payload.version.clone(),
-        },
+            system_specs: payload.system_specs.clone(),
+            manifest: payload.manifest.clone(),
+        }),
     )
     .await
     {
