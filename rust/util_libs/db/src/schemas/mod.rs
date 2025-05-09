@@ -5,6 +5,8 @@ pub mod api_log;
 pub mod host;
 pub mod metadata;
 pub mod public_service;
+pub mod hoster;
+pub mod developer;
 pub mod user;
 pub mod user_info;
 pub mod workload;
