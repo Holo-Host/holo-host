@@ -38,6 +38,7 @@ let
     # Additional environment variables can be set directly
     # MY_CUSTOM_VAR = "some value";
     TEST_MONGODB_URI = "mongodb+srv://ci_test_runner:${pkgs.lib.getEnv "CI_MONGODB_ATLAS_PASSWORD"}@cluster0.${pkgs.lib.getEnv "DEV_MONGODB_ATLAS_CLUSTER_ID"}.mongodb.net";
+    IGNORE_TESTS_IN_BUILDBOT = "true";
 
     meta.platforms = pkgs.lib.platforms.linux;
   };
@@ -175,12 +176,14 @@ craneLib.buildPackage (
         pkgs.lib.attrsets.recursiveUpdate commonArgs {
           inherit cargoArtifacts;
           cargoClippyExtraArgs = "--all-targets -- --deny warnings";
+          IGNORE_TESTS_IN_BUILDBOT = "true";
         }
       );
 
       doc = craneLib.cargoDoc (
         pkgs.lib.attrsets.recursiveUpdate commonArgs {
           inherit cargoArtifacts;
+          IGNORE_TESTS_IN_BUILDBOT = "true";
         }
       );
 
@@ -225,6 +228,7 @@ craneLib.buildPackage (
 
           partitions = 1;
           partitionType = "count";
+          IGNORE_TESTS_IN_BUILDBOT = "true";
         }
       );
     };
