@@ -114,7 +114,7 @@ $ nix copy --no-check-sigs "$(nix build --print-out-paths .#packages.x86_64-linu
   packageWithPlatformFilterAndTest = packageWithPlatformFilter.overrideAttrs {
     passthru.tests.integration = pkgs.testers.runNixOSTest (
       {
-        _nodes,
+        nodes,
         lib,
         ...
       }: {
