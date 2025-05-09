@@ -13,36 +13,6 @@ use crate::mongodb::traits::{IntoIndexes, MutMetadata};
 pub const USER_COLLECTION_NAME: &str = "user";
 
 /// Enumeration of possible user roles
-#[derive(
-    Debug,
-    Clone,
-    Serialize,
-    Deserialize,
-    EnumString,
-    PartialEq,
-    AsRefStr,
-    EnumDiscriminants,
-    FromRepr,
-    ToSchema,
-)]
-#[serde(rename_all = "snake_case")]
-pub enum PublicKeyRole {
-    /// Role for hosters
-    Hoster,
-    /// Role for developers
-    Developer,
-}
-
-/// Key pair of public key and it's role
-#[derive(Serialize, Deserialize, Clone, Debug, ToSchema)]
-pub struct PublicKeyWithRole {
-    // Role of the public key
-    pub role: PublicKeyRole,
-    /// Public key associated with the role
-    pub pubkey: PubKey,
-}
-
-/// Enumeration of possible user roles
 /// Roles will apply a predefined set of permissions to the user automatically
 #[derive(
     Debug,
@@ -85,8 +55,6 @@ pub struct User {
     pub permissions: Vec<UserPermission>,
     // A list of roles attached to the user
     pub roles: Vec<UserRole>,
-    // contains a list of pairs of public keys and their roles
-    pub public_key: Vec<PublicKeyWithRole>,
     // this is used to invalidate all refresh tokens by incrementing the version by 1
     pub refresh_token_version: i32,
 
@@ -120,6 +88,32 @@ impl IntoIndexes for User {
                 .build(),
         );
         indices.push((public_key_role_pubkey_doc, public_key_role_pubkey_opts));
+
+        let public_key_role_pubkey_doc = doc! { "user_info": 1 };
+        let public_key_role_pubkey_opts = Some(
+            IndexOptions::builder()
+                .name(Some("public_key.pubkey".to_string()))
+                .build(),
+        );
+        indices.push((public_key_role_pubkey_doc, public_key_role_pubkey_opts));
+
+        // add developer index
+        let developer_index_doc = doc! { "developer": 1 };
+        let developer_index_opts = Some(
+            IndexOptions::builder()
+                .name(Some("developer_index".to_string()))
+                .build(),
+        );
+        indices.push((developer_index_doc, developer_index_opts));
+
+        // add host index
+        let host_index_doc = doc! { "hoster": 1 };
+        let host_index_opts = Some(
+            IndexOptions::builder()
+                .name(Some("hoster_index".to_string()))
+                .build(),
+        );
+        indices.push((host_index_doc, host_index_opts));
 
         Ok(indices)
     }

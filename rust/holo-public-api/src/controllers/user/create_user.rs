@@ -1,12 +1,31 @@
 use actix_web::{post, web, HttpMessage, HttpRequest, HttpResponse, Responder};
+use bson::oid::ObjectId;
 use db_utils::schemas::{
-    user::{PublicKeyWithRole, User, UserRole, USER_COLLECTION_NAME},
+    developer::{Developer, DEVELOPER_COLLECTION_NAME},
+    hoster::Hoster,
+    user::{RoleInfo, User, UserRole, USER_COLLECTION_NAME},
     user_permissions::{PermissionAction, UserPermission},
 };
 use serde::{Deserialize, Serialize};
 use utoipa::{OpenApi, ToSchema};
 
 use crate::providers::{self, error_response::ErrorResponse, jwt::AccessTokenClaims};
+
+#[derive(Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum PublicKeyRoleInfo {
+    Developer,
+    Hoster,
+}
+
+#[derive(Serialize, Deserialize, ToSchema)]
+pub struct PublicKeyWithRole {
+    /// the public key of the user
+    public_key: String,
+
+    /// the role of the user
+    role: PublicKeyRoleInfo,
+}
 
 #[derive(Serialize, Deserialize, ToSchema)]
 pub struct UserInfo {
@@ -47,7 +66,8 @@ pub struct CreateUserRequest {
 
 #[derive(Serialize, Deserialize, ToSchema)]
 pub struct CreateUserResponse {
-    pub id: String,
+    /// id of the created user
+    id: String,
 }
 
 #[derive(OpenApi)]
@@ -93,18 +113,78 @@ pub async fn create_user(
         });
     }
 
+    let user_id = ObjectId::new();
+
+    let mut developer_role: Option<RoleInfo> = None;
+    let mut hoster_role: Option<RoleInfo> = None;
+    for pubkey_obj in payload.public_keys.iter() {
+        match pubkey_obj.role {
+            PublicKeyRoleInfo::Developer => {
+                let result = match providers::crud::create::<Developer>(
+                    db.get_ref().clone(),
+                    DEVELOPER_COLLECTION_NAME.to_string(),
+                    Developer {
+                        _id: None,
+                        metadata: db_utils::schemas::metadata::Metadata::default(),
+                        user_id,
+                        active_workloads: vec![],
+                    },
+                )
+                .await
+                {
+                    Ok(result) => result,
+                    Err(error) => {
+                        tracing::error!("{:?}", error);
+                        return HttpResponse::InternalServerError().json(ErrorResponse {
+                            message: "internal server error".to_string(),
+                        });
+                    }
+                };
+                developer_role = Some(RoleInfo {
+                    collection_id: result,
+                    pubkey: pubkey_obj.public_key.clone(),
+                });
+            }
+            PublicKeyRoleInfo::Hoster => {
+                let result = match providers::crud::create::<Hoster>(
+                    db.get_ref().clone(),
+                    USER_COLLECTION_NAME.to_string(),
+                    Hoster {
+                        _id: None,
+                        metadata: db_utils::schemas::metadata::Metadata::default(),
+                        user_id,
+                        assigned_hosts: vec![],
+                    },
+                )
+                .await
+                {
+                    Ok(result) => result,
+                    Err(error) => {
+                        tracing::error!("{:?}", error);
+                        return HttpResponse::InternalServerError().json(ErrorResponse {
+                            message: "internal server error".to_string(),
+                        });
+                    }
+                };
+                hoster_role = Some(RoleInfo {
+                    collection_id: result,
+                    pubkey: pubkey_obj.public_key.clone(),
+                });
+            }
+        }
+    }
+
     let result = match providers::crud::create::<User>(
         db.get_ref().clone(),
         USER_COLLECTION_NAME.to_string(),
         User {
-            _id: None,
+            _id: Some(user_id),
             metadata: db_utils::schemas::metadata::Metadata::default(),
             permissions: payload.permissions.clone(),
             roles: payload.roles.clone(),
-            public_key: payload.public_keys.clone(),
             refresh_token_version: 0,
-            developer: None,
-            hoster: None,
+            developer: developer_role,
+            hoster: hoster_role,
             jurisdiction: "".to_string(),
         },
     )
