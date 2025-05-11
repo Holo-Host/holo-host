@@ -1,6 +1,7 @@
 use actix_web::{post, web, HttpMessage, HttpRequest, HttpResponse, Responder};
 use bson::oid::ObjectId;
 use db_utils::schemas::{
+    self,
     developer::{Developer, DEVELOPER_COLLECTION_NAME},
     hoster::Hoster,
     user::{RoleInfo, User, UserRole, USER_COLLECTION_NAME},
@@ -185,6 +186,29 @@ pub async fn create_user(
             developer: developer_role,
             hoster: hoster_role,
             jurisdiction: "".to_string(),
+        },
+    )
+    .await
+    {
+        Ok(result) => result,
+        Err(error) => {
+            tracing::error!("{:?}", error);
+            return HttpResponse::InternalServerError().json(ErrorResponse {
+                message: "internal server error".to_string(),
+            });
+        }
+    };
+    match providers::crud::create::<schemas::user_info::UserInfo>(
+        db.get_ref().clone(),
+        USER_COLLECTION_NAME.to_string(),
+        schemas::user_info::UserInfo {
+            _id: None,
+            metadata: db_utils::schemas::metadata::Metadata::default(),
+            user_id: result.clone(),
+            email: payload.user_info.email.clone(),
+            given_names: payload.user_info.given_names.clone(),
+            family_name: payload.user_info.family_name.clone(),
+            geographic_jurisdiction: payload.user_info.geographic_jurisdiction.clone(),
         },
     )
     .await
