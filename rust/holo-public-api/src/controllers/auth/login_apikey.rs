@@ -3,7 +3,12 @@ use bson::doc;
 use utoipa::OpenApi;
 
 use super::auth_dto::AuthLoginResponse;
-use crate::providers::{auth, config::AppConfig, error_response::ErrorResponse};
+use crate::providers::{
+    auth,
+    config::AppConfig,
+    error_response::ErrorResponse,
+    jwt::{AccessTokenClaims, RefreshTokenClaims},
+};
 
 #[derive(OpenApi)]
 #[openapi(paths(login_with_apikey))]
@@ -71,17 +76,22 @@ pub async fn login_with_apikey(
     let user_id = result.owner.to_string();
     let version = auth::get_refresh_token_version(db.get_ref(), user_id.clone()).await;
     let permissions = result.permissions.clone();
-    let jwt_tokens = auth::sign_jwt_tokens(
-        &config.get_ref().jwt_secret,
-        user_id.clone(),
-        permissions.clone(),
-        version,
-        false,
-        bson::DateTime::now().to_chrono().timestamp() as usize
-            + config.access_token_expiry.unwrap_or(300) as usize,
-        result.expire_at as usize,
-        Some(result._id.unwrap().to_string()),
-    );
+    let jwt_tokens = auth::sign_jwt_tokens(auth::SignJwtTokenOptions {
+        jwt_secret: config.get_ref().jwt_secret.clone(),
+        access_token: AccessTokenClaims {
+            sub: user_id.clone(),
+            permissions: permissions.clone(),
+            exp: bson::DateTime::now().to_chrono().timestamp() as usize
+                + config.access_token_expiry.unwrap_or(300) as usize,
+        },
+        refresh_token: RefreshTokenClaims {
+            version,
+            sub: user_id.clone(),
+            exp: result.expire_at as usize,
+            allow_extending_refresh_token: false,
+            api_key: Some(result._id.unwrap().to_string()),
+        },
+    });
     if jwt_tokens.is_none() {
         return HttpResponse::InternalServerError().json(ErrorResponse {
             message: "failed to sign jwt tokens".to_string(),

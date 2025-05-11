@@ -82,42 +82,21 @@ pub async fn get_user_id_and_permissions_from_apikey(
     Ok(Some(result))
 }
 
-/// This function signs a access and a refresh token
-/// and returns them as a tuple
-pub fn sign_jwt_tokens(
-    jwt_secret: &str,
-    user_id: String,
-    permissions: Vec<UserPermission>,
-    version: i32,
-    allow_extending_refresh_token: bool,
-    access_token_expires_at: usize,
-    refresh_token_expires_at: usize,
-    api_key: Option<String>,
-) -> Option<(String, String)> {
-    let access_token = match sign_access_token(
-        AccessTokenClaims {
-            sub: user_id.clone(),
-            permissions: permissions.clone(),
-            exp: access_token_expires_at,
-        },
-        jwt_secret,
-    ) {
+pub struct SignJwtTokenOptions {
+    pub jwt_secret: String,
+    pub access_token: AccessTokenClaims,
+    pub refresh_token: RefreshTokenClaims,
+}
+
+pub fn sign_jwt_tokens(options: SignJwtTokenOptions) -> Option<(String, String)> {
+    let access_token = match sign_access_token(options.access_token, &options.jwt_secret) {
         Ok(claims) => claims,
         Err(_err) => {
             tracing::error!("failed to sign access token");
             return None;
         }
     };
-    let refresh_token = match sign_refresh_token(
-        RefreshTokenClaims {
-            sub: user_id.clone(),
-            exp: refresh_token_expires_at,
-            version,
-            allow_extending_refresh_token,
-            api_key,
-        },
-        jwt_secret,
-    ) {
+    let refresh_token = match sign_refresh_token(options.refresh_token, &options.jwt_secret) {
         Ok(token) => token,
         Err(_err) => {
             tracing::error!("failed to sign refresh token");

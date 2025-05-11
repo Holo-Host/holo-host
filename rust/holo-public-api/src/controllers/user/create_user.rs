@@ -200,11 +200,11 @@ pub async fn create_user(
     };
     match providers::crud::create::<schemas::user_info::UserInfo>(
         db.get_ref().clone(),
-        USER_COLLECTION_NAME.to_string(),
+        schemas::user_info::USER_INFO_COLLECTION_NAME.to_string(),
         schemas::user_info::UserInfo {
             _id: None,
             metadata: db_utils::schemas::metadata::Metadata::default(),
-            user_id: result.clone(),
+            user_id: result,
             email: payload.user_info.email.clone(),
             given_names: payload.user_info.given_names.clone(),
             family_name: payload.user_info.family_name.clone(),
