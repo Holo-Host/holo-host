@@ -137,7 +137,8 @@ pub async fn refresh(
     let access_token = match sign_access_token(
         AccessTokenClaims {
             sub: access_token_result.sub,
-            exp: bson::DateTime::now().to_chrono().timestamp() as usize + 60 * 5, // 5 minutes
+            exp: bson::DateTime::now().to_chrono().timestamp() as usize
+                + config.access_token_expiry.unwrap_or(300) as usize,
             permissions,
         },
         &config.jwt_secret,

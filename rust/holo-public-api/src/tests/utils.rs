@@ -95,11 +95,12 @@ pub fn get_app_config() -> AppConfig {
         port: 3000,
         mongo_url: "mongodb://admin:password@localhost:27017/".to_string(),
         redis_url: "redis://localhost:6379".to_string(),
-        enable_swagger: true,
+        enable_documentation: true,
         enable_scheduler: true,
         host: "http://localhost".to_string(),
         jwt_secret: "jwt_secret".to_string(),
         blob_storage_location: None,
+        access_token_expiry: Some(300), // defaults to 5 minutes (in seconds)
     }
 }
 

@@ -90,15 +90,15 @@ pub fn sign_jwt_tokens(
     permissions: Vec<UserPermission>,
     version: i32,
     allow_extending_refresh_token: bool,
-    expires_at: usize,
+    access_token_expires_at: usize,
+    refresh_token_expires_at: usize,
     api_key: Option<String>,
 ) -> Option<(String, String)> {
-    const ACCESS_TOKEN_EXPIRATION: usize = 60 * 5; // 5 minutes
     let access_token = match sign_access_token(
         AccessTokenClaims {
             sub: user_id.clone(),
             permissions: permissions.clone(),
-            exp: bson::DateTime::now().to_chrono().timestamp() as usize + ACCESS_TOKEN_EXPIRATION,
+            exp: access_token_expires_at,
         },
         jwt_secret,
     ) {
@@ -111,7 +111,7 @@ pub fn sign_jwt_tokens(
     let refresh_token = match sign_refresh_token(
         RefreshTokenClaims {
             sub: user_id.clone(),
-            exp: expires_at,
+            exp: refresh_token_expires_at,
             version,
             allow_extending_refresh_token,
             api_key,

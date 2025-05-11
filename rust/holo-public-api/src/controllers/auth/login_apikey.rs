@@ -77,6 +77,8 @@ pub async fn login_with_apikey(
         permissions.clone(),
         version,
         false,
+        bson::DateTime::now().to_chrono().timestamp() as usize
+            + config.access_token_expiry.unwrap_or(300) as usize,
         result.expire_at as usize,
         Some(result._id.unwrap().to_string()),
     );

@@ -60,7 +60,7 @@ async fn main() -> std::io::Result<()> {
             .wrap(from_fn(middlewares::logging::logging_middleware));
 
         // open api spec and swagger ui
-        if app_config.enable_swagger {
+        if app_config.enable_documentation {
             app = app.route(
                 "/",
                 web::get().to(|| async { web::Redirect::to("/scalar") }),
