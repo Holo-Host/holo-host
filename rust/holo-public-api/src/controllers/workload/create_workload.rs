@@ -61,7 +61,7 @@ pub async fn create_workload(
 
     let developer = match providers::crud::get::<schemas::developer::Developer>(
         db.get_ref().clone(),
-        schemas::workload::WORKLOAD_COLLECTION_NAME.to_string(),
+        schemas::developer::DEVELOPER_COLLECTION_NAME.to_string(),
         payload.assigned_developer.clone(),
     )
     .await
