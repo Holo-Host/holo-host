@@ -60,7 +60,7 @@ pub struct WorkloadStatusDto {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
-pub struct WorkloadManifestHolochainDhtV1 {
+pub struct WorkloadManifestHolochainDhtV1Dto {
     pub happ_binary_url: String,
     pub network_seed: String,
     pub memproof: Option<HashMap<String, String>>,
@@ -80,7 +80,7 @@ pub enum WorkloadManifestDto {
     ExtraContainerPath { extra_container_path: String },
     ExtraContainerStorePath { store_path: String },
     ExtraContainerBuildCmd { nix_args: Box<[String]> },
-    HolochainDhtV1(Box<WorkloadManifestHolochainDhtV1>),
+    HolochainDhtV1(Box<WorkloadManifestHolochainDhtV1Dto>),
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
@@ -140,7 +140,7 @@ pub fn to_manifest_dto(data: schemas::workload::WorkloadManifest) -> WorkloadMan
             WorkloadManifestDto::ExtraContainerBuildCmd { nix_args }
         }
         schemas::workload::WorkloadManifest::HolochainDhtV1(data) => {
-            WorkloadManifestDto::HolochainDhtV1(Box::new(WorkloadManifestHolochainDhtV1 {
+            WorkloadManifestDto::HolochainDhtV1(Box::new(WorkloadManifestHolochainDhtV1Dto {
                 happ_binary_url: data.happ_binary_url.to_string(),
                 network_seed: data.network_seed,
                 memproof: data.memproof,

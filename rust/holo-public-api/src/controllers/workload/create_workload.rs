@@ -9,7 +9,7 @@ use crate::{
     providers::{self, error_response::ErrorResponse, jwt::AccessTokenClaims},
 };
 
-use super::workload_dto::WorkloadManifestDto;
+use super::workload_dto::{WorkloadManifestDto, WorkloadManifestHolochainDhtV1Dto};
 
 #[derive(Serialize, Deserialize, ToSchema)]
 pub struct CreateWorkloadResponse {
@@ -24,7 +24,7 @@ pub struct OpenApiSpec;
 #[serde(rename_all = "snake_case")]
 pub struct CreateWorkloadRequest {
     assigned_developer: String,
-    manifest: WorkloadManifestDto,
+    manifest: WorkloadManifestHolochainDhtV1Dto,
 }
 
 #[utoipa::path(
@@ -101,7 +101,9 @@ pub async fn create_workload(
             });
         }
     };
-    workload.manifest = from_manifest_dto(payload.manifest.clone());
+    workload.manifest = from_manifest_dto(WorkloadManifestDto::HolochainDhtV1(Box::new(
+        payload.manifest.clone(),
+    )));
     let result = match providers::crud::create::<schemas::workload::Workload>(
         db.get_ref().clone(),
         schemas::workload::WORKLOAD_COLLECTION_NAME.to_string(),
