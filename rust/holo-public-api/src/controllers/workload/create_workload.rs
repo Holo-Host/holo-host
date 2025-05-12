@@ -1,14 +1,15 @@
 use actix_web::{post, web, HttpMessage, HttpRequest, HttpResponse, Responder};
+use bson::oid::ObjectId;
 use db_utils::schemas;
 use serde::{Deserialize, Serialize};
 use utoipa::{OpenApi, ToSchema};
 
 use crate::{
-    controllers::workload::workload_dto::{from_workload_dto, WorkloadDto},
+    controllers::workload::workload_dto::from_manifest_dto,
     providers::{self, error_response::ErrorResponse, jwt::AccessTokenClaims},
 };
 
-use super::workload_dto::{SystemSpecsDto, WorkloadManifestDto, WorkloadStatusDto};
+use super::workload_dto::WorkloadManifestDto;
 
 #[derive(Serialize, Deserialize, ToSchema)]
 pub struct CreateWorkloadResponse {
@@ -23,11 +24,6 @@ pub struct OpenApiSpec;
 #[serde(rename_all = "snake_case")]
 pub struct CreateWorkloadRequest {
     assigned_developer: String,
-    version: String,
-    min_hosts: i32,
-    system_specs: SystemSpecsDto,
-    assigned_hosts: Vec<String>,
-    status: WorkloadStatusDto,
     manifest: WorkloadManifestDto,
 }
 
@@ -94,19 +90,22 @@ pub async fn create_workload(
         });
     }
 
+    let mut workload = schemas::workload::Workload {
+        ..Default::default()
+    };
+    workload.assigned_developer = match ObjectId::parse_str(payload.assigned_developer.clone()) {
+        Ok(id) => id,
+        Err(_) => {
+            return HttpResponse::BadRequest().json(ErrorResponse {
+                message: "Invalid developer ID".to_string(),
+            });
+        }
+    };
+    workload.manifest = from_manifest_dto(payload.manifest.clone());
     let result = match providers::crud::create::<schemas::workload::Workload>(
         db.get_ref().clone(),
         schemas::workload::WORKLOAD_COLLECTION_NAME.to_string(),
-        from_workload_dto(WorkloadDto {
-            id: None,
-            assigned_developer: payload.assigned_developer.clone(),
-            assigned_hosts: payload.assigned_hosts.clone(),
-            min_hosts: payload.min_hosts,
-            status: payload.status.clone(),
-            version: payload.version.clone(),
-            system_specs: payload.system_specs.clone(),
-            manifest: payload.manifest.clone(),
-        }),
+        workload.clone(),
     )
     .await
     {
