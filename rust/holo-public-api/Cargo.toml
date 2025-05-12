@@ -21,8 +21,17 @@ dotenvy = "0.15.7"
 bson = "2.14"
 serde_json = { workspace = true }
 jsonwebtoken = "9.3.1"
-redis = { version = "0.30.0", features = ["tokio-rustls-comp"] }
-deadpool-redis = { version = "0.20.0", features = ["tokio-rustls-comp"] }
+redis = { version = "0.30.0", features = [
+    "tls-rustls",
+    "tokio-rustls-comp",
+    "tls-rustls-webpki-roots",
+] }
+deadpool-redis = { version = "0.20.0", features = [
+    "rt_tokio_1",
+    "tls-rustls",
+    "tokio-rustls-comp",
+    "tls-rustls-webpki-roots",
+] }
 mongodb = { workspace = true }
 serde = { workspace = true }
 url = { version = "2", features = ["serde"] }
@@ -31,4 +40,3 @@ db_utils = { path = "../util_libs/db" }
 [[bin]]
 name = "holo-public-api"
 path = "src/main.rs"
-

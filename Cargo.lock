@@ -5230,6 +5230,7 @@ dependencies = [
  "tokio-rustls 0.26.2",
  "tokio-util",
  "url",
+ "webpki-roots 0.26.8",
 ]
 
 [[package]]
@@ -5256,6 +5257,7 @@ dependencies = [
  "tokio-rustls 0.26.2",
  "tokio-util",
  "url",
+ "webpki-roots 0.26.8",
 ]
 
 [[package]]
