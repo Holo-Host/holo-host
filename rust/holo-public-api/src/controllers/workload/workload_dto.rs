@@ -63,13 +63,20 @@ pub struct WorkloadStatusDto {
 pub struct WorkloadManifestHolochainDhtV1Dto {
     pub happ_binary_url: String,
     pub network_seed: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub memproof: Option<HashMap<String, String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub bootstrap_server_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub signal_server_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub stun_server_urls: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub holochain_feature_flags: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub holochain_version: Option<String>,
     pub http_gw_enable: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub http_gw_allowed_fns: Option<Vec<String>>,
 }
 
