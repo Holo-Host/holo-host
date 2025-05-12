@@ -24,7 +24,7 @@ async fn main() -> std::io::Result<()> {
 
     // setup docs
     let docs = providers::docs::build_open_api_spec(
-        controllers::setup_docs(true),
+        controllers::setup_docs(false),
         app_config.host.clone(),
     );
     let docs_internal = providers::docs::build_open_api_spec(
