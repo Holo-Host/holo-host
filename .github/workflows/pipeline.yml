@@ -67,7 +67,7 @@ jobs:
       project: holo-public-api
       environment: dev
       droplets: '["api.dev.holo.host"]'
-      dockerArgs: "-p 3000:3000 -v /srv/holo-blobstore:/srv/holo-blobstore" # docker args
+      dockerArgs: "-p 3000:3000 -v /tmp:/tmp -v /srv/holo-blobstore:/srv/holo-blobstore" # docker args
     secrets:
       DIGITAL_OCEAN_TOKEN: ${{ secrets.DIGITAL_OCEAN_TOKEN }}
       SSH_KEY: ${{ secrets.SSH_KEY }}
