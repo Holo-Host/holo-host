@@ -13,7 +13,7 @@ use serde::Serialize;
 use utoipa::{OpenApi, ToSchema};
 
 #[derive(OpenApi)]
-#[openapi(paths(upload_blob), components(schemas(UploadBlobResponse)))]
+#[openapi(paths(create_blob), components(schemas(UploadBlobResponse)))]
 pub struct OpenApiSpec;
 
 #[derive(Serialize, ToSchema)]
@@ -29,7 +29,7 @@ struct BlobUploadRequest {
 
 #[utoipa::path(
     post,
-    path = "/protected/v1/blob/upload",
+    path = "/protected/v1/blob",
     tag = "Blob",
     summary = "Upload Blob",
     description = "Requires 'blob.Create' permission",
@@ -44,8 +44,8 @@ struct BlobUploadRequest {
         (status = 200, body = UploadBlobResponse)
     )
 )]
-#[post("/v1/blob/upload")]
-pub async fn upload_blob(
+#[post("/v1/blob")]
+pub async fn create_blob(
     req: HttpRequest,
     mut payload: Multipart,
     config: web::Data<AppConfig>,
@@ -130,19 +130,35 @@ pub async fn upload_blob(
     let metadata_body = bson::doc! {
         "createdAt": bson::DateTime::now().to_string(),
         "updatedAt": bson::DateTime::now().to_string(),
-        "userId": owner.clone(),
+        "owner": owner.clone(),
         "hash": hash_hex.clone(),
     }
     .to_string()
     .into_bytes();
+
+    // create temporary directory for blobs
+    let temp_file_location = match config.temp_storage_location {
+        Some(ref location) => location.clone(),
+        None => "/tmp".to_string(),
+    };
+    if fs::metadata(&temp_file_location).is_err() {
+        match fs::create_dir_all(&temp_file_location) {
+            Ok(_) => (),
+            Err(e) => {
+                tracing::error!("{:?}", e);
+                return HttpResponse::InternalServerError().json(ErrorResponse {
+                    message: "Internal server error".to_string(),
+                });
+            }
+        };
+    }
 
     // create directory for the blob and metadata
     let file_location = match config.blob_storage_location {
         Some(ref location) => location.clone(),
         None => ".".to_string(),
     };
-    let exists = fs::metadata(&file_location).is_ok();
-    if !exists {
+    if fs::metadata(&file_location).is_err() {
         match fs::create_dir_all(&file_location) {
             Ok(_) => (),
             Err(e) => {
@@ -155,8 +171,8 @@ pub async fn upload_blob(
     };
 
     // copy blob to the correct location
-    match fs::copy(
-        format!("/tmp/{}", temp_file_identifier),
+    match fs::rename(
+        format!("/{}/{}", temp_file_location, temp_file_identifier),
         format!("{}/{}", file_location, hash_hex),
     ) {
         Ok(_) => (),
@@ -169,8 +185,18 @@ pub async fn upload_blob(
         }
     }
 
-    // remove the temp file
-    match fs::remove_file(format!("/tmp/{}", temp_file_identifier)) {
+    // create metadata blob
+    let mut metadata_file =
+        match fs::File::create(format!("{}/{}.json", temp_file_location, hash_hex)) {
+            Ok(blob) => blob,
+            Err(e) => {
+                tracing::error!("{:?}", e);
+                return HttpResponse::InternalServerError().json(ErrorResponse {
+                    message: "Internal server error".to_string(),
+                });
+            }
+        };
+    match metadata_file.write_all(&metadata_body) {
         Ok(_) => (),
         Err(e) => {
             tracing::error!("{:?}", e);
@@ -178,19 +204,11 @@ pub async fn upload_blob(
                 message: "Internal server error".to_string(),
             });
         }
-    };
-
-    // create metadata blob
-    let mut metadata_file = match fs::File::create(format!("{}/{}.json", file_location, hash_hex)) {
-        Ok(blob) => blob,
-        Err(e) => {
-            tracing::error!("{:?}", e);
-            return HttpResponse::InternalServerError().json(ErrorResponse {
-                message: "Internal server error".to_string(),
-            });
-        }
-    };
-    match metadata_file.write_all(&metadata_body) {
+    }
+    match fs::rename(
+        format!("/{}/{}.json", temp_file_location, temp_file_identifier),
+        format!("{}/{}.json", file_location, hash_hex),
+    ) {
         Ok(_) => (),
         Err(e) => {
             tracing::error!("{:?}", e);

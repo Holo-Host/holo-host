@@ -12,7 +12,6 @@ futures-util = "0.3.31"
 blake3 = "1.8.2"
 utoipa = "5.3.1"
 utoipa-scalar = { version = "0.3", features = ["actix-web"] }
-utoipa-redoc = { version = "6", features = ["actix-web"] }
 tracing = "0.1.41"
 tracing-subscriber = "0.3.19"
 anyhow = "1.0.97"

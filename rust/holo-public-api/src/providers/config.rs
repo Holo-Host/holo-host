@@ -13,10 +13,12 @@ pub struct AppConfig {
     pub redis_url: String,
     /// secret used to sign jwt tokens
     pub jwt_secret: String,
-    /// enable auto-generated documentation ui hosted by the api
+    /// enable internal documentation
     pub enable_documentation: bool,
     /// enable scheduler to run cron jobs
     pub enable_scheduler: bool,
+    /// defaults to '/tmp'
+    pub temp_storage_location: Option<String>,
     /// defaults to '.'
     pub blob_storage_location: Option<String>,
     /// defaults to 5 minutes (in seconds)

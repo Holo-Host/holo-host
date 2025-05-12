@@ -1,5 +1,4 @@
 use actix_web::{middleware::from_fn, web, App, HttpServer};
-use utoipa_redoc::Servable as Redoc;
 use utoipa_scalar::Servable as Scalar;
 
 #[cfg(test)]
@@ -24,8 +23,14 @@ async fn main() -> std::io::Result<()> {
     });
 
     // setup docs
-    let docs =
-        providers::docs::build_open_api_spec(controllers::setup_docs(), app_config.host.clone());
+    let docs = providers::docs::build_open_api_spec(
+        controllers::setup_docs(true),
+        app_config.host.clone(),
+    );
+    let docs_internal = providers::docs::build_open_api_spec(
+        controllers::setup_docs(true),
+        app_config.host.clone(),
+    );
 
     // setup database
     let mongodb_client = mongodb::Client::with_uri_str(&app_config.mongo_url)
@@ -59,14 +64,17 @@ async fn main() -> std::io::Result<()> {
             .app_data(web::Data::new(cache_pool.clone()))
             .wrap(from_fn(middlewares::logging::logging_middleware));
 
-        // open api spec and swagger ui
+        // open api spec and docs
+        app = app.route(
+            "/",
+            web::get().to(|| async { web::Redirect::to("/scalar") }),
+        );
+        app = app.service(utoipa_scalar::Scalar::with_url("/scalar", docs.clone()));
         if app_config.enable_documentation {
-            app = app.route(
-                "/",
-                web::get().to(|| async { web::Redirect::to("/scalar") }),
-            );
-            app = app.service(utoipa_redoc::Redoc::with_url("/redoc", docs.clone()));
-            app = app.service(utoipa_scalar::Scalar::with_url("/scalar", docs.clone()));
+            app = app.service(utoipa_scalar::Scalar::with_url(
+                "/scalar-internal",
+                docs_internal.clone(),
+            ));
         }
 
         // public routes

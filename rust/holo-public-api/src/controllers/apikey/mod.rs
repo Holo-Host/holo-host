@@ -17,7 +17,7 @@ pub fn setup_private_controllers(cfg: &mut web::ServiceConfig) {
     cfg.service(delete_apikey::delete_apikey);
 }
 
-pub fn setup_docs() -> utoipa::openapi::OpenApi {
+pub fn setup_docs(_internal: bool) -> utoipa::openapi::OpenApi {
     let mut openapi = utoipa::openapi::OpenApi::default();
     openapi.merge(apikey_dto::OpenApiSpec::openapi());
     openapi.merge(create_apikey::OpenApiSpec::openapi());

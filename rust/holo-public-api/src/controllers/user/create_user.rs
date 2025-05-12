@@ -31,7 +31,7 @@ pub struct PublicKeyWithRole {
 #[derive(Serialize, Deserialize, ToSchema)]
 pub struct UserInfo {
     /// the email of the user, this can be used as a login flow
-    #[schema(example = "john.doe@email.com")]
+    #[schema(example = "john.doe@example.com")]
     email: String,
 
     /// the given names of the user, this can be used as a login flow

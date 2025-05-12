@@ -9,7 +9,7 @@ pub fn setup_public_controllers(cfg: &mut web::ServiceConfig) {
     cfg.service(health_check::health_check);
 }
 
-pub fn setup_docs() -> utoipa::openapi::OpenApi {
+pub fn setup_docs(_internal: bool) -> utoipa::openapi::OpenApi {
     let mut openapi = utoipa::openapi::OpenApi::default();
     openapi.merge(health_check::OpenApiSpec::openapi());
     openapi

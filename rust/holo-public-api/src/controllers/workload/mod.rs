@@ -13,11 +13,13 @@ pub fn setup_private_controllers(cfg: &mut web::ServiceConfig) {
     cfg.service(delete_workload::delete_workload);
 }
 
-pub fn setup_docs() -> utoipa::openapi::OpenApi {
+pub fn setup_docs(internal: bool) -> utoipa::openapi::OpenApi {
     let mut openapi = utoipa::openapi::OpenApi::default();
-    openapi.merge(workload_dto::OpenApiSpec::openapi());
-    openapi.merge(create_workload::OpenApiSpec::openapi());
-    openapi.merge(get_workload::OpenApiSpec::openapi());
-    openapi.merge(delete_workload::OpenApiSpec::openapi());
+    if internal {
+        openapi.merge(workload_dto::OpenApiSpec::openapi());
+        openapi.merge(create_workload::OpenApiSpec::openapi());
+        openapi.merge(get_workload::OpenApiSpec::openapi());
+        openapi.merge(delete_workload::OpenApiSpec::openapi());
+    }
     openapi
 }

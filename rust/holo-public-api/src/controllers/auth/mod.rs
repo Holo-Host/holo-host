@@ -16,7 +16,7 @@ pub fn setup_public_controllers(cfg: &mut web::ServiceConfig) {
 
 pub fn setup_private_controllers(_cfg: &mut web::ServiceConfig) {}
 
-pub fn setup_docs() -> utoipa::openapi::OpenApi {
+pub fn setup_docs(_internal: bool) -> utoipa::openapi::OpenApi {
     let mut openapi = utoipa::openapi::OpenApi::default();
     openapi.merge(AuthLoginResponseSpec::openapi());
     openapi.merge(login_apikey::OpenApiSpec::openapi());

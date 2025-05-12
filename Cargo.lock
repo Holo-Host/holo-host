@@ -2475,7 +2475,6 @@ dependencies = [
  "tracing-subscriber",
  "url",
  "utoipa",
- "utoipa-redoc",
  "utoipa-scalar",
 ]
 
@@ -7331,18 +7330,6 @@ dependencies = [
  "quote",
  "regex",
  "syn 2.0.99",
-]
-
-[[package]]
-name = "utoipa-redoc"
-version = "6.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6427547f6db7ec006cbbef95f7565952a16f362e298b416d2d497d9706fef72d"
-dependencies = [
- "actix-web",
- "serde",
- "serde_json",
- "utoipa",
 ]
 
 [[package]]

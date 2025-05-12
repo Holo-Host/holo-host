@@ -8,8 +8,10 @@ pub fn setup_private_controllers(cfg: &mut web::ServiceConfig) {
     cfg.service(create_user::create_user);
 }
 
-pub fn setup_docs() -> utoipa::openapi::OpenApi {
+pub fn setup_docs(internal: bool) -> utoipa::openapi::OpenApi {
     let mut openapi = utoipa::openapi::OpenApi::default();
-    openapi.merge(create_user::OpenApiSpec::openapi());
+    if internal {
+        openapi.merge(create_user::OpenApiSpec::openapi());
+    }
     openapi
 }
