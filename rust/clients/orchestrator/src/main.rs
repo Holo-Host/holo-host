@@ -31,10 +31,10 @@ async fn main() -> Result<(), async_nats::Error> {
 
     // Setup MongoDB Client
     let mongo_uri: String = get_mongodb_url();
+    log::info!("Connecting to mongodb at {mongo_uri}");
     let db_client_options = ClientOptions::parse(&mongo_uri)
         .await
         .context(format!("mongo db client: connecting to {mongo_uri}"))?;
-    log::info!("Connected to mongodb at {mongo_uri}");
     let db_client = MongoDBClient::with_options(db_client_options)?;
     log::trace!("mongodb client={db_client:#?}");
 
