@@ -10,7 +10,6 @@ pub mod traits;
 /// - Otherwise, returns the default local MongoDB URL: "mongodb://127.0.0.1:27017"
 pub fn get_mongodb_url() -> String {
     let url: Result<String, Box<dyn std::error::Error>> = (|| {
-        let db_name = std::env::var("DB_NAME").unwrap_or("new_holo".to_string());
         let username = std::env::var("MONGODB_USERNAME")?;
 
         let cluster_file = std::env::var("MONGODB_CLUSTER_ID_FILE")?;
@@ -20,8 +19,8 @@ pub fn get_mongodb_url() -> String {
         let pw = std::fs::read_to_string(pw_file)?.trim().to_owned();
 
         Ok(format!(
-            "mongodb+srv://{}:{}@cluster0.{}.mongodb.net/{}?retryWrites=true&w=majority",
-            username, pw, cluster_id, db_name
+            "mongodb+srv://{}:{}@cluster0.{}.mongodb.net/?retryWrites=true&w=majority",
+            username, pw, cluster_id
         ))
     })();
 
