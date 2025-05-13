@@ -1,4 +1,3 @@
-use bson::oid::ObjectId;
 use db_utils::schemas;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -194,23 +193,6 @@ pub fn to_workload_dto(data: schemas::workload::Workload) -> WorkloadDto {
     }
 }
 
-pub fn from_workload_state_dto(state: WorkloadStateDto) -> schemas::workload::WorkloadState {
-    match state {
-        WorkloadStateDto::Reported => schemas::workload::WorkloadState::Reported,
-        WorkloadStateDto::Assigned => schemas::workload::WorkloadState::Assigned,
-        WorkloadStateDto::Pending => schemas::workload::WorkloadState::Pending,
-        WorkloadStateDto::Installed => schemas::workload::WorkloadState::Installed,
-        WorkloadStateDto::Running => schemas::workload::WorkloadState::Running,
-        WorkloadStateDto::Updating => schemas::workload::WorkloadState::Updating,
-        WorkloadStateDto::Updated => schemas::workload::WorkloadState::Updated,
-        WorkloadStateDto::Deleted => schemas::workload::WorkloadState::Deleted,
-        WorkloadStateDto::Removed => schemas::workload::WorkloadState::Removed,
-        WorkloadStateDto::Uninstalled => schemas::workload::WorkloadState::Uninstalled,
-        WorkloadStateDto::Error(msg) => schemas::workload::WorkloadState::Error(msg),
-        WorkloadStateDto::Unknown(ctx) => schemas::workload::WorkloadState::Unknown(ctx),
-    }
-}
-
 pub fn from_manifest_dto(data: WorkloadManifestDto) -> schemas::workload::WorkloadManifest {
     match data {
         WorkloadManifestDto::None => schemas::workload::WorkloadManifest::None,
@@ -256,45 +238,5 @@ pub fn from_manifest_dto(data: WorkloadManifestDto) -> schemas::workload::Worklo
                 },
             ))
         }
-    }
-}
-
-pub fn from_workload_dto(data: WorkloadDto) -> schemas::workload::Workload {
-    schemas::workload::Workload {
-        _id: data
-            .id
-            .map(|id| ObjectId::parse_str(&id).expect("invalid id")),
-        metadata: schemas::metadata::Metadata::default(),
-        assigned_developer: ObjectId::parse_str(&data.assigned_developer).unwrap(),
-        version: data.version.to_string(),
-        min_hosts: data.min_hosts,
-        system_specs: schemas::workload::SystemSpecs {
-            avg_uptime: data.system_specs.avg_uptime,
-            avg_network_speed: data.system_specs.avg_network_speed,
-            capacity: schemas::workload::Capacity {
-                drive: data.system_specs.capacity.drive,
-                cores: data.system_specs.capacity.cores,
-            },
-        },
-        assigned_hosts: data
-            .assigned_hosts
-            .iter()
-            .map(|host| mongodb::bson::oid::ObjectId::parse_str(host).unwrap())
-            .collect(),
-        status: schemas::workload::WorkloadStatus {
-            id: Some(mongodb::bson::oid::ObjectId::parse_str(&data.status.id).unwrap()),
-            desired: from_workload_state_dto(data.status.desired),
-            actual: from_workload_state_dto(data.status.actual),
-            payload: match data.status.payload {
-                Some(payload) => {
-                    let parsed: schemas::workload::WorkloadStatePayload =
-                        bson::from_bson(mongodb::bson::Bson::String(payload))
-                            .expect("failed to parse payload");
-                    parsed
-                }
-                None => schemas::workload::WorkloadStatePayload::None,
-            },
-        },
-        manifest: from_manifest_dto(data.manifest),
     }
 }
