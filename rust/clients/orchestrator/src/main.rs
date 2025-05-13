@@ -34,7 +34,9 @@ async fn main() -> Result<(), async_nats::Error> {
     let db_client_options = ClientOptions::parse(&mongo_uri)
         .await
         .context(format!("mongo db client: connecting to {mongo_uri}"))?;
+    log::info!("Connected to mongodb at {mongo_uri}");
     let db_client = MongoDBClient::with_options(db_client_options)?;
+    log::trace!("mongodb client={db_client:#?}");
 
     // TODO: Start Nats Auth Service (once ready)
     // let auth_client: Client = auth::run(db_client).await?;
