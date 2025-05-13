@@ -106,6 +106,25 @@ The development environment includes the following key packages or use their pla
 
 ### Run the Development Environment
 1. Start the development containers and follow logs:
+```bash
+just dev-cycle-logs
+```
+
+2. In a second terminal, start the Holochain terminal:
+```bash
+just dev-hcterm
+```
+
+3. In a third terminal, install the test application:
+```bash
+just dev-install-app
+```
+
+4. Switch back to the Holochain terminal and press `r` twice to refresh.
+
+
+### Running the an example HApp in the dev env (Humm Hive)
+1. Start the development containers and follow logs:
     ```bash
     just dev-cycle-logs
     ```
@@ -114,7 +133,6 @@ The development environment includes the following key packages or use their pla
     - Sets up NATS messaging infrastructure
     - Initializes the Holochain conductor
     - Starts following the logs from all services
-
 
     Example output:
 
