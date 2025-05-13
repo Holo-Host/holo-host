@@ -290,7 +290,9 @@ The development environment includes the following key packages or use their pla
 
 ### Workload States and Flow
 
-The development environment manages workloads through a series of states that represent the lifecycle of a HApp. Here's the typical flow and what each state means:
+The development environment manages workloads through a series of states that represent the lifecycle of a workload.
+
+Here's a description of what each state means and it's expected flow below:
 
 1. **Initial States**:
    - `reported`: The workload has been registered and stored in mongodb, but is not yet assigned a host
@@ -314,8 +316,6 @@ The development environment manages workloads through a series of states that re
 
 
 #### State Flow Example
-
-When running `just dev-install-humm-hive`, the workload goes through these states:
 ```bash
 # Initial registration and assignment (eg: just dev-install-humm-hive)
 reported (stored in MongoDB) -> assigned (host stored in MongoDB) -> pending (queued/sending update install request via nats)
