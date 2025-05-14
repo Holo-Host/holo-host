@@ -38,7 +38,9 @@ pub async fn perform_integration_test<C: HttpServiceFactory + 'static>(
     req: TestRequest,
     web_data: WebData,
 ) -> Result<IntegrationTestResponse, anyhow::Error> {
-    let req_builder = req.to_request();
+    let req_builder = req
+        .peer_addr(std::net::SocketAddr::from(([127, 0, 0, 1], 3000)))
+        .to_request();
 
     // build the app with the app config and db
     let mut app_builder = web::scope("");

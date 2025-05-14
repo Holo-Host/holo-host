@@ -61,7 +61,8 @@ async fn main() -> std::io::Result<()> {
             .app_data(web::Data::new(app_config.clone()))
             .app_data(web::Data::new(mongodb_client.clone()))
             .app_data(web::Data::new(cache_pool.clone()))
-            .wrap(from_fn(middlewares::logging::logging_middleware));
+            .wrap(from_fn(middlewares::logging::logging_middleware))
+            .wrap(from_fn(middlewares::limiter::rate_limiter_middleware));
 
         // open api spec and docs
         app = app.route(

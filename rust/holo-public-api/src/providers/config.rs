@@ -27,9 +27,9 @@ pub struct AppConfig {
     /// defaults to 5 minutes (in seconds)
     pub access_token_expiry: Option<u64>,
     /// defaults to 100
-    pub rate_limit_max_requests: Option<i32>,
+    pub rate_limit_max_requests: Option<u32>,
     /// defaults to 60 seconds
-    pub rate_limit_window: Option<i32>,
+    pub rate_limit_window: Option<u32>,
 }
 
 pub fn load_config() -> Result<AppConfig, config::ConfigError> {
