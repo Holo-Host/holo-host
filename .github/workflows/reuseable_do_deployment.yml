@@ -46,8 +46,8 @@ jobs:
         uses: actions/cache@v4
         with:
           path: |
-            /root/docker-cargo
-            /root/docker-target
+            ${{ github.workspace }}/docker-cargo
+            ${{ github.workspace }}/docker-target
           key: docker-${{ inputs.project }}-${{ hashFiles('Cargo.lock') }}
           restore-keys: |
             docker-${{ inputs.project }}-
@@ -58,8 +58,8 @@ jobs:
         with:
           cache-map: |
             {
-              "/root/docker-cargo": "/root/.cargo",
-              "/root/docker-target": "/usr/src/target"
+              "${{ github.workspace }}/docker-cargo": "/root/.cargo",
+              "${{ github.workspace }}/docker-target": "/usr/src/target"
             }
           skip-extraction: ${{ steps.cache-docker.outputs.cache-hit }}
 
@@ -87,7 +87,7 @@ jobs:
 
       # removes built image so it is not stored in the cache
       - name: Clean up
-        run: rm -f /root/docker-target/release/${{ inputs.project }}
+        run: rm -f ${{ github.workspace }}/docker-target/release/${{ inputs.project }}
 
   update-droplets:
     name: Update Droplets
