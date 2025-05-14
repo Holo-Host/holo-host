@@ -58,6 +58,11 @@
             flake.nixosModules.holo-nats-server
           ];
 
+          environment.systemPackages = [
+            pkgs.systemd
+            pkgs.util-linux # for journalctl deps
+          ];
+
           networking.hosts = hosts;
 
           # networking.hostName = "hub";
@@ -152,7 +157,7 @@
         # This is useful for importing flakes from modules (see nixpkgs/lib/modules.nix).
         # specialArgs = { inherit inputs; };
 
-        config = {...}: {
+        config = {pkgs, ...}: {
           # in case the container shares the host network, don't mess with the firewall rules.
           networking.firewall.enable = false;
 
@@ -169,6 +174,8 @@
 
           environment.systemPackages = [
             perSystem.self.rust-workspace.individual.ham
+            pkgs.systemd
+            pkgs.util-linux # for journalctl deps
           ];
 
           holo.host-agent = {
@@ -211,6 +218,11 @@
             flake.nixosModules.holo-orchestrator
           ];
 
+          environment.systemPackages = [
+            pkgs.systemd
+            pkgs.util-linux # for journalctl deps
+          ];
+
           networking.hosts = hosts;
 
           holo.orchestrator = {
@@ -238,12 +250,17 @@
         # This is useful for importing flakes from modules (see nixpkgs/lib/modules.nix).
         # specialArgs = { inherit inputs; };
 
-        config = {...}: {
+        config = {pkgs, ...}: {
           # in case the container shares the host network, don't mess with the firewall rules.
           networking.firewall.enable = false;
 
           imports = [
             flake.nixosModules.holo-gateway
+          ];
+
+          environment.systemPackages = [
+            pkgs.systemd
+            pkgs.util-linux # for journalctl deps
           ];
 
           networking.hosts = hosts;

@@ -108,6 +108,10 @@ The development environment includes the following key packages or use their pla
 1. Start the development containers and follow logs:
 ```bash
 just dev-cycle-logs
+
+# ...or use the log compatabile version,
+# if you're able to view logs with the command above
+just dev-cycle-logs-compat
 ```
 
 2. In a second terminal, start the Holochain terminal:
@@ -127,6 +131,10 @@ just dev-install-app
 1. Start the development containers and follow logs:
     ```bash
     just dev-cycle-logs
+
+    # ...or use the log compatabile version,
+    # if you're able to view logs with the command above
+    just dev-cycle-logs-compat
     ```
     This command:
     - Creates and starts the dev containers (dev-hub, dev-host, dev-orch, dev-gw)
@@ -155,33 +163,7 @@ just dev-install-app
     Solution: Ensure you have sudo access and run `just dev-destroy` first
     ```
 
-2. In a new terminal, initialize the Humm Hive HApp:
-    ```bash
-    just dev-ham-init-humm
-    ```
-    This command:
-    - Connects to the Holochain conductor
-    - Initializes the Humm Hive core zome
-    - Sets up the initial Hive structure
-
-    Example output:
-    You should see a success message indicating the Hive has been initialized.
-    ```
-    [INFO] Connecting to Holochain conductor...
-    [INFO] Initializing Humm Hive core zome...
-    [INFO] Hive initialized successfully
-    ```
-
-    Common errors:
-    ```
-    [ERROR] Failed to connect to Holochain conductor: connection refused
-    Solution: Ensure the dev containers are running with `just dev-cycle-logs`
-
-    [ERROR] Hive already initialized
-    Solution: This is not an error - the Hive can only be initialized once
-    ```
-
-3. Install the Humm Hive HApp:
+2. Install the Humm Hive HApp:
     ```bash
     just dev-install-humm-hive
     ```
@@ -213,7 +195,7 @@ just dev-install-app
     Solution: Ensure NATS server is running in dev-hub container
     ```
 
-4. Verify the installation:
+3.  Verify the installation:
     ```bash
     just dev-ham-find-installed-app
     ```
@@ -239,13 +221,41 @@ just dev-install-app
     Common errors:
     ```
     [ERROR] No installed app found with ID: `67d2ef2a67d4b619a54286c4`
-    Solution: Ensure the HApp was installed successfully with `just dev-install-humm-hive`
+    Solution: Ensure the hApp was installed successfully with `just dev-install-humm-hive`
 
     [ERROR] Failed to connect to host agent
     Solution: Check if dev-host container is running with `just dev-logs`
     ```
+    
+5. Option a - init without gw:
+In a new terminal, initialize the Humm Hive HApp:
+    ```bash
+    just dev-ham-init-humm
+    ```
+    This command:
+    - Connects to the Holochain conductor
+    - Initializes the Humm Hive core zome
+    - Sets up the initial Hive structure
 
-5. Test the HApp using the HTTP gateway:
+    Example output:
+    You should see a success message indicating the Hive has been initialized.
+    ```
+    [INFO] Connecting to Holochain conductor...
+    [INFO] Initializing Humm Hive core zome...
+    [INFO] Hive initialized successfully
+    ```
+
+    Common errors:
+    ```
+    [ERROR] Failed to connect to Holochain conductor: connection refused
+    Solution: Ensure the dev containers are running with `just dev-cycle-logs`
+
+    [ERROR] Hive already initialized
+    Solution: This is not an error - the Hive can only be initialized once
+    ```
+
+Option b - init with gw
+Test the HApp using the HTTP gateway:
     ```bash
     just dev-gw-curl-humm-hive
     ```
