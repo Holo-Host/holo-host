@@ -1,5 +1,5 @@
 {
-  "workspace": ["./packages/**"],
+  "workspace": ["packages/cloud-console"],
   "fmt": {
     "semiColons": true,
     "singleQuote": true,
