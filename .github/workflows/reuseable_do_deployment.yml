@@ -87,7 +87,7 @@ jobs:
 
       # removes built image so it is not stored in the cache
       - name: Clean up
-        run: rm /usr/src/target/release/${{ inputs.project }}
+        run: rm docker-target/release/${{ inputs.project }}
 
   update-droplets:
     name: Update Droplets
