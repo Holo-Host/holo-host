@@ -60,7 +60,7 @@ jobs:
           cache-map: |
             {
               "${{ github.workspace }}/docker-cargo": "/root/.cargo",
-              "${{ github.workspace }}/docker-target": "/usr/src/target",
+              "${{ github.workspace }}/docker-target": "/usr/src/target"
             }
           skip-extraction: ${{ steps.cache-docker.outputs.cache-hit }}
 
