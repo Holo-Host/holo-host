@@ -7,21 +7,35 @@ edition = "2021"
 [dependencies]
 actix-web = "4.10.2"
 actix-cors = "0.7.1"
+actix-multipart = "0.7.2"
+futures-util = "0.3.31"
+blake3 = "1.8.2"
 utoipa = "5.3.1"
-utoipa-swagger-ui = { version = "9.0.1", features = ["actix-web"] }
+utoipa-scalar = { version = "0.3", features = ["actix-web"] }
 tracing = "0.1.41"
+tracing-subscriber = "0.3.19"
 anyhow = "1.0.97"
 config = "0.15.11"
 dotenvy = "0.15.7"
 bson = "2.14"
 serde_json = { workspace = true }
 jsonwebtoken = "9.3.1"
-deadpool-redis = "0.20.0"
+redis = { version = "0.30.0", features = [
+    "tls-rustls",
+    "tokio-rustls-comp",
+    "tls-rustls-webpki-roots",
+] }
+deadpool-redis = { version = "0.20.0", features = [
+    "rt_tokio_1",
+    "tls-rustls",
+    "tokio-rustls-comp",
+    "tls-rustls-webpki-roots",
+] }
 mongodb = { workspace = true }
 serde = { workspace = true }
+url = { version = "2", features = ["serde"] }
 db_utils = { path = "../util_libs/db" }
 
 [[bin]]
 name = "holo-public-api"
 path = "src/main.rs"
-
