@@ -1,0 +1,9 @@
+{
+  "workspace": ["./packages/**"],
+  "fmt": {
+    "semiColons": true,
+    "singleQuote": true,
+    "trailingCommas": "always",
+    "indentWidth": 2
+  }
+}
