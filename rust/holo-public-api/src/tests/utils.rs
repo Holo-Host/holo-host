@@ -92,16 +92,18 @@ pub fn get_app_config() -> AppConfig {
         std::process::exit(0);
     }
     AppConfig {
-        port: 3000,
+        port: None,
         mongo_url: "mongodb://admin:password@localhost:27017/".to_string(),
         redis_url: "redis://localhost:6379".to_string(),
-        enable_documentation: true,
-        enable_scheduler: true,
-        host: "http://localhost".to_string(),
+        enable_internal_docs: None,
+        enable_scheduler: None,
+        host: None,
         jwt_secret: "jwt_secret".to_string(),
         temp_storage_location: None,
         blob_storage_location: None,
-        access_token_expiry: Some(300), // defaults to 5 minutes (in seconds)
+        rate_limit_max_requests: None,
+        rate_limit_window: None,
+        access_token_expiry: None,
     }
 }
 

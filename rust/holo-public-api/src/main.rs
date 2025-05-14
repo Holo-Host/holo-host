@@ -23,14 +23,13 @@ async fn main() -> std::io::Result<()> {
     });
 
     // setup docs
-    let docs = providers::docs::build_open_api_spec(
-        controllers::setup_docs(false),
-        app_config.host.clone(),
-    );
-    let docs_internal = providers::docs::build_open_api_spec(
-        controllers::setup_docs(true),
-        app_config.host.clone(),
-    );
+    let host = app_config
+        .clone()
+        .host
+        .unwrap_or("https://localhost:3000".to_string());
+    let docs = providers::docs::build_open_api_spec(controllers::setup_docs(false), host.clone());
+    let docs_internal =
+        providers::docs::build_open_api_spec(controllers::setup_docs(true), host.clone());
 
     // setup database
     let mongodb_client = mongodb::Client::with_uri_str(&app_config.mongo_url)
@@ -43,7 +42,7 @@ async fn main() -> std::io::Result<()> {
         .expect("failed to create redis pool");
 
     // setup scheduler
-    if app_config.enable_scheduler {
+    if app_config.enable_scheduler.unwrap_or(false) {
         scheduler::setup_scheduler(
             app_config.clone(),
             mongodb_client.clone(),
@@ -54,8 +53,8 @@ async fn main() -> std::io::Result<()> {
     }
 
     // start server
-    println!("Started server on {}", app_config.host);
-    let port = app_config.port;
+    println!("Started server on {}", host.clone());
+    let port = app_config.port.unwrap_or(3000);
     HttpServer::new(move || {
         // create app with required app data
         let mut app = App::new()
@@ -70,7 +69,7 @@ async fn main() -> std::io::Result<()> {
             web::get().to(|| async { web::Redirect::to("/scalar") }),
         );
         app = app.service(utoipa_scalar::Scalar::with_url("/scalar", docs.clone()));
-        if app_config.enable_documentation {
+        if app_config.enable_internal_docs.unwrap_or(false) {
             app = app.service(utoipa_scalar::Scalar::with_url(
                 "/scalar-internal",
                 docs_internal.clone(),
