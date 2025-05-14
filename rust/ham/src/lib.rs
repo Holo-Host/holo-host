@@ -74,7 +74,7 @@ impl Ham {
     pub async fn connect(addr: Ipv4Addr, admin_port: u16) -> Result<Self> {
         let admin = holochain_client::AdminWebsocket::connect((addr, admin_port))
             .await
-            .context("Failed to connect to admin interface")?;
+            .context("Failed to connect to Holochain Admin interface")?;
 
         Ok(Self { admin_ws: admin })
     }

@@ -1,22 +1,13 @@
 # Module to configure a machine as a holo-orchestrator.
-
 # blueprint specific first level argument that's referred to as "publisherArgs"
-{
-  inputs,
-  ...
-}:
-
-{
+{inputs, ...}: {
   lib,
   config,
   pkgs,
   ...
-}:
-
-let
+}: let
   cfg = config.holo.orchestrator;
-in
-{
+in {
   options.holo.orchestrator = {
     enable = lib.mkOption {
       description = "enable holo-orchestrator";
@@ -51,8 +42,21 @@ in
     };
 
     mongo = {
-      url = lib.mkOption {
+      username = lib.mkOption {
         type = lib.types.str;
+        default = "orchestrator";
+      };
+
+      clusterIdFile = lib.mkOption {
+        type = lib.types.str;
+        default = "/var/lib/config/mongo/cluster_id.txt";
+        description = "Path to the file containing the Orchestrator MongoDB cluster id";
+      };
+
+      passwordFile = lib.mkOption {
+        type = lib.types.path;
+        default = "/var/lib/config/mongo/password.txt";
+        description = "Path to the file containing the Orchestrator MongoDB password";
       };
     };
 
@@ -61,6 +65,7 @@ in
         url = lib.mkOption {
           type = lib.types.str;
         };
+
         tlsInsecure = lib.mkOption {
           type = lib.types.bool;
         };
@@ -76,7 +81,6 @@ in
         };
       };
     };
-
   };
 
   config = lib.mkIf cfg.enable {
@@ -94,13 +98,14 @@ in
       environment =
         {
           RUST_LOG =
-            if cfg.rust.log != null then
-              cfg.rust.log
-            else
-              "${cfg.logLevel},tungstenite=error,async_nats=error,mio=error";
+            if cfg.rust.log != null
+            then cfg.rust.log
+            else "${cfg.logLevel},tungstenite=error,async_nats=error,mio=error";
 
           RUST_BACKTRACE = cfg.rust.backtrace;
-          MONGO_URI = cfg.mongo.url;
+          MONGODB_USERNAME = cfg.mongo.username;
+          MONGODB_CLUSTER_ID_FILE = cfg.mongo.clusterIdFile;
+          MONGODB_PASSWORD_FILE = cfg.mongo.passwordFile;
         }
         // lib.attrsets.optionalAttrs (cfg.nats.hub.url != null) {
           NATS_URL = cfg.nats.hub.url;
@@ -115,14 +120,19 @@ in
           NATS_SKIP_TLS_VERIFICATION_DANGER = "true";
         };
 
-      serviceConfig.LoadCredential = lib.lists.optional (cfg.nats.hub.passwordFile != null) [
-        # specified like: <filename inside unit>:<source of secret>
-        "NATS_PASSWORD_FILE:${cfg.nats.hub.passwordFile}"
+      serviceConfig.LoadCredential =
+        lib.lists.optional (cfg.nats.hub.passwordFile != null) [
+          # specified like: <filename inside unit>:<source of secret>
+          "NATS_PASSWORD_FILE:${cfg.nats.hub.passwordFile}"
 
-        # Using agenix, perhaps:
-        #
-        # "target:${config.age.secrets.greeting_target.path}"
-      ];
+          # Using agenix, perhaps:
+          #
+          # "target:${config.age.secrets.greeting_target.path}"
+        ]
+        ++ [
+          "MONGODB_CLUSTER_ID_FILE:${cfg.mongo.clusterIdFile}"
+          "MONGODB_PASSWORD_FILE:${cfg.mongo.passwordFile}"
+        ];
 
       path = [
         pkgs.nats-server

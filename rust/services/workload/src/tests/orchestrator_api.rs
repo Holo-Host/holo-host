@@ -19,8 +19,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_add_workload() -> Result<()> {
-        let mongod = MongodRunner::run().unwrap();
-        let db_client = mongod.client().unwrap();
+        let mongod = MongodRunner::run().expect("Failed to run Mongodb Runner");
+        let db_client = mongod
+            .client()
+            .expect("Failed to connect client to Mongodb");
 
         let api = OrchestratorWorkloadApi::new(&db_client).await?;
         let workload = create_test_workload_default();
@@ -37,8 +39,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_update_workload() -> Result<()> {
-        let mongod = MongodRunner::run().unwrap();
-        let db_client = mongod.client().unwrap();
+        let mongod = MongodRunner::run().expect("Failed to run Mongodb Runner");
+        let db_client = mongod
+            .client()
+            .expect("Failed to connect client to Mongodb");
 
         let api = OrchestratorWorkloadApi::new(&db_client).await?;
 
@@ -63,8 +67,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_delete_workload() -> Result<()> {
-        let mongod = MongodRunner::run().expect("Failed to run mongod");
-        let db_client = mongod.client().expect("Failed to create db client");
+        let mongod = MongodRunner::run().expect("Failed to run Mongodb Runner");
+        let db_client = mongod
+            .client()
+            .expect("Failed to connect client to Mongodb");
 
         let api = OrchestratorWorkloadApi::new(&db_client).await?;
 
@@ -99,8 +105,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_verify_host_meets_workload_criteria() -> Result<()> {
-        let mongod = MongodRunner::run().unwrap();
-        let db_client = mongod.client().unwrap();
+        let mongod = MongodRunner::run().expect("Failed to run Mongodb Runner");
+        let db_client = mongod
+            .client()
+            .expect("Failed to connect client to Mongodb");
 
         let api = OrchestratorWorkloadApi::new(&db_client).await?;
         let required_avg_network_speed = 100;
@@ -165,8 +173,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_handle_db_insertion() -> Result<()> {
-        let mongod = MongodRunner::run().unwrap();
-        let db_client = mongod.client().unwrap();
+        let mongod = MongodRunner::run().expect("Failed to run Mongodb Runner");
+        let db_client = mongod
+            .client()
+            .expect("Failed to connect client to Mongodb");
 
         let api = OrchestratorWorkloadApi::new(&db_client).await?;
         let required_avg_network_speed = 500;
@@ -236,8 +246,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_handle_status_update() -> Result<()> {
-        let mongod = MongodRunner::run().unwrap();
-        let db_client = mongod.client().unwrap();
+        let mongod = MongodRunner::run().expect("Failed to run Mongodb Runner");
+        let db_client = mongod
+            .client()
+            .expect("Failed to connect client to Mongodb");
 
         let api = OrchestratorWorkloadApi::new(&db_client).await?;
 
