@@ -26,7 +26,7 @@ async fn main() -> std::io::Result<()> {
     let host = app_config
         .clone()
         .host
-        .unwrap_or("https://localhost:3000".to_string());
+        .unwrap_or("http://localhost:3000".to_string());
     let docs = providers::docs::build_open_api_spec(controllers::setup_docs(false), host.clone());
     let docs_internal =
         providers::docs::build_open_api_spec(controllers::setup_docs(true), host.clone());

@@ -9,6 +9,7 @@ use deadpool_redis::{redis::AsyncCommands, Pool};
 
 use crate::providers::{config::AppConfig, error_response::create_middleware_error_response};
 
+/// middleware to add a global rate limiter on every request
 pub async fn rate_limiter_middleware(
     req: ServiceRequest,
     next: Next<impl MessageBody + 'static>,
