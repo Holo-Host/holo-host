@@ -10,20 +10,12 @@ pkgs.mkShell {
     pkgs.jq
     pkgs.just
     pkgs.mongosh
-    pkgs.systemd
-    pkgs.util-linux # for journalctl deps
     # Add extra-container for development container management
     flake.inputs.extra-container.packages.${system}.default
-    # Add additional systemd-related packages
-    pkgs.systemd-container
-    pkgs.machinectl
   ];
 
   # Add environment variables
-  env = {
-    # Ensure systemd can find its configuration
-    SYSTEMD_NSPAWN_TMPFS_TMP = "1";
-  };
+  env = { };
 
   # Load custom bash code
   shellHook =
