@@ -103,7 +103,7 @@ pub async fn login_with_apikey(
     let version = auth::get_refresh_token_version(db.get_ref(), user_id.clone()).await;
     let permissions = result.permissions.clone();
     let jwt_tokens = auth::sign_tokens(auth::SignJwtTokenOptions {
-        jwt_secret: config.get_ref().jwt_secret.clone(),
+        jwt_secret: config.jwt_secret.clone(),
         access_token: AccessTokenClaims {
             sub: user_id.clone(),
             permissions: permissions.clone(),

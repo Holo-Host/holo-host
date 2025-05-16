@@ -95,12 +95,12 @@ pub fn get_app_config() -> AppConfig {
     }
     AppConfig {
         port: None,
-        mongo_url: "mongodb://admin:password@localhost:27017/".to_string(),
-        redis_url: "redis://localhost:6379".to_string(),
+        mongo_url: Some("mongodb://admin:password@localhost:27017/".to_string()),
+        redis_url: Some("redis://localhost:6379".to_string()),
         enable_internal_docs: None,
         enable_scheduler: None,
         host: None,
-        jwt_secret: "jwt_secret".to_string(),
+        jwt_secret: Some("jwt_secret".to_string()),
         temp_storage_location: None,
         blob_storage_location: None,
         rate_limit_max_requests: None,
@@ -109,14 +109,14 @@ pub fn get_app_config() -> AppConfig {
     }
 }
 
-pub async fn get_db(app_config: &AppConfig) -> mongodb::Client {
-    mongodb::Client::with_uri_str(&app_config.mongo_url)
+pub async fn get_db(app_config: AppConfig) -> mongodb::Client {
+    mongodb::Client::with_uri_str(app_config.mongo_url.unwrap())
         .await
         .expect("Failed to connect to MongoDB")
 }
 
-pub async fn get_cache(app_config: &AppConfig) -> deadpool_redis::Pool {
-    deadpool_redis::Config::from_url(&app_config.redis_url)
+pub async fn get_cache(app_config: AppConfig) -> deadpool_redis::Pool {
+    deadpool_redis::Config::from_url(app_config.redis_url.unwrap())
         .create_pool(Some(deadpool_redis::Runtime::Tokio1))
         .expect("failed to create redis pool")
 }
@@ -128,7 +128,7 @@ pub fn create_credentials(secret: &str, user_id: bson::oid::ObjectId) -> (String
             exp: 0,
             permissions: vec![],
         },
-        secret,
+        Some(secret.to_string()),
     )
     .unwrap_or_else(|_| panic!("signing {secret} for {user_id:#?}"));
     let refresh_token = sign_refresh_token(
@@ -139,7 +139,7 @@ pub fn create_credentials(secret: &str, user_id: bson::oid::ObjectId) -> (String
             allow_extending_refresh_token: true,
             reference_id: None,
         },
-        secret,
+        Some(secret.to_string()),
     )
     .unwrap_or_else(|_| panic!("signing {secret} for {user_id:#?}"));
     (access_token, refresh_token)

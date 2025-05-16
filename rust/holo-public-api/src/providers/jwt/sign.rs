@@ -4,22 +4,23 @@ use serde::Serialize;
 
 pub fn sign_access_token(
     claims: AccessTokenClaims,
-    secret: &str,
+    secret: Option<String>,
 ) -> Result<String, jsonwebtoken::errors::Error> {
     sign_jwt::<AccessTokenClaims>(claims, secret)
 }
 
 pub fn sign_refresh_token(
     claims: RefreshTokenClaims,
-    secret: &str,
+    secret: Option<String>,
 ) -> Result<String, jsonwebtoken::errors::Error> {
     sign_jwt::<RefreshTokenClaims>(claims, secret)
 }
 
 pub fn sign_jwt<T: Serialize>(
     claims: T,
-    secret: &str,
+    secret: Option<String>,
 ) -> Result<String, jsonwebtoken::errors::Error> {
+    let secret = secret.unwrap_or("jwt_secret".to_string());
     encode(
         &Header::default(),
         &claims,

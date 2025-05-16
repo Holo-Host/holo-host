@@ -3,20 +3,20 @@ use crate::providers::jwt::{
 };
 
 pub struct SignJwtTokenOptions {
-    pub jwt_secret: String,
+    pub jwt_secret: Option<String>,
     pub access_token: AccessTokenClaims,
     pub refresh_token: RefreshTokenClaims,
 }
 
 pub fn sign_tokens(options: SignJwtTokenOptions) -> Option<(String, String)> {
-    let access_token = match sign_access_token(options.access_token, &options.jwt_secret) {
+    let access_token = match sign_access_token(options.access_token, options.jwt_secret.clone()) {
         Ok(claims) => claims,
         Err(_err) => {
             tracing::error!("failed to sign access token");
             return None;
         }
     };
-    let refresh_token = match sign_refresh_token(options.refresh_token, &options.jwt_secret) {
+    let refresh_token = match sign_refresh_token(options.refresh_token, options.jwt_secret) {
         Ok(token) => token,
         Err(_err) => {
             tracing::error!("failed to sign refresh token");

@@ -29,7 +29,7 @@ mod tests {
     pub async fn should_push_logs_to_redis_when_api_receives_a_request() {
         let uuid = bson::uuid::Uuid::new();
         let app_config = get_app_config();
-        let cache = get_cache(&app_config).await;
+        let cache = get_cache(app_config.clone()).await;
         let req = TestRequest::get()
             .insert_header(("Content-Type", "application/json"))
             .insert_header(("user-agent", uuid.clone().to_string()))
