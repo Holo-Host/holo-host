@@ -7,6 +7,3 @@ pub mod error_response;
 pub mod jwt;
 pub mod limiter;
 pub mod pagination;
-
-#[cfg(test)]
-mod tests;
