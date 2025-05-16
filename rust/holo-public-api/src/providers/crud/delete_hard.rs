@@ -4,7 +4,7 @@ use db_utils::mongodb::{
     traits::{IntoIndexes, MutMetadata},
 };
 use serde::{Deserialize, Serialize};
-use std::{fmt::Debug};
+use std::fmt::Debug;
 
 /// Hard delete a document by its ID in the specified MongoDB collection.
 /// Returns an empty result if successful.
