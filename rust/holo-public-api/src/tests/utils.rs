@@ -137,7 +137,7 @@ pub fn create_credentials(secret: &str, user_id: bson::oid::ObjectId) -> (String
             exp: 900000000000,
             version: 0,
             allow_extending_refresh_token: true,
-            api_key: None,
+            reference_id: None,
         },
         secret,
     )

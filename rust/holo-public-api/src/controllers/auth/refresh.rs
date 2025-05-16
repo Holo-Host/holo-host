@@ -60,7 +60,7 @@ pub async fn refresh(
             RefreshTokenClaims {
                 exp: bson::DateTime::now().to_chrono().timestamp() as usize + 60 + 60 * 24 * 30,
                 sub: refresh_token_result.sub.clone(),
-                api_key: refresh_token_result.api_key.clone(),
+                reference_id: refresh_token_result.reference_id.clone(),
                 allow_extending_refresh_token: true,
                 version: refresh_token_result.version,
             },
@@ -121,11 +121,11 @@ pub async fn refresh(
         });
     }
     let mut permissions = user.permissions;
-    if refresh_token_result.api_key.is_some() {
+    if refresh_token_result.reference_id.is_some() {
         let api_key = match providers::crud::get::<ApiKey>(
             db.get_ref().clone(),
             API_KEY_COLLECTION_NAME.to_string(),
-            refresh_token_result.api_key.unwrap(),
+            refresh_token_result.reference_id.unwrap(),
         )
         .await
         {
