@@ -1,6 +1,9 @@
 use actix_web::{post, web, HttpResponse, Responder};
 use bson::doc;
-use db_utils::schemas::user;
+use db_utils::schemas::{
+    api_key::{ApiKey, API_KEY_COLLECTION_NAME},
+    user,
+};
 use utoipa::OpenApi;
 
 use crate::providers::{
@@ -119,18 +122,21 @@ pub async fn refresh(
     }
     let mut permissions = user.permissions;
     if refresh_token_result.api_key.is_some() {
-        let api_key =
-            match providers::auth::get_api_key(db.get_ref(), refresh_token_result.api_key.unwrap())
-                .await
-            {
-                Ok(value) => value,
-                Err(error) => {
-                    tracing::error!("{}", error);
-                    return HttpResponse::InternalServerError().json(ErrorResponse {
-                        message: "failed to get user ID and permissions".to_string(),
-                    });
-                }
-            };
+        let api_key = match providers::crud::get::<ApiKey>(
+            db.get_ref().clone(),
+            API_KEY_COLLECTION_NAME.to_string(),
+            refresh_token_result.api_key.unwrap(),
+        )
+        .await
+        {
+            Ok(value) => value,
+            Err(error) => {
+                tracing::error!("{}", error);
+                return HttpResponse::InternalServerError().json(ErrorResponse {
+                    message: "failed to get user ID and permissions".to_string(),
+                });
+            }
+        };
         if api_key.is_none() {
             return HttpResponse::Unauthorized().json(ErrorResponse {
                 message: "invalid api key".to_string(),

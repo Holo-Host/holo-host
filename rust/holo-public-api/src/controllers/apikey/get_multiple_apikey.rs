@@ -71,7 +71,7 @@ pub async fn get_multiple_apikey(
     );
 
     // get a page if items accessible by the user from the database
-    let api_keys = match providers::crud::get_many::<ApiKey>(
+    let api_keys = match providers::crud::list::<ApiKey>(
         db.get_ref().clone(),
         API_KEY_COLLECTION_NAME.to_string(),
         Some(bson::doc! {
