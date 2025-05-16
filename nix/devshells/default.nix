@@ -3,6 +3,9 @@
   flake,
   system,
 }:
+let
+  inherit (pkgs) lib;
+in
 pkgs.mkShell {
   # Add build dependencies
   packages = [
@@ -10,9 +13,7 @@ pkgs.mkShell {
     pkgs.jq
     pkgs.just
     pkgs.mongosh
-    # Add extra-container for development container management
-    flake.inputs.extra-container.packages.${system}.default
-  ];
+  ] ++ lib.optional (system == "aarch64-linux" || system == "x86_64-linux") flake.inputs.extra-container.packages.${system}.default;
 
   # Add environment variables
   env = { };
