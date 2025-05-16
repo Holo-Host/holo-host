@@ -57,6 +57,7 @@ mod tests {
         let mut count = 0;
         for log in logs {
             let log = serde_json::from_str::<ApiLog>(&log).unwrap();
+            print!("{:?}", log);
             if log.user_agent == uuid.to_string() {
                 assert_eq!(log.path, "/v1/general/health-check");
                 assert_eq!(log.method, "GET");

@@ -11,10 +11,12 @@ pub fn build_open_api_spec(
         )),
     );
     docs.info.title = "Holo Public API".to_string();
-    docs.info.version = "0.5.3".to_string();
+    docs.info.version = "0.5.4".to_string();
     docs.info.description = Some(
         "Holo Public API is a RESTful API that allows you to interact with the Holo platform.
 You can manage your API keys, workloads, blobs, user accounts, and more.
+##### Rate Limiting
+By default, every endpoint has a rate limit of 100 requests per minute. Some critical endpoints may have an additional rate limit.
 "
         .to_string(),
     );

@@ -12,3 +12,8 @@ services:
       - 6379:6379
     environment:
       - REDIS_PASSWORD=password
+    command: >
+      redis-server
+      --save ""
+      --appendonly no
+      --stop-writes-on-bgsave-error no

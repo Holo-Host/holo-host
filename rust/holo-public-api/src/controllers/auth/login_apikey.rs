@@ -4,7 +4,7 @@ use utoipa::OpenApi;
 
 use super::auth_dto::AuthLoginResponse;
 use crate::providers::{
-    auth,
+    self, auth,
     config::AppConfig,
     error_response::ErrorResponse,
     jwt::{AccessTokenClaims, RefreshTokenClaims},
@@ -19,7 +19,7 @@ pub struct OpenApiSpec;
     path = "/public/v1/auth/login-with-apikey",
     tag = "Auth",
     summary = "Login with API key",
-    description = "Use an api key to login and get an access token + refresh token",
+    description = "Use an api key to login and get an access token + refresh token. Rate limit: 3 requests per minute.",
     params(
       ("x-api-key", Header, description = "API key to authenticate user", example = "v0-1234567890abcdef12345678"),
     ),
@@ -32,7 +32,26 @@ pub async fn login_with_apikey(
     req: HttpRequest,
     config: web::Data<AppConfig>,
     db: web::Data<mongodb::Client>,
+    cache: web::Data<deadpool_redis::Pool>,
 ) -> impl Responder {
+    match providers::limiter::limiter_by_ip(
+        cache,
+        req.clone(),
+        providers::limiter::LimiterOptions {
+            rate_limit_max_requests: 3,
+            rate_limit_window: 60,
+        },
+    )
+    .await
+    {
+        true => {}
+        false => {
+            return HttpResponse::TooManyRequests().json(ErrorResponse {
+                message: "rate limit exceeded".to_string(),
+            });
+        }
+    };
+
     let api_key = auth::get_apikey_from_headers(&req);
     if api_key.is_none() {
         return HttpResponse::Unauthorized().json(ErrorResponse {

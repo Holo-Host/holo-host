@@ -1,5 +1,6 @@
 use actix_web::{post, web, HttpResponse, Responder};
 use bson::doc;
+use db_utils::schemas::user;
 use utoipa::OpenApi;
 
 use crate::providers::{
@@ -89,7 +90,12 @@ pub async fn refresh(
             message: "access token does not match refresh token".to_string(),
         });
     }
-    let user = match providers::user::get_user(db.get_ref(), refresh_token_result.sub.clone()).await
+    let user = match providers::crud::get::<user::User>(
+        db.get_ref().clone(),
+        user::USER_COLLECTION_NAME.to_string(),
+        refresh_token_result.sub.clone(),
+    )
+    .await
     {
         Ok(value) => match value {
             None => {
