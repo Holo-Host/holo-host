@@ -7,6 +7,9 @@ mod get_apikey;
 mod get_multiple_apikey;
 mod update_apikey;
 
+#[cfg(test)]
+mod tests;
+
 pub fn setup_public_controllers(_cfg: &mut web::ServiceConfig) {}
 
 pub fn setup_private_controllers(cfg: &mut web::ServiceConfig) {
