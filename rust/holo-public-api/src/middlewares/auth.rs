@@ -24,7 +24,11 @@ pub async fn auth_middleware(
     let auth_header = auth_header.to_str().unwrap();
 
     // get access token from authorization header (Bearer <token>)
-    let token = auth_header.split(" ").nth(1).unwrap_or_default();
+    let token = auth_header
+        .split(" ")
+        .nth(1)
+        .unwrap_or_default()
+        .to_string();
 
     // get jwt secret from app config
     let config = match req.app_data::<web::Data<providers::config::AppConfig>>() {
@@ -35,7 +39,7 @@ pub async fn auth_middleware(
     };
 
     // verify access token
-    let claims = match providers::jwt::verify_access_token(token, &config.jwt_secret) {
+    let claims = match providers::jwt::verify_access_token(token, config.jwt_secret.clone()) {
         Ok(claims) => claims,
         Err(err) => {
             tracing::debug!("Error verifying token: {}", err);
