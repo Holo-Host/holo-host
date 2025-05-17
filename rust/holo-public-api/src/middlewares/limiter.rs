@@ -86,9 +86,11 @@ pub async fn rate_limiter_middleware(
             );
         }
 
-        conn.set_ex(key, count + 1, window as u64)
-            .await
-            .unwrap_or(());
+        if count == 0 {
+            conn.set_ex(key, 1, window as u64).await.unwrap_or(());
+        } else {
+            conn.incr(key, count + 1).await.unwrap_or(());
+        }
     }
     let resp = next.call(req).await?;
     Ok(resp.map_into_boxed_body())
