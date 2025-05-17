@@ -78,13 +78,9 @@ pub async fn rate_limiter_middleware(
             );
         }
 
-        let _: () = if count == 0 {
-            let options = deadpool_redis::redis::SetOptions::default();
-            options.with_expiration(deadpool_redis::redis::SetExpiry::EX(window as u64));
-            conn.set_options(key, 1, options).await.unwrap_or(());
-        } else {
-            conn.incr(&key, 1).await.unwrap_or(());
-        };
+        conn.set_ex(key, count + 1, window as u64)
+            .await
+            .unwrap_or(());
     }
     let resp = next.call(req).await?;
     Ok(resp.map_into_boxed_body())
