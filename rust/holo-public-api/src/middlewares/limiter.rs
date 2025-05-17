@@ -14,10 +14,18 @@ pub async fn rate_limiter_middleware(
     req: ServiceRequest,
     next: Next<impl MessageBody + 'static>,
 ) -> Result<ServiceResponse<BoxBody>, Error> {
+    // get ip from x-forward-for header or peer address
+    // nginx uses x-forwarded-for header to pass the real ip
     let ip = req
-        .peer_addr()
-        .map(|addr| addr.ip().to_string())
-        .unwrap_or_default();
+        .headers()
+        .get("X-Forwarded-For")
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.split(',').next().unwrap_or("").trim().to_string())
+        .unwrap_or_else(|| {
+            req.peer_addr()
+                .map(|addr| addr.ip().to_string())
+                .unwrap_or_default()
+        });
 
     let authorization = req
         .headers()
