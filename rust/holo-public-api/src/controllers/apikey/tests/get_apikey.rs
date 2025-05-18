@@ -13,7 +13,7 @@ mod tests {
     };
 
     #[actix_web::test]
-    pub async fn should_successfully_get_api_key() {
+    pub async fn should_successfully_get_apikey() {
         let config = utils::get_app_config();
         let db = utils::get_db(config.clone()).await;
         let owner_id = ObjectId::new();
