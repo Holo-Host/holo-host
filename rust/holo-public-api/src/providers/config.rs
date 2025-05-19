@@ -3,12 +3,13 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct AppConfig {
+    /// secret used to sign jwt tokens
+    pub jwt_secret: String,
+
     /// connection string for mongodb
     pub mongo_url: Option<String>,
     /// connection string for redis
     pub redis_url: Option<String>,
-    /// secret used to sign jwt tokens
-    pub jwt_secret: Option<String>,
     /// the current address of the server, defaults to http://localhost:3000
     pub host: Option<String>,
     /// port to run the server on, defaults to 3000
@@ -40,13 +41,6 @@ pub fn load_config() -> Result<AppConfig, config::ConfigError> {
         .unwrap();
 
     let config: AppConfig = settings.try_deserialize()?;
-
-    if config.jwt_secret.is_none() {
-        tracing::warn!(
-            "!!!!!!JWT secret is not set!!!!!!
-This is not secure and should not be used in production"
-        );
-    }
 
     Ok(config)
 }

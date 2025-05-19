@@ -3,7 +3,7 @@ use crate::providers::jwt::{
 };
 
 pub struct SignJwtTokenOptions {
-    pub jwt_secret: Option<String>,
+    pub jwt_secret: String,
     pub access_token: AccessTokenClaims,
     pub refresh_token: RefreshTokenClaims,
 }
