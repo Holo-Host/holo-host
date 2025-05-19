@@ -20,7 +20,7 @@ pub async fn rate_limiter_middleware(
         .headers()
         .get("X-Forwarded-For")
         .and_then(|v| v.to_str().ok())
-        .map(|s| s.split(',').next().unwrap_or("").trim().to_string())
+        .map(|s| s.to_string())
         .unwrap_or_else(|| {
             req.peer_addr()
                 .map(|addr| addr.ip().to_string())
