@@ -14,10 +14,18 @@ pub async fn rate_limiter_middleware(
     req: ServiceRequest,
     next: Next<impl MessageBody + 'static>,
 ) -> Result<ServiceResponse<BoxBody>, Error> {
+    // get ip from x-forward-for header or peer address
+    // nginx uses x-forwarded-for header to pass the real ip
     let ip = req
-        .peer_addr()
-        .map(|addr| addr.ip().to_string())
-        .unwrap_or_default();
+        .headers()
+        .get("X-Forwarded-For")
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| {
+            req.peer_addr()
+                .map(|addr| addr.ip().to_string())
+                .unwrap_or_default()
+        });
 
     let authorization = req
         .headers()
@@ -78,13 +86,11 @@ pub async fn rate_limiter_middleware(
             );
         }
 
-        let _: () = if count == 0 {
-            let options = deadpool_redis::redis::SetOptions::default();
-            options.with_expiration(deadpool_redis::redis::SetExpiry::EX(window as u64));
-            conn.set_options(key, 1, options).await.unwrap_or(());
+        if count == 0 {
+            conn.set_ex(key, 1, window as u64).await.unwrap_or(());
         } else {
-            conn.incr(&key, 1).await.unwrap_or(());
-        };
+            conn.incr(key, count + 1).await.unwrap_or(());
+        }
     }
     let resp = next.call(req).await?;
     Ok(resp.map_into_boxed_body())
