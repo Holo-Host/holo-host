@@ -325,6 +325,13 @@ impl JsClient {
         )
         .await?;
 
+        log::info!(
+            "Adding service {}: {} ({})",
+            &params.name,
+            &params.service_subject,
+            &params.description
+        );
+
         match self.js_services.write().await.entry(params.name) {
             Entry::Occupied(occupied_entry) => {
                 Err(format!("didn't expect an entry, found {occupied_entry:?}").into())
@@ -347,6 +354,7 @@ impl JsClient {
         &self,
         subject: S,
     ) -> Result<async_nats::Subscriber, async_nats::SubscribeError> {
+        log::info!("Subscribing to thing");
         self.client.subscribe(subject).await
     }
 }

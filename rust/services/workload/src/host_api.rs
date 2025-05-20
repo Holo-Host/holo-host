@@ -79,6 +79,8 @@ impl HostWorkloadApi {
         // TODO(correctness): consider status.actual to inform assumptions towards the current state
         // TODO(backlog,ux): spawn longer-running tasks and report back Pending, and set up a periodic status updates while the spawned task is running
 
+        log::info!("Workload: {:?}", &workload);
+
         let desired_state = &workload.status.desired;
         let (actual_status, status_payload) = match desired_state {
             WorkloadState::Installed | WorkloadState::Running => {
@@ -97,10 +99,12 @@ impl HostWorkloadApi {
                     ""
                 };
 
-                bash(&format!(
+                let ec_cmd = format!(
                     "extra-container create {extra_container_path}{start_or_restart_if_desired}",
-                ))
-                .await?;
+                );
+                log::debug!("Running extra container command: {}", ec_cmd);
+
+                bash(&ec_cmd).await?;
 
                 let status_payload = match (desired_state, &workload.manifest) {
                     (WorkloadState::Running, WorkloadManifest::HolochainDhtV1(boxed)) => {
@@ -121,6 +125,7 @@ impl HostWorkloadApi {
 
                         // TODO: wait until the container is considered booted
                         // TODO: wait until holochain is ready
+                        log::info!("Not waiting for container or holochain to start. Connecting ham anyway.");
 
                         let mut ham = Ham::connect(
                             // TODO(feat): figure out the IP address of the container once we use network namespace separation
@@ -129,9 +134,11 @@ impl HostWorkloadApi {
                         )
                         .await?;
 
+                        log::info!("Retrieving happ from {}", happ_binary_url);
                         let happ_bytes = ham::Ham::download_happ_bytes(happ_binary_url)
                             .await
                             .context(format!("downloading {happ_binary_url:?}"))?;
+                        log::info!("{} bytes of happ retrieved", happ_bytes.len());
 
                         // TODO(feat): derive a different predictable app id from the workload
                         let installed_app_id = workload_id.to_hex();
@@ -219,6 +226,11 @@ impl HostWorkloadApi {
                                 "http://127.0.0.1:{HOLOCHAIN_HTTP_GW_PORT_DEFAULT}"
                             ))?;
 
+                            log::info!(
+                                "Starting gateway for workload with URL base {}",
+                                hc_http_gw_url_base
+                            );
+
                             match self
                                 .hc_http_gw_storetore
                                 .entry(workload_id.to_hex())
@@ -246,6 +258,12 @@ impl HostWorkloadApi {
                             };
                             let value_blob = serde_json::to_string(&value)
                                 .context(format!("serializing {value:?}"))?;
+
+                            log::info!(
+                                "Gateway bucket value thing for workload id {}: {}",
+                                workload_id.to_string(),
+                                value_blob
+                            );
 
                             self.hc_http_gw_storetore
                                 .create(&key, value_blob.into())

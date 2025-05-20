@@ -53,7 +53,7 @@ pub async fn run(
         service_subject: WORKLOAD_SRV_SUBJ.to_string(),
     };
 
-    let worload_api_js_service = host_client
+    let workload_api_js_service = host_client
         .write()
         .await
         .add_js_service(workload_stream_service)
@@ -62,7 +62,7 @@ pub async fn run(
     let hc_http_gw_storetore = spawn_hc_http_gw_watcher(
         host_id,
         Arc::clone(&host_client),
-        Arc::clone(&worload_api_js_service),
+        Arc::clone(&workload_api_js_service),
     )
     .await?;
 
@@ -71,11 +71,11 @@ pub async fn run(
         hc_http_gw_storetore,
     };
 
-    worload_api_js_service
+    workload_api_js_service
         .add_consumer(
             ServiceConsumerBuilder::new(
                 "update_workload".to_string(),
-                WorkloadServiceSubjects::Update,
+                WorkloadServiceSubjects::Command,
                 generate_service_call!(workload_api, update_workload),
             )
             .with_subject_prefix(host_id.to_lowercase())
@@ -88,7 +88,7 @@ pub async fn run(
         )
         .await?;
 
-    worload_api_js_service
+    workload_api_js_service
         .add_consumer(
             ServiceConsumerBuilder::new(
                 "fetch_workload_status".to_string(),
