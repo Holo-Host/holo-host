@@ -1,0 +1,106 @@
+<script lang="ts">
+  import { defaultTheme } from "../theme";
+</script>
+
+<div
+  class="top-bar"
+  style:background-color={defaultTheme.colors.background.card}
+>
+  <div class="search">
+    <span
+      class="icons-outlined search-icon"
+      style:--color={defaultTheme.colors.text.subtext}>search</span
+    >
+    <input
+      type="text"
+      placeholder="Search by resource name or public IP"
+      style:--text-color={defaultTheme.colors.text.black}
+      style:--placeholder-color={defaultTheme.colors.text.subtext}
+    />
+  </div>
+  <a href="#support" style:--text-color={defaultTheme.colors.text.black}>
+    Support
+  </a>
+  <a href="#support" style:--text-color={defaultTheme.colors.text.black}>
+    <span>English</span>
+    <span
+      class="icons-outlined expand"
+      style:--color={defaultTheme.colors.text.subtext}
+    >
+      expand_more
+    </span>
+  </a>
+  <div class="user-info">
+    <span
+      class="icons-outlined user-info-avatar"
+      style:--color={defaultTheme.colors.text.white}
+      style:--background-color={defaultTheme.colors.background.primary}
+    >
+      person
+    </span>
+    <span>
+      ZA
+      <span
+        class="icons-outlined"
+        style:--color={defaultTheme.colors.text.subtext}
+      >
+        expand_more
+      </span>
+    </span>
+  </div>
+</div>
+
+<style lang="css">
+  .top-bar {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    height: 60px;
+    padding: 0 20px;
+    gap: 30px;
+
+    a {
+      flex-direction: row;
+      font-weight: 400;
+      font-size: 16px;
+      color: var(--text-color);
+    }
+
+    .user-info {
+      align-items: center;
+      gap: 10px;
+      cursor: pointer;
+
+      span {
+        color: var(--color);
+        background-color: var(--background-color);
+      }
+      .user-info-avatar {
+        border-radius: 50%;
+        font-size: 20px;
+        padding: 3px;
+      }
+    }
+
+    .search {
+      flex-grow: 1;
+      gap: 10px;
+
+      .search-icon {
+        color: var(--color);
+      }
+
+      input[type="text"] {
+        flex-grow: 1;
+        font-size: 18px;
+        outline: none;
+        border: none;
+        color: var(--text-color);
+
+        &::placeholder {
+          color: var(--placeholder-color);
+        }
+      }
+    }
+  }
+</style>
