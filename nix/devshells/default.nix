@@ -10,6 +10,7 @@ pkgs.mkShell {
     pkgs.jq
     pkgs.just
     pkgs.mongosh
+    flake.inputs.extra-container.packages.${system}.default
   ];
 
   # Add environment variables
