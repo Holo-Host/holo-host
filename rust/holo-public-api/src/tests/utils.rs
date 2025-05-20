@@ -128,7 +128,7 @@ pub fn create_credentials(secret: &str, user_id: bson::oid::ObjectId) -> (String
             exp: 0,
             permissions: vec![],
         },
-        secret.to_string(),
+        secret,
     )
     .unwrap_or_else(|_| panic!("signing {secret} for {user_id:#?}"));
     let refresh_token = sign_refresh_token(
@@ -139,7 +139,7 @@ pub fn create_credentials(secret: &str, user_id: bson::oid::ObjectId) -> (String
             allow_extending_refresh_token: true,
             reference_id: None,
         },
-        secret.to_string(),
+        secret,
     )
     .unwrap_or_else(|_| panic!("signing {secret} for {user_id:#?}"));
     (access_token, refresh_token)

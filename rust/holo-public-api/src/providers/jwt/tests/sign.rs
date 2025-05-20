@@ -14,7 +14,7 @@ mod tests {
                 exp: 0,
                 permissions: vec![],
             },
-            SECRET.to_string(),
+            SECRET,
         )
         .unwrap();
         assert_eq!(token, TOKEN);

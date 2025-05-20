@@ -24,6 +24,7 @@ pub async fn auth_middleware(
     let auth_header = auth_header.to_str().unwrap();
 
     // get access token from authorization header (Bearer <token>)
+    // the first keyword is a "Bearer" and the second is the token
     let token = auth_header
         .split(" ")
         .nth(1)

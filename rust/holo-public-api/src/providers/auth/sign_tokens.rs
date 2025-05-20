@@ -9,14 +9,14 @@ pub struct SignJwtTokenOptions {
 }
 
 pub fn sign_tokens(options: SignJwtTokenOptions) -> Option<(String, String)> {
-    let access_token = match sign_access_token(options.access_token, options.jwt_secret.clone()) {
+    let access_token = match sign_access_token(options.access_token, options.jwt_secret.as_ref()) {
         Ok(claims) => claims,
         Err(_err) => {
             tracing::error!("failed to sign access token");
             return None;
         }
     };
-    let refresh_token = match sign_refresh_token(options.refresh_token, options.jwt_secret) {
+    let refresh_token = match sign_refresh_token(options.refresh_token, options.jwt_secret.as_ref()) {
         Ok(token) => token,
         Err(_err) => {
             tracing::error!("failed to sign refresh token");
