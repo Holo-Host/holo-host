@@ -99,7 +99,7 @@ pub fn get_app_config() -> AppConfig {
         enable_internal_docs: None,
         enable_scheduler: None,
         host: None,
-        jwt_secret: Some("jwt_secret".to_string()),
+        jwt_secret: "jwt_secret".to_string(),
         temp_storage_location: None,
         blob_storage_location: None,
         rate_limit_max_requests: None,
@@ -127,7 +127,7 @@ pub fn create_credentials(secret: &str, user_id: bson::oid::ObjectId) -> (String
             exp: 0,
             permissions: vec![],
         },
-        Some(secret.to_string()),
+        secret,
     )
     .unwrap_or_else(|_| panic!("signing {secret} for {user_id:#?}"));
     let refresh_token = sign_refresh_token(
@@ -138,7 +138,7 @@ pub fn create_credentials(secret: &str, user_id: bson::oid::ObjectId) -> (String
             allow_extending_refresh_token: true,
             reference_id: None,
         },
-        Some(secret.to_string()),
+        secret,
     )
     .unwrap_or_else(|_| panic!("signing {secret} for {user_id:#?}"));
     (access_token, refresh_token)

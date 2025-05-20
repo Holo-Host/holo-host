@@ -65,7 +65,7 @@ pub async fn refresh(
                 allow_extending_refresh_token: true,
                 version: refresh_token_result.version,
             },
-            config.jwt_secret.clone(),
+            config.jwt_secret.as_ref(),
         ) {
             Ok(result) => result,
             Err(error) => {
@@ -155,7 +155,7 @@ pub async fn refresh(
                 + config.access_token_expiry.unwrap_or(300) as usize,
             permissions,
         },
-        config.jwt_secret.clone(),
+        config.jwt_secret.as_ref(),
     ) {
         Ok(value) => value,
         Err(error) => {

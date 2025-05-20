@@ -43,7 +43,7 @@ mod tests {
                 exp: 1000000000000,
                 permissions: vec![],
             },
-            app_config.jwt_secret.clone(),
+            app_config.jwt_secret.as_ref(),
         )
         .unwrap();
 
@@ -93,7 +93,7 @@ mod tests {
                 exp: 0,
                 permissions: vec![],
             },
-            app_config.jwt_secret.clone(),
+            app_config.jwt_secret.as_ref(),
         )
         .unwrap();
 
@@ -116,7 +116,7 @@ mod tests {
                 exp: 1000000000000,
                 permissions: vec![],
             },
-            app_config.jwt_secret.clone(),
+            app_config.jwt_secret.as_ref(),
         )
         .unwrap();
 
