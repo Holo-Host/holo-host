@@ -1,5 +1,6 @@
 <script lang="ts">
   import { defaultTheme } from "../theme";
+  import Dropdown from "./Dropdown.svelte";
 </script>
 
 <div
@@ -18,10 +19,18 @@
       style:--placeholder-color={defaultTheme.colors.text.subtext}
     />
   </div>
-  <a href="#support" style:--text-color={defaultTheme.colors.text.black}>
+  <a
+    class="top-bar-tool"
+    href="#support"
+    style:--text-color={defaultTheme.colors.text.black}
+  >
     Support
   </a>
-  <a href="#support" style:--text-color={defaultTheme.colors.text.black}>
+  <a
+    class="top-bar-tool"
+    href="#support"
+    style:--text-color={defaultTheme.colors.text.black}
+  >
     <span>English</span>
     <span
       class="icons-outlined expand"
@@ -30,24 +39,32 @@
       expand_more
     </span>
   </a>
-  <div class="user-info">
-    <span
-      class="icons-outlined user-info-avatar"
-      style:--color={defaultTheme.colors.text.white}
-      style:--background-color={defaultTheme.colors.background.primary}
-    >
-      person
-    </span>
-    <span>
-      ZA
+  <Dropdown
+    items={["Settings", "Logout"]}
+    onItemSelected={(item) => console.log(item)}
+  >
+    <div class="user-info">
       <span
-        class="icons-outlined"
-        style:--color={defaultTheme.colors.text.subtext}
+        class="icons-outlined user-info-avatar"
+        style:--color={defaultTheme.colors.text.white}
+        style:--background-color={defaultTheme.colors.background.primary}
       >
-        expand_more
+        person
       </span>
-    </span>
-  </div>
+      <span>
+        ZA
+        <span
+          class="icons-outlined"
+          style:--color={defaultTheme.colors.text.subtext}
+        >
+          expand_more
+        </span>
+      </span>
+    </div>
+    {#snippet itemTemplate(item)}
+      <span>{item}</span>
+    {/snippet}
+  </Dropdown>
 </div>
 
 <style lang="css">
@@ -59,11 +76,17 @@
     padding: 0 20px;
     gap: 30px;
 
+    .top-bar-tool,
+    div {
+      height: 28px;
+    }
+
     a {
       flex-direction: row;
       font-weight: 400;
       font-size: 16px;
       color: var(--text-color);
+      align-items: center;
     }
 
     .user-info {
@@ -72,6 +95,7 @@
       cursor: pointer;
 
       span {
+        align-items: center;
         color: var(--color);
         background-color: var(--background-color);
       }
