@@ -10,12 +10,11 @@ use actix_web::{
     test::{self, TestRequest},
     web, App, Error, HttpMessage,
 };
-use mongodb::Database;
 
 #[derive(Clone)]
 pub struct WebData {
     pub config: Option<AppConfig>,
-    pub db: Option<Database>,
+    pub db: Option<mongodb::Client>,
     pub cache: Option<deadpool_redis::Pool>,
     pub auth: Option<AccessTokenClaims>,
 }

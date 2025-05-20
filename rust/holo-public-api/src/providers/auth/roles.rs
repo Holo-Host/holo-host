@@ -34,14 +34,8 @@ pub fn combine_role_and_permissions(
     roles: Vec<UserRole>,
     permissions: Vec<UserPermission>,
 ) -> Vec<UserPermission> {
-    let mut role_permissions: Vec<UserPermission> = vec![];
-    for role in roles.clone() {
-        for p in get_role_permissions(role) {
-            role_permissions.push(p);
-        }
-    }
-    for p in permissions {
-        role_permissions.push(p);
-    }
+    let mut role_permissions: Vec<UserPermission> =
+        roles.into_iter().flat_map(get_role_permissions).collect();
+    role_permissions.extend(permissions);
     role_permissions
 }
