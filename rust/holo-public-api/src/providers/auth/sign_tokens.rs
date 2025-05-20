@@ -16,7 +16,8 @@ pub fn sign_tokens(options: SignJwtTokenOptions) -> Option<(String, String)> {
             return None;
         }
     };
-    let refresh_token = match sign_refresh_token(options.refresh_token, options.jwt_secret.as_ref()) {
+    let refresh_token = match sign_refresh_token(options.refresh_token, options.jwt_secret.as_ref())
+    {
         Ok(token) => token,
         Err(_err) => {
             tracing::error!("failed to sign refresh token");
