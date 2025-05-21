@@ -32,12 +32,20 @@ async fn main() -> std::io::Result<()> {
         providers::docs::build_open_api_spec(controllers::setup_docs(true), host.clone());
 
     // setup database
-    let mongodb_client = mongodb::Client::with_uri_str(&app_config.mongo_url)
+    let mongodb_url = app_config
+        .mongo_url
+        .clone()
+        .unwrap_or("mongodb://admin:password@localhost:27017".to_string());
+    let mongodb_client = mongodb::Client::with_uri_str(mongodb_url)
         .await
         .expect("Failed to connect to MongoDB");
 
     // setup cache
-    let cache_pool = deadpool_redis::Config::from_url(&app_config.redis_url)
+    let valkey_url = app_config
+        .redis_url
+        .clone()
+        .unwrap_or("redis://localhost:6379".to_string());
+    let cache_pool = deadpool_redis::Config::from_url(valkey_url)
         .create_pool(Some(deadpool_redis::Runtime::Tokio1))
         .expect("failed to create redis pool");
 

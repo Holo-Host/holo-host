@@ -28,7 +28,7 @@ mod tests {
     #[actix_web::test]
     pub async fn should_block_requests_after_100_requests() {
         let app_config = get_app_config();
-        let cache = get_cache(&app_config).await;
+        let cache = get_cache(app_config.clone()).await;
 
         for _ in 0..100 {
             build_test_request(WebData {

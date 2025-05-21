@@ -3,15 +3,13 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct AppConfig {
-    /// REQUIRED
-    /// connection string for mongodb
-    pub mongo_url: String,
-    /// connection string for redis
-    pub redis_url: String,
     /// secret used to sign jwt tokens
     pub jwt_secret: String,
 
-    /// OPTIONAL
+    /// connection string for mongodb
+    pub mongo_url: Option<String>,
+    /// connection string for redis
+    pub redis_url: Option<String>,
     /// the current address of the server, defaults to http://localhost:3000
     pub host: Option<String>,
     /// port to run the server on, defaults to 3000
@@ -43,5 +41,6 @@ pub fn load_config() -> Result<AppConfig, config::ConfigError> {
         .unwrap();
 
     let config: AppConfig = settings.try_deserialize()?;
+
     Ok(config)
 }
