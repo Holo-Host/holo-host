@@ -47,7 +47,7 @@ pub async fn run(
         // TODO: make this configurable
         debug: true, // NB: This logging is a blocking action, only run in non-prod
         // TODO: make this configurable
-        trace: false, // NB: This logging is a blocking action, only run in non-prod
+        trace: true, // NB: This logging is a blocking action, only run in non-prod
         logtime: false,
     };
 
