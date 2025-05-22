@@ -27,6 +27,13 @@ h5,
 h6 {
   font-family: "Lexend", sans-serif;
   display: flex;
+  margin: 0;
+  padding: 0;
+}
+
+h1 {
+  font-weight: 500;
+  font-size: 48px;
 }
 
 /* fallback */
@@ -64,4 +71,10 @@ button {
   background: none;
   border: none;
   outline: none;
+}
+
+.page {
+  flex-direction: column;
+  margin: 30px;
+  gap: 30px;
 }

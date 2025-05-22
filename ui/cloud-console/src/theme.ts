@@ -1,5 +1,6 @@
 export const defaultTheme = {
   colors: {
+    shadow: "rgba(0, 0, 0, 0.1)",
     success: "#398223",
     warning: "#EDCA68",
     danger: "#DD0000",
@@ -19,4 +20,5 @@ export const defaultTheme = {
       disabled: "#B9BACF",
     },
   },
+  shadow: "0px 4px 8px 0px",
 } as const;

@@ -17,6 +17,7 @@
 <div
   class="top-bar"
   style:background-color={defaultTheme.colors.background.card}
+  style:--shadow-color={defaultTheme.colors.shadow}
 >
   <div class="search">
     <span
@@ -92,6 +93,7 @@
     height: 60px;
     padding: 0 20px;
     gap: 30px;
+    box-shadow: 0px 2px 0px 0px var(--shadow-color);
 
     .top-bar-tool,
     div {

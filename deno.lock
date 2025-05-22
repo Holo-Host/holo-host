@@ -505,7 +505,7 @@
   },
   "workspace": {
     "members": {
-      "packages/cloud-console": {
+      "ui/cloud-console": {
         "dependencies": [
           "npm:@deno/vite-plugin@^1.0.4",
           "npm:@sveltejs/vite-plugin-svelte@^5.0.3",
