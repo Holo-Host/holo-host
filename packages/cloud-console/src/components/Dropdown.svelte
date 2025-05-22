@@ -9,16 +9,17 @@
     onItemSelected(item);
   }
 
+  let dropdownEl: HTMLElement = $state(null);
+  let dropdownMenuEl: HTMLElement = $state(null);
+
   $effect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (!isOpen) return;
       const target = event.target as HTMLElement;
-      const dropdown = document.querySelector(".dropdown");
-      const dropdownMenu = document.querySelector(".dropdown-menu");
       if (
-        target.className === "dropdown" ||
-        dropdown.contains(target) ||
-        dropdownMenu.contains(target)
+        dropdownEl &&
+        dropdownMenuEl &&
+        (dropdownEl.contains(target) || dropdownMenuEl.contains(target))
       ) {
         return;
       }
@@ -36,7 +37,7 @@
 <div class="container">
   {#if isOpen}
     <div class="dropdown-container">
-      <div class="dropdown-menu">
+      <div class="dropdown-menu" bind:this={dropdownMenuEl}>
         {#each items as item}
           <button
             style:--hover-color={defaultTheme.colors.background.secondary}
@@ -50,7 +51,11 @@
     </div>
   {/if}
 
-  <button class="dropdown" onclick={() => (isOpen = !isOpen)}>
+  <button
+    class="dropdown"
+    bind:this={dropdownEl}
+    onclick={() => (isOpen = !isOpen)}
+  >
     {@render children()}
   </button>
 </div>

@@ -1,31 +1,32 @@
 <script lang="ts">
   import { defaultTheme } from "../theme";
+  import { getTranslation } from "../lang";
 
   const { path } = $props();
 
   const entries = [
     {
-      name: "Dashboard",
+      name: getTranslation("drawer.dashboard"),
       icon: "dashboard",
       href: "/",
     },
     {
-      name: "Constellations & Deployments",
+      name: getTranslation("drawer.constellations"),
       icon: "laptop_windows",
       href: "/constellations",
     },
     {
-      name: "API Tokens",
+      name: getTranslation("drawer.api-tokens"),
       icon: "key",
       href: "/api-tokens",
     },
     {
-      name: "Billing & Credits",
+      name: getTranslation("drawer.billing"),
       icon: "payments",
       href: "/billing",
     },
     {
-      name: "Account Settings",
+      name: getTranslation("drawer.settings"),
       icon: "settings",
       href: "/settings",
     },

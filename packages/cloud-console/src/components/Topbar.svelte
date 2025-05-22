@@ -1,6 +1,17 @@
 <script lang="ts">
+  import {
+    getSupportedLanguages,
+    getTranslation,
+    getTranslationWithLang,
+    setLanguage,
+  } from "../lang";
   import { defaultTheme } from "../theme";
   import Dropdown from "./Dropdown.svelte";
+
+  const languages = getSupportedLanguages().map((lang) => ({
+    label: getTranslationWithLang(lang, "topbar.language"),
+    value: lang,
+  }));
 </script>
 
 <div
@@ -24,21 +35,27 @@
     href="#support"
     style:--text-color={defaultTheme.colors.text.black}
   >
-    Support
+    {getTranslation("topbar.support")}
   </a>
-  <a
-    class="top-bar-tool"
-    href="#support"
-    style:--text-color={defaultTheme.colors.text.black}
+  <!-- Language Selector -->
+  <Dropdown
+    items={languages}
+    onItemSelected={(item) => setLanguage(item.value)}
   >
-    <span>English</span>
-    <span
-      class="icons-outlined expand"
-      style:--color={defaultTheme.colors.text.subtext}
-    >
-      expand_more
-    </span>
-  </a>
+    <div class="language-selector">
+      <span>{getTranslation("topbar.language")}</span>
+      <span
+        class="icons-outlined expand"
+        style:--color={defaultTheme.colors.text.subtext}
+      >
+        expand_more
+      </span>
+    </div>
+    {#snippet itemTemplate(item)}
+      <span>{item.label}</span>
+    {/snippet}
+  </Dropdown>
+  <!-- Profile Dropdown -->
   <Dropdown
     items={["Settings", "Logout"]}
     onItemSelected={(item) => console.log(item)}
@@ -89,10 +106,12 @@
       align-items: center;
     }
 
-    .user-info {
+    .user-info,
+    .language-selector {
       align-items: center;
       gap: 10px;
       cursor: pointer;
+      font-size: 16px;
 
       span {
         align-items: center;
