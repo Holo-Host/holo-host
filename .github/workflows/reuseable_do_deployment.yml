@@ -17,8 +17,14 @@ on:
           These droplets will be updated to use the new image automatically.
       dockerArgs:
         required: false
+        default: ""
         type: string
         description: Docker arguments to pass when starting the container
+      dockerCustomCommand:
+        required: false
+        default: ""
+        type: string
+        description: Start the container with a custom command, eg. /build --my-custom-arguments
     secrets:
       DIGITAL_OCEAN_TOKEN:
         required: true
@@ -125,7 +131,8 @@ jobs:
               --env-file .env \
               --name ${{ inputs.project }} \
               ${{ inputs.dockerArgs }} \
-              registry.digitalocean.com/holo-host/${{ inputs.project }}:${{ inputs.environment }}
+              registry.digitalocean.com/holo-host/${{ inputs.project }}:${{ inputs.environment }} \
+              ${{ inputs.dockerCustomCommand }}
 
             # clean up unused images
             docker system prune -a -f
