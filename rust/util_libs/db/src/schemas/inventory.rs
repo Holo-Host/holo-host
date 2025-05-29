@@ -3,7 +3,11 @@ use anyhow::Result;
 use hpos_hal::inventory::HoloInventory;
 use mongodb::options::IndexOptions;
 
-use crate::mongodb::traits::IntoIndexes;
+use crate::mongodb::traits::{IntoIndexes, MutMetadata};
+
+use super::metadata::Metadata;
+
+pub const INVENTORY_COLLECTION_NAME: &str = "inventory";
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default)]
 pub struct Inventory {
@@ -39,5 +43,10 @@ impl IntoIndexes for Inventory {
         indices.push((host_index, Some(host_index_options)));
 
         Ok(indices)
+    }
+}
+impl MutMetadata for Inventory {
+    fn mut_metadata(&mut self) -> &mut Metadata {
+        &mut self.metadata
     }
 }

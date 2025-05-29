@@ -4,6 +4,8 @@ use crate::mongodb::traits::IntoIndexes;
 
 use super::metadata::Metadata;
 
+pub const JURISDICTION_COLLECTION_NAME: &str = "jurisdiction";
+
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, Default)]
 pub struct Jurisdiction {
     #[serde(skip_serializing_if = "Option::is_none")]

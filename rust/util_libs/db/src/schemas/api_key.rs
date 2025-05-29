@@ -4,7 +4,7 @@ use mongodb::options::IndexOptions;
 use serde::{Deserialize, Serialize};
 
 use super::{metadata::Metadata, user_permissions::UserPermission};
-use crate::mongodb::traits::{IntoIndexes, MutMetadata};
+use crate::{mongodb::traits::{IntoIndexes, MutMetadata}};
 
 /// Collection name for API key documents
 pub const API_KEY_COLLECTION_NAME: &str = "api_key";
@@ -15,6 +15,7 @@ pub fn default_expire_at() -> i64 {
 
 /// API key document schema representing an API key in the system
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
+
 pub struct ApiKey {
     /// MongoDB ObjectId of the host document
     #[serde(skip_serializing_if = "Option::is_none")]

@@ -13,10 +13,7 @@ use anyhow::{Context, Result};
 use async_nats::{jetstream::kv::Store, Message};
 use bson::oid::ObjectId;
 use core::option::Option::None;
-use db_utils::schemas::workload::{
-    Workload, WorkloadManifest, WorkloadManifestHolochainDhtV1, WorkloadState,
-    WorkloadStateDiscriminants, WorkloadStatePayload, WorkloadStatus,
-};
+use db_utils::schemas::workload::Workload;
 use futures::TryFutureExt;
 use ham::{
     exports::{

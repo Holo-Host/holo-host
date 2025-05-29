@@ -3,6 +3,8 @@ use mongodb::options::IndexOptions;
 
 use crate::mongodb::traits::IntoIndexes;
 
+pub const REGION_COLLECTION_NAME: &str = "region";
+
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, Default)]
 pub struct Region {
     pub _id: Option<bson::oid::ObjectId>,

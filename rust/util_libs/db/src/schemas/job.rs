@@ -1,8 +1,10 @@
-use crate::mongodb::traits::IntoIndexes;
+use crate::mongodb::traits::{IntoIndexes, MutMetadata};
 
 use super::metadata::Metadata;
 use bson::{oid::ObjectId, Document};
 use mongodb::options::IndexOptions;
+
+pub const JOB_COLLECTION_NAME: &str = "job";
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
@@ -73,5 +75,11 @@ impl IntoIndexes for Job {
         indices.push((host_index, Some(host_index_options)));
 
         Ok(indices)
+    }
+}
+
+impl MutMetadata for Job {
+    fn mut_metadata(&mut self) -> &mut Metadata {
+        &mut self.metadata
     }
 }

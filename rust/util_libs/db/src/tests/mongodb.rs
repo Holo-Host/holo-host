@@ -5,7 +5,6 @@ use crate::{
 use anyhow::Result;
 use bson::{self, doc, oid, DateTime};
 use dotenv::dotenv;
-use hpos_hal::inventory::HoloInventory;
 use mock_utils::mongodb_runner::MongodRunner;
 
 #[tokio::test]
@@ -38,14 +37,9 @@ async fn test_indexing_and_api() -> Result<()> {
             },
             device_id: "placeholder_pubkey_host".to_string(),
             ip_address: Some("127.0.0.1".to_string()),
-            inventory: HoloInventory {
-                ..Default::default()
-            },
             avg_uptime: 0.95,
             avg_network_speed: 500,
             avg_latency: 10,
-            assigned_workloads: vec![oid::ObjectId::new()],
-            assigned_hoster: Some(oid::ObjectId::new()),
         }
     }
 

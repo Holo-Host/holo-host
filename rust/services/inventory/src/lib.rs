@@ -28,6 +28,7 @@ use db_utils::{
     schemas::{
         self,
         host::{Host, HOST_COLLECTION_NAME},
+        job::{Job, JOB_COLLECTION_NAME},
         workload::{Workload, WORKLOAD_COLLECTION_NAME},
     },
 };
@@ -50,6 +51,7 @@ pub const INVENTORY_UPDATE_SUBJECT: &str = "update";
 pub struct InventoryServiceApi {
     pub workload_collection: MongoCollection<Workload>,
     pub host_collection: MongoCollection<Host>,
+    pub job_collection: MongoCollection<Job>,
 }
 
 impl InventoryServiceApi {
@@ -57,6 +59,7 @@ impl InventoryServiceApi {
         Ok(Self {
             workload_collection: Self::init_collection(client, WORKLOAD_COLLECTION_NAME).await?,
             host_collection: Self::init_collection(client, HOST_COLLECTION_NAME).await?,
+            job_collection: Self::init_collection(client, JOB_COLLECTION_NAME).await?,
         })
     }
 
@@ -72,7 +75,7 @@ impl InventoryServiceApi {
 
         let subject_sections: Vec<&str> = msg_subject.split('.').collect();
         let host_id_index = 1;
-        let host_id: schemas::alias::PubKey = subject_sections
+        let host_id: String = subject_sections
             .get(host_id_index)
             .ok_or_else(|| {
                 ServiceError::internal(
@@ -144,13 +147,6 @@ impl InventoryServiceApi {
         Ok(host)
     }
 
-    fn calculate_host_drive_capacity(&self, host_inventory: &HoloInventory) -> i64 {
-        host_inventory
-            .drives
-            .iter()
-            .fold(0_i64, |acc, d| acc + d.capacity_bytes.unwrap_or(0) as i64)
-    }
-
     async fn handle_ineligible_host_workloads(&self, host: Host) -> Result<(), ServiceError> {
         let host_id = host._id.ok_or_else(|| {
             ServiceError::internal(
@@ -159,18 +155,22 @@ impl InventoryServiceApi {
             )
         })?;
 
-        // Find workloads that exceed host capacity
-        let host_drive_capacity = self.calculate_host_drive_capacity(&host.inventory);
-        let host_cpu_count = host.inventory.cpus.len() as i64;
+        let jobs = self
+            .job_collection
+            .get_many_from(doc! {
+                "host_id": host_id,
+            })
+            .await?;
+
+        let assigned_workloads = jobs
+            .into_iter()
+            .map(|job| job.workload)
+            .collect::<Vec<ObjectId>>();
 
         let ineligible_workloads = self
             .workload_collection
             .get_many_from(doc! {
-                "_id": { "$in": &host.assigned_workloads },
-                "$or": [
-                    { "system_specs.capacity.drive": { "$gt": host_drive_capacity } },
-                    { "system_specs.capacity.cores": { "$gt": host_cpu_count } }
-                ]
+                "_id": { "$in": &assigned_workloads }
             })
             .await?;
 
