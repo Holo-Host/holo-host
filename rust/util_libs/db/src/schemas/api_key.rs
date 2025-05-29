@@ -9,8 +9,12 @@ use crate::mongodb::traits::{IntoIndexes, MutMetadata};
 /// Collection name for API key documents
 pub const API_KEY_COLLECTION_NAME: &str = "api_key";
 
+pub fn default_expire_at() -> i64 {
+    bson::DateTime::now().to_chrono().timestamp() + 60 + 60 * 24 * 30 // 30 days from now
+}
+
 /// API key document schema representing an API key in the system
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct ApiKey {
     /// MongoDB ObjectId of the host document
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -28,22 +32,8 @@ pub struct ApiKey {
     pub description: String,
     /// when the api key expires in unixtimestamp (seconds) (this is optional and set by the user)
     /// bson::DateTime::now().to_chrono().timestamp()
+    #[serde(default = "default_expire_at")]
     pub expire_at: i64,
-}
-
-impl Default for ApiKey {
-    fn default() -> Self {
-        Self {
-            _id: None,
-            metadata: Metadata::default(),
-            owner: ObjectId::new(),
-            api_key: String::new(),
-            permissions: vec![],
-            description: "".to_string(),
-            // default expire_at is 30 day
-            expire_at: bson::DateTime::now().to_chrono().timestamp() + 60 + 60 * 24 * 30,
-        }
-    }
 }
 
 impl IntoIndexes for ApiKey {

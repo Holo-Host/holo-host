@@ -1,21 +1,19 @@
-use bson::{oid::ObjectId, Document};
+use bson::Document;
 use mongodb::options::IndexOptions;
+
 use crate::mongodb::traits::IntoIndexes;
 
-use super::metadata::Metadata;
-
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, Default)]
-pub struct Jurisdiction {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub _id: Option<ObjectId>,
-    pub metadata:  Metadata,
-    /// The code of the jurisdiction, which is unique and used to identify it.
+pub struct Region {
+    pub _id: Option<bson::oid::ObjectId>,
+    pub metadata: super::metadata::Metadata,
+    /// The code of the region, which is unique and used to identify it.
     pub code: String,
-    /// The name of the jurisdiction, which is a human-readable identifier.
+    /// The name of the region, which is a human-readable identifier.
     pub name: String,
 }
 
-impl IntoIndexes for Jurisdiction {
+impl IntoIndexes for Region {
     fn into_indices(self) -> anyhow::Result<Vec<(Document, Option<IndexOptions>)>> {
         let mut indices = vec![];
 

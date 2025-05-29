@@ -1,6 +1,5 @@
 use anyhow::Result;
 use bson::{doc, oid::ObjectId, Document};
-use hpos_hal::inventory::HoloInventory;
 use mongodb::options::IndexOptions;
 use serde::{Deserialize, Serialize};
 
@@ -11,7 +10,7 @@ use crate::mongodb::traits::{IntoIndexes, MutMetadata};
 pub const HOST_COLLECTION_NAME: &str = "host";
 
 /// Host document schema representing a hosting device in the system
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct Host {
     /// MongoDB ObjectId of the host document
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -20,8 +19,6 @@ pub struct Host {
     pub metadata: Metadata,
     /// Unique identifier for the device
     pub device_id: String,
-    /// Hardware inventory information
-    pub inventory: HoloInventory,
     /// Average uptime as a percentage
     pub avg_uptime: f64,
     /// Average network speed in Mbps
@@ -30,27 +27,6 @@ pub struct Host {
     pub avg_latency: i64,
     /// IP address of the host
     pub ip_address: Option<String>,
-    /// Reference to the user that owns this host
-    pub assigned_hoster: Option<ObjectId>,
-    /// List of workloads running on this host
-    pub assigned_workloads: Vec<ObjectId>,
-}
-
-impl Default for Host {
-    fn default() -> Self {
-        Self {
-            _id: None,
-            metadata: Metadata::default(),
-            device_id: Default::default(),
-            inventory: HoloInventory::default(),
-            avg_uptime: 100.00,     // Start with full 100% uptime
-            avg_network_speed: 100, // Start at decent network speed (mbps)
-            avg_latency: 100,       // Start at decent latency time
-            assigned_workloads: vec![],
-            assigned_hoster: None,
-            ip_address: None,
-        }
-    }
 }
 
 impl IntoIndexes for Host {

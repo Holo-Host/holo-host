@@ -1,20 +1,8 @@
 use serde::{Deserialize, Serialize};
-use strum::{AsRefStr, EnumDiscriminants, EnumString, FromRepr};
 use utoipa::ToSchema;
 
 /// Represents the type of permission the user has for each resources
-#[derive(
-    Debug,
-    Clone,
-    Serialize,
-    Deserialize,
-    EnumString,
-    ToSchema,
-    PartialEq,
-    AsRefStr,
-    EnumDiscriminants,
-    FromRepr,
-)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum PermissionAction {
     All,
