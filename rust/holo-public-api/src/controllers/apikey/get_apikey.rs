@@ -10,7 +10,7 @@ use crate::providers::{self, error_response::ErrorResponse, jwt::AccessTokenClai
 use super::apikey_dto::ApiKeyDto;
 
 #[derive(OpenApi)]
-#[openapi(paths(get_api_key))]
+#[openapi(paths(get_apikey))]
 pub struct OpenApiSpec;
 
 #[utoipa::path(
@@ -30,7 +30,7 @@ pub struct OpenApiSpec;
     )
 )]
 #[get("/v1/apikey/{id}")]
-pub async fn get_api_key(
+pub async fn get_apikey(
     req: HttpRequest,
     id: web::Path<String>,
     db: web::Data<mongodb::Client>,
