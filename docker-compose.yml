@@ -1,0 +1,12 @@
+services:
+  db:
+    image: mongo:latest
+    ports:
+      - 27017:27017
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=admin
+      - MONGO_INITDB_ROOT_PASSWORD=password
+  redis:
+    image: valkey/valkey:latest
+    ports:
+      - 6379:6379
