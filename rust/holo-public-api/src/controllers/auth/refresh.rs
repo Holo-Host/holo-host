@@ -1,6 +1,9 @@
 use actix_web::{post, web, HttpResponse, Responder};
 use bson::doc;
-use db_utils::schemas::user;
+use db_utils::schemas::{
+    api_key::{ApiKey, API_KEY_COLLECTION_NAME},
+    user,
+};
 use utoipa::OpenApi;
 
 use crate::providers::{
@@ -39,14 +42,15 @@ pub async fn refresh(
     let config = config.get_ref();
     let current_time = bson::DateTime::now().to_chrono().timestamp() as usize;
     let mut refresh_token = payload.refresh_token.clone();
-    let refresh_token_result = match verify_refresh_token(&refresh_token, &config.jwt_secret) {
-        Ok(claims) => claims,
-        Err(_) => {
-            return HttpResponse::Unauthorized().json(ErrorResponse {
-                message: "invalid refresh token".to_string(),
-            })
-        }
-    };
+    let refresh_token_result =
+        match verify_refresh_token(refresh_token.clone(), config.jwt_secret.clone()) {
+            Ok(claims) => claims,
+            Err(_) => {
+                return HttpResponse::Unauthorized().json(ErrorResponse {
+                    message: "invalid refresh token".to_string(),
+                })
+            }
+        };
     if refresh_token_result.exp < current_time {
         return HttpResponse::Unauthorized().json(ErrorResponse {
             message: "refresh token expired".to_string(),
@@ -57,11 +61,11 @@ pub async fn refresh(
             RefreshTokenClaims {
                 exp: bson::DateTime::now().to_chrono().timestamp() as usize + 60 + 60 * 24 * 30,
                 sub: refresh_token_result.sub.clone(),
-                api_key: refresh_token_result.api_key.clone(),
+                reference_id: refresh_token_result.reference_id.clone(),
                 allow_extending_refresh_token: true,
                 version: refresh_token_result.version,
             },
-            &config.jwt_secret,
+            config.jwt_secret.as_ref(),
         ) {
             Ok(result) => result,
             Err(error) => {
@@ -72,14 +76,15 @@ pub async fn refresh(
             }
         };
     }
-    let access_token_result = match verify_access_token(&payload.access_token, &config.jwt_secret) {
-        Ok(claims) => claims,
-        Err(_) => {
-            return HttpResponse::Unauthorized().json(ErrorResponse {
-                message: "invalid access token".to_string(),
-            })
-        }
-    };
+    let access_token_result =
+        match verify_access_token(payload.access_token.clone(), config.jwt_secret.clone()) {
+            Ok(claims) => claims,
+            Err(_) => {
+                return HttpResponse::Unauthorized().json(ErrorResponse {
+                    message: "invalid access token".to_string(),
+                })
+            }
+        };
     if access_token_result.exp > current_time + 60 {
         return HttpResponse::BadRequest().json(ErrorResponse {
             message: "access token is still valid for 60 seconds or longer".to_string(),
@@ -118,19 +123,22 @@ pub async fn refresh(
         });
     }
     let mut permissions = user.permissions;
-    if refresh_token_result.api_key.is_some() {
-        let api_key =
-            match providers::auth::get_api_key(db.get_ref(), refresh_token_result.api_key.unwrap())
-                .await
-            {
-                Ok(value) => value,
-                Err(error) => {
-                    tracing::error!("{}", error);
-                    return HttpResponse::InternalServerError().json(ErrorResponse {
-                        message: "failed to get user ID and permissions".to_string(),
-                    });
-                }
-            };
+    if refresh_token_result.reference_id.is_some() {
+        let api_key = match providers::crud::get::<ApiKey>(
+            db.get_ref().clone(),
+            API_KEY_COLLECTION_NAME.to_string(),
+            refresh_token_result.reference_id.unwrap(),
+        )
+        .await
+        {
+            Ok(value) => value,
+            Err(error) => {
+                tracing::error!("{}", error);
+                return HttpResponse::InternalServerError().json(ErrorResponse {
+                    message: "failed to get user ID and permissions".to_string(),
+                });
+            }
+        };
         if api_key.is_none() {
             return HttpResponse::Unauthorized().json(ErrorResponse {
                 message: "invalid api key".to_string(),
@@ -147,7 +155,7 @@ pub async fn refresh(
                 + config.access_token_expiry.unwrap_or(300) as usize,
             permissions,
         },
-        &config.jwt_secret,
+        config.jwt_secret.as_ref(),
     ) {
         Ok(value) => value,
         Err(error) => {

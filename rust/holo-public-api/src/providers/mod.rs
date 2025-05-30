@@ -1,5 +1,6 @@
 pub mod auth;
 pub mod config;
+#[allow(dead_code)]
 pub mod crud;
 pub mod docs;
 pub mod error_response;

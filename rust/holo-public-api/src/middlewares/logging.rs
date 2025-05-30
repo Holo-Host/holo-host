@@ -1,7 +1,6 @@
 use actix_web::{
-    body::MessageBody,
+    body::{BoxBody, MessageBody},
     dev::{ServiceRequest, ServiceResponse},
-    http::StatusCode,
     middleware::Next,
     web, Error, HttpMessage,
 };
@@ -12,8 +11,8 @@ use crate::providers::jwt::AccessTokenClaims;
 
 pub async fn logging_middleware(
     req: ServiceRequest,
-    next: Next<impl MessageBody>,
-) -> Result<ServiceResponse<impl MessageBody>, Error> {
+    next: Next<impl MessageBody + 'static>,
+) -> Result<ServiceResponse<BoxBody>, Error> {
     let path = req.path().to_owned();
     let method = req.method().clone();
     let method_str = method.to_string();
@@ -44,21 +43,18 @@ pub async fn logging_middleware(
 
     let pool = req.app_data::<web::Data<Pool>>().cloned();
 
-    let response = next.call(req).await;
+    let response = next.call(req).await?;
 
-    let status = match &response {
-        Ok(response) => response.status().as_u16(),
-        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.as_u16(),
-    };
+    let status = response.status().as_u16();
 
     if pool.is_none() {
         tracing::error!("Redis pool not found");
-        return response;
+        return Ok(response.map_into_boxed_body());
     }
     let pool = pool.unwrap().get().await;
     if pool.is_err() {
         tracing::error!("failed to connect to redis: {}", pool.err().unwrap());
-        return response;
+        return Ok(response.map_into_boxed_body());
     }
     let mut conn = pool.unwrap();
 
@@ -80,7 +76,7 @@ pub async fn logging_middleware(
         Ok(doc) => doc,
         Err(e) => {
             tracing::error!("failed to serialize log: {}", e);
-            return response;
+            return Ok(response.map_into_boxed_body());
         }
     };
 
@@ -89,5 +85,5 @@ pub async fn logging_middleware(
         .await
         .unwrap_or_default();
 
-    response
+    Ok(response.map_into_boxed_body())
 }

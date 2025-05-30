@@ -23,5 +23,5 @@ pub struct RefreshTokenClaims {
     pub allow_extending_refresh_token: bool,
     /// mongodb id of api key collection.
     /// if refresh token was not created using an api key then it is None
-    pub api_key: Option<String>,
+    pub reference_id: Option<String>,
 }
