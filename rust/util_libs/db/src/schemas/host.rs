@@ -25,8 +25,6 @@ pub struct Host {
     pub avg_network_speed: i64,
     /// Average latency in milliseconds
     pub avg_latency: i64,
-    /// IP address of the host
-    pub ip_address: Option<String>,
 }
 
 impl IntoIndexes for Host {

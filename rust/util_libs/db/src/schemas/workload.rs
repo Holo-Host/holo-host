@@ -35,12 +35,14 @@ pub struct ExecutionPolicy {
     pub visibility: ExecutionPolicyVisibility,
 }
 
+// todo: add parameters to enum
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, Default, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum WorkloadType {
     #[default]
     HoloChainDht,
     StaticContent,
+    WebBridge,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, Default)]
