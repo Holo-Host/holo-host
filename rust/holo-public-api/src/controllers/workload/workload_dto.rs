@@ -1,7 +1,10 @@
-use db_utils::schemas;
+use bson::oid::ObjectId;
+use db_utils::schemas::{
+    metadata::Metadata,
+    workload::{ExecutionPolicyVisibility, Workload, WorkloadType},
+};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use url::Url;
 use utoipa::{OpenApi, ToSchema};
 
 #[derive(OpenApi)]
@@ -9,234 +12,158 @@ use utoipa::{OpenApi, ToSchema};
 pub struct OpenApiSpec;
 
 #[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
-#[serde(rename_all = "snake_case")]
-pub enum WorkloadStateDto {
-    /// Workload reported by developer
-    Reported,
-    /// Workload assigned to host
-    Assigned,
-    /// Workload installation pending on host device
-    Pending,
-    /// Workload installed on host device
-    Installed,
-    /// Workload running on host device
-    Running,
-    /// Workload is being updated
-    Updating,
-    /// Workload update completed
-    Updated,
-    /// Workload marked for deletion
-    Deleted,
-    /// Workload links removed
-    Removed,
-    /// Workload uninstalled from host device
-    Uninstalled,
-    /// Error state with message
-    Error(String),
-    /// Unknown state with context
-    Unknown(String),
+pub struct ExecutionPolicyDto {
+    /// The jurisdictions to deploy the workload in
+    /// This maps to the jurisdiction code in the jurisdiction collection
+    pub jurisdictions: Vec<String>,
+    /// The region to deploy the workload in
+    /// This maps to the region code in the region collection
+    pub regions: Vec<String>,
+    /// Minimum number of instances required for this workload
+    pub instances: i32,
+    /// The visibility of the workload on hosts
+    pub visibility: ExecutionPolicyVisibility,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
-pub struct CapacityDto {
-    pub drive: i64,
-    pub cores: i64,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
-pub struct SystemSpecsDto {
-    pub capacity: CapacityDto,
-    pub avg_network_speed: i64,
-    pub avg_uptime: f64,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
-pub struct WorkloadStatusDto {
-    pub id: String,
-    pub desired: WorkloadStateDto,
-    pub actual: WorkloadStateDto,
-    pub payload: Option<String>,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
-pub struct WorkloadManifestHolochainDhtV1Dto {
-    pub happ_binary_url: String,
-    pub network_seed: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
+pub struct WorkloadParametersDto {
+    /// The uploaded happ blob object id
+    pub blob_object_id: Option<String>,
+    /// network seed
+    pub network_seed: Option<String>,
+    /// membrane proof
     pub memproof: Option<HashMap<String, String>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    /// bootstrap server url
     pub bootstrap_server_url: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    /// signal server url
     pub signal_server_url: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    /// stun server urls
     pub stun_server_urls: Option<Vec<String>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    /// holochain feature flags
     pub holochain_feature_flags: Option<Vec<String>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    /// holochain version
     pub holochain_version: Option<String>,
+    /// HTTP gateway enable flag
     pub http_gw_enable: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    /// HTTP gateway allowed functions
     pub http_gw_allowed_fns: Option<Vec<String>>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
-#[serde(rename_all = "snake_case")]
-pub enum WorkloadManifestDto {
-    None,
-    ExtraContainerPath { extra_container_path: String },
-    ExtraContainerStorePath { store_path: String },
-    ExtraContainerBuildCmd { nix_args: Box<[String]> },
-    HolochainDhtV1(Box<WorkloadManifestHolochainDhtV1Dto>),
+pub struct CreateWorkloadDto {
+    pub name: String,
+    pub tag: Option<String>,
+    pub execution_policy: ExecutionPolicyDto,
+    pub workload_type: WorkloadType,
+    pub parameters: WorkloadParametersDto,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
 pub struct WorkloadDto {
-    /// unique identifier for the workload
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub id: Option<String>,
-    /// Reference to the user who created this workload
-    pub assigned_developer: String,
-    /// Semantic version of the workload
-    pub version: String,
-    /// Minimum number of hosts required
-    pub min_hosts: i32,
-    /// System requirements for the workload
-    pub system_specs: SystemSpecsDto,
-    /// List of hosts this workload is assigned to
-    pub assigned_hosts: Vec<String>,
-    /// Current status of the workload
-    pub status: WorkloadStatusDto,
-    pub manifest: WorkloadManifestDto,
+    pub id: String,
+    pub owner: String,
+    pub name: String,
+    pub tag: Option<String>,
+    pub execution_policy: ExecutionPolicyDto,
+    pub workload_type: WorkloadType,
+    pub parameters: WorkloadParametersDto,
 }
 
-fn to_workload_state_dto(state: schemas::workload::WorkloadState) -> WorkloadStateDto {
-    match state {
-        schemas::workload::WorkloadState::Reported => WorkloadStateDto::Reported,
-        schemas::workload::WorkloadState::Assigned => WorkloadStateDto::Assigned,
-        schemas::workload::WorkloadState::Pending => WorkloadStateDto::Pending,
-        schemas::workload::WorkloadState::Installed => WorkloadStateDto::Installed,
-        schemas::workload::WorkloadState::Running => WorkloadStateDto::Running,
-        schemas::workload::WorkloadState::Updating => WorkloadStateDto::Updating,
-        schemas::workload::WorkloadState::Updated => WorkloadStateDto::Updated,
-        schemas::workload::WorkloadState::Deleted => WorkloadStateDto::Deleted,
-        schemas::workload::WorkloadState::Removed => WorkloadStateDto::Removed,
-        schemas::workload::WorkloadState::Uninstalled => WorkloadStateDto::Uninstalled,
-        schemas::workload::WorkloadState::Error(msg) => WorkloadStateDto::Error(msg),
-        schemas::workload::WorkloadState::Unknown(ctx) => WorkloadStateDto::Unknown(ctx),
+pub fn from_execution_policy_dto(
+    dto: ExecutionPolicyDto,
+) -> db_utils::schemas::workload::ExecutionPolicy {
+    db_utils::schemas::workload::ExecutionPolicy {
+        jurisdictions: dto.jurisdictions,
+        regions: dto.regions,
+        instances: dto.instances,
+        visibility: dto.visibility,
     }
 }
 
-pub fn to_manifest_dto(data: schemas::workload::WorkloadManifest) -> WorkloadManifestDto {
-    match data {
-        schemas::workload::WorkloadManifest::None => WorkloadManifestDto::None,
-        schemas::workload::WorkloadManifest::ExtraContainerPath {
-            extra_container_path,
-        } => WorkloadManifestDto::ExtraContainerPath {
-            extra_container_path,
-        },
-        schemas::workload::WorkloadManifest::ExtraContainerStorePath { store_path } => {
-            WorkloadManifestDto::ExtraContainerStorePath {
-                store_path: store_path
-                    .to_str()
-                    .expect("failed to convert store_path to string")
-                    .to_string(),
+pub fn from_parameters_dto(
+    dto: WorkloadParametersDto,
+) -> db_utils::schemas::workload::WorkloadParameters {
+    let stun_server_urls = match dto.stun_server_urls {
+        Some(dto_stun_server_urls) => {
+            let mut stun_server_urls_vec: Vec<url::Url> = vec![];
+            for value in dto_stun_server_urls {
+                let url = url::Url::parse(&value).expect("Invalid STUN server URL");
+                stun_server_urls_vec.push(url);
             }
+            Some(stun_server_urls_vec)
         }
-        schemas::workload::WorkloadManifest::ExtraContainerBuildCmd { nix_args } => {
-            WorkloadManifestDto::ExtraContainerBuildCmd { nix_args }
-        }
-        schemas::workload::WorkloadManifest::HolochainDhtV1(data) => {
-            WorkloadManifestDto::HolochainDhtV1(Box::new(WorkloadManifestHolochainDhtV1Dto {
-                happ_binary_url: data.happ_binary_url.to_string(),
-                network_seed: data.network_seed,
-                memproof: data.memproof,
-                bootstrap_server_url: data.bootstrap_server_url.map(|url| url.to_string()),
-                signal_server_url: data.signal_server_url.map(|url| url.to_string()),
-                stun_server_urls: data
-                    .stun_server_urls
-                    .map(|data| data.into_iter().map(|url| url.to_string()).collect()),
-                holochain_feature_flags: data.holochain_feature_flags,
-                holochain_version: data.holochain_version,
-                http_gw_enable: data.http_gw_enable,
-                http_gw_allowed_fns: data.http_gw_allowed_fns,
-            }))
-        }
+        None => None,
+    };
+
+    db_utils::schemas::workload::WorkloadParameters {
+        blob_object_id: dto.blob_object_id,
+        network_seed: dto.network_seed,
+        memproof: dto.memproof,
+        bootstrap_server_url: dto
+            .bootstrap_server_url
+            .map(|url| url::Url::parse(&url).expect("Invalid URL")),
+        signal_server_url: dto
+            .signal_server_url
+            .map(|url| url::Url::parse(&url).expect("Invalid URL")),
+        stun_server_urls,
+        holochain_feature_flags: dto.holochain_feature_flags,
+        holochain_version: dto.holochain_version,
+        http_gw_enable: dto.http_gw_enable,
+        http_gw_allowed_fns: dto.http_gw_allowed_fns,
     }
 }
 
-pub fn to_workload_dto(data: schemas::workload::Workload) -> WorkloadDto {
+pub fn from_create_workload_dto(dto: CreateWorkloadDto, owner: ObjectId) -> Workload {
+    Workload {
+        _id: None,
+        owner,
+        metadata: Metadata::default(),
+        name: dto.name,
+        tag: dto.tag,
+        execution_policy: from_execution_policy_dto(dto.execution_policy),
+        parameters: from_parameters_dto(dto.parameters),
+        workload_type: dto.workload_type,
+    }
+}
+
+pub fn to_execution_policy_dto(
+    execution_policy: db_utils::schemas::workload::ExecutionPolicy,
+) -> ExecutionPolicyDto {
+    ExecutionPolicyDto {
+        jurisdictions: execution_policy.jurisdictions,
+        regions: execution_policy.regions,
+        instances: execution_policy.instances,
+        visibility: execution_policy.visibility,
+    }
+}
+
+pub fn to_parameters_dto(
+    parameters: db_utils::schemas::workload::WorkloadParameters,
+) -> WorkloadParametersDto {
+    WorkloadParametersDto {
+        blob_object_id: parameters.blob_object_id,
+        network_seed: parameters.network_seed,
+        memproof: parameters.memproof,
+        bootstrap_server_url: parameters.bootstrap_server_url.map(|url| url.to_string()),
+        signal_server_url: parameters.signal_server_url.map(|url| url.to_string()),
+        stun_server_urls: parameters
+            .stun_server_urls
+            .map(|urls| urls.iter().map(|url| url.to_string()).collect()),
+        holochain_feature_flags: parameters.holochain_feature_flags,
+        holochain_version: parameters.holochain_version,
+        http_gw_enable: parameters.http_gw_enable,
+        http_gw_allowed_fns: parameters.http_gw_allowed_fns,
+    }
+}
+
+pub fn to_workload_dto(workload: Workload) -> WorkloadDto {
     WorkloadDto {
-        id: data._id.map(|id| id.to_hex()),
-        assigned_developer: data.assigned_developer.to_hex(),
-        version: data.version.to_string(),
-        min_hosts: data.min_hosts,
-        system_specs: SystemSpecsDto {
-            avg_uptime: data.system_specs.avg_uptime,
-            avg_network_speed: data.system_specs.avg_network_speed,
-            capacity: CapacityDto {
-                drive: data.system_specs.capacity.drive,
-                cores: data.system_specs.capacity.cores,
-            },
-        },
-        assigned_hosts: data
-            .assigned_hosts
-            .iter()
-            .map(|host| host.to_hex())
-            .collect(),
-        status: WorkloadStatusDto {
-            id: data.status.id.unwrap().to_hex(),
-            desired: to_workload_state_dto(data.status.desired),
-            actual: to_workload_state_dto(data.status.actual),
-            payload: None,
-        },
-        manifest: to_manifest_dto(data.manifest),
-    }
-}
-
-pub fn from_manifest_dto(data: WorkloadManifestDto) -> schemas::workload::WorkloadManifest {
-    match data {
-        WorkloadManifestDto::None => schemas::workload::WorkloadManifest::None,
-        WorkloadManifestDto::ExtraContainerPath {
-            extra_container_path,
-        } => schemas::workload::WorkloadManifest::ExtraContainerPath {
-            extra_container_path: extra_container_path.to_string(),
-        },
-        WorkloadManifestDto::ExtraContainerStorePath { store_path } => {
-            schemas::workload::WorkloadManifest::ExtraContainerStorePath {
-                store_path: std::path::PathBuf::from(store_path),
-            }
-        }
-        WorkloadManifestDto::ExtraContainerBuildCmd { nix_args } => {
-            schemas::workload::WorkloadManifest::ExtraContainerBuildCmd {
-                nix_args: nix_args.clone(),
-            }
-        }
-        WorkloadManifestDto::HolochainDhtV1(data) => {
-            schemas::workload::WorkloadManifest::HolochainDhtV1(Box::new(
-                schemas::workload::WorkloadManifestHolochainDhtV1 {
-                    happ_binary_url: Url::parse(&data.happ_binary_url)
-                        .expect("failed to parse url"),
-                    network_seed: data.network_seed.to_string(),
-                    memproof: data.memproof.clone(),
-                    bootstrap_server_url: data
-                        .bootstrap_server_url
-                        .clone()
-                        .map(|url| Url::parse(&url).expect("failed to parse url")),
-                    signal_server_url: data
-                        .signal_server_url
-                        .clone()
-                        .map(|url| Url::parse(&url).expect("failed to parse url")),
-                    stun_server_urls: data.stun_server_urls.map(|data| {
-                        data.into_iter()
-                            .map(|url| Url::parse(&url).expect("failed to parse url"))
-                            .collect()
-                    }),
-                    holochain_feature_flags: data.holochain_feature_flags.clone(),
-                    holochain_version: data.holochain_version.clone(),
-                    http_gw_enable: data.http_gw_enable,
-                    http_gw_allowed_fns: data.http_gw_allowed_fns.clone(),
-                },
-            ))
-        }
+        id: workload._id.map(|id| id.to_string()).unwrap_or_default(),
+        owner: workload.owner.to_string(),
+        name: workload.name,
+        tag: workload.tag,
+        execution_policy: to_execution_policy_dto(workload.execution_policy),
+        workload_type: workload.workload_type,
+        parameters: to_parameters_dto(workload.parameters),
     }
 }

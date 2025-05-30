@@ -2,9 +2,7 @@ use actix_web::{post, web, HttpMessage, HttpRequest, HttpResponse, Responder};
 use bson::oid::ObjectId;
 use db_utils::schemas::{
     self,
-    developer::{Developer, DEVELOPER_COLLECTION_NAME},
-    hoster::Hoster,
-    user::{RoleInfo, User, UserRole, USER_COLLECTION_NAME},
+    user::{User, UserRole, USER_COLLECTION_NAME},
     user_permissions::{PermissionAction, UserPermission},
 };
 use serde::{Deserialize, Serialize};
@@ -43,8 +41,8 @@ pub struct UserInfo {
     family_name: String,
 
     /// the jurisdiction of the user, this is used to determine the user's permissions
-    #[schema(example = json!(db_utils::schemas::jurisdiction::Jurisdiction::default()))]
-    geographic_jurisdiction: db_utils::schemas::jurisdiction::Jurisdiction,
+    #[schema(example = "US")]
+    geographic_jurisdiction: String,
 }
 
 #[derive(Serialize, Deserialize, ToSchema)]
@@ -115,65 +113,6 @@ pub async fn create_user(
 
     let user_id = ObjectId::new();
 
-    let mut developer_role: Option<RoleInfo> = None;
-    let mut hoster_role: Option<RoleInfo> = None;
-    for pubkey_obj in payload.public_keys.iter() {
-        match pubkey_obj.role {
-            PublicKeyRoleInfo::Developer => {
-                let result = match providers::crud::create::<Developer>(
-                    db.get_ref().clone(),
-                    DEVELOPER_COLLECTION_NAME.to_string(),
-                    Developer {
-                        _id: None,
-                        metadata: db_utils::schemas::metadata::Metadata::default(),
-                        user_id,
-                        active_workloads: vec![],
-                    },
-                )
-                .await
-                {
-                    Ok(result) => result,
-                    Err(error) => {
-                        tracing::error!("{:?}", error);
-                        return HttpResponse::InternalServerError().json(ErrorResponse {
-                            message: "internal server error".to_string(),
-                        });
-                    }
-                };
-                developer_role = Some(RoleInfo {
-                    collection_id: result,
-                    pubkey: pubkey_obj.public_key.clone(),
-                });
-            }
-            PublicKeyRoleInfo::Hoster => {
-                let result = match providers::crud::create::<Hoster>(
-                    db.get_ref().clone(),
-                    USER_COLLECTION_NAME.to_string(),
-                    Hoster {
-                        _id: None,
-                        metadata: db_utils::schemas::metadata::Metadata::default(),
-                        user_id,
-                        assigned_hosts: vec![],
-                    },
-                )
-                .await
-                {
-                    Ok(result) => result,
-                    Err(error) => {
-                        tracing::error!("{:?}", error);
-                        return HttpResponse::InternalServerError().json(ErrorResponse {
-                            message: "internal server error".to_string(),
-                        });
-                    }
-                };
-                hoster_role = Some(RoleInfo {
-                    collection_id: result,
-                    pubkey: pubkey_obj.public_key.clone(),
-                });
-            }
-        }
-    }
-
     let result = match providers::crud::create::<User>(
         db.get_ref().clone(),
         USER_COLLECTION_NAME.to_string(),
@@ -183,9 +122,6 @@ pub async fn create_user(
             permissions: payload.permissions.clone(),
             roles: payload.roles.clone(),
             refresh_token_version: 0,
-            developer: developer_role,
-            hoster: hoster_role,
-            jurisdiction: "".to_string(),
         },
     )
     .await

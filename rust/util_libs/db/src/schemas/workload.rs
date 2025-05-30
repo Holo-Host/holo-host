@@ -5,10 +5,11 @@ use bson::{oid::ObjectId, Document};
 use mongodb::options::IndexOptions;
 use std::collections::HashMap;
 use url::Url;
+use utoipa::ToSchema;
 
 pub const WORKLOAD_COLLECTION_NAME: &str = "workload";
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, Default)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, Default, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ExecutionPolicyVisibility {
     #[default]
@@ -34,7 +35,7 @@ pub struct ExecutionPolicy {
     pub visibility: ExecutionPolicyVisibility,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, Default)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, Default, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum WorkloadType {
     #[default]
@@ -84,6 +85,7 @@ pub struct Workload {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub _id: Option<ObjectId>,
     pub metadata: Metadata,
+    pub owner: ObjectId,
 
     /// the user can filter using the workload name
     /// this is a user defined string

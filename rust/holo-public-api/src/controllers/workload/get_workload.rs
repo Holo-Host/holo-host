@@ -44,6 +44,20 @@ pub async fn get_workload(
     }
     let claims = claims.unwrap();
 
+    // verify permissions
+    if !providers::auth::verify_all_permissions(
+        claims.clone(),
+        vec![schemas::user_permissions::UserPermission {
+            resource: schemas::workload::WORKLOAD_COLLECTION_NAME.to_string(),
+            action: schemas::user_permissions::PermissionAction::Read,
+            owner: claims.sub.clone(),
+        }],
+    ) {
+        return HttpResponse::Forbidden().json(ErrorResponse {
+            message: "Permission denied".to_string(),
+        });
+    }
+
     let id = id.into_inner();
     if id.is_empty() {
         return HttpResponse::NotFound().json(ErrorResponse {
@@ -72,42 +86,6 @@ pub async fn get_workload(
         });
     }
     let workload = workload.unwrap();
-
-    let developer = match providers::crud::get::<schemas::developer::Developer>(
-        db.get_ref().clone(),
-        schemas::developer::DEVELOPER_COLLECTION_NAME.to_string(),
-        workload.assigned_developer.to_hex().clone(),
-    )
-    .await
-    {
-        Ok(developer) => developer,
-        Err(e) => {
-            tracing::error!("Error getting developer: {}", e);
-            return HttpResponse::InternalServerError().json(ErrorResponse {
-                message: "Error getting developer".to_string(),
-            });
-        }
-    };
-    if developer.is_none() {
-        return HttpResponse::NotFound().json(ErrorResponse {
-            message: "Developer not found".to_string(),
-        });
-    }
-    let developer = developer.unwrap();
-
-    // verify permissions
-    if !providers::auth::verify_all_permissions(
-        claims.clone(),
-        vec![schemas::user_permissions::UserPermission {
-            resource: schemas::developer::DEVELOPER_COLLECTION_NAME.to_string(),
-            action: schemas::user_permissions::PermissionAction::Read,
-            owner: developer.user_id.to_hex(),
-        }],
-    ) {
-        return HttpResponse::Forbidden().json(ErrorResponse {
-            message: "Permission denied".to_string(),
-        });
-    }
     let workload_dto = to_workload_dto(workload.clone());
 
     HttpResponse::Ok().json(workload_dto)
