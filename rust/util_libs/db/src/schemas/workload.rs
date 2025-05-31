@@ -130,7 +130,7 @@ pub struct WorkloadManifestHolochainDhtV1 {
     #[arg(long, value_delimiter = ',')]
     pub happ_binary_url: Url,
     #[arg(long, value_delimiter = ',')]
-    pub network_seed: String,
+    pub network_seed: Option<String>,
     #[arg(long, value_delimiter = ',', value_parser = parse_key_val::<String, String>)]
     pub memproof: Option<HashMap<String, String>>,
     #[arg(long, value_delimiter = ',')]

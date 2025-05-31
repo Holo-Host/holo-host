@@ -594,7 +594,14 @@ pub async fn hc_http_gw_nats_request(
     mut converted_headers: async_nats::HeaderMap,
 ) -> anyhow::Result<HcHttpGwResponse> {
     let destination_subject = request.nats_destination_subject();
+    log::trace!(
+        "Generated destination subject for Holochain Gateway request: destination_subject={destination_subject:?}"
+    );
+
     let reply_subject = request.nats_reply_subject();
+    log::trace!(
+        "Generated reply subject for Holochain Gateway request: reply_subject={reply_subject:?}"
+    );
 
     let data = serde_json::to_string(&request)?;
 
