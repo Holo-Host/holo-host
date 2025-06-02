@@ -2,11 +2,10 @@ use anyhow::Result;
 use bson::{doc, oid::ObjectId, Document};
 use mongodb::options::IndexOptions;
 use serde::{Deserialize, Serialize};
-use strum::{AsRefStr, EnumDiscriminants, EnumString, FromRepr};
 use utoipa::ToSchema;
 
 use super::metadata::Metadata;
-use super::{alias::PubKey, user_permissions::UserPermission};
+use super::user_permissions::UserPermission;
 use crate::mongodb::traits::{IntoIndexes, MutMetadata};
 
 /// Collection name for user documents
@@ -14,18 +13,7 @@ pub const USER_COLLECTION_NAME: &str = "user";
 
 /// Enumeration of possible user roles
 /// Roles will apply a predefined set of permissions to the user automatically
-#[derive(
-    Debug,
-    Clone,
-    EnumString,
-    Serialize,
-    Deserialize,
-    PartialEq,
-    AsRefStr,
-    EnumDiscriminants,
-    FromRepr,
-    ToSchema,
-)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum UserRole {
     // WARNING: This role will give full access to the system
@@ -34,13 +22,6 @@ pub enum UserRole {
     User,
     // Role for developers or support team to have limited access over others data
     Support,
-}
-
-/// Information about a user's role (hoster or developer) in the system
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct RoleInfo {
-    pub collection_id: ObjectId,
-    pub pubkey: PubKey,
 }
 
 /// User document schema representing a user in the system
@@ -57,11 +38,6 @@ pub struct User {
     pub roles: Vec<UserRole>,
     // this is used to invalidate all refresh tokens by incrementing the version by 1
     pub refresh_token_version: i32,
-
-    // legacy fields
-    pub developer: Option<RoleInfo>,
-    pub hoster: Option<RoleInfo>,
-    pub jurisdiction: String,
 }
 
 impl IntoIndexes for User {

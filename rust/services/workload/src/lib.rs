@@ -24,7 +24,7 @@ use async_nats::jetstream::ErrorCode;
 use async_nats::Message;
 use async_trait::async_trait;
 use core::option::Option::None;
-use db_utils::schemas::workload::{WorkloadState, WorkloadStatus};
+use db_utils::schemas::workload_layout::{WorkloadState, WorkloadStatus};
 use nats_utils::types::ServiceError;
 use serde::Deserialize;
 use std::future::Future;

@@ -1,41 +1,40 @@
-use actix_web::{post, web, HttpMessage, HttpRequest, HttpResponse, Responder};
-use bson::oid::ObjectId;
-use db_utils::schemas;
-use serde::{Deserialize, Serialize};
-use utoipa::{OpenApi, ToSchema};
-
 use crate::{
-    controllers::workload::workload_dto::{from_create_workload_dto, CreateWorkloadDto},
+    controllers::workload_layout::workload_layout_dto::{
+        from_workload_layout_dto, CreateWorkloadLayoutDto,
+    },
     providers::{self, error_response::ErrorResponse, jwt::AccessTokenClaims},
 };
-
-#[derive(Serialize, Deserialize, ToSchema)]
-pub struct CreateWorkloadResponse {
-    pub id: String,
-}
+use actix_web::{post, web, HttpMessage, HttpRequest, HttpResponse, Responder};
+use db_utils::schemas;
+use utoipa::OpenApi;
 
 #[derive(OpenApi)]
 #[openapi(paths(create_workload))]
 pub struct OpenApiSpec;
 
+#[derive(serde::Deserialize, serde::Serialize, Debug, Clone, utoipa::ToSchema)]
+pub struct CreateWorkloadLayoutResponse {
+    pub id: String,
+}
+
 #[utoipa::path(
     post,
-    path = "/protected/v1/workload",
+    path = "/protected/v1/workload-layout",
     tag = "Workload",
-    summary = "Create workload",
-    description = "Requires 'workload.Create' permission",
+    summary = "Create workload layout",
+    description = "Requires 'workload_layout.Create' permission",
     security(
         ("Bearer" = [])
     ),
-    request_body = CreateWorkloadDto,
+    request_body = CreateWorkloadLayoutDto,
     responses(
-        (status = 200, body = CreateWorkloadResponse)
+        (status = 200, body = CreateWorkloadLayoutResponse)
     )
 )]
-#[post("/v1/workload")]
-pub async fn create_workload(
+#[post("/v1/workload-layout")]
+pub async fn create_workload_layout(
     req: HttpRequest,
-    payload: web::Json<CreateWorkloadDto>,
+    payload: web::Json<CreateWorkloadLayoutDto>,
     db: web::Data<mongodb::Client>,
 ) -> impl Responder {
     let claims = req.extensions().get::<AccessTokenClaims>().cloned();
@@ -62,7 +61,7 @@ pub async fn create_workload(
     let result = match providers::crud::create::<schemas::workload_layout::WorkloadLayout>(
         db.get_ref().clone(),
         schemas::workload_layout::WORKLOAD_LAYOUT_COLLECTION_NAME.to_string(),
-        from_create_workload_dto(payload.clone(), ObjectId::parse_str(&claims.sub).unwrap()),
+        from_workload_layout_dto(),
     )
     .await
     {

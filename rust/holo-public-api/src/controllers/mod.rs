@@ -5,6 +5,7 @@ mod blob;
 pub mod general; // used for testing middleware
 mod user;
 mod workload;
+mod workload_layout;
 
 pub fn setup_public_controllers(cfg: &mut web::ServiceConfig) {
     general::setup_public_controllers(cfg);

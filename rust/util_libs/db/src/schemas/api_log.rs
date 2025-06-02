@@ -10,7 +10,7 @@ use crate::mongodb::traits::{IntoIndexes, MutMetadata};
 pub const LOG_COLLECTION_NAME: &str = "api_logs";
 
 /// Host document schema representing a hosting device in the system
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct ApiLog {
     /// MongoDB ObjectId of the host document
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -34,23 +34,6 @@ pub struct ApiLog {
     pub user_id: String,
     /// the timestamp of the request
     pub response_status: i32,
-}
-
-impl Default for ApiLog {
-    fn default() -> Self {
-        Self {
-            _id: None,
-            metadata: Metadata::default(),
-            request_id: bson::uuid::Uuid::new().to_string(),
-            path: String::new(),
-            method: String::new(),
-            ip: String::new(),
-            user_agent: String::new(),
-            authorization: String::new(),
-            user_id: String::new(),
-            response_status: 0,
-        }
-    }
 }
 
 impl IntoIndexes for ApiLog {

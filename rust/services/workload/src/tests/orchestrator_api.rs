@@ -3,7 +3,7 @@ mod tests {
     use crate::{orchestrator_api::OrchestratorWorkloadApi, types::WorkloadResult};
     use anyhow::Result;
     use bson::doc;
-    use db_utils::schemas::workload::{
+    use db_utils::schemas::workload_layout::{
         Capacity, WorkloadState, WorkloadStatePayload, WorkloadStatus,
     };
     use hpos_hal::inventory::{HoloDriveInventory, HoloInventory};

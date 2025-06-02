@@ -15,7 +15,7 @@
 use super::utils::create_callback_subject;
 use anyhow::{Context, Result};
 use async_nats::jetstream::kv::Store;
-use db_utils::schemas::workload::WorkloadStateDiscriminants;
+use db_utils::schemas::workload_layout::WorkloadStateDiscriminants;
 use futures::{StreamExt, TryStreamExt};
 use nats_utils::{
     generate_service_call,

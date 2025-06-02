@@ -26,7 +26,7 @@ use db_utils::{
     schemas::{
         host::{Host, HOST_COLLECTION_NAME},
         user::{User, USER_COLLECTION_NAME},
-        workload::{Workload, WorkloadState, WorkloadStatus, WORKLOAD_COLLECTION_NAME},
+        workload_layout::{WorkloadLayout, WorkloadState, WorkloadStatus, WORKLOAD_LAYOUT_COLLECTION_NAME},
         DATABASE_NAME,
     },
 };
@@ -42,7 +42,7 @@ use std::{
 
 #[derive(Debug, Clone)]
 pub struct OrchestratorWorkloadApi {
-    pub workload_collection: MongoCollection<Workload>,
+    pub workload_collection: MongoCollection<WorkloadLayout>,
     pub host_collection: MongoCollection<Host>,
     pub user_collection: MongoCollection<User>,
 }
@@ -52,7 +52,7 @@ impl WorkloadServiceApi for OrchestratorWorkloadApi {}
 impl OrchestratorWorkloadApi {
     pub async fn new(client: &MongoDBClient) -> Result<Self> {
         Ok(Self {
-            workload_collection: Self::init_collection(client, WORKLOAD_COLLECTION_NAME).await?,
+            workload_collection: Self::init_collection(client, WORKLOAD_LAYOUT_COLLECTION_NAME).await?,
             host_collection: Self::init_collection(client, HOST_COLLECTION_NAME).await?,
             user_collection: Self::init_collection(client, USER_COLLECTION_NAME).await?,
         })
@@ -64,7 +64,7 @@ impl OrchestratorWorkloadApi {
             msg,
             WorkloadState::Reported,
             WorkloadState::Error,
-            |mut workload: Workload| async move {
+            |mut workload: WorkloadLayout| async move {
                 let mut status = WorkloadStatus {
                     id: None,
                     desired: WorkloadState::Running,
@@ -103,7 +103,7 @@ impl OrchestratorWorkloadApi {
             msg,
             WorkloadState::Updating,
             WorkloadState::Error,
-            |mut workload: Workload| async move {
+            |mut workload: WorkloadLayout| async move {
                 let status = WorkloadStatus {
                     id: workload._id,
                     desired: WorkloadState::Updated,
@@ -155,7 +155,7 @@ impl OrchestratorWorkloadApi {
             msg,
             WorkloadState::Deleted,
             WorkloadState::Error,
-            |workload: Workload| async move {
+            |workload: WorkloadLayout| async move {
                 let workload_id = if let Some(workload_id) = workload._id {
                     workload_id
                 } else {
@@ -222,7 +222,7 @@ impl OrchestratorWorkloadApi {
             msg,
             WorkloadState::Installed,
             WorkloadState::Error,
-            |workload: Workload| async move {
+            |workload: WorkloadLayout| async move {
                 log::debug!("New workload to assign. Workload={:#?}", workload);
 
                 // Perform sanity check to ensure workload is not already assigned to a host and if so, exit fn
@@ -308,7 +308,7 @@ impl OrchestratorWorkloadApi {
         msg: Arc<Message>,
     ) -> Result<WorkloadApiResult, ServiceError> {
         log::debug!("Incoming message for 'WORKLOAD.modify'");
-        let workload = Self::convert_msg_to_type::<Workload>(msg)?;
+        let workload = Self::convert_msg_to_type::<WorkloadLayout>(msg)?;
 
         let workload_id = workload.clone()._id.ok_or_else(|| {
             ServiceError::internal(
@@ -553,7 +553,7 @@ impl OrchestratorWorkloadApi {
     pub fn verify_host_meets_workload_criteria(
         &self,
         assigned_host_inventory: &HoloInventory,
-        workload: &Workload,
+        workload: &WorkloadLayout,
     ) -> bool {
         let host_drive_capacity = assigned_host_inventory.drives.iter().fold(0, |mut acc, d| {
             if let Some(capacity) = d.capacity_bytes {
@@ -598,7 +598,7 @@ impl OrchestratorWorkloadApi {
     // returns the minimum number of hosts required for workload
     async fn find_hosts_meeting_workload_criteria(
         &self,
-        workload: Workload,
+        workload: WorkloadLayout,
         maybe_existing_hosts: Option<Vec<Host>>,
     ) -> Result<Vec<HostIdJSON>, ServiceError> {
         let mut needed_host_count = workload.min_hosts;
