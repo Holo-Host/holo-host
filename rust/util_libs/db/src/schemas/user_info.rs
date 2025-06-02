@@ -18,7 +18,7 @@ pub struct UserInfo {
     /// Common metadata fields
     pub metadata: Metadata,
     /// Reference to the associated user
-    pub user_id: ObjectId,
+    pub owner: ObjectId,
     /// User's email address
     pub email: String,
     /// User's given names

@@ -140,7 +140,7 @@ pub async fn create_user(
         schemas::user_info::UserInfo {
             _id: None,
             metadata: db_utils::schemas::metadata::Metadata::default(),
-            user_id: result,
+            owner: result,
             email: payload.user_info.email.clone(),
             given_names: payload.user_info.given_names.clone(),
             family_name: payload.user_info.family_name.clone(),

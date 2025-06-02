@@ -17,6 +17,8 @@ pub struct Host {
     pub _id: Option<ObjectId>,
     /// Common metadata fields
     pub metadata: Metadata,
+    /// Owner of the host, typically a developer or organization
+    pub owner: ObjectId,
     /// Unique identifier for the device
     pub device_id: String,
     /// Average uptime as a percentage

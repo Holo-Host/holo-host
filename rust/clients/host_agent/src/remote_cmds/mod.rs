@@ -1,6 +1,6 @@
 use anyhow::Context;
-use db_utils::schemas::workload::{
-    Workload, WorkloadManifest, WorkloadState, WorkloadStateDiscriminants, WorkloadStatus,
+use db_utils::schemas::workload_layout::{
+    WorkloadLayout, WorkloadManifest, WorkloadState, WorkloadStateDiscriminants, WorkloadStatus,
 };
 use futures::StreamExt;
 use nats_utils::types::PublishInfo;
@@ -54,7 +54,7 @@ pub(crate) async fn run(args: RemoteArgs, command: RemoteCommands) -> anyhow::Re
                 payload: Default::default(),
             };
 
-            let workload = Workload {
+            let workload = WorkloadLayout {
                 _id: Some(id),
                 status,
                 manifest: WorkloadManifest::HolochainDhtV1(manifest),

@@ -13,7 +13,7 @@ use anyhow::{Context, Result};
 use async_nats::{jetstream::kv::Store, Message};
 use bson::oid::ObjectId;
 use core::option::Option::None;
-use db_utils::schemas::workload::Workload;
+use db_utils::schemas::workload_layout::WorkloadLayout;
 use futures::TryFutureExt;
 use ham::{
     exports::{
@@ -55,7 +55,7 @@ impl HostWorkloadApi {
         &self,
         msg_subject: String,
         try_message_payload: Result<WorkloadResult, ServiceError>,
-    ) -> anyhow::Result<(WorkloadStatus, Workload)> {
+    ) -> anyhow::Result<(WorkloadStatus, WorkloadLayout)> {
         let workload_result = try_message_payload?;
 
         let workload_id = get_workload_id(&workload_result).map_err(|e| WorkloadResultError {
@@ -459,7 +459,7 @@ impl HostWorkloadApi {
 mod util {
     use anyhow::Context;
     use bson::oid::ObjectId;
-    use db_utils::schemas::workload::{WorkloadManifest, WorkloadManifestHolochainDhtV1};
+    use db_utils::schemas::workload_layout::{WorkloadManifest, WorkloadManifestHolochainDhtV1};
     use futures::{AsyncBufReadExt, StreamExt};
     use std::{path::PathBuf, process::Stdio, str::FromStr};
     use tokio::process::Command;

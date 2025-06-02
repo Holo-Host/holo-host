@@ -29,7 +29,7 @@ use db_utils::{
         self,
         host::{Host, HOST_COLLECTION_NAME},
         job::{Job, JOB_COLLECTION_NAME},
-        workload::{Workload, WORKLOAD_COLLECTION_NAME},
+        workload_layout::{WorkloadLayout, WORKLOAD_LAYOUT_COLLECTION_NAME},
     },
 };
 use hpos_hal::inventory::HoloInventory;
@@ -49,7 +49,7 @@ pub const INVENTORY_UPDATE_SUBJECT: &str = "update";
 
 #[derive(Clone, Debug)]
 pub struct InventoryServiceApi {
-    pub workload_collection: MongoCollection<Workload>,
+    pub workload_collection: MongoCollection<WorkloadLayout>,
     pub host_collection: MongoCollection<Host>,
     pub job_collection: MongoCollection<Job>,
 }
@@ -57,7 +57,7 @@ pub struct InventoryServiceApi {
 impl InventoryServiceApi {
     pub async fn new(client: &MongoDBClient) -> Result<Self> {
         Ok(Self {
-            workload_collection: Self::init_collection(client, WORKLOAD_COLLECTION_NAME).await?,
+            workload_collection: Self::init_collection(client, WORKLOAD_LAYOUT_COLLECTION_NAME).await?,
             host_collection: Self::init_collection(client, HOST_COLLECTION_NAME).await?,
             job_collection: Self::init_collection(client, JOB_COLLECTION_NAME).await?,
         })

@@ -45,7 +45,7 @@ pub async fn delete_workload(
     if !providers::auth::verify_all_permissions(
         claims.clone(),
         vec![schemas::user_permissions::UserPermission {
-            resource: schemas::workload::WORKLOAD_COLLECTION_NAME.to_string(),
+            resource: schemas::workload_layout::WORKLOAD_LAYOUT_COLLECTION_NAME.to_string(),
             action: schemas::user_permissions::PermissionAction::Delete,
             owner: claims.sub.clone(),
         }],
@@ -63,9 +63,9 @@ pub async fn delete_workload(
     }
 
     // get workload
-    let workload = match providers::crud::get::<schemas::workload::Workload>(
+    let workload = match providers::crud::get::<schemas::workload_layout::WorkloadLayout>(
         db.get_ref().clone(),
-        schemas::workload::WORKLOAD_COLLECTION_NAME.to_string(),
+        schemas::workload_layout::WORKLOAD_LAYOUT_COLLECTION_NAME.to_string(),
         id.to_string().clone(),
     )
     .await
@@ -86,9 +86,9 @@ pub async fn delete_workload(
     let workload = workload.unwrap();
 
     // delete workload
-    match providers::crud::delete::<schemas::workload::Workload>(
+    match providers::crud::delete::<schemas::workload_layout::WorkloadLayout>(
         db.get_ref().clone(),
-        schemas::workload::WORKLOAD_COLLECTION_NAME.to_string(),
+        schemas::workload_layout::WORKLOAD_LAYOUT_COLLECTION_NAME.to_string(),
         workload._id.unwrap().to_hex(),
     )
     .await

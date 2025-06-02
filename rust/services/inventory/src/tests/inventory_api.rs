@@ -5,7 +5,7 @@ mod tests {
     use bson::doc;
     use bson::oid::ObjectId;
     use db_utils::schemas::host::Host;
-    use db_utils::{mongodb::api::MongoDbAPI, schemas::workload::Workload};
+    use db_utils::{mongodb::api::MongoDbAPI, schemas::workload_layout::WorkloadLayout};
     use mock_utils::{mongodb_runner::MongodRunner, nats_message::NatsMessage};
     use std::sync::Arc;
 

@@ -1,5 +1,3 @@
-pub mod jurisdiction;
-pub mod region;
 pub mod api_key;
 pub mod api_log;
 pub mod host;
@@ -9,6 +7,7 @@ pub mod user;
 pub mod user_info;
 pub mod user_permissions;
 pub mod workload;
+pub mod workload_layout;
 pub mod job;
 pub mod inventory;
 

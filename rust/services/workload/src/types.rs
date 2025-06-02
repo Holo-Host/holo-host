@@ -1,5 +1,5 @@
 use bson::oid::ObjectId;
-use db_utils::schemas::workload::{Workload, WorkloadStatus};
+use db_utils::schemas::workload_layout::{WorkloadLayout, WorkloadStatus};
 use nats_utils::types::{CreateResponse, CreateTag, EndpointTraits};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -31,7 +31,7 @@ pub enum WorkloadServiceSubjects {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorkloadResult {
     pub status: WorkloadStatus,
-    pub workload: Option<Workload>,
+    pub workload: Option<WorkloadLayout>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

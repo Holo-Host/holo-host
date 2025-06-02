@@ -1,7 +1,7 @@
 use bson::oid::ObjectId;
 use db_utils::schemas::{
     metadata::Metadata,
-    workload::{ExecutionPolicyVisibility, Workload, WorkloadType},
+    workload_layout::{ExecutionPolicyVisibility, WorkloadLayout, WorkloadType},
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -71,8 +71,8 @@ pub struct WorkloadDto {
 
 pub fn from_execution_policy_dto(
     dto: ExecutionPolicyDto,
-) -> db_utils::schemas::workload::ExecutionPolicy {
-    db_utils::schemas::workload::ExecutionPolicy {
+) -> db_utils::schemas::workload_layout::ExecutionPolicy {
+    db_utils::schemas::workload_layout::ExecutionPolicy {
         jurisdictions: dto.jurisdictions,
         regions: dto.regions,
         instances: dto.instances,
@@ -82,7 +82,7 @@ pub fn from_execution_policy_dto(
 
 pub fn from_parameters_dto(
     dto: WorkloadParametersDto,
-) -> db_utils::schemas::workload::WorkloadParameters {
+) -> db_utils::schemas::workload_layout::WorkloadParameters {
     let stun_server_urls = match dto.stun_server_urls {
         Some(dto_stun_server_urls) => {
             let mut stun_server_urls_vec: Vec<url::Url> = vec![];
@@ -95,7 +95,7 @@ pub fn from_parameters_dto(
         None => None,
     };
 
-    db_utils::schemas::workload::WorkloadParameters {
+    db_utils::schemas::workload_layout::WorkloadParameters {
         blob_object_id: dto.blob_object_id,
         network_seed: dto.network_seed,
         memproof: dto.memproof,
@@ -113,8 +113,8 @@ pub fn from_parameters_dto(
     }
 }
 
-pub fn from_create_workload_dto(dto: CreateWorkloadDto, owner: ObjectId) -> Workload {
-    Workload {
+pub fn from_create_workload_dto(dto: CreateWorkloadDto, owner: ObjectId) -> WorkloadLayout {
+    WorkloadLayout {
         _id: None,
         owner,
         metadata: Metadata::default(),
@@ -127,7 +127,7 @@ pub fn from_create_workload_dto(dto: CreateWorkloadDto, owner: ObjectId) -> Work
 }
 
 pub fn to_execution_policy_dto(
-    execution_policy: db_utils::schemas::workload::ExecutionPolicy,
+    execution_policy: db_utils::schemas::workload_layout::ExecutionPolicy,
 ) -> ExecutionPolicyDto {
     ExecutionPolicyDto {
         jurisdictions: execution_policy.jurisdictions,
@@ -138,7 +138,7 @@ pub fn to_execution_policy_dto(
 }
 
 pub fn to_parameters_dto(
-    parameters: db_utils::schemas::workload::WorkloadParameters,
+    parameters: db_utils::schemas::workload_layout::WorkloadParameters,
 ) -> WorkloadParametersDto {
     WorkloadParametersDto {
         blob_object_id: parameters.blob_object_id,
@@ -156,7 +156,7 @@ pub fn to_parameters_dto(
     }
 }
 
-pub fn to_workload_dto(workload: Workload) -> WorkloadDto {
+pub fn to_workload_dto(workload: WorkloadLayout) -> WorkloadDto {
     WorkloadDto {
         id: workload._id.map(|id| id.to_string()).unwrap_or_default(),
         owner: workload.owner.to_string(),
