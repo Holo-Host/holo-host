@@ -308,11 +308,9 @@ impl JsStreamService {
                     .await
                 {
                     log::error!(
-                        "{}Failed to send reply upon successful message consumption: subj='{}.{}.{}', endpoint={}, service={}, err={:?}",
+                        "{}Failed to send reply upon successful message consumption: subj='{}', endpoint={}, service={}, err={:?}",
                         log_info.prefix,
                         reply,
-                        log_info.service_subject,
-                        log_info.endpoint_subject,
                         log_info.endpoint_name,
                         log_info.service_name,
                         err
@@ -341,7 +339,7 @@ impl JsStreamService {
                             "{}Failed to publish new message upon successful message consumption: subj='{}.{}', endpoint={}, service={}, err={:?}",
                             log_info.prefix,
                             log_info.service_subject,
-                            log_info.endpoint_subject,
+                            response_subject,
                             log_info.endpoint_name,
                             log_info.service_name,
                             err

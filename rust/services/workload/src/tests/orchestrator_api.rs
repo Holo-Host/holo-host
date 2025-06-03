@@ -229,7 +229,7 @@ mod tests {
         let msg_payload = serde_json::to_vec(&workload).unwrap();
         let msg = Arc::new(NatsMessage::new("WORKLOAD.insert", msg_payload).into_message());
 
-        let r = api.handle_db_insertion(msg).await?;
+        let r = api.manage_workload_on_host(msg).await?;
         assert!(matches!(r.result.status.actual, WorkloadState::Assigned));
         assert_eq!(r.result.status.desired, workload.status.desired);
 

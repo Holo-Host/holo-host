@@ -37,7 +37,7 @@ pub async fn run(
     // Instantiate the Workload API (requires access to db client)
     let workload_api = Arc::new(OrchestratorWorkloadApi::new(&db_client).await?);
 
-    // Register Workload Streams for Orchestrator to consume and proceess
+    // Register Workload Streams for Orchestrator to consume and process
     // NB: These subjects are published by external Developer (via external api), the Nats-DB-Connector, or the Hosting Agent
     let workload_stream_service = JsServiceBuilder {
         name: WORKLOAD_SRV_NAME.to_string(),
@@ -97,32 +97,17 @@ pub async fn run(
     )
     .await?;
 
-    // Subjects published by the Nats-DB-Connector:
+    // Subjects published `remote_cmd` cli (interntal tool)
     add_workload_consumer(
         ServiceConsumerBuilder::new(
-            "handle_db_insertion".to_string(),
+            "manage_workload_on_host".to_string(),
             WorkloadServiceSubjects::Insert,
-            generate_service_call!(workload_api, handle_db_insertion),
+            generate_service_call!(workload_api, manage_workload_on_host),
         )
         .with_response_subject_fn(create_callback_subject_to_host(
             true,
             TAG_MAP_PREFIX_ASSIGNED_HOST.to_string(),
             WorkloadServiceSubjects::Update.to_string(),
-        )),
-        &workload_service,
-    )
-    .await?;
-
-    add_workload_consumer(
-        ServiceConsumerBuilder::new(
-            "handle_db_modification".to_string(),
-            WorkloadServiceSubjects::Modify,
-            generate_service_call!(workload_api, handle_db_modification),
-        )
-        .with_response_subject_fn(create_callback_subject_to_host(
-            true,
-            TAG_MAP_PREFIX_ASSIGNED_HOST.to_string(),
-            WorkloadServiceSubjects::Update.as_ref().to_string(),
         )),
         &workload_service,
     )
@@ -139,6 +124,26 @@ pub async fn run(
         &workload_service,
     )
     .await?;
+
+    // Start workload collection stream in background
+    let workload_api_clone = workload_api.clone();
+    let js_context_clone = orchestrator_client.js_context.clone();
+    tokio::spawn(async move {
+        if let Err(e) = workload_api_clone
+            .stream_workload_changes(
+                js_context_clone,
+                WORKLOAD_SRV_SUBJ.to_string(),
+                create_callback_subject_to_host(
+                    true,
+                    TAG_MAP_PREFIX_ASSIGNED_HOST.to_string(),
+                    WorkloadServiceSubjects::Update.to_string(),
+                ),
+            )
+            .await
+        {
+            log::error!("Workload collection stream error: {}", e);
+        }
+    });
 
     Ok(orchestrator_client)
 }
