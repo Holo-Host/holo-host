@@ -110,6 +110,14 @@ where
         updated_doc: UpdateModifications,
         should_mark_deleted: bool,
     ) -> Result<UpdateResult, Self::Error>;
+
+    /// Deletes a single document matching the query criteria from the collection.
+    ///
+    /// # Arguments
+    ///
+    /// * `query` - Query filter as a BSON document
+    ///
+    async fn delete_one_from(&self, query: Document) -> Result<(), Self::Error>;
 }
 
 #[async_trait]
@@ -265,5 +273,17 @@ where
             result.modified_count
         );
         Ok(result)
+    }
+
+    async fn delete_one_from(&self, query: Document) -> Result<(), Self::Error> {
+        log::debug!("Deleting document with query: {:?}", query);
+        let result = self
+            .inner
+            .delete_one(query.clone())
+            .await
+            .map_err(|e| Self::handle_db_error("delete_one_from", e))?;
+
+        log::info!("Deleted document (deleted count: {})", result.deleted_count);
+        Ok(())
     }
 }

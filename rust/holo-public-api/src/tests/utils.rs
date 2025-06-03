@@ -10,12 +10,11 @@ use actix_web::{
     test::{self, TestRequest},
     web, App, Error, HttpMessage,
 };
-use mongodb::Database;
 
 #[derive(Clone)]
 pub struct WebData {
     pub config: Option<AppConfig>,
-    pub db: Option<Database>,
+    pub db: Option<mongodb::Client>,
     pub cache: Option<deadpool_redis::Pool>,
     pub auth: Option<AccessTokenClaims>,
 }
@@ -38,7 +37,9 @@ pub async fn perform_integration_test<C: HttpServiceFactory + 'static>(
     req: TestRequest,
     web_data: WebData,
 ) -> Result<IntegrationTestResponse, anyhow::Error> {
-    let req_builder = req.to_request();
+    let req_builder = req
+        .peer_addr(std::net::SocketAddr::from(([127, 0, 0, 1], 3000)))
+        .to_request();
 
     // build the app with the app config and db
     let mut app_builder = web::scope("");
@@ -92,24 +93,29 @@ pub fn get_app_config() -> AppConfig {
         std::process::exit(0);
     }
     AppConfig {
-        port: 3000,
-        mongo_url: "mongodb://admin:password@localhost:27017/".to_string(),
-        redis_url: "redis://localhost:6379".to_string(),
-        enable_swagger: true,
-        enable_scheduler: true,
-        host: "http://localhost".to_string(),
+        port: None,
+        mongo_url: Some("mongodb://admin:password@localhost:27017/".to_string()),
+        redis_url: Some("redis://localhost:6379".to_string()),
+        enable_internal_docs: None,
+        enable_scheduler: None,
+        host: None,
         jwt_secret: "jwt_secret".to_string(),
+        temp_storage_location: None,
+        blob_storage_location: None,
+        rate_limit_max_requests: None,
+        rate_limit_window: None,
+        access_token_expiry: None,
     }
 }
 
-pub async fn get_db(app_config: &AppConfig) -> mongodb::Client {
-    mongodb::Client::with_uri_str(&app_config.mongo_url)
+pub async fn get_db(app_config: AppConfig) -> mongodb::Client {
+    mongodb::Client::with_uri_str(app_config.mongo_url.unwrap())
         .await
         .expect("Failed to connect to MongoDB")
 }
 
-pub async fn get_cache(app_config: &AppConfig) -> deadpool_redis::Pool {
-    deadpool_redis::Config::from_url(&app_config.redis_url)
+pub async fn get_cache(app_config: AppConfig) -> deadpool_redis::Pool {
+    deadpool_redis::Config::from_url(app_config.redis_url.unwrap())
         .create_pool(Some(deadpool_redis::Runtime::Tokio1))
         .expect("failed to create redis pool")
 }
@@ -129,6 +135,8 @@ pub fn create_credentials(secret: &str, user_id: bson::oid::ObjectId) -> (String
             sub: user_id.to_string(),
             exp: 900000000000,
             version: 0,
+            allow_extending_refresh_token: true,
+            reference_id: None,
         },
         secret,
     )
