@@ -46,8 +46,13 @@ jobs:
     with:
       project: holo-gateway
       environment: dev
+      droplets: '["api.dev.holo.host"]'
+      dockerArgs: "-p 8000:8000 -v /root/nats.password:/root/nats.password"
+      dockerCustomCommand: "/build --nats-url wss://nats-server-0.holotest.dev:443 --nats-user gateway --nats-password-file /root/nats.password"
     secrets:
       DIGITAL_OCEAN_TOKEN: ${{ secrets.DIGITAL_OCEAN_TOKEN }}
+      SSH_KEY: ${{ secrets.SSH_KEY }}
+      SSH_USERNAME: ${{ secrets.SSH_USERNAME }}
 
   # holo-public api
   HOLO_PUBLIC_API_CI:
@@ -67,7 +72,7 @@ jobs:
       project: holo-public-api
       environment: dev
       droplets: '["api.dev.holo.host"]'
-      dockerArgs: "-p 3000:3000 -v /srv/holo-blobstore:/srv/holo-blobstore" # docker args
+      dockerArgs: "-p 3000:3000 -v /tmp:/tmp -v /srv/holo-blobstore:/srv/holo-blobstore" # docker args
     secrets:
       DIGITAL_OCEAN_TOKEN: ${{ secrets.DIGITAL_OCEAN_TOKEN }}
       SSH_KEY: ${{ secrets.SSH_KEY }}

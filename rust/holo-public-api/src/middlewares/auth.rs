@@ -1,23 +1,11 @@
-use crate::providers::{self, error_response::ErrorResponse};
+use crate::providers::{self, error_response::create_middleware_error_response};
 use actix_web::{
     body::{BoxBody, MessageBody},
     dev::{ServiceRequest, ServiceResponse},
+    http::StatusCode,
     middleware::Next,
-    web, Error, HttpMessage, HttpResponse,
+    web, Error, HttpMessage,
 };
-
-pub fn build_unauthorized_response(
-    req: ServiceRequest,
-    message: &str,
-) -> Result<ServiceResponse<BoxBody>, Error> {
-    let (req_http, _) = req.into_parts();
-    let resp = HttpResponse::Unauthorized()
-        .json(ErrorResponse {
-            message: message.to_string(),
-        })
-        .map_into_boxed_body();
-    Ok(ServiceResponse::new(req_http, resp))
-}
 
 pub async fn auth_middleware(
     req: ServiceRequest,
@@ -25,34 +13,49 @@ pub async fn auth_middleware(
 ) -> Result<ServiceResponse<BoxBody>, Error> {
     let auth_header = req.headers().get("authorization");
     if auth_header.is_none() {
-        return build_unauthorized_response(req, "No authorization header");
+        return create_middleware_error_response(
+            req,
+            StatusCode::UNAUTHORIZED,
+            "No authorization header",
+        );
     }
 
     let auth_header = auth_header.unwrap();
     let auth_header = auth_header.to_str().unwrap();
 
     // get access token from authorization header (Bearer <token>)
-    let token = auth_header.split(" ").nth(1).unwrap_or_default();
+    // the first keyword is a "Bearer" and the second is the token
+    let token = auth_header
+        .split(" ")
+        .nth(1)
+        .unwrap_or_default()
+        .to_string();
 
     // get jwt secret from app config
     let config = match req.app_data::<web::Data<providers::config::AppConfig>>() {
         Some(config) => config,
-        None => return build_unauthorized_response(req, "No app config"),
+        None => {
+            return create_middleware_error_response(req, StatusCode::UNAUTHORIZED, "No app config")
+        }
     };
 
     // verify access token
-    let claims = match providers::jwt::verify_access_token(token, &config.jwt_secret) {
+    let claims = match providers::jwt::verify_access_token(token, config.jwt_secret.clone()) {
         Ok(claims) => claims,
         Err(err) => {
             tracing::debug!("Error verifying token: {}", err);
-            return build_unauthorized_response(req, "Invalid token");
+            return create_middleware_error_response(
+                req,
+                StatusCode::UNAUTHORIZED,
+                "Invalid token",
+            );
         }
     };
 
     // check if access token is expired
     let now = bson::DateTime::now().to_chrono().timestamp() as usize;
     if claims.exp < now {
-        return build_unauthorized_response(req, "Token expired");
+        return create_middleware_error_response(req, StatusCode::UNAUTHORIZED, "Token expired");
     }
 
     // verify user id is valid
@@ -60,7 +63,11 @@ pub async fn auth_middleware(
         Ok(_) => {}
         Err(err) => {
             tracing::error!("Invalid user id with a valid token: {}", err);
-            return build_unauthorized_response(req, "Invalid user id");
+            return create_middleware_error_response(
+                req,
+                StatusCode::UNAUTHORIZED,
+                "Invalid user id",
+            );
         }
     }
 

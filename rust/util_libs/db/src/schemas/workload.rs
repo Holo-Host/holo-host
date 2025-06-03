@@ -94,7 +94,7 @@ pub struct Workload {
     pub _id: Option<ObjectId>,
     /// Common metadata fields
     pub metadata: Metadata,
-    /// Reference to the developer who created this workload
+    /// Reference to the user who created this workload
     pub assigned_developer: ObjectId,
     /// Semantic version of the workload
     pub version: SemVer,
@@ -220,14 +220,14 @@ impl IntoIndexes for Workload {
     fn into_indices(self) -> Result<Vec<(Document, Option<IndexOptions>)>> {
         let mut indices = vec![];
 
-        //  Add Assigned Developer Index
-        let developer_index_doc = doc! { "assigned_developer": 1 };
-        let developer_index_opts = Some(
+        //  Add Owner Index
+        let assigned_developer_index_doc = doc! { "assigned_developer": 1 };
+        let assigned_developer_index_opts = Some(
             IndexOptions::builder()
                 .name(Some("assigned_developer_index".to_string()))
                 .build(),
         );
-        indices.push((developer_index_doc, developer_index_opts));
+        indices.push((assigned_developer_index_doc, assigned_developer_index_opts));
 
         Ok(indices)
     }
