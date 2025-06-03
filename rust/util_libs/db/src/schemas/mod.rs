@@ -13,4 +13,4 @@ pub mod user_permissions;
 pub mod workload;
 
 /// Name of the main database for the Holo Hosting system
-pub const DATABASE_NAME: &str = "new_holo";
+pub const DATABASE_NAME: &str = "holo";
