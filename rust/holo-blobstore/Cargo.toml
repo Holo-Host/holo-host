@@ -1,0 +1,19 @@
+[package]
+name = "holo-blobstore"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+base64 = "0.22.1"
+bitmask-enum = "2.2.5"
+blake3 = "1.8.2"
+log = { workspace = true }
+serde = { workspace = true }
+serde_derive = { workspace = true }
+serde_json = { workspace = true }
+srfng = "1.0.1"
+
+[dev-dependencies]
+env_logger = "0.11.8"
+log = "0.4.27"
+test-temp-dir = "0.3.3"
