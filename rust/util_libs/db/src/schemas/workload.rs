@@ -8,6 +8,7 @@ use std::path::PathBuf;
 use strum::{EnumDiscriminants, EnumString, FromRepr};
 use strum_macros::AsRefStr;
 use url::Url;
+use utoipa::ToSchema;
 
 use super::alias::SemVer;
 use super::metadata::Metadata;
@@ -18,7 +19,7 @@ pub const WORKLOAD_COLLECTION_NAME: &str = "workload";
 
 /// Enumeration of possible workload states
 #[derive(
-    Debug, Clone, Serialize, Deserialize, PartialEq, AsRefStr, EnumDiscriminants, FromRepr,
+    Debug, Clone, Serialize, Deserialize, PartialEq, AsRefStr, EnumDiscriminants, FromRepr, ToSchema,
 )]
 #[strum_discriminants(
     derive(EnumString, Serialize, Deserialize),

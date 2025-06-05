@@ -1,14 +1,7 @@
+use crate::providers::{self, error_response::ErrorResponse, jwt::AccessTokenClaims};
 use actix_web::{delete, web, HttpMessage, HttpRequest, HttpResponse, Responder};
 use db_utils::schemas;
-use serde::{Deserialize, Serialize};
-use utoipa::{OpenApi, ToSchema};
-
-use crate::providers::{self, error_response::ErrorResponse, jwt::AccessTokenClaims};
-
-#[derive(Serialize, Deserialize, ToSchema)]
-pub struct CreateWorkloadResponse {
-    pub id: String,
-}
+use utoipa::OpenApi;
 
 #[derive(OpenApi)]
 #[openapi(paths(delete_workload))]
