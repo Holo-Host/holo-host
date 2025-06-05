@@ -2474,6 +2474,7 @@ dependencies = [
  "redis 0.30.0",
  "serde",
  "serde_json",
+ "strum 0.27.1",
  "tracing",
  "tracing-subscriber",
  "url",
