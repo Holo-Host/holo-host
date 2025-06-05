@@ -61,7 +61,7 @@ pub struct WorkloadStatusDto {
 #[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
 pub struct WorkloadManifestHolochainDhtV1Dto {
     pub happ_binary_url: String,
-    pub network_seed: String,
+    pub network_seed: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub memproof: Option<HashMap<String, String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -216,7 +216,7 @@ pub fn from_manifest_dto(data: WorkloadManifestDto) -> schemas::workload::Worklo
                 schemas::workload::WorkloadManifestHolochainDhtV1 {
                     happ_binary_url: Url::parse(&data.happ_binary_url)
                         .expect("failed to parse url"),
-                    network_seed: data.network_seed.to_string(),
+                    network_seed: data.network_seed,
                     memproof: data.memproof.clone(),
                     bootstrap_server_url: data
                         .bootstrap_server_url

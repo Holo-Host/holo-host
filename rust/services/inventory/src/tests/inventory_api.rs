@@ -14,8 +14,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_handle_authenticated_inventory_update() -> Result<()> {
-        let mongod = MongodRunner::run().expect("Failed to run mongod");
-        let db_client = mongod.client().expect("Failed to create db client");
+        let mongod = MongodRunner::run().expect("Failed to run Mongodb Runner");
+        let db_client = mongod
+            .client()
+            .expect("Failed to connect client to Mongodb");
         let api = InventoryServiceApi::new(&db_client).await?;
 
         // Create a host id to reference in the workload collection
@@ -81,8 +83,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_handle_inventory_update_with_insufficient_resources() -> Result<()> {
-        let mongod = MongodRunner::run().expect("Failed to run mongod");
-        let db_client = mongod.client().expect("Failed to create db client");
+        let mongod = MongodRunner::run().expect("Failed to run Mongodb Runner");
+        let db_client = mongod
+            .client()
+            .expect("Failed to connect client to Mongodb");
         let api = InventoryServiceApi::new(&db_client)
             .await
             .expect("Failed to create api");

@@ -38,6 +38,7 @@ derive_more = { version = "1.0.0", features = ["debug"] }
 
 [dev-dependencies]
 mock_utils = { workspace = true }
+ctor = "0.2"
 
 [features]
 tests_integration_mongodb = []

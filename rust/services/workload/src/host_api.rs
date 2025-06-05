@@ -145,7 +145,7 @@ impl HostWorkloadApi {
                             let (app_info, agent_key) = ham
                                 .install_and_enable_happ(
                                     &happ_bytes,
-                                    Some(network_seed.to_string()),
+                                    network_seed.clone(),
                                     None,
                                     Some(installed_app_id.clone()),
                                 )
