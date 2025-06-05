@@ -42,16 +42,13 @@ mod blobstoretests {
             LocalContentAddressableBlobStore::init(tempdir.as_path_untracked().to_str().unwrap())
                 .unwrap();
         let mut blob = store.create_blob_writer(owner.clone()).unwrap();
-        let mut data: Vec<String> = vec![];
-        data.push("This".to_string());
-        data.push("Is".to_string());
-        data.push("Content".to_string());
+        let data: Vec<String> = vec!["This".to_string(), "Is".to_string(), "Content".to_string()];
         for line in data.iter() {
-            blob.write(line.as_bytes()).unwrap();
+            blob.write_all(line.as_bytes()).unwrap();
         }
         // We call the repo's finalise method, to commit the blob to the repo.
         let cid1 = store.finalise(&mut blob).unwrap();
-        debug!("CID1: {}", cid1.to_string());
+        debug!("CID1: {}", cid1);
 
         // Taunt it a second time.
         let store =
@@ -60,11 +57,11 @@ mod blobstoretests {
         let mut blob = store.create_blob_writer(owner.clone()).unwrap();
         // use identical data to above
         for line in data.iter() {
-            blob.write(line.as_bytes()).unwrap();
+            blob.write_all(line.as_bytes()).unwrap();
         }
         // This shouldn't panic on the blob store rename().
         let cid2 = store.finalise(&mut blob).unwrap();
-        debug!("CID2: {}", cid2.to_string());
+        debug!("CID2: {}", cid2);
         assert_eq!(cid1, cid2);
     }
 
@@ -79,22 +76,19 @@ mod blobstoretests {
             LocalContentAddressableBlobStore::init(tempdir.as_path_untracked().to_str().unwrap())
                 .unwrap();
         let mut blob = store.create_blob_writer(owner.clone()).unwrap();
-        let mut data: Vec<String> = vec![];
-        data.push("This".to_string());
-        data.push("Is".to_string());
-        data.push("Content".to_string());
+        let data: Vec<String> = vec!["This".to_string(), "Is".to_string(), "Content".to_string()];
         for line in data.iter() {
-            blob.write(line.as_bytes()).unwrap();
+            blob.write_all(line.as_bytes()).unwrap();
         }
         // We call the repo's finalise method, to commit the blob to the repo.
         let cid = store.finalise(&mut blob).unwrap();
-        debug!("CID: {}", cid.to_string());
+        debug!("CID: {}", cid);
 
         let assumed_filename = &format!(
             "{}/{}/{}",
             tempdir.as_path_untracked().to_str().unwrap(),
             LocalContentAddressableBlobStore::REPO_DATA_DIR,
-            cid.to_string()
+            cid
         );
 
         let assumed_path = Path::new(&assumed_filename);
@@ -113,17 +107,18 @@ mod blobstoretests {
             LocalContentAddressableBlobStore::init(tempdir.as_path_untracked().to_str().unwrap())
                 .unwrap();
         let mut blob = store.create_blob_writer(owner).unwrap();
-        let mut data: Vec<String> = vec![];
-        data.push("This".to_string());
-        data.push("Is".to_string());
-        data.push("Different".to_string());
-        data.push("Content".to_string());
+        let data: Vec<String> = vec![
+            "This".to_string(),
+            "Is".to_string(),
+            "Different".to_string(),
+            "Content".to_string(),
+        ];
         for line in data.iter() {
-            blob.write(line.as_bytes()).unwrap();
+            blob.write_all(line.as_bytes()).unwrap();
         }
         // We call the repo's finalise method, to commit the blob to the repo.
         let cid = store.finalise(&mut blob).unwrap();
-        debug!("CID: {}", cid.to_string());
+        debug!("CID: {}", cid);
 
         // Retrieve a [Read] Trait capable handle for the blob.
         let mut blob = store.get_blob_reader(&cid.to_string()).unwrap();

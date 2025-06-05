@@ -15,7 +15,7 @@ use blake3::Hasher;
 use log::debug;
 use serde_derive::{Deserialize, Serialize};
 use std::fmt;
-use std::fs::{create_dir_all, rename, File, OpenOptions};
+use std::fs::{File, OpenOptions, create_dir_all, rename};
 use std::io::{Error, Read, Write};
 use std::path::Path;
 use std::time::SystemTime;
