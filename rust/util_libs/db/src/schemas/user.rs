@@ -2,7 +2,7 @@ use anyhow::Result;
 use bson::{doc, oid::ObjectId, Document};
 use mongodb::options::IndexOptions;
 use serde::{Deserialize, Serialize};
-use strum::{AsRefStr, EnumDiscriminants, EnumString, FromRepr, Display};
+use strum::{AsRefStr, Display, EnumDiscriminants, EnumString, FromRepr};
 use utoipa::{openapi, PartialSchema, ToSchema};
 
 use super::metadata::Metadata;
@@ -24,7 +24,7 @@ pub const USER_COLLECTION_NAME: &str = "user";
     AsRefStr,
     EnumDiscriminants,
     FromRepr,
-    Display
+    Display,
 )]
 #[serde(rename_all = "snake_case")]
 pub enum UserRole {

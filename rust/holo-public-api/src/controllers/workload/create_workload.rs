@@ -48,9 +48,10 @@ pub async fn create_workload(
     let user_id = match ObjectId::parse_str(claims.sub.clone()) {
         Ok(r) => r,
         Err(e) => {
+            tracing::error!("{:?}", e);
             return HttpResponse::Forbidden().json(ErrorResponse {
-                 message: "Permission denied".to_string(),
-            };
+                message: "Permission denied".to_string(),
+            });
         }
     };
 
