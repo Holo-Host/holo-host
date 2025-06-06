@@ -45,13 +45,14 @@ pub async fn create_workload(
         });
     }
     let claims = claims.unwrap();
-    let user_id = ObjectId::parse_str(claims.sub.clone());
-    if user_id.is_err() {
-        return HttpResponse::Forbidden().json(ErrorResponse {
-            message: "Permission denied".to_string(),
-        });
-    }
-    let user_id = user_id.unwrap();
+    let user_id = match ObjectId::parse_str(claims.sub.clone()) {
+        Ok(r) => r,
+        Err(e) => {
+            return HttpResponse::Forbidden().json(ErrorResponse {
+                 message: "Permission denied".to_string(),
+            };
+        }
+    };
 
     let developer = match providers::crud::find_one::<schemas::developer::Developer>(
         db.as_ref().clone(),
