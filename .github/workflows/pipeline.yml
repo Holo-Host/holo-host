@@ -7,7 +7,6 @@ on:
   push:
     branches:
       - main
-      - api-workload-cleanup
 
 jobs:
   #holo-dns
@@ -68,6 +67,7 @@ jobs:
     name: holo-public-api Dev
     needs: HOLO_PUBLIC_API_CI
     uses: ./.github/workflows/reuseable_do_deployment.yml
+    if: github.ref == 'refs/heads/main'
     with:
       project: holo-public-api
       environment: dev

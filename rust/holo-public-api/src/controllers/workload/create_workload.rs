@@ -119,14 +119,7 @@ pub async fn create_workload(
             },
             manifest: schemas::workload::WorkloadManifest::HolochainDhtV1(Box::new(
                 WorkloadManifestHolochainDhtV1 {
-                    happ_binary_url: match Url::parse(&payload.template.blake3_hash.clone()) {
-                        Ok(url) => url,
-                        Err(_) => {
-                            return HttpResponse::BadRequest().json(ErrorResponse {
-                                message: "Invalid URL for happ binary".to_string(),
-                            });
-                        }
-                    },
+                    happ_binary_url: payload.template.blake3_hash.clone(),
                     stun_server_urls: Some(
                         payload
                             .template
