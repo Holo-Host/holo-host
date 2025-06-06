@@ -172,7 +172,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_handle_db_insertion() -> Result<()> {
+    async fn test_manage_workload_on_host() -> Result<()> {
         let mongod = MongodRunner::run().expect("Failed to run Mongodb Runner");
         let db_client = mongod
             .client()
@@ -225,6 +225,8 @@ mod tests {
             .insert_one_into(workload.clone())
             .await?;
         workload._id = Some(workload_id);
+        workload.status.desired = WorkloadState::Running;
+        workload.status.actual = WorkloadState::Reported;
 
         let msg_payload = serde_json::to_vec(&workload).unwrap();
         let msg = Arc::new(NatsMessage::new("WORKLOAD.insert", msg_payload).into_message());

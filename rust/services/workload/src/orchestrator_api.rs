@@ -3,8 +3,7 @@ Current Endpoints & Managed Subjects:
     - `add_workload`: handles the "WORKLOAD.add" subject
     - `update_workload`: handles the "WORKLOAD.update" subject
     - `delete_workload`: handles the "WORKLOAD.delete" subject
-    - `handle_db_insertion`: handles the "WORKLOAD.insert" subject // published by mongo<>nats connector
-    - `handle_workload_change_event`: handles the "WORKLOAD.modify" subject // published by mongo<>nats connector
+    - `manage_workload_on_host`: handles the "WORKLOAD.insert" subject
     - `handle_status_update`: handles the "WORKLOAD.handle_status_update" subject // published by hosting agent
 */
 
@@ -271,12 +270,13 @@ impl OrchestratorWorkloadApi {
     ) -> Result<WorkloadApiResult, ServiceError> {
         log::debug!("Incoming message for 'WORKLOAD.insert'");
         let workload = Self::convert_msg_to_type::<Workload>(msg)?;
+
         match workload.status.desired {
             WorkloadState::Removed | WorkloadState::Deleted | WorkloadState::Uninstalled => {
                 self.handle_workload_change_event(workload).await
             }
             WorkloadState::Running => match workload.status.actual {
-                WorkloadState::Assigned | WorkloadState::Updating => {
+                WorkloadState::Reported | WorkloadState::Updating => {
                     self.handle_workload_change_event(workload).await
                 }
                 _ => Err(ServiceError::internal(
