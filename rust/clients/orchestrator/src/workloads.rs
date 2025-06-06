@@ -24,6 +24,7 @@ use nats_utils::{
     jetstream_client::JsClient,
     types::{JsServiceBuilder, ServiceConsumerBuilder},
 };
+use std::time::Duration;
 use workload::{
     orchestrator_api::OrchestratorWorkloadApi, types::WorkloadServiceSubjects,
     TAG_MAP_PREFIX_ASSIGNED_HOST, WORKLOAD_ORCHESTRATOR_SUBJECT_PREFIX, WORKLOAD_SRV_DESC,
@@ -97,7 +98,7 @@ pub async fn run(
     )
     .await?;
 
-    // Subjects published `remote_cmd` cli (interntal tool)
+    // Subjects published `remote_cmd` cli (internal tool)
     add_workload_consumer(
         ServiceConsumerBuilder::new(
             "manage_workload_on_host".to_string(),
@@ -129,19 +130,52 @@ pub async fn run(
     let workload_api_clone = workload_api.clone();
     let js_context_clone = orchestrator_client.js_context.clone();
     tokio::spawn(async move {
-        if let Err(e) = workload_api_clone
-            .stream_workload_changes(
-                js_context_clone,
-                WORKLOAD_SRV_SUBJ.to_string(),
-                create_callback_subject_to_host(
-                    true,
-                    TAG_MAP_PREFIX_ASSIGNED_HOST.to_string(),
-                    WorkloadServiceSubjects::Update.to_string(),
-                ),
-            )
-            .await
-        {
-            log::error!("Workload collection stream error: {}", e);
+        let mut retry_delay = Duration::from_secs(1);
+        const MAX_RETRY_DELAY: Duration = Duration::from_secs(300); // 5 minutes
+        const MAX_RETRIES: i32 = 10;
+
+        let mut retry_count = 0;
+        loop {
+            match workload_api_clone
+                .stream_workload_changes(
+                    js_context_clone.clone(),
+                    WORKLOAD_SRV_SUBJ.to_string(),
+                    create_callback_subject_to_host(
+                        true,
+                        TAG_MAP_PREFIX_ASSIGNED_HOST.to_string(),
+                        WorkloadServiceSubjects::Update.to_string(),
+                    ),
+                )
+                .await
+            {
+                Ok(_) => {
+                    // Stream completed successfully (shouldn't happen normally)
+                    log::warn!("Workload collection stream completed unexpectedly");
+                    break;
+                }
+                Err(e) => {
+                    retry_count += 1;
+                    if retry_count > MAX_RETRIES {
+                        log::error!(
+                            "Workload collection stream failed after {} retries. Last error: {}",
+                            MAX_RETRIES,
+                            e
+                        );
+                        break;
+                    }
+
+                    log::warn!(
+                        "Workload collection stream error: {}. Retrying in {:?} (attempt {}/{})",
+                        e,
+                        retry_delay,
+                        retry_count,
+                        MAX_RETRIES
+                    );
+
+                    tokio::time::sleep(retry_delay).await;
+                    retry_delay = std::cmp::min(retry_delay * 2, MAX_RETRY_DELAY);
+                }
+            }
         }
     });
 
