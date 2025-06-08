@@ -22,8 +22,9 @@ use mongodb::Client as MongoDBClient;
 use nats_utils::{
     generate_service_call,
     jetstream_client::JsClient,
-    types::{JsServiceBuilder, ServiceConsumerBuilder},
+    types::{JsServiceBuilder, ServiceConsumerBuilder, ServiceError},
 };
+use rand;
 use std::time::Duration;
 use workload::{
     orchestrator_api::OrchestratorWorkloadApi, types::WorkloadServiceSubjects,
@@ -130,11 +131,12 @@ pub async fn run(
     let workload_api_clone = workload_api.clone();
     let js_context_clone = orchestrator_client.js_context.clone();
     tokio::spawn(async move {
-        let mut retry_delay = Duration::from_secs(1);
-        const MAX_RETRY_DELAY: Duration = Duration::from_secs(300); // 5 minutes
+        const MAX_RETRY_DELAY: Duration = Duration::from_secs(300); // 300 sec = 5 min
         const MAX_RETRIES: i32 = 10;
 
         let mut retry_count = 0;
+        let mut retry_delay = Duration::from_secs(1);
+
         loop {
             match workload_api_clone
                 .stream_workload_changes(
@@ -154,6 +156,12 @@ pub async fn run(
                     break;
                 }
                 Err(e) => {
+                    // Check if this is a permanent error that shouldn't be re-tried
+                    if is_permanent_error(&e) {
+                        log::error!("Request error found in workload collection stream. Skipping retry. err={}", e);
+                        break;
+                    }
+
                     retry_count += 1;
                     if retry_count > MAX_RETRIES {
                         log::error!(
@@ -180,4 +188,11 @@ pub async fn run(
     });
 
     Ok(orchestrator_client)
+}
+
+// Helper function to determine if an error is permanent and shouldn't be retried
+// Add specific error types that should not be retried below
+// eg: request error
+fn is_permanent_error(e: &ServiceError) -> bool {
+    matches!(e, ServiceError::Request { .. })
 }
