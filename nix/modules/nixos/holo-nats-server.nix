@@ -90,6 +90,7 @@ in
           host = lib.mkDefault cfg.host;
           port = lib.mkDefault cfg.port;
           leafnodes.port = lib.mkDefault cfg.leafnodePort;
+          max_payload = 5242880; # 5MiB in bytes
           websocket = {
             inherit (cfg.websocket) port;
 
