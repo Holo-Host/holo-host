@@ -22,8 +22,9 @@ use mongodb::Client as MongoDBClient;
 use nats_utils::{
     generate_service_call,
     jetstream_client::JsClient,
-    types::{JsServiceBuilder, ServiceConsumerBuilder},
+    types::{JsServiceBuilder, ServiceConsumerBuilder, ServiceError},
 };
+use std::time::Duration;
 use workload::{
     orchestrator_api::OrchestratorWorkloadApi, types::WorkloadServiceSubjects,
     TAG_MAP_PREFIX_ASSIGNED_HOST, WORKLOAD_ORCHESTRATOR_SUBJECT_PREFIX, WORKLOAD_SRV_DESC,
@@ -97,7 +98,7 @@ pub async fn run(
     )
     .await?;
 
-    // Subjects published `remote_cmd` cli (interntal tool)
+    // Subjects published `remote_cmd` cli (internal tool)
     add_workload_consumer(
         ServiceConsumerBuilder::new(
             "manage_workload_on_host".to_string(),
@@ -129,21 +130,68 @@ pub async fn run(
     let workload_api_clone = workload_api.clone();
     let js_context_clone = orchestrator_client.js_context.clone();
     tokio::spawn(async move {
-        if let Err(e) = workload_api_clone
-            .stream_workload_changes(
-                js_context_clone,
-                WORKLOAD_SRV_SUBJ.to_string(),
-                create_callback_subject_to_host(
-                    true,
-                    TAG_MAP_PREFIX_ASSIGNED_HOST.to_string(),
-                    WorkloadServiceSubjects::Update.to_string(),
-                ),
-            )
-            .await
-        {
-            log::error!("Workload collection stream error: {}", e);
+        const MAX_RETRY_DELAY: Duration = Duration::from_secs(300); // 300 sec = 5 min
+        const MAX_RETRIES: i32 = 10;
+
+        let mut retry_count = 0;
+        let mut retry_delay = Duration::from_secs(1);
+
+        loop {
+            match workload_api_clone
+                .stream_workload_changes(
+                    js_context_clone.clone(),
+                    WORKLOAD_SRV_SUBJ.to_string(),
+                    create_callback_subject_to_host(
+                        true,
+                        TAG_MAP_PREFIX_ASSIGNED_HOST.to_string(),
+                        WorkloadServiceSubjects::Update.to_string(),
+                    ),
+                )
+                .await
+            {
+                Ok(_) => {
+                    // Stream completed successfully (shouldn't happen normally)
+                    log::warn!("Workload collection stream completed unexpectedly");
+                    break;
+                }
+                Err(e) => {
+                    // Check if this is a permanent error that shouldn't be re-tried
+                    if is_permanent_error(&e) {
+                        log::error!("Request error found in workload collection stream. Skipping retry. err={}", e);
+                        break;
+                    }
+
+                    retry_count += 1;
+                    if retry_count > MAX_RETRIES {
+                        log::error!(
+                            "Workload collection stream failed after {} retries. Last error: {}",
+                            MAX_RETRIES,
+                            e
+                        );
+                        break;
+                    }
+
+                    log::warn!(
+                        "Workload collection stream error: {}. Retrying in {:?} (attempt {}/{})",
+                        e,
+                        retry_delay,
+                        retry_count,
+                        MAX_RETRIES
+                    );
+
+                    tokio::time::sleep(retry_delay).await;
+                    retry_delay = std::cmp::min(retry_delay * 2, MAX_RETRY_DELAY);
+                }
+            }
         }
     });
 
     Ok(orchestrator_client)
+}
+
+// Helper function to determine if an error is permanent and shouldn't be retried
+// Add specific error types that should not be retried below
+// eg: request error
+fn is_permanent_error(e: &ServiceError) -> bool {
+    matches!(e, ServiceError::Request { .. })
 }

@@ -328,7 +328,7 @@ pub enum ServiceError {
         context: Option<String>,
     },
 
-    #[error("Internal error: {message}")]
+    #[error("Workload error: {message}")]
     Workload {
         message: String,
         context: Option<String>,

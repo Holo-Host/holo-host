@@ -76,6 +76,7 @@ pub async fn run(
         LEAF_SERVER_CONFIG_PATH,
         leaf_server_listen_host,
         leaf_server_listen_port,
+        Some(3145728), // 3MiB in bytes (temp solution - matches holo-nats server configuration)
         jetstream_config,
         logging_options,
         leaf_node_remotes,
