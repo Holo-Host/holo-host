@@ -24,7 +24,6 @@ use nats_utils::{
     jetstream_client::JsClient,
     types::{JsServiceBuilder, ServiceConsumerBuilder, ServiceError},
 };
-use rand;
 use std::time::Duration;
 use workload::{
     orchestrator_api::OrchestratorWorkloadApi, types::WorkloadServiceSubjects,
