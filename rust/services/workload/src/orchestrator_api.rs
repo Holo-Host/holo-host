@@ -231,7 +231,11 @@ impl OrchestratorWorkloadApi {
         log::debug!("Incoming message for '{incoming_subject}'");
 
         let workload_status = Self::convert_msg_to_type::<WorkloadResult>(msg)?.status;
-        log::trace!("Workload status to update. Status={:?}", workload_status);
+        log::trace!("Received workload status update. Status={:?}", workload_status);
+
+        if workload_status.actual == WorkloadState::Uninstalled {
+            self.remove_workload_from_hosts(workload_status_id).await?;
+        }
 
         let workload_status_id = workload_status.id.ok_or_else(|| {
             ServiceError::internal(
@@ -349,6 +353,8 @@ impl OrchestratorWorkloadApi {
         workload_id: ObjectId,
         target_state: WorkloadState,
     ) -> Result<WorkloadApiResult, ServiceError> {
+        log::info!("Orchestrator::handle_workload_assignment");
+
         // Find eligible hosts for the new workload
         let eligible_hosts = self.find_hosts_for_workload(workload.clone()).await?;
 
@@ -372,6 +378,8 @@ impl OrchestratorWorkloadApi {
         workload: Workload,
         workload_id: ObjectId,
     ) -> Result<WorkloadApiResult, ServiceError> {
+        log::info!("Orchestrator::handle_workload_update");
+
         // Fetch current hosts and remove workload from them
         self.remove_workload_from_hosts(workload_id).await?;
         self.handle_workload_assignment(workload, workload_id, WorkloadState::Updated)
@@ -395,7 +403,8 @@ impl OrchestratorWorkloadApi {
             payload: Default::default(),
         };
 
-        // Remove hosts from the workload and update status
+        // Remove hosts from the workload and update status to uninstall from hosts
+        // NB: We should not remove the workload from a given host collection until we recieve a successful uninstallation message from the host
         self.assign_hosts_to_workload(workload_id, vec![], new_status.clone())
             .await?;
         log::info!(
@@ -422,13 +431,11 @@ impl OrchestratorWorkloadApi {
 
         Ok(WorkloadApiResult {
             result: WorkloadResult {
-                status: WorkloadStatus {
-                    id: Some(workload_id),
-                    desired: WorkloadState::Uninstalled,
-                    actual: WorkloadState::Removed,
-                    payload: Default::default(),
-                },
-                workload: Some(workload),
+                status: new_status,
+                workload: Some(Workload {
+                    status: new_status,
+                    ..workload
+                }),
             },
             maybe_response_tags: Some(tag_map),
         })
@@ -620,7 +627,7 @@ impl OrchestratorWorkloadApi {
 
         // Update workload status and assigned hosts
         let new_status = WorkloadStatus {
-            id: None,
+            id: Some(workload_id),
             desired: WorkloadState::Running,
             actual: target_state,
             payload: Default::default(),
@@ -662,7 +669,10 @@ impl OrchestratorWorkloadApi {
                     id: Some(workload_id),
                     ..new_status
                 },
-                workload: Some(workload),
+                workload: Some(Workload {
+                    status: new_status,
+                    ..workload
+                }),
             },
             maybe_response_tags: Some(tag_map),
         })
@@ -740,10 +750,7 @@ impl OrchestratorWorkloadApi {
 
                     // Handle the workload change based on operation type
                     let api_result = match change_event.operation_type {
-                        mongodb::change_stream::event::OperationType::Insert => {
-                            self.handle_workload_change_event(workload).await
-                        }
-                        mongodb::change_stream::event::OperationType::Update => {
+                        mongodb::change_stream::event::OperationType::Insert | mongodb::change_stream::event::OperationType::Update => {
                             self.handle_workload_change_event(workload).await
                         }
                         _ => continue,
