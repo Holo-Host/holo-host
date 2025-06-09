@@ -19,7 +19,7 @@ pub fn get_mongodb_url() -> String {
         let pw = std::fs::read_to_string(pw_file)?.trim().to_owned();
 
         Ok(format!(
-            "mongodb+srv://{}:{}@allograph-dev-mongodb-{}.mongo.ondigitalocean.com/?retryWrites=true&w=majority",
+            "mongodb+srv://{}:{}@allograph-dev-mongodb-{}.mongo.ondigitalocean.com/?retryWrites=true&w=majority&authSource=admin",
             username, pw, cluster_id
         ))
     })();
