@@ -679,7 +679,7 @@ impl OrchestratorWorkloadApi {
         let response_subjects = response_subject_fn(workload_api_result.get_tags());
         for response_subject in response_subjects.iter() {
             let subject = format!("{}.{}", service_subject, response_subject);
-            log::debug!("publishing a response on {subject}");
+            log::debug!("publishing a message for hosts on {subject}");
             if let Err(err) = jetstream
                 .publish(subject.clone(), response_bytes.clone())
                 .await
