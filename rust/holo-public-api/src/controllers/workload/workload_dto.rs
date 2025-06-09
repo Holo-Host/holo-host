@@ -1,7 +1,6 @@
 use db_utils::schemas;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use url::Url;
 use utoipa::{OpenApi, ToSchema};
 
 #[derive(OpenApi)]
@@ -109,134 +108,60 @@ pub struct WorkloadDto {
     pub manifest: WorkloadManifestDto,
 }
 
+/// use serde-based JSON to convert schema to dto
+fn convert_via_serde<T, U>(data: T) -> Result<U, serde_json::Error>
+where
+    T: serde::Serialize,
+    U: serde::de::DeserializeOwned,
+{
+    serde_json::to_string(&data).and_then(|json_str| serde_json::from_str(&json_str))
+}
+
 fn to_workload_state_dto(state: schemas::workload::WorkloadState) -> WorkloadStateDto {
-    match state {
-        schemas::workload::WorkloadState::Reported => WorkloadStateDto::Reported,
-        schemas::workload::WorkloadState::Assigned => WorkloadStateDto::Assigned,
-        schemas::workload::WorkloadState::Pending => WorkloadStateDto::Pending,
-        schemas::workload::WorkloadState::Installed => WorkloadStateDto::Installed,
-        schemas::workload::WorkloadState::Running => WorkloadStateDto::Running,
-        schemas::workload::WorkloadState::Updating => WorkloadStateDto::Updating,
-        schemas::workload::WorkloadState::Updated => WorkloadStateDto::Updated,
-        schemas::workload::WorkloadState::Deleted => WorkloadStateDto::Deleted,
-        schemas::workload::WorkloadState::Removed => WorkloadStateDto::Removed,
-        schemas::workload::WorkloadState::Uninstalled => WorkloadStateDto::Uninstalled,
-        schemas::workload::WorkloadState::Error(msg) => WorkloadStateDto::Error(msg),
-        schemas::workload::WorkloadState::Unknown(ctx) => WorkloadStateDto::Unknown(ctx),
-    }
+    convert_via_serde(state).unwrap_or_else(|e| {
+        tracing::error!("Failed to convert workload state to dto. Defaulting to Unknown. Err={:?}", e);
+        WorkloadStateDto::Unknown("conversion_failed".to_string())
+    })
 }
 
 pub fn to_manifest_dto(data: schemas::workload::WorkloadManifest) -> WorkloadManifestDto {
-    match data {
-        schemas::workload::WorkloadManifest::None => WorkloadManifestDto::None,
-        schemas::workload::WorkloadManifest::ExtraContainerPath {
-            extra_container_path,
-        } => WorkloadManifestDto::ExtraContainerPath {
-            extra_container_path,
-        },
-        schemas::workload::WorkloadManifest::ExtraContainerStorePath { store_path } => {
-            WorkloadManifestDto::ExtraContainerStorePath {
-                store_path: store_path
-                    .to_str()
-                    .expect("failed to convert store_path to string")
-                    .to_string(),
-            }
-        }
-        schemas::workload::WorkloadManifest::ExtraContainerBuildCmd { nix_args } => {
-            WorkloadManifestDto::ExtraContainerBuildCmd { nix_args }
-        }
-        schemas::workload::WorkloadManifest::HolochainDhtV1(data) => {
-            WorkloadManifestDto::HolochainDhtV1(Box::new(WorkloadManifestHolochainDhtV1Dto {
-                happ_binary_url: data.happ_binary_url.to_string(),
-                network_seed: data.network_seed,
-                memproof: data.memproof,
-                bootstrap_server_url: data.bootstrap_server_url.map(|url| url.to_string()),
-                signal_server_url: data.signal_server_url.map(|url| url.to_string()),
-                stun_server_urls: data
-                    .stun_server_urls
-                    .map(|data| data.into_iter().map(|url| url.to_string()).collect()),
-                holochain_feature_flags: data.holochain_feature_flags,
-                holochain_version: data.holochain_version,
-                http_gw_enable: data.http_gw_enable,
-                http_gw_allowed_fns: data.http_gw_allowed_fns,
-            }))
-        }
-    }
+    convert_via_serde(data).unwrap_or_else(|e| {
+        tracing::error!("Failed to convert manifest schema to dto. Defaulting to a value of `None`.  Err={:?}", e);
+        WorkloadManifestDto::None
+    })
 }
 
 pub fn to_workload_dto(data: schemas::workload::Workload) -> WorkloadDto {
-    WorkloadDto {
-        id: data._id.map(|id| id.to_hex()),
-        assigned_developer: data.assigned_developer.to_hex(),
-        version: data.version.to_string(),
-        min_hosts: data.min_hosts,
-        system_specs: SystemSpecsDto {
-            avg_uptime: data.system_specs.avg_uptime,
-            avg_network_speed: data.system_specs.avg_network_speed,
-            capacity: CapacityDto {
-                drive: data.system_specs.capacity.drive,
-                cores: data.system_specs.capacity.cores,
+    convert_via_serde(data.clone()).unwrap_or_else(|e| {
+        tracing::error!("Failed to convert workload schema to dto.  Falling back to the default dto structure.  Err={:?}", e);
+        
+        // Fall back to a default dto structure to avoid unnecessary response failures
+        WorkloadDto {
+            id: data._id.map(|id| id.to_hex()),
+            assigned_developer: data.assigned_developer.to_hex(),
+            version: data.version.to_string(),
+            min_hosts: data.min_hosts,
+            system_specs: SystemSpecsDto {
+                avg_uptime: data.system_specs.avg_uptime,
+                avg_network_speed: data.system_specs.avg_network_speed,
+                capacity: CapacityDto {
+                    drive: data.system_specs.capacity.drive,
+                    cores: data.system_specs.capacity.cores,
+                },
             },
-        },
-        assigned_hosts: data
-            .assigned_hosts
-            .iter()
-            .map(|host| host.to_hex())
-            .collect(),
-        status: WorkloadStatusDto {
-            id: data.status.id.unwrap().to_hex(),
-            desired: to_workload_state_dto(data.status.desired),
-            actual: to_workload_state_dto(data.status.actual),
-            payload: None,
-        },
-        manifest: to_manifest_dto(data.manifest),
-    }
+            assigned_hosts: data
+                .assigned_hosts
+                .iter()
+                .map(|host| host.to_hex())
+                .collect(),
+            status: WorkloadStatusDto {
+                id: data.status.id.unwrap_or_default().to_hex(),
+                desired: to_workload_state_dto(data.status.desired),
+                actual: to_workload_state_dto(data.status.actual),
+                payload: None,
+            },
+            manifest: to_manifest_dto(data.manifest),
+        }
+    })
 }
 
-pub fn from_manifest_dto(data: WorkloadManifestDto) -> schemas::workload::WorkloadManifest {
-    match data {
-        WorkloadManifestDto::None => schemas::workload::WorkloadManifest::None,
-        WorkloadManifestDto::ExtraContainerPath {
-            extra_container_path,
-        } => schemas::workload::WorkloadManifest::ExtraContainerPath {
-            extra_container_path: extra_container_path.to_string(),
-        },
-        WorkloadManifestDto::ExtraContainerStorePath { store_path } => {
-            schemas::workload::WorkloadManifest::ExtraContainerStorePath {
-                store_path: std::path::PathBuf::from(store_path),
-            }
-        }
-        WorkloadManifestDto::ExtraContainerBuildCmd { nix_args } => {
-            schemas::workload::WorkloadManifest::ExtraContainerBuildCmd {
-                nix_args: nix_args.clone(),
-            }
-        }
-        WorkloadManifestDto::HolochainDhtV1(data) => {
-            schemas::workload::WorkloadManifest::HolochainDhtV1(Box::new(
-                schemas::workload::WorkloadManifestHolochainDhtV1 {
-                    happ_binary_url: Url::parse(&data.happ_binary_url)
-                        .expect("failed to parse url"),
-                    network_seed: data.network_seed,
-                    memproof: data.memproof.clone(),
-                    bootstrap_server_url: data
-                        .bootstrap_server_url
-                        .clone()
-                        .map(|url| Url::parse(&url).expect("failed to parse url")),
-                    signal_server_url: data
-                        .signal_server_url
-                        .clone()
-                        .map(|url| Url::parse(&url).expect("failed to parse url")),
-                    stun_server_urls: data.stun_server_urls.map(|data| {
-                        data.into_iter()
-                            .map(|url| Url::parse(&url).expect("failed to parse url"))
-                            .collect()
-                    }),
-                    holochain_feature_flags: data.holochain_feature_flags.clone(),
-                    holochain_version: data.holochain_version.clone(),
-                    http_gw_enable: data.http_gw_enable,
-                    http_gw_allowed_fns: data.http_gw_allowed_fns.clone(),
-                },
-            ))
-        }
-    }
-}
