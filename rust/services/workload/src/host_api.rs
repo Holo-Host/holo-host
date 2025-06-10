@@ -365,7 +365,7 @@ impl HostWorkloadApi {
         msg: Arc<Message>,
     ) -> Result<WorkloadApiResult, ServiceError> {
         let msg_subject = msg.subject.clone().into_string();
-        log::trace!("Incoming message for '{}'", msg_subject);
+        log::debug!("Incoming message for '{}'", msg_subject);
 
         let try_message_payload =
             Self::convert_msg_to_type::<WorkloadResult>(msg).inspect(|message_payload| {
@@ -388,10 +388,11 @@ impl HostWorkloadApi {
                         workload_result.workload,
                     ),
                     Err(e) => (
+                        // workload_id={workload_id},
                         WorkloadStatus {
                             id: None,
                             desired: WorkloadState::Unknown(Default::default()),
-                            actual: WorkloadState::Error(e.to_string()),
+                            actual: WorkloadState::Error(format!("Error handling workload update. request_subject={msg_subject}, err={e:?}")),
                             payload: Default::default(),
                         },
                         None,
@@ -405,7 +406,6 @@ impl HostWorkloadApi {
 
         Ok(WorkloadApiResult {
             maybe_response_tags: None,
-
             result: WorkloadResult {
                 status: workload_status,
                 workload: maybe_workload,
@@ -413,8 +413,6 @@ impl HostWorkloadApi {
         })
     }
 
-    // For host agent ? or elsewhere ?
-    // TODO: Talk through with Stefan
     pub async fn fetch_workload_status(
         &self,
         msg: Arc<Message>,
