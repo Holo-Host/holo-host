@@ -231,11 +231,10 @@ impl OrchestratorWorkloadApi {
         log::debug!("Incoming message for '{incoming_subject}'");
 
         let workload_status = Self::convert_msg_to_type::<WorkloadResult>(msg)?.status;
-        log::trace!("Received workload status update. Status={:?}", workload_status);
-
-        if workload_status.actual == WorkloadState::Uninstalled {
-            self.remove_workload_from_hosts(workload_status_id).await?;
-        }
+        log::trace!(
+            "Received workload status update. Status={:?}",
+            workload_status
+        );
 
         let workload_status_id = workload_status.id.ok_or_else(|| {
             ServiceError::internal(
@@ -243,6 +242,10 @@ impl OrchestratorWorkloadApi {
                 Some("Missing workload status ID".to_string()),
             )
         })?;
+
+        if workload_status.actual == WorkloadState::Uninstalled {
+            self.remove_workload_from_hosts(workload_status_id).await?;
+        }
 
         let status_bson = bson::to_bson(&workload_status).map_err(|e| {
             ServiceError::internal(
@@ -431,7 +434,7 @@ impl OrchestratorWorkloadApi {
 
         Ok(WorkloadApiResult {
             result: WorkloadResult {
-                status: new_status,
+                status: new_status.clone(),
                 workload: Some(Workload {
                     status: new_status,
                     ..workload
@@ -667,7 +670,7 @@ impl OrchestratorWorkloadApi {
             result: WorkloadResult {
                 status: WorkloadStatus {
                     id: Some(workload_id),
-                    ..new_status
+                    ..new_status.clone()
                 },
                 workload: Some(Workload {
                     status: new_status,
@@ -750,7 +753,8 @@ impl OrchestratorWorkloadApi {
 
                     // Handle the workload change based on operation type
                     let api_result = match change_event.operation_type {
-                        mongodb::change_stream::event::OperationType::Insert | mongodb::change_stream::event::OperationType::Update => {
+                        mongodb::change_stream::event::OperationType::Insert
+                        | mongodb::change_stream::event::OperationType::Update => {
                             self.handle_workload_change_event(workload).await
                         }
                         _ => continue,

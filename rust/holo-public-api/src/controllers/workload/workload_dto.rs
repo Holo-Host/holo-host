@@ -119,14 +119,20 @@ where
 
 fn to_workload_state_dto(state: schemas::workload::WorkloadState) -> WorkloadStateDto {
     convert_via_serde(state).unwrap_or_else(|e| {
-        tracing::error!("Failed to convert workload state to dto. Defaulting to Unknown. Err={:?}", e);
+        tracing::error!(
+            "Failed to convert workload state to dto. Defaulting to Unknown. Err={:?}",
+            e
+        );
         WorkloadStateDto::Unknown("conversion_failed".to_string())
     })
 }
 
 pub fn to_manifest_dto(data: schemas::workload::WorkloadManifest) -> WorkloadManifestDto {
     convert_via_serde(data).unwrap_or_else(|e| {
-        tracing::error!("Failed to convert manifest schema to dto. Defaulting to a value of `None`.  Err={:?}", e);
+        tracing::error!(
+            "Failed to convert manifest schema to dto. Defaulting to a value of `None`.  Err={:?}",
+            e
+        );
         WorkloadManifestDto::None
     })
 }
@@ -134,7 +140,7 @@ pub fn to_manifest_dto(data: schemas::workload::WorkloadManifest) -> WorkloadMan
 pub fn to_workload_dto(data: schemas::workload::Workload) -> WorkloadDto {
     convert_via_serde(data.clone()).unwrap_or_else(|e| {
         tracing::error!("Failed to convert workload schema to dto.  Falling back to the default dto structure.  Err={:?}", e);
-        
+
         // Fall back to a default dto structure to avoid unnecessary response failures
         WorkloadDto {
             id: data._id.map(|id| id.to_hex()),
@@ -164,4 +170,3 @@ pub fn to_workload_dto(data: schemas::workload::Workload) -> WorkloadDto {
         }
     })
 }
-

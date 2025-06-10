@@ -4,9 +4,7 @@ use db_utils::schemas;
 use serde::{Deserialize, Serialize};
 use utoipa::{OpenApi, ToSchema};
 
-use crate::{
-    providers::{self, error_response::ErrorResponse, jwt::AccessTokenClaims},
-};
+use crate::providers::{self, error_response::ErrorResponse, jwt::AccessTokenClaims};
 
 use super::workload_dto::WorkloadManifestDto;
 
@@ -76,6 +74,7 @@ pub async fn create_workload(
     }
 
     let developer = developer.unwrap();
+
     if !providers::auth::verify_all_permissions(
         claims.clone(),
         vec![schemas::user_permissions::UserPermission {
@@ -89,25 +88,27 @@ pub async fn create_workload(
         });
     }
 
-    let mut workload = schemas::workload::Workload::default();
-    workload.assigned_developer = match ObjectId::parse_str(payload.assigned_developer.clone()) {
-        Ok(id) => id,
-        Err(_) => {
-            return HttpResponse::BadRequest().json(ErrorResponse {
-                message: "Invalid developer ID".to_string(),
-            });
-        }
-    };
-
-    workload.manifest = match serde_json::to_string(&payload.manifest)
-        .and_then(|json_str| serde_json::from_str(&json_str)) {
-        Ok(manifest) => manifest,
-        Err(e) => {
-            tracing::error!("Failed to convert manifest: {:?}", e);
-            return HttpResponse::BadRequest().json(ErrorResponse {
-                message: "Invalid manifest data".to_string(),
-            });
-        }
+    let workload = db_utils::schemas::workload::Workload {
+        assigned_developer: match ObjectId::parse_str(payload.assigned_developer.clone()) {
+            Ok(id) => id,
+            Err(_) => {
+                return HttpResponse::BadRequest().json(ErrorResponse {
+                    message: "Invalid developer ID".to_string(),
+                });
+            }
+        },
+        manifest: match serde_json::to_string(&payload.manifest)
+            .and_then(|json_str| serde_json::from_str(&json_str))
+        {
+            Ok(manifest) => manifest,
+            Err(e) => {
+                tracing::error!("Failed to convert manifest: {:?}", e);
+                return HttpResponse::BadRequest().json(ErrorResponse {
+                    message: "Invalid manifest data".to_string(),
+                });
+            }
+        },
+        ..Default::default()
     };
 
     let result = match providers::crud::create::<schemas::workload::Workload>(
