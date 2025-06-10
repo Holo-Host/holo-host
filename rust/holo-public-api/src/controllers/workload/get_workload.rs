@@ -134,15 +134,11 @@ pub async fn get_workload(
                 .signal_server_url
                 .clone()
                 .map(|url| url.to_string()),
-            http_gw_allowed_fns: holochain_manifest
-                .http_gw_allowed_fns
-                .clone()
-                .map(|fns| {
-                    fns.into_iter()
-                        .map(|url| url.to_string())
-                        .collect::<Vec<String>>()
-                })
-                .unwrap_or_default(),
+            http_gw_allowed_fns: holochain_manifest.http_gw_allowed_fns.clone().map(|fns| {
+                fns.into_iter()
+                    .map(|url| url.to_string())
+                    .collect::<Vec<String>>()
+            }),
             http_gw_enable: holochain_manifest.http_gw_enable,
         },
         status: workload.status.actual,

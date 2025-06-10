@@ -11,8 +11,9 @@ pub struct WorkloadTemplateDto {
     #[schema(value_type = String, example = "template_id")]
     pub blake3_hash: String,
 
-    #[schema(value_type = Vec<String>, example = json!(vec!["https://stun1.example.com".to_string(), "https://stun2.example.com".to_string()]))]
-    pub stun_server_urls: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(value_type = Option<Vec<String>>, example = json!(vec!["https://stun1.example.com".to_string(), "https://stun2.example.com".to_string()]))]
+    pub stun_server_urls: Option<Vec<String>>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     #[schema(value_type = Option<String>, example = "0.0.1")]
@@ -44,8 +45,9 @@ pub struct WorkloadPropertiesDto {
     #[schema(value_type = bool, example = false)]
     pub http_gw_enable: bool,
 
-    #[schema(value_type = Vec<String>, example = json!(vec!["function1".to_string(), "function2".to_string()]))]
-    pub http_gw_allowed_fns: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(value_type = Option<Vec<String>>, example = json!(vec!["function1".to_string(), "function2".to_string()]))]
+    pub http_gw_allowed_fns: Option<Vec<String>>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     #[schema(value_type = Option<i32>, example = 1)]

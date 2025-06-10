@@ -120,14 +120,11 @@ pub async fn create_workload(
             manifest: schemas::workload::WorkloadManifest::HolochainDhtV1(Box::new(
                 WorkloadManifestHolochainDhtV1 {
                     happ_binary_url: payload.template.blake3_hash.clone(),
-                    stun_server_urls: Some(
-                        payload
-                            .template
-                            .stun_server_urls
-                            .into_iter()
-                            .map(|url| Url::parse(&url).unwrap())
-                            .collect::<Vec<Url>>(),
-                    ),
+                    stun_server_urls: payload.template.stun_server_urls.map(|urls| {
+                        urls.iter()
+                            .map(|url| Url::parse(url).unwrap())
+                            .collect::<Vec<Url>>()
+                    }),
                     holochain_feature_flags: payload.template.holochain_feature_flags.clone(),
                     holochain_version: payload.template.holochain_version.clone(),
 
@@ -157,7 +154,7 @@ pub async fn create_workload(
                         None => None,
                     },
                     http_gw_enable: payload.properties.http_gw_enable,
-                    http_gw_allowed_fns: Some(payload.properties.http_gw_allowed_fns.clone()),
+                    http_gw_allowed_fns: payload.properties.http_gw_allowed_fns.clone(),
                 },
             )),
         },
