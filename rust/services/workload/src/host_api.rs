@@ -132,13 +132,14 @@ impl HostWorkloadApi {
                         let parsed_url = match Url::parse(happ_binary_url) {
                             Ok(url) => url,
                             Err(e) => {
-                                anyhow::bail!("failed to parse happ_binary_url {happ_binary_url:?}: {e}");
+                                anyhow::bail!(
+                                    "failed to parse happ_binary_url {happ_binary_url:?}: {e}"
+                                );
                             }
                         };
-                        let happ_bytes =
-                            ham::Ham::download_happ_bytes(&parsed_url)
-                                .await
-                                .context(format!("downloading {happ_binary_url:?}"))?;
+                        let happ_bytes = ham::Ham::download_happ_bytes(&parsed_url)
+                            .await
+                            .context(format!("downloading {happ_binary_url:?}"))?;
 
                         // TODO(feat): derive a different predictable app id from the workload
                         let installed_app_id = workload_id.to_hex();
