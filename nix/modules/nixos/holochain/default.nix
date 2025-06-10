@@ -168,6 +168,20 @@ in
       inherit (cfg) group;
     };
 
+    # Add holochain CLI tools (hc*) to system packages
+    # This includes tools like: hc, hc-run-local-services, hc-sandbox, etc.
+    environment.systemPackages = [
+      # Link hc CLI tools from the holochain package
+      (pkgs.runCommand "holochain-cli-tools" { } ''
+        mkdir -p $out/bin
+        for bin in ${cfg.package}/bin/hc*; do
+          if [ -f "$bin" ]; then
+            ln -s $bin $out/bin/
+          fi
+        done
+      '')
+    ];
+
     systemd.services.holochain = {
       enable = true;
 
