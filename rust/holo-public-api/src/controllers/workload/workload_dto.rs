@@ -1,7 +1,37 @@
 use db_utils::schemas;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use std::collections::HashMap;
 use utoipa::{OpenApi, ToSchema};
+
+// Serde helper functions to convert empty values to None during deserialization
+mod serde_helpers {
+    use super::*;
+    
+    pub fn empty_string_as_none<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let opt = Option::<String>::deserialize(deserializer)?;
+        Ok(opt.filter(|s| !s.is_empty()))
+    }
+    
+    pub fn empty_vec_as_none<'de, D, T>(deserializer: D) -> Result<Option<Vec<T>>, D::Error>
+    where
+        D: Deserializer<'de>,
+        T: Deserialize<'de>,
+    {
+        let opt = Option::<Vec<T>>::deserialize(deserializer)?;
+        Ok(opt.filter(|v| !v.is_empty()))
+    }
+    
+    pub fn empty_hashmap_as_none<'de, D>(deserializer: D) -> Result<Option<HashMap<String, String>>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let opt = Option::<HashMap<String, String>>::deserialize(deserializer)?;
+        Ok(opt.filter(|m| !m.is_empty()))
+    }
+}
 
 #[derive(OpenApi)]
 #[openapi(components(schemas(WorkloadDto)))]
@@ -60,21 +90,22 @@ pub struct WorkloadStatusDto {
 #[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
 pub struct WorkloadManifestHolochainDhtV1Dto {
     pub happ_binary_url: String,
+    #[serde(deserialize_with = "serde_helpers::empty_string_as_none")]
     pub network_seed: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none", deserialize_with = "serde_helpers::empty_hashmap_as_none")]
     pub memproof: Option<HashMap<String, String>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none", deserialize_with = "serde_helpers::empty_string_as_none")]
     pub bootstrap_server_url: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none", deserialize_with = "serde_helpers::empty_string_as_none")]
     pub signal_server_url: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none", deserialize_with = "serde_helpers::empty_vec_as_none")]
     pub stun_server_urls: Option<Vec<String>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none", deserialize_with = "serde_helpers::empty_vec_as_none")]
     pub holochain_feature_flags: Option<Vec<String>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none", deserialize_with = "serde_helpers::empty_string_as_none")]
     pub holochain_version: Option<String>,
     pub http_gw_enable: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none", deserialize_with = "serde_helpers::empty_vec_as_none")]
     pub http_gw_allowed_fns: Option<Vec<String>>,
 }
 
