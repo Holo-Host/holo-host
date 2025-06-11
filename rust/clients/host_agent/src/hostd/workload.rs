@@ -299,11 +299,8 @@ async fn spawn_hc_http_gw_watcher(
                     WorkloadStateDiscriminants::Reported
                     | WorkloadStateDiscriminants::Assigned
                     | WorkloadStateDiscriminants::Pending
-                    | WorkloadStateDiscriminants::Installed
-                    | WorkloadStateDiscriminants::Updating
                     | WorkloadStateDiscriminants::Updated
                     | WorkloadStateDiscriminants::Deleted
-                    | WorkloadStateDiscriminants::Removed
                     | WorkloadStateDiscriminants::Uninstalled
                     | WorkloadStateDiscriminants::Error
                     | WorkloadStateDiscriminants::Unknown => {

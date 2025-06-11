@@ -28,10 +28,16 @@ pub enum WorkloadServiceSubjects {
     Command,
 }
 
+// #[derive(Debug, Clone, Serialize, Deserialize)]
+// pub struct WorkloadResult {
+//     pub status: WorkloadStatus,
+//     pub workload: Option<Workload>,
+// }
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct WorkloadResult {
-    pub status: WorkloadStatus,
-    pub workload: Option<Workload>,
+pub enum WorkloadResult {
+    Status(WorkloadStatus),
+    Workload(Workload),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

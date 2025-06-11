@@ -92,19 +92,17 @@ where
             Ok(t) => t,
             Err(e) => {
                 return Ok(WorkloadApiResult {
-                    result: WorkloadResult {
-                        status: WorkloadStatus {
-                            id: None,
-                            desired: desired_state,
-                            actual: error_state(format!("error converting message {msg:?}: {e}")),
-                            payload: Default::default(),
-                        },
-                        workload: None,
-                    },
+                    result: WorkloadResult::Status(WorkloadStatus {
+                        id: None,
+                        desired: desired_state,
+                        actual: error_state(format!("error converting message {msg:?}: {e}")),
+                        payload: Default::default(),
+                    }),
                     maybe_response_tags: None,
                 })
             }
         };
+
         let subject = msg.subject.clone().into_string();
 
         // Call callback handler
@@ -119,15 +117,12 @@ where
 
                 // Return response for stream with error state
                 Ok(WorkloadApiResult {
-                    result: WorkloadResult {
-                        status: WorkloadStatus {
-                            id: None,
-                            desired: desired_state,
-                            actual: error_state(format!("{}: {}", err_msg, e)),
-                            payload: Default::default(),
-                        },
-                        workload: None,
-                    },
+                    result: WorkloadResult::Status(WorkloadStatus {
+                        id: None,
+                        desired: desired_state,
+                        actual: error_state(format!("{}: {}", err_msg, e)),
+                        payload: Default::default(),
+                    }),
                     maybe_response_tags: None,
                 })
             }

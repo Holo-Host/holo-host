@@ -197,7 +197,7 @@ pub fn to_workload_dto(data: schemas::workload::Workload) -> WorkloadDto {
 
         // Fall back to a default dto structure to avoid unnecessary response failures
         WorkloadDto {
-            id: data._id.map(|id| id.to_hex()),
+            id: Some(data._id.to_hex()),
             assigned_developer: data.assigned_developer.to_hex(),
             version: data.version.to_string(),
             min_hosts: data.min_hosts,

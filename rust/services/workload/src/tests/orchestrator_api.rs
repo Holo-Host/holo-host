@@ -59,8 +59,8 @@ mod tests {
         let msg = Arc::new(NatsMessage::new("WORKLOAD.update", msg_payload).into_message());
 
         let r = api.update_workload(msg).await?;
-        assert!(matches!(r.result.status.actual, WorkloadState::Updating));
-        assert!(matches!(r.result.status.desired, WorkloadState::Updated));
+        assert!(matches!(r.result.status.actual, WorkloadState::Updated));
+        assert!(matches!(r.result.status.desired, WorkloadState::Running));
 
         Ok(())
     }
@@ -89,7 +89,10 @@ mod tests {
         let r = api.delete_workload(msg).await?;
 
         assert!(matches!(r.result.status.actual, WorkloadState::Deleted));
-        assert!(matches!(r.result.status.desired, WorkloadState::Removed));
+        assert!(matches!(
+            r.result.status.desired,
+            WorkloadState::Uninstalled
+        ));
 
         // Verify workload is marked as deleted
         let deleted_workload = api

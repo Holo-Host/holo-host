@@ -14,8 +14,8 @@ use async_nats::{jetstream::kv::Store, Message};
 use bson::oid::ObjectId;
 use core::option::Option::None;
 use db_utils::schemas::workload::{
-    Workload, WorkloadManifest, WorkloadManifestHolochainDhtV1, WorkloadState,
-    WorkloadStateDiscriminants, WorkloadStatePayload, WorkloadStatus,
+    WorkloadManifest, WorkloadManifestHolochainDhtV1, WorkloadState, WorkloadStateDiscriminants,
+    WorkloadStatePayload, WorkloadStatus,
 };
 use futures::TryFutureExt;
 use ham::{
@@ -30,7 +30,7 @@ use serde::{Deserialize, Serialize};
 use std::{fmt::Debug, net::Ipv4Addr, path::Path, sync::Arc};
 use url::Url;
 use util::{
-    bash, ensure_workload_path, get_workload_id, provision_extra_container_closure_path,
+    bash, ensure_workload_path, provision_extra_container_closure_path,
     realize_extra_container_path,
 };
 
@@ -56,308 +56,303 @@ const HOLOCHAIN_HTTP_GW_PORT_DEFAULT: u16 = 8090;
 impl HostWorkloadApi {
     async fn handle_workload_command(
         &self,
-        msg_subject: String,
         try_message_payload: Result<WorkloadResult, ServiceError>,
-    ) -> anyhow::Result<(WorkloadStatus, Workload)> {
+    ) -> anyhow::Result<WorkloadStatus> {
         let workload_result = try_message_payload?;
-
-        let workload_id = get_workload_id(&workload_result).map_err(|e| WorkloadResultError {
-            e,
-            workload_result: workload_result.clone(),
-        })?;
-
-        let WorkloadResult {
-            workload: maybe_workload,
-            ..
-        } = workload_result;
-
-        let workload = match maybe_workload {
-            Some(workload) => workload,
-            None => anyhow::bail!("Failed to process Workload Service Endpoint. Subject={} Error=No workload found in message.", msg_subject),
-        };
-
-        // TODO(correctness): consider status.actual to inform assumptions towards the current state
-        // TODO(backlog,ux): spawn longer-running tasks and report back Pending, and set up a periodic status updates while the spawned task is running
-
-        let desired_state = &workload.status.desired;
-        let (actual_status, status_payload) = match desired_state {
-            WorkloadState::Installed | WorkloadState::Running => {
-                let (workload_path_toplevel, _) =
-                    ensure_workload_path(&workload_id, None, util::EnsureWorkloadPathMode::Create)?;
-                let extra_container_path = realize_extra_container_path(
-                    workload_id,
-                    workload.manifest.clone(),
-                    (&workload_path_toplevel).into(),
-                )
-                .await?;
-
-                let start_or_restart_if_desired = if let WorkloadState::Running = desired_state {
-                    " --start --restart-changed"
-                } else {
-                    ""
-                };
-
-                bash(&format!(
-                    "extra-container create {extra_container_path}{start_or_restart_if_desired}",
-                ))
-                .await?;
-
-                let status_payload = match (desired_state, &workload.manifest) {
-                    (WorkloadState::Running, WorkloadManifest::HolochainDhtV1(boxed)) => {
-                        let WorkloadManifestHolochainDhtV1 {
-                            happ_binary_url,
-                            network_seed,
-                            http_gw_enable,
-
-                            // acknowledge unused fields
-                            memproof: _,
-                            bootstrap_server_url: _,
-                            signal_server_url: _,
-                            stun_server_urls: _,
-                            holochain_feature_flags: _,
-                            holochain_version: _,
-                            http_gw_allowed_fns: _,
-                        } = boxed.as_ref();
-
-                        // TODO: wait until the container is considered booted
-                        // TODO: wait until holochain is ready
-
-                        let mut ham = Ham::connect(
-                            // TODO(feat): figure out the IP address of the container once we use network namespace separation
-                            Ipv4Addr::LOCALHOST,
-                            HOLOCHAIN_ADMIN_PORT_DEFAULT,
+        match workload_result {
+            WorkloadResult::Status(workload_status) => {
+                log::warn!("Received a workload status message (WorkloadResult::Status). This is currently unsupported. Ignoring... ");
+                Ok(workload_status)
+            }
+            WorkloadResult::Workload(workload) => {
+                // TODO(correctness): consider status.actual to inform assumptions towards the current state
+                // TODO(backlog,ux): spawn longer-running tasks and report back Pending, and set up a periodic status updates while the spawned task is running
+                let desired_state = &workload.status.desired;
+                let (actual_state, workload_state_payload) = match desired_state {
+                    WorkloadState::Running => {
+                        let (workload_path_toplevel, _) = ensure_workload_path(
+                            &workload._id,
+                            None,
+                            util::EnsureWorkloadPathMode::Create,
+                        )?;
+                        let extra_container_path = realize_extra_container_path(
+                            workload._id,
+                            workload.manifest.clone(),
+                            (&workload_path_toplevel).into(),
                         )
                         .await?;
 
-                        let happ_bytes = ham::Ham::download_happ_bytes(happ_binary_url)
-                            .await
-                            .context(format!("downloading {happ_binary_url:?}"))?;
+                        let start_or_restart_if_desired =
+                            if let WorkloadState::Running = desired_state {
+                                " --start --restart-changed"
+                            } else {
+                                ""
+                            };
 
-                        // TODO(feat): derive a different predictable app id from the workload
-                        let installed_app_id = workload_id.to_hex();
+                        bash(&format!(
+                            "extra-container create {extra_container_path}{start_or_restart_if_desired}",
+                        ))
+                        .await?;
 
-                        // TODO(clarify): how do we want to handle installing on a container that has previous state and the happ is already installed?
-                        let (app_info, agent_key, app_interfaces) = if let Some(previous) =
-                            ham.find_installed_app(&installed_app_id).await?
-                        {
-                            previous
-                        } else {
-                            let (app_info, agent_key) = ham
-                                .install_and_enable_happ(
-                                    &happ_bytes,
-                                    network_seed.clone(),
-                                    None,
-                                    Some(installed_app_id.clone()),
+                        let workload_state_payload = match (desired_state, &workload.manifest) {
+                            (WorkloadState::Running, WorkloadManifest::HolochainDhtV1(boxed)) => {
+                                let WorkloadManifestHolochainDhtV1 {
+                                    happ_binary_url,
+                                    network_seed,
+                                    http_gw_enable,
+
+                                    // acknowledge unused fields
+                                    memproof: _,
+                                    bootstrap_server_url: _,
+                                    signal_server_url: _,
+                                    stun_server_urls: _,
+                                    holochain_feature_flags: _,
+                                    holochain_version: _,
+                                    http_gw_allowed_fns: _,
+                                } = boxed.as_ref();
+
+                                // TODO: wait until the container is considered booted
+                                // TODO: wait until holochain is ready
+
+                                let mut ham = Ham::connect(
+                                    // TODO(feat): figure out the IP address of the container once we use network namespace separation
+                                    Ipv4Addr::LOCALHOST,
+                                    HOLOCHAIN_ADMIN_PORT_DEFAULT,
                                 )
                                 .await?;
 
-                            let mut app_interface_info = AppInterfaceInfo {
-                                port: 0,
-                                // TODO(security)
-                                allowed_origins: AllowedOrigins::Any,
-                                installed_app_id: Some(installed_app_id.clone()),
-                            };
+                                let happ_bytes = ham::Ham::download_happ_bytes(happ_binary_url)
+                                    .await
+                                    .context(format!("downloading {happ_binary_url:?}"))?;
 
-                            let AppInterfaceInfo {
-                                port,
-                                allowed_origins,
-                                installed_app_id,
-                            } = &mut app_interface_info;
+                                // TODO(feat): derive a different predictable app id from the workload
+                                let installed_app_id = workload._id.to_hex();
 
-                            // Connect app agent client
-                            // TODO(correctness): this port is going to be different after holochain (e.g. due to a machine reboot) is restarted
-                            *port = ham
-                                .admin_ws
-                                .attach_app_interface(
-                                    *port,
-                                    allowed_origins.clone(),
-                                    installed_app_id.clone(),
-                                )
-                                .await
-                                .context("attaching app interface")?;
+                                // TODO(clarify): how do we want to handle installing on a container that has previous state and the happ is already installed?
+                                let (app_info, agent_key, app_interfaces) = if let Some(previous) =
+                                    ham.find_installed_app(&installed_app_id).await?
+                                {
+                                    previous
+                                } else {
+                                    let (app_info, agent_key) = ham
+                                        .install_and_enable_happ(
+                                            &happ_bytes,
+                                            network_seed.clone(),
+                                            None,
+                                            Some(installed_app_id.clone()),
+                                        )
+                                        .await?;
 
-                            (app_info, agent_key, vec![app_interface_info])
-                        };
+                                    let mut app_interface_info = AppInterfaceInfo {
+                                        port: 0,
+                                        // TODO(security)
+                                        allowed_origins: AllowedOrigins::Any,
+                                        installed_app_id: Some(installed_app_id.clone()),
+                                    };
 
-                        let app_ws_port = app_interfaces
-                            .first()
-                            .ok_or_else(|| anyhow::anyhow!("got no app interface"))?
-                            .port;
+                                    let AppInterfaceInfo {
+                                        port,
+                                        allowed_origins,
+                                        installed_app_id,
+                                    } = &mut app_interface_info;
 
-                        // TODO(clarify): iterate over all cells and call init until a call succeeds or cells are exhausted. treat errors as warnings.
-                        let _happ = AppBundle::decode(&happ_bytes).context("decoding AppBundle")?;
-
-                        let app_info_bson =
-                            bson::to_bson(&app_info).context("serializing app_info into bson")?;
-
-                        // persist the ham state for debugging purposes; maybe we can reuse it later
-                        let _ = {
-                            let mut ham_state_builder = ham::HamStateBuilder::default();
-                            ham_state_builder = ham_state_builder.app_info(app_info);
-                            ham_state_builder = ham_state_builder.agent_key(agent_key);
-                            ham_state_builder = ham_state_builder.app_ws_port(app_ws_port);
-                            let ham_state =
-                                ham_state_builder.build().context("building HamState")?;
-                            let ham_state_path =
-                                Path::new(&workload_path_toplevel).join("ham.state");
-                            ham_state
-                                .persist(&ham_state_path)
-                                .context(format!("persisting ham state to {ham_state_path:?}"))?;
-                            ham_state
-                        };
-
-                        if *http_gw_enable {
-                            /* TODO(feat: multiple workloads per host): dynamically allocate/retrieve ip:port
-                                multiple options
-                                a) we use privateNetwork = true in containers and can use the default hc-http-gw port
-                                b) we use privateNetwork = false in containers and need different hc-http-gw ports
-
-                                option (b) is inherently less secure as the admin websocktes will also be shared on the host network namespace
-                            */
-
-                            let hc_http_gw_url_base = url::Url::parse(&format!(
-                                "http://127.0.0.1:{HOLOCHAIN_HTTP_GW_PORT_DEFAULT}"
-                            ))?;
-
-                            match self
-                                .hc_http_gw_storetore
-                                .entry(workload_id.to_hex())
-                                .await
-                                .context("retrieving entry for {workload_id}")
-                            {
-                                Ok(Some(_)) => {
-                                    // TODO: deal with this case smarter
-                                    self.hc_http_gw_storetore
-                                        .delete(workload_id.to_hex())
+                                    // Connect app agent client
+                                    // TODO(correctness): this port is going to be different after holochain (e.g. due to a machine reboot) is restarted
+                                    *port = ham
+                                        .admin_ws
+                                        .attach_app_interface(
+                                            *port,
+                                            allowed_origins.clone(),
+                                            installed_app_id.clone(),
+                                        )
                                         .await
-                                        .context("deleting entry for {workload_id}")?;
-                                }
-                                Ok(None) => {}
-                                Err(e) => {
-                                    log::error!("{}", e);
-                                }
+                                        .context("attaching app interface")?;
+
+                                    (app_info, agent_key, vec![app_interface_info])
+                                };
+
+                                let app_ws_port = app_interfaces
+                                    .first()
+                                    .ok_or_else(|| anyhow::anyhow!("got no app interface"))?
+                                    .port;
+
+                                // TODO(clarify): iterate over all cells and call init until a call succeeds or cells are exhausted. treat errors as warnings.
+                                let _happ =
+                                    AppBundle::decode(&happ_bytes).context("decoding AppBundle")?;
+
+                                let app_info_bson = bson::to_bson(&app_info)
+                                    .context("serializing app_info into bson")?;
+
+                                // persist the ham state for debugging purposes; maybe we can reuse it later
+                                let _ = {
+                                    let mut ham_state_builder = ham::HamStateBuilder::default();
+                                    ham_state_builder = ham_state_builder.app_info(app_info);
+                                    ham_state_builder = ham_state_builder.agent_key(agent_key);
+                                    ham_state_builder = ham_state_builder.app_ws_port(app_ws_port);
+                                    let ham_state =
+                                        ham_state_builder.build().context("building HamState")?;
+                                    let ham_state_path =
+                                        Path::new(&workload_path_toplevel).join("ham.state");
+                                    ham_state.persist(&ham_state_path).context(format!(
+                                        "persisting ham state to {ham_state_path:?}"
+                                    ))?;
+                                    ham_state
+                                };
+
+                                if *http_gw_enable {
+                                    /* TODO(feat: multiple workloads per host): dynamically allocate/retrieve ip:port
+                                        multiple options
+                                        a) we use privateNetwork = true in containers and can use the default hc-http-gw port
+                                        b) we use privateNetwork = false in containers and need different hc-http-gw ports
+
+                                        option (b) is inherently less secure as the admin websockets will also be shared on the host network namespace
+                                    */
+
+                                    let hc_http_gw_url_base = url::Url::parse(&format!(
+                                        "http://127.0.0.1:{HOLOCHAIN_HTTP_GW_PORT_DEFAULT}"
+                                    ))?;
+
+                                    match self
+                                        .hc_http_gw_storetore
+                                        .entry(workload._id.to_hex())
+                                        .await
+                                        .context("retrieving entry for {workload._id}")
+                                    {
+                                        Ok(Some(_)) => {
+                                            // TODO: deal with this case smarter
+                                            self.hc_http_gw_storetore
+                                                .delete(workload._id.to_hex())
+                                                .await
+                                                .context("deleting entry for {workload._id}")?;
+                                        }
+                                        Ok(None) => {}
+                                        Err(e) => {
+                                            log::error!("{}", e);
+                                        }
+                                    }
+
+                                    let key = workload._id.to_hex();
+                                    let value = HcHttpGwWorkerKvBucketValue {
+                                        desired_state: WorkloadStateDiscriminants::Running,
+                                        hc_http_gw_url_base,
+                                        installed_app_id,
+                                    };
+                                    let value_blob = serde_json::to_string(&value)
+                                        .context(format!("serializing {value:?}"))?;
+
+                                    self.hc_http_gw_storetore
+                                        .create(&key, value_blob.into())
+                                        .await
+                                        .context(format!(
+                                            "creating entry with key {key} and value {value:?}"
+                                        ))?;
+                                };
+
+                                WorkloadStatePayload::HolochainDhtV1(app_info_bson)
                             }
 
-                            let key = workload_id.to_hex();
-                            let value = HcHttpGwWorkerKvBucketValue {
-                                desired_state: WorkloadStateDiscriminants::Running,
-                                hc_http_gw_url_base,
-                                installed_app_id,
-                            };
-                            let value_blob = serde_json::to_string(&value)
-                                .context(format!("serializing {value:?}"))?;
-
-                            self.hc_http_gw_storetore
-                                .create(&key, value_blob.into())
-                                .await
-                                .context(format!(
-                                    "creating entry with key {key} and value {value:?}"
-                                ))?;
+                            _ => WorkloadStatePayload::None,
                         };
 
-                        WorkloadStatePayload::HolochainDhtV1(app_info_bson)
+                        (desired_state, workload_state_payload)
                     }
+                    WorkloadState::Uninstalled | WorkloadState::Deleted => {
+                        let (workload_path_toplevel, path_exists) = ensure_workload_path(
+                            &workload._id,
+                            None,
+                            util::EnsureWorkloadPathMode::Observe,
+                        )?;
 
-                    _ => WorkloadStatePayload::None,
-                };
+                        match workload.manifest {
+                            WorkloadManifest::HolochainDhtV1(
+                                ref workload_manifest_holochain_dht_v1,
+                            ) if workload_manifest_holochain_dht_v1.http_gw_enable => {
+                                let key = workload._id.to_hex();
+                                if let Some(entry) = self
+                                    .hc_http_gw_storetore
+                                    .entry(&key)
+                                    .await
+                                    .context("retrieving entry for {workload._id}")
+                                    .unwrap_or_else(|e| {
+                                        log::error!("{e}");
+                                        None
+                                    })
+                                {
+                                    let desired_state: WorkloadStateDiscriminants =
+                                        desired_state.into();
+                                    log::debug!(
+                                        "marking the KV entry for {key} to be become {desired_state:?}"
+                                    );
+                                    let mut value: HcHttpGwWorkerKvBucketValue =
+                                        serde_json::from_slice(&entry.value).context(format!(
+                                            "deserializing HcHttpGwWorkerKvBucketValue for {:?}",
+                                            workload._id.to_hex()
+                                        ))?;
 
-                (desired_state, status_payload)
-            }
-            WorkloadState::Uninstalled | WorkloadState::Removed | WorkloadState::Deleted => {
-                let (workload_path_toplevel, exists) = ensure_workload_path(
-                    &workload_id,
-                    None,
-                    util::EnsureWorkloadPathMode::Observe,
-                )?;
+                                    value.desired_state = desired_state;
 
-                match workload.manifest {
-                    WorkloadManifest::HolochainDhtV1(ref workload_manifest_holochain_dht_v1)
-                        if workload_manifest_holochain_dht_v1.http_gw_enable =>
-                    {
-                        let key = workload_id.to_hex();
-                        if let Some(entry) = self
-                            .hc_http_gw_storetore
-                            .entry(&key)
-                            .await
-                            .context("retrieving entry for {workload_id}")
-                            .unwrap_or_else(|e| {
-                                log::error!("{e}");
-                                None
-                            })
-                        {
-                            let desired_state: WorkloadStateDiscriminants = desired_state.into();
-                            log::debug!(
-                                "marking the KV entry for {key} to be become {desired_state:?}"
-                            );
-                            let mut value: HcHttpGwWorkerKvBucketValue =
-                                serde_json::from_slice(&entry.value).context(format!(
-                                    "deserializing HcHttpGwWorkerKvBucketValue for {workload_id}"
-                                ))?;
-
-                            value.desired_state = desired_state;
-
-                            if let Err(e) =
-                                async { serde_json::to_string(&value).map_err(anyhow::Error::from) }
+                                    if let Err(e) = async {
+                                        serde_json::to_string(&value).map_err(anyhow::Error::from)
+                                    }
                                     .and_then(|serialized| {
                                         self.hc_http_gw_storetore
                                             .put(&key, serialized.into())
                                             .map_err(anyhow::Error::from)
                                     })
                                     .await
-                            {
-                                // best effort cleanup, don't throw here
-                                log::warn!("error putting the changed {key}: {e}");
+                                    {
+                                        // best effort cleanup, don't throw here
+                                        log::warn!("error putting the changed {key}: {e}");
+                                    }
+                                }
+                            }
+
+                            _ => (),
+                        }
+
+                        if path_exists {
+                            let extra_container_path = provision_extra_container_closure_path(
+                                &workload_path_toplevel.into(),
+                            )?;
+
+                            let extra_container_subcmd = match desired_state {
+                                WorkloadState::Deleted => "destroy",
+                                _ => "stop",
+                            };
+
+                            bash(&format!(
+                                "extra-container {extra_container_subcmd} {extra_container_path}"
+                            ))
+                            .await?;
+
+                            if Path::new(&extra_container_path).exists() {
+                                log::debug!("removing container path at {extra_container_path}");
+                                std::fs::remove_dir_all(&extra_container_path)
+                                    .context(format!("removing {extra_container_path}"))?;
                             }
                         }
+
+                        (desired_state, WorkloadStatePayload::None)
                     }
 
-                    _ => (),
-                }
-
-                if exists {
-                    let extra_container_path =
-                        provision_extra_container_closure_path(&workload_path_toplevel.into())?;
-
-                    let extra_container_subcmd = match desired_state {
-                        WorkloadState::Deleted => "destroy",
-                        _ => "stop",
-                    };
-
-                    bash(&format!(
-                        "extra-container {extra_container_subcmd} {extra_container_path}"
-                    ))
-                    .await?;
-
-                    if Path::new(&extra_container_path).exists() {
-                        log::debug!("removing container path at {extra_container_path}");
-                        std::fs::remove_dir_all(&extra_container_path)
-                            .context(format!("removing {extra_container_path}"))?;
+                    WorkloadState::Reported
+                    | WorkloadState::Assigned
+                    | WorkloadState::Updated
+                    | WorkloadState::Pending
+                    | WorkloadState::Error(_)
+                    | WorkloadState::Unknown(_) => {
+                        anyhow::bail!("unsupported desired state {desired_state:?}")
                     }
-                }
+                };
 
-                (desired_state, WorkloadStatePayload::None)
+                Ok(WorkloadStatus {
+                    id: Some(workload._id),
+                    desired: workload.status.desired.clone(),
+                    actual: actual_state.clone(),
+                    payload: workload_state_payload,
+                })
             }
-
-            WorkloadState::Updated
-            | WorkloadState::Reported
-            | WorkloadState::Assigned
-            | WorkloadState::Pending
-            | WorkloadState::Updating
-            | WorkloadState::Error(_)
-            | WorkloadState::Unknown(_) => {
-                anyhow::bail!("unsupported desired state {desired_state:?}")
-            }
-        };
-
-        Ok((
-            WorkloadStatus {
-                id: workload._id,
-                desired: workload.status.desired.clone(),
-                actual: actual_status.clone(),
-                payload: status_payload,
-            },
-            workload,
-        ))
+        }
     }
 
     pub async fn update_workload(
@@ -373,43 +368,38 @@ impl HostWorkloadApi {
             });
 
         // TODO: throwing an actual error from here leads to the request silently skipped with no logs entry in the host-agent.
-        let (workload_status, maybe_workload) = match self
-            .handle_workload_command(msg_subject, try_message_payload)
-            .await
-        {
-            Ok(result) => (result.0, Some(result.1)),
+        let workload_status = match self.handle_workload_command(try_message_payload).await {
+            Ok(r) => r,
             Err(err) => {
-                let (status, maybe_workload) = match err.downcast::<WorkloadResultError>() {
-                    Ok(WorkloadResultError { e, workload_result }) => (
-                        WorkloadStatus {
-                            actual: WorkloadState::Error(e.to_string()),
-                            ..workload_result.status
-                        },
-                        workload_result.workload,
-                    ),
-                    Err(e) => (
-                        // workload_id={workload_id},
-                        WorkloadStatus {
+                let workload_status= match err.downcast::<WorkloadResultError>() {
+                    Ok(WorkloadResultError { e, workload_result }) => {
+                        match workload_result {
+                            WorkloadResult::Workload(workload) => {
+                                WorkloadStatus {
+                                    id: Some(workload._id),
+                                    actual: WorkloadState::Error(e.to_string()),
+                                    ..workload.status
+                                }
+                            },
+                            WorkloadResult::Status(s) => s
+                        }
+                    },
+                    Err(e) => WorkloadStatus {
                             id: None,
                             desired: WorkloadState::Unknown(Default::default()),
                             actual: WorkloadState::Error(format!("Error handling workload update. request_subject={msg_subject}, err={e:?}")),
                             payload: Default::default(),
                         },
-                        None,
-                    ),
                 };
 
-                log::error!("{status:?}");
-                (status, maybe_workload)
+                log::error!("{workload_status:?}");
+                workload_status
             }
         };
 
         Ok(WorkloadApiResult {
             maybe_response_tags: None,
-            result: WorkloadResult {
-                status: workload_status,
-                workload: maybe_workload,
-            },
+            result: WorkloadResult::Status(workload_status),
         })
     }
 
@@ -421,37 +411,28 @@ impl HostWorkloadApi {
         log::trace!("Incoming message for '{}'", msg_subject);
 
         let workload_result = Self::convert_msg_to_type::<WorkloadResult>(msg)?;
-        let status = workload_result.status;
+        let current_status = match workload_result {
+            WorkloadResult::Workload(workload) => {
+                // let last_recorded_status = workload.status;
 
-        // we're interested in the actual status on the system for this workload
-        let workload =
-            match workload_result.workload {
-                Some(workload) => workload,
-                None => return Ok(WorkloadApiResult {
-                    result: WorkloadResult {
-                        status: WorkloadStatus {
-                            actual: WorkloadState::Error(
-                                "we need to know the workload information to get a status for it"
-                                    .to_owned(),
-                            ),
-                            ..status
-                        },
-                        workload: None,
-                    },
-                    maybe_response_tags: None,
-                }),
-            };
+                // TODO: this is a placeholder for fetching the actual status on the system for this workload
+                // we're interested in the actual status on the system for this workload
 
-        // TODO: look up the status for the given workload
+                // TODO: look up the status for the given workload
+
+                workload.status
+            }
+            WorkloadResult::Status(status) => {
+                log::warn!("Received a workload status message (WorkloadResult::Status). This is currently unsupported. Ignoring... ");
+                status
+            }
+        };
 
         // Send updated status:
         // NB: This will send the update to both the requester (if one exists)
         // and will broadcast the update to for any `response_subject` address registred for the endpoint
         Ok(WorkloadApiResult {
-            result: WorkloadResult {
-                status,
-                workload: Some(workload),
-            },
+            result: WorkloadResult::Status(current_status),
             maybe_response_tags: None,
         })
     }
@@ -465,16 +446,7 @@ mod util {
     use std::{path::PathBuf, process::Stdio, str::FromStr};
     use tokio::process::Command;
 
-    use crate::{
-        host_api::{get_container_name, HOLOCHAIN_ADMIN_PORT_DEFAULT},
-        types::WorkloadResult,
-    };
-
-    pub fn get_workload_id(wr: &WorkloadResult) -> anyhow::Result<ObjectId> {
-        wr.workload.as_ref().and_then(|w| w._id).ok_or_else(|| {
-            anyhow::anyhow!("need a workload with an id to process the workload request")
-        })
-    }
+    use crate::host_api::{get_container_name, HOLOCHAIN_ADMIN_PORT_DEFAULT};
 
     pub(crate) async fn bash(cmd: &str) -> anyhow::Result<()> {
         let mut workload_cmd = tokio::process::Command::new("/usr/bin/env");
@@ -525,7 +497,7 @@ mod util {
             }
         };
 
-        let exists = match mode {
+        let path_exists = match mode {
             EnsureWorkloadPathMode::Create => {
                 std::fs::create_dir_all(&workload_path).map(|()| true)?
             }
@@ -534,7 +506,7 @@ mod util {
 
         let path = workload_path.to_str().map(ToString::to_string).ok_or_else(|| anyhow::anyhow!("{workload_path:?} is not a valid string, and we need to use it in string representation"))?;
 
-        Ok((path, exists))
+        Ok((path, path_exists))
     }
 
     // transform the workload into something that can be executed

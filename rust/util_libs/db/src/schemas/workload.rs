@@ -32,18 +32,14 @@ pub enum WorkloadState {
     Assigned,
     /// Workload installation pending on host device
     Pending,
-    /// Workload installed on host device
-    Installed,
+    // /// Workload installed on host device
+    // Installed,
     /// Workload running on host device
     Running,
-    /// Workload is being updated
-    Updating,
     /// Workload update completed
     Updated,
     /// Workload marked for deletion
     Deleted,
-    /// Workload links removed
-    Removed,
     /// Workload uninstalled from host device
     Uninstalled,
     /// Error state with message
@@ -90,8 +86,7 @@ pub struct SystemSpecs {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Workload {
     /// MongoDB ObjectId of the workload document
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub _id: Option<ObjectId>,
+    pub _id: ObjectId,
     /// Common metadata fields
     pub metadata: Metadata,
     /// Reference to the user who created this workload
@@ -185,7 +180,7 @@ impl Default for Workload {
         let semver = version.to_string();
 
         Self {
-            _id: None,
+            _id: ObjectId::new(),
             metadata: Metadata {
                 is_deleted: false,
                 created_at: Some(DateTime::now()),
