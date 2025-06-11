@@ -25,7 +25,7 @@ use ham::{
     },
     Ham,
 };
-use nats_utils::types::ServiceError;
+use nats_utils::{macros::ApiOptions, types::ServiceError};
 use serde::{Deserialize, Serialize};
 use std::{fmt::Debug, net::Ipv4Addr, path::Path, sync::Arc};
 use url::Url;
@@ -56,9 +56,8 @@ const HOLOCHAIN_HTTP_GW_PORT_DEFAULT: u16 = 8090;
 impl HostWorkloadApi {
     async fn handle_workload_command(
         &self,
-        try_message_payload: Result<WorkloadResult, ServiceError>,
+        workload_result: WorkloadResult,
     ) -> anyhow::Result<WorkloadStatus> {
-        let workload_result = try_message_payload?;
         match workload_result {
             WorkloadResult::Status(workload_status) => {
                 log::warn!("Received a workload status message (WorkloadResult::Status). This is currently unsupported. Ignoring... ");
@@ -358,40 +357,41 @@ impl HostWorkloadApi {
     pub async fn update_workload(
         &self,
         msg: Arc<Message>,
+        api_options: ApiOptions,
     ) -> Result<WorkloadApiResult, ServiceError> {
         let msg_subject = msg.subject.clone().into_string();
-        log::debug!("Incoming message for '{}'", msg_subject);
+        let msg_headers = msg.headers.clone();
+        log::trace!("Incoming message for '{}'", msg_subject);
 
-        let try_message_payload =
-            Self::convert_msg_to_type::<WorkloadResult>(msg).inspect(|message_payload| {
-                log::debug!("Message payload '{}' : {:?}", msg_subject, message_payload)
-            });
+        let mut header_map = async_nats::HeaderMap::new();
+        let host_device_id = api_options.device_id;
+        header_map.insert("host_id", host_device_id);
 
-        // TODO: throwing an actual error from here leads to the request silently skipped with no logs entry in the host-agent.
-        let workload_status = match self.handle_workload_command(try_message_payload).await {
+        // TODO: fix -
+        // Note: Throwing an actual error in this scope leads to the request silently skipped with no logs entry in the host-agent.
+        let workload_payload = match Self::convert_msg_to_type::<WorkloadResult>(msg) {
             Ok(r) => r,
             Err(err) => {
-                let workload_status= match err.downcast::<WorkloadResultError>() {
-                    Ok(WorkloadResultError { e, workload_result }) => {
-                        match workload_result {
-                            WorkloadResult::Workload(workload) => {
-                                WorkloadStatus {
-                                    id: Some(workload._id),
-                                    actual: WorkloadState::Error(e.to_string()),
-                                    ..workload.status
-                                }
-                            },
-                            WorkloadResult::Status(s) => s
-                        }
-                    },
-                    Err(e) => WorkloadStatus {
-                            id: None,
-                            desired: WorkloadState::Unknown(Default::default()),
-                            actual: WorkloadState::Error(format!("Error handling workload update. request_subject={msg_subject}, err={e:?}")),
-                            payload: Default::default(),
-                        },
-                };
+                return Ok(WorkloadApiResult {
+                    maybe_response_tags: None,
+                    result: WorkloadResult::Status(Self::handle_error(
+                        err.into(),
+                        msg_subject,
+                        msg_headers,
+                    )),
+                    maybe_headers: Some(header_map),
+                });
+            }
+        };
 
+        log::debug!(
+            "Received update workload message. subject={msg_subject}', msg={workload_payload:?}"
+        );
+
+        let workload_status = match self.handle_workload_command(workload_payload).await {
+            Ok(res) => res,
+            Err(err) => {
+                let workload_status = Self::handle_error(err, msg_subject, msg_headers);
                 log::error!("{workload_status:?}");
                 workload_status
             }
@@ -400,6 +400,7 @@ impl HostWorkloadApi {
         Ok(WorkloadApiResult {
             maybe_response_tags: None,
             result: WorkloadResult::Status(workload_status),
+            maybe_headers: Some(header_map),
         })
     }
 
@@ -410,8 +411,8 @@ impl HostWorkloadApi {
         let msg_subject = msg.subject.clone().into_string();
         log::trace!("Incoming message for '{}'", msg_subject);
 
-        let workload_result = Self::convert_msg_to_type::<WorkloadResult>(msg)?;
-        let current_status = match workload_result {
+        let workload_payload = Self::convert_msg_to_type::<WorkloadResult>(msg)?;
+        let current_status = match workload_payload {
             WorkloadResult::Workload(workload) => {
                 // let last_recorded_status = workload.status;
 
@@ -434,7 +435,44 @@ impl HostWorkloadApi {
         Ok(WorkloadApiResult {
             result: WorkloadResult::Status(current_status),
             maybe_response_tags: None,
+            maybe_headers: None,
         })
+    }
+
+    fn handle_error(
+        err: anyhow::Error,
+        msg_subject: String,
+        maybe_msg_headers: Option<async_nats::HeaderMap>,
+    ) -> WorkloadStatus {
+        match err.downcast::<WorkloadResultError>() {
+            Ok(WorkloadResultError {
+                e,
+                workload_result: payload,
+            }) => match payload {
+                WorkloadResult::Workload(workload) => WorkloadStatus {
+                    id: Some(workload._id),
+                    actual: WorkloadState::Error(e.to_string()),
+                    ..workload.status
+                },
+                WorkloadResult::Status(s) => s,
+            },
+            Err(e) => {
+                let workload_id = maybe_msg_headers.and_then(|header_map| {
+                    header_map
+                        .get("workload_id")
+                        .and_then(|workload_id| ObjectId::parse_str(workload_id).ok())
+                });
+
+                WorkloadStatus {
+                    id: workload_id,
+                    desired: WorkloadState::Unknown(Default::default()),
+                    actual: WorkloadState::Error(format!(
+                        "Error handling workload update. request_subject={msg_subject}, err={e:?}"
+                    )),
+                    payload: Default::default(),
+                }
+            }
+        }
     }
 }
 

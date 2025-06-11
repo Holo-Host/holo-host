@@ -245,9 +245,12 @@ mod tests {
         let msg = Arc::new(NatsMessage::new("WORKLOAD.insert", msg_payload).into_message());
 
         let r = api.manage_workload_on_host(msg).await?;
-        
+
         if let WorkloadResult::Workload(returned_workload) = r.result {
-            assert!(matches!(returned_workload.status.actual, WorkloadState::Assigned));
+            assert!(matches!(
+                returned_workload.status.actual,
+                WorkloadState::Assigned
+            ));
             assert_eq!(returned_workload.status.desired, workload.status.desired);
         } else {
             panic!("Expected WorkloadResult::Workload, got something else");

@@ -37,8 +37,9 @@ use mongodb::{
     options::{FullDocumentType, UpdateModifications},
     Client as MongoDBClient,
 };
-use nats_utils::types::CreateResponse;
-use nats_utils::types::CreateTag;
+use nats_utils::types::GetHeaderMap;
+use nats_utils::types::GetResponse;
+use nats_utils::types::GetSubjectTags;
 use nats_utils::types::{ResponseSubjectsGenerator, ServiceError};
 use serde::{Deserialize, Serialize};
 use std::time::SystemTime;
@@ -95,6 +96,7 @@ impl OrchestratorWorkloadApi {
                 Ok(WorkloadApiResult {
                     result: WorkloadResult::Status(status),
                     maybe_response_tags: None,
+                    maybe_headers: None,
                 })
             },
         )
@@ -149,6 +151,7 @@ impl OrchestratorWorkloadApi {
                 Ok(WorkloadApiResult {
                     result: WorkloadResult::Status(status),
                     maybe_response_tags: None,
+                    maybe_headers: None,
                 })
             },
         )
@@ -201,6 +204,7 @@ impl OrchestratorWorkloadApi {
                 Ok(WorkloadApiResult {
                     result: WorkloadResult::Status(status),
                     maybe_response_tags: None,
+                    maybe_headers: None,
                 })
             },
         )
@@ -273,6 +277,7 @@ impl OrchestratorWorkloadApi {
         Ok(WorkloadApiResult {
             result: WorkloadResult::Status(workload_status),
             maybe_response_tags: None,
+            maybe_headers: None,
         })
     }
 
@@ -334,6 +339,7 @@ impl OrchestratorWorkloadApi {
                         ..workload.status
                     }),
                     maybe_response_tags: None,
+                    maybe_headers: None,
                 })
             }
         }
@@ -400,7 +406,7 @@ impl OrchestratorWorkloadApi {
             hosts
         );
         // Create tag map for response
-        let mut tag_map = HashMap::new();
+        let mut subject_tag_map = HashMap::new();
         for (index, host) in hosts.iter().enumerate() {
             let host_id = host._id.ok_or_else(|| {
                 ServiceError::internal(
@@ -408,20 +414,24 @@ impl OrchestratorWorkloadApi {
                     Some("Database integrity error".to_string()),
                 )
             })?;
-            tag_map.insert(
+            subject_tag_map.insert(
                 format!("{TAG_MAP_PREFIX_ASSIGNED_HOST}{}", index),
                 host_id.to_hex(),
             );
         }
+        log::trace!("Subject tag map: {subject_tag_map:?}");
 
-        log::trace!("Subject tag map: {tag_map:?}");
+        let mut header_map = async_nats::HeaderMap::new();
+        header_map.insert("workload_id", workload._id.to_hex());
+        log::trace!("Nats header map: {header_map:?}");
 
         Ok(WorkloadApiResult {
             result: WorkloadResult::Workload(Workload {
                 status: new_status,
                 ..workload
             }),
-            maybe_response_tags: Some(tag_map),
+            maybe_response_tags: Some(subject_tag_map),
+            maybe_headers: Some(header_map),
         })
     }
 
@@ -620,7 +630,7 @@ impl OrchestratorWorkloadApi {
             .await?;
 
         // Create tag map for response
-        let mut tag_map = HashMap::new();
+        let mut subject_tag_map = HashMap::new();
         for (index, host_id) in assigned_host_ids.iter().enumerate() {
             let assigned_host = min_eligible_hosts
                 .iter()
@@ -633,26 +643,32 @@ impl OrchestratorWorkloadApi {
                     )
                 })?;
 
-            tag_map.insert(
+            subject_tag_map.insert(
                 format!("{TAG_MAP_PREFIX_ASSIGNED_HOST}{}", index),
                 assigned_host.device_id.to_string(),
             );
         }
 
-        if !tag_map.is_empty() {
+        if !subject_tag_map.is_empty() {
             log::info!(
                 "Assigned workload to hosts. Workload={:#?}\nDeviceIds={:#?}",
                 workload._id,
-                tag_map.values()
+                subject_tag_map.values()
             );
         }
+        log::trace!("Subject tag Map: {subject_tag_map:?}");
+
+        let mut header_map = async_nats::HeaderMap::new();
+        header_map.insert("workload_id", workload._id.to_hex());
+        log::trace!("Nats header map: {header_map:?}");
 
         Ok(WorkloadApiResult {
             result: WorkloadResult::Workload(Workload {
                 status: new_status,
                 ..workload
             }),
-            maybe_response_tags: Some(tag_map),
+            maybe_response_tags: Some(subject_tag_map),
+            maybe_headers: Some(header_map),
         })
     }
 
@@ -685,19 +701,33 @@ impl OrchestratorWorkloadApi {
         workload_api_result: WorkloadApiResult,
     ) {
         let response_bytes = workload_api_result.get_response();
-        let response_subjects = response_subject_fn(workload_api_result.get_tags());
+        let header_map = workload_api_result.get_header_map();
+        let response_subjects = response_subject_fn(workload_api_result.get_subject_tags());
         for response_subject in response_subjects.iter() {
             let subject = format!("{}.{}", service_subject, response_subject);
             log::debug!("publishing a message for hosts on {subject}");
-            if let Err(err) = jetstream
-                .publish(subject.clone(), response_bytes.clone())
-                .await
-            {
+
+            if let Err(err) = match header_map {
+                Some(ref header_map) => {
+                    jetstream
+                        .publish_with_headers(
+                            subject.clone(),
+                            header_map.clone(),
+                            response_bytes.clone(),
+                        )
+                        .await
+                }
+                None => {
+                    jetstream
+                        .publish(subject.clone(), response_bytes.clone())
+                        .await
+                }
+            } {
                 log::error!(
                     "WORKLOAD_API_LOG::Failed to publish new message to host: subj='{}', service={}, err={:?}",
                     subject,
                     "publish_response_to_hosts",
-                    err
+                    err,
                 );
             };
         }

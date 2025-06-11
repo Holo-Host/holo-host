@@ -17,6 +17,8 @@ use anyhow::{Context, Result};
 use async_nats::jetstream::kv::Store;
 use db_utils::schemas::workload::WorkloadStateDiscriminants;
 use futures::{StreamExt, TryStreamExt};
+use hpos_hal::inventory::MACHINE_ID_PATH;
+use nats_utils::macros::ApiOptions;
 use nats_utils::{
     generate_service_call,
     jetstream_client::JsClient,
@@ -71,12 +73,16 @@ pub async fn run(
         hc_http_gw_storetore,
     };
 
+    // Created/ensured by the host agent inventory service (which is started prior to this service)
+    let device_id =
+        std::fs::read_to_string(MACHINE_ID_PATH).context("reading device id from path")?;
+
     worload_api_js_service
         .add_consumer(
             ServiceConsumerBuilder::new(
                 "update_workload".to_string(),
                 WorkloadServiceSubjects::Update,
-                generate_service_call!(workload_api, update_workload),
+                generate_service_call!(workload_api, update_workload, ApiOptions { device_id }),
             )
             .with_subject_prefix(host_id.to_lowercase())
             .with_response_subject_fn(create_callback_subject(

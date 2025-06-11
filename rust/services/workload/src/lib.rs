@@ -99,6 +99,7 @@ where
                         payload: Default::default(),
                     }),
                     maybe_response_tags: None,
+                    maybe_headers: None,
                 })
             }
         };
@@ -124,6 +125,7 @@ where
                         payload: Default::default(),
                     }),
                     maybe_response_tags: None,
+                    maybe_headers: None,
                 })
             }
         }

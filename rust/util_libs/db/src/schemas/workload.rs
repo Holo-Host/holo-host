@@ -58,7 +58,7 @@ pub struct WorkloadStatus {
     pub desired: WorkloadState,
     /// Actual current state of the workload
     pub actual: WorkloadState,
-
+    #[serde(skip_serializing_if = "WorkloadStatePayload::is_default")]
     pub payload: WorkloadStatePayload,
 }
 
@@ -118,6 +118,13 @@ pub enum WorkloadStatePayload {
     #[default]
     None,
     HolochainDhtV1(Bson),
+}
+
+impl WorkloadStatePayload {
+    /// Returns true if this payload is the default value (None)
+    pub fn is_default(&self) -> bool {
+        matches!(self, WorkloadStatePayload::None)
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, clap::Args)]

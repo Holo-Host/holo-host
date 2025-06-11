@@ -825,7 +825,7 @@ fn ssh_host_keys() -> Vec<SSHPubKey> {
 }
 
 /// Path to machine-id file, as specified in the FreeDesktop standards.
-const MACHINE_ID_PATH: &str = "/etc/machine-id";
+pub const MACHINE_ID_PATH: &str = "/etc/machine-id";
 
 fn systemd_machine_id() -> String {
     match fs::read_to_string(MACHINE_ID_PATH).and_then(|content| {
