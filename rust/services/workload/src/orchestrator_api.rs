@@ -657,7 +657,7 @@ impl OrchestratorWorkloadApi {
     }
 
     // NB: This is a baseline for actual matching logic. It is a scaffold for future.
-    fn _verify_host_meets_workload_criteria(
+    pub fn _verify_host_meets_workload_criteria(
         &self,
         assigned_host_inventory: &HoloInventory,
         workload: &Workload,
