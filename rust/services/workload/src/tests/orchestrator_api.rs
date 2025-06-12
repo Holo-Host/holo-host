@@ -26,9 +26,11 @@ mod tests {
 
         let api = OrchestratorWorkloadApi::new(&db_client).await?;
         let workload = create_test_workload_default();
+        println!("workload: {:#?}", workload);
         let msg_payload = serde_json::to_vec(&workload).unwrap();
         let msg = Arc::new(NatsMessage::new("WORKLOAD.add", msg_payload).into_message());
         let r = api.add_workload(msg).await?;
+        println!("workload result: {:#?}", r);
 
         if let WorkloadResult::Status(status) = r.result {
             assert!(status.id.is_some());

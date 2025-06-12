@@ -1,8 +1,6 @@
 /*
 Endpoints & Managed Subjects:
-    - `install_workload`: handles the "WORKLOAD.<host_pukey>.install." subject
-    - `update_workload`: handles the "WORKLOAD.<host_pukey>.update_installed" subject
-    - `uninstall_workload`: handles the "WORKLOAD.<host_pukey>.uninstall." subject
+    - `update_workload`: handles the "WORKLOAD.<host_pukey>.update" subject
     - `fetch_workload_status`: handles the "WORKLOAD.<host_pukey>.send_status" subject
 */
 
@@ -97,9 +95,14 @@ lazy_static::lazy_static! {
 fn validate_holochain_version(version: Option<&String>) -> Result<(), String> {
     match version {
         Some(hc_version) => {
+
             let supported_versions = &VERSION_CONFIG.supported_versions;
+
             let parsed_version = hc_version.split('.').collect::<Vec<_>>();
-            if parsed_version.len() < 2 {
+
+            if parsed_version[0] == "latest" {
+                return Ok(());
+            } else if parsed_version.len() < 2 {
                 return Err(format!("Invalid Holochain version format. Please use the format 'x.y' or 'x.y.z'. requested_version={}", hc_version));
             }
             let major_minor_version = format!("{}.{}", parsed_version[0], parsed_version[1]);
