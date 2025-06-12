@@ -10,6 +10,7 @@
   lib,
   config,
   pkgs,
+  options,
   ...
 }:
 
@@ -43,6 +44,12 @@ in
       type = with lib.types; nullOr path;
       default = ../../supported-holochain-versions.json;
       description = "Path to the supported-holochain-versions.json file.";
+    };
+
+    features = lib.mkOption {
+      type = with lib.types; nullOr (listOf str);
+      default = null;
+      description = "A list of features to enable in the holochain package.";
     };
 
     rust = {
@@ -174,128 +181,135 @@ in
     };
   };
 
-  config = lib.mkIf cfg.enable {
-    # Dynamically set the package based on the version selection logic
-    holo.holochain.package = lib.mkDefault (
-      let
-        hcVersionsConfig =
-          if cfg.versionConfigPath != null && builtins.pathExists cfg.versionConfigPath
-          then builtins.fromJSON (builtins.readFile cfg.versionConfigPath)
-          else null;
+  config = lib.mkMerge [
+    (lib.mkIf cfg.enable {
+      # Dynamically set the package based on the version selection logic
+      holo.holochain.package = lib.mkDefault (
+        let
+          hcVersionsConfig =
+            if cfg.versionConfigPath != null && builtins.pathExists cfg.versionConfigPath
+            then builtins.fromJSON (builtins.readFile cfg.versionConfigPath)
+            else null;
 
 # Function to select holochain version
-        selectHolochainVersion = version: config:
-          let
-            supportedVersions = config.supported_versions;
-            versionMappings = config.version_mappings;
-            versionParts = builtins.split "\\." version;
+          selectHolochainVersion = version: config:
+            let
+              supportedVersions = config.supported_versions;
+              versionMappings = config.version_mappings;
+              versionParts = builtins.split "\\." version;
 
-            majorMinor =
-              if builtins.length versionParts >= 3
-              then "${builtins.elemAt versionParts 0}.${builtins.elemAt versionParts 2}"
-              else version;
+              majorMinor =
+                if builtins.length versionParts >= 3
+                then "${builtins.elemAt versionParts 0}.${builtins.elemAt versionParts 2}"
+                else version;
 
-            mappingKey =
-              if builtins.hasAttr version versionMappings
-              then version
-              else if builtins.hasAttr majorMinor versionMappings
-              then majorMinor
-              else null;
+              mappingKey =
+                if builtins.hasAttr version versionMappings
+                then version
+                else if builtins.hasAttr majorMinor versionMappings
+                then majorMinor
+                else null;
 
-            holonixInput =
-              if mappingKey != null
-              then versionMappings.${mappingKey}
-              else null;
-          in
-            if !(builtins.elem version supportedVersions || builtins.elem majorMinor supportedVersions)
-            then throw "Unsupported Holochain version '${version}'. Supported versions are: ${builtins.concatStringsSep ", " supportedVersions}"
-            else if holonixInput == null
-            then throw "No version mapping found for '${version}'. Available mappings: ${builtins.concatStringsSep ", " (builtins.attrNames versionMappings)}"
-            else inputs.${holonixInput}.packages.${pkgs.system}.holochain;
+              holonixInput =
+                if mappingKey != null
+                then versionMappings.${mappingKey}
+                else null;
+            in
+              if !(builtins.elem version supportedVersions || builtins.elem majorMinor supportedVersions)
+              then throw "Unsupported Holochain version '${version}'. Supported versions are: ${builtins.concatStringsSep ", " supportedVersions}"
+              else if holonixInput == null
+              then throw "No version mapping found for '${version}'. Available mappings: ${builtins.concatStringsSep ", " (builtins.attrNames versionMappings)}"
+              else inputs.${holonixInput}.packages.${pkgs.system}.holochain;
 
-      in
-        if hcVersionsConfig != null then
-          selectHolochainVersion (cfg.version or hcVersionsConfig.default_version) hcVersionsConfig
-        else
-          # Holochain package fallback if/when the holochain version config is missing.
-          ${cfg.package.default}
-    );
+        in
+          if hcVersionsConfig != null then
+            selectHolochainVersion (cfg.version or hcVersionsConfig.default_version) hcVersionsConfig
+          else
+            # Holochain package fallback if/when the holochain version config is missing.
+            options.holo.holochain.package.default
+      );
 
-    users.groups.${cfg.group} = { };
-    users.users.${cfg.user} = {
-      isSystemUser = true;
-      inherit (cfg) group;
-    };
-
-    # Add holochain CLI tools (hc*) to system packages
-    # This includes tools like: hc, hc-run-local-services, hc-sandbox, etc.
-    environment.systemPackages = [
-      # Link hc CLI tools from the holochain package
-      (pkgs.runCommand "holochain-cli-tools" { } ''
-        mkdir -p $out/bin
-        for bin in ${cfg.package}/bin/hc*; do
-          if [ -f "$bin" ]; then
-            ln -s $bin $out/bin/
-          fi
-        done
-      '')
-    ];
-
-    systemd.services.holochain = {
-      enable = true;
-
-      after = [
-        "network.target"
-      ];
-      wants = [
-        "network.target"
-      ];
-      wantedBy = lib.lists.optional cfg.autoStart "multi-user.target";
-
-      restartIfChanged = true;
-
-      environment = {
-        RUST_LOG = "${cfg.rust.log},wasmer_compiler_cranelift=warn";
-        RUST_BACKTRACE = cfg.rust.backtrace;
-        WASM_LOG = cfg.wasmLog;
+      users.groups.${cfg.group} = { };
+      users.users.${cfg.user} = {
+        isSystemUser = true;
+        inherit (cfg) group;
       };
 
-      preStart = ''
-        if [[ ! -e "${cfg.passphraseFile}" ]]; then
-          echo generating new passphrase at "${cfg.passphraseFile}".
-          ${lib.getExe pkgs.pwgen} 64 1 > "${cfg.passphraseFile}"
-        else
-          echo using existing passphrase at file ${cfg.passphraseFile}.
-        fi
-      '';
+      # Add holochain CLI tools (hc*) to system packages
+      # This includes tools like: hc, hc-run-local-services, hc-sandbox, etc.
+      environment.systemPackages = [
+        # Link hc CLI tools from the holochain package
+        (pkgs.runCommand "holochain-cli-tools" { } ''
+          mkdir -p $out/bin
+          for bin in ${cfg.package}/bin/hc*; do
+            if [ -f "$bin" ]; then
+              ln -s $bin $out/bin/
+            fi
+          done
+        '')
+      ];
 
-      serviceConfig =
-        let
-          StateDirectory = "holochain";
-        in
-        {
-          User = cfg.user;
-          Group = cfg.user;
-          # %S is short for StateDirectory
-          WorkingDirectory = "%S/${StateDirectory}";
-          inherit StateDirectory;
-          StateDirectoryMode = "0700";
-          Restart = "always";
-          RestartSec = 1;
-          Type = "notify"; # The conductor sends a notify signal to systemd when it is ready
-          NotifyAccess = "all";
+      systemd.services.holochain = {
+        enable = true;
+
+        after = [
+          "network.target"
+        ];
+        wants = [
+          "network.target"
+        ];
+        wantedBy = lib.lists.optional cfg.autoStart "multi-user.target";
+
+        restartIfChanged = true;
+
+        environment = {
+          RUST_LOG = "${cfg.rust.log},wasmer_compiler_cranelift=warn";
+          RUST_BACKTRACE = cfg.rust.backtrace;
+          WASM_LOG = cfg.wasmLog;
         };
 
-      script = builtins.toString (
-        pkgs.writeShellScript "holochain-wrapper" ''
-          set -xeE
+        preStart = ''
+          if [[ ! -e "${cfg.passphraseFile}" ]]; then
+            echo generating new passphrase at "${cfg.passphraseFile}".
+            ${lib.getExe pkgs.pwgen} 64 1 > "${cfg.passphraseFile}"
+          else
+            echo using existing passphrase at file ${cfg.passphraseFile}.
+          fi
+        '';
 
-          ${lib.getExe' cfg.package "holochain"} \
-            --piped \
-            --config-path ${cfg.conductorConfigYaml} \
-            < "${cfg.passphraseFile}"
-        ''
-      );
-    };
-  };
+        serviceConfig =
+          let
+            StateDirectory = "holochain";
+          in
+          {
+            User = cfg.user;
+            Group = cfg.user;
+            # %S is short for StateDirectory
+            WorkingDirectory = "%S/${StateDirectory}";
+            inherit StateDirectory;
+            StateDirectoryMode = "0700";
+            Restart = "always";
+            RestartSec = 1;
+            Type = "notify"; # The conductor sends a notify signal to systemd when it is ready
+            NotifyAccess = "all";
+          };
+
+        script = builtins.toString (
+          pkgs.writeShellScript "holochain-wrapper" ''
+            set -xeE
+
+            ${lib.getExe' cfg.package "holochain"} \
+              --piped \
+              --config-path ${cfg.conductorConfigYaml} \
+              < "${cfg.passphraseFile}"
+          ''
+        );
+      };
+    })
+    (lib.mkIf (cfg.features != null) {
+      holo.holochain.package = lib.mkForce (cfg.package.override {
+        cargoExtraArgs = "--features ${builtins.concatStringsSep "," cfg.features}";
+      });
+    })
+  ];
 }

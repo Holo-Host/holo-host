@@ -115,10 +115,12 @@ in
           RUST_BACKTRACE = cfg.rust.backtrace;
           NATS_LISTEN_PORT = builtins.toString cfg.nats.listenPort;
           NIX_REMOTE = "daemon";
-          HOLOCHAIN_VERSION_CONFIG_PATH = config.holo.holochain.versionConfigPath;
         }
         // lib.attrsets.optionalAttrs (cfg.nats.url != null) {
           NATS_URL = cfg.nats.url;
+        }
+        // lib.attrsets.optionalAttrs (config.holo ? "holochain") {
+          HOLOCHAIN_VERSION_CONFIG_PATH = config.holo.holochain.versionConfigPath;
         };
 
       path = config.environment.systemPackages ++ [

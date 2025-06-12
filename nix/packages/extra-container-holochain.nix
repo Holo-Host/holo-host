@@ -80,13 +80,9 @@ $ nix copy --no-check-sigs "$(nix build --print-out-paths .#packages.x86_64-linu
                 inherit adminWebsocketPort;
                 # NB: all holochain version handling logic is now located within the holochain nixos module.
                 version = holochainVersion;
+                features = holochainFeatures;
               }
             )
-            // (lib.optionalAttrs (holochainFeatures != null) {
-              package = (config.holo.holochain.package).override {
-                cargoExtraArgs = "--features ${builtins.concatStringsSep "," holochainFeatures}";
-              };
-            })
             // (lib.optionalAttrs (bootstrapUrl != null) {bootstrapServiceUrl = bootstrapUrl;})
             // (lib.optionalAttrs (signalUrl != null) {webrtcTransportPoolSignalUrl = signalUrl;})
             // (lib.optionalAttrs (stunUrls != null) {webrtcTransportPoolIceServers = stunUrls;})
