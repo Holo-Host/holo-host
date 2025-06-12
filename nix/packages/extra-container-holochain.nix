@@ -1,5 +1,7 @@
 /*
-this can be run on a nixos machine (that has extra-containers installed ?) using:
+This file is a package that configures the container.
+
+This can be run on a nixos machine (that has extra-containers installed ?) using:
 $ nix run --extra-experimental-features "nix-command flakes" --refresh github:holo-host/holo-host#extra-container-holochain -- --restart-changed
 
 optionally deploy locally to a dev machine:
@@ -22,12 +24,14 @@ $ nix copy --no-check-sigs "$(nix build --print-out-paths .#packages.x86_64-linu
   signalUrl ? null,
   stunUrls ? null,
   holochainFeatures ? null,
+  holochainVersion ? null,
   # hc-http-gw related args
   httpGwEnable ? false,
   httpGwAllowedAppIds ? [],
   # TODO: support
   # httpGwAllowedFns ? { },
 }: let
+  
   package = inputs.extra-container.lib.buildContainers {
     # The system of the container host
     inherit system;
@@ -71,29 +75,23 @@ $ nix copy --no-check-sigs "$(nix build --print-out-paths .#packages.x86_64-linu
           ];
 
           holo.holochain =
-            {
-              inherit adminWebsocketPort;
-              package = let
-                # TODO: choose according to the requested version. maybe by overriding the holonix branch?
-                versioned = options.holo.holochain.package.default;
-
-                featured =
-                  if holochainFeatures != null
-                  then let
-                    features = builtins.concatStringsSep "," holochainFeatures;
-                    cargoExtraArgs = "--features ${features}";
-                  in
-                    versioned.override {inherit cargoExtraArgs;}
-                  else versioned;
-
-                finalPkg = featured;
-              in
-                finalPkg;
-            }
+            (
+              {
+                inherit adminWebsocketPort;
+                # NB: all holochain version handling logic is now located within the holochain nixos module.
+                version = holochainVersion;
+              }
+            )
+            // (lib.optionalAttrs (holochainFeatures != null) {
+              package = (config.holo.holochain.package).override {
+                cargoExtraArgs = "--features ${builtins.concatStringsSep "," holochainFeatures}";
+              };
+            })
             // (lib.optionalAttrs (bootstrapUrl != null) {bootstrapServiceUrl = bootstrapUrl;})
             // (lib.optionalAttrs (signalUrl != null) {webrtcTransportPoolSignalUrl = signalUrl;})
             // (lib.optionalAttrs (stunUrls != null) {webrtcTransportPoolIceServers = stunUrls;})
-            #
+
+            # TODO: add support for httpGwAllowedFns ?
             ;
 
           holo.hc-http-gw = {
@@ -106,6 +104,7 @@ $ nix copy --no-check-sigs "$(nix build --print-out-paths .#packages.x86_64-linu
       };
     };
   };
+
   packageWithPlatformFilter = package.overrideAttrs {
     meta.platforms = with nixpkgs.lib;
       lists.intersectLists platforms.linux (platforms.x86_64 ++ platforms.aarch64);

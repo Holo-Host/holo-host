@@ -30,6 +30,19 @@ in
     package = lib.mkOption {
       type = lib.types.package;
       default = inputs.holonix_0_4.packages.${pkgs.system}.holochain;
+      description = "The Holochain package to use. By default, this is dynamically selected based on the 'version' and 'versionConfigPath' options.";
+    };
+
+    version = lib.mkOption {
+      type = with lib.types; nullOr str;
+      default = null;
+      description = "The desired holochain version string (e.g., '0.4', '0.5.1', 'latest').";
+    };
+
+    versionConfigPath = lib.mkOption {
+      type = with lib.types; nullOr path;
+      default = ../../supported-holochain-versions.json;
+      description = "Path to the supported-holochain-versions.json file.";
     };
 
     rust = {
@@ -162,6 +175,52 @@ in
   };
 
   config = lib.mkIf cfg.enable {
+    # Dynamically set the package based on the version selection logic
+    holo.holochain.package = lib.mkDefault (
+      let
+        hcVersionsConfig =
+          if cfg.versionConfigPath != null && builtins.pathExists cfg.versionConfigPath
+          then builtins.fromJSON (builtins.readFile cfg.versionConfigPath)
+          else null;
+
+# Function to select holochain version
+        selectHolochainVersion = version: config:
+          let
+            supportedVersions = config.supported_versions;
+            versionMappings = config.version_mappings;
+            versionParts = builtins.split "\\." version;
+
+            majorMinor =
+              if builtins.length versionParts >= 3
+              then "${builtins.elemAt versionParts 0}.${builtins.elemAt versionParts 2}"
+              else version;
+
+            mappingKey =
+              if builtins.hasAttr version versionMappings
+              then version
+              else if builtins.hasAttr majorMinor versionMappings
+              then majorMinor
+              else null;
+
+            holonixInput =
+              if mappingKey != null
+              then versionMappings.${mappingKey}
+              else null;
+          in
+            if !(builtins.elem version supportedVersions || builtins.elem majorMinor supportedVersions)
+            then throw "Unsupported Holochain version '${version}'. Supported versions are: ${builtins.concatStringsSep ", " supportedVersions}"
+            else if holonixInput == null
+            then throw "No version mapping found for '${version}'. Available mappings: ${builtins.concatStringsSep ", " (builtins.attrNames versionMappings)}"
+            else inputs.${holonixInput}.packages.${pkgs.system}.holochain;
+
+      in
+        if hcVersionsConfig != null then
+          selectHolochainVersion (cfg.version or hcVersionsConfig.default_version) hcVersionsConfig
+        else
+          # Holochain package fallback if/when the holochain version config is missing.
+          ${cfg.package.default}
+    );
+
     users.groups.${cfg.group} = { };
     users.users.${cfg.user} = {
       isSystemUser = true;

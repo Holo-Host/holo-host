@@ -53,6 +53,69 @@ struct WorkloadResultError {
 const HOLOCHAIN_ADMIN_PORT_DEFAULT: u16 = 8000;
 const HOLOCHAIN_HTTP_GW_PORT_DEFAULT: u16 = 8090;
 
+const SUPPORTED_HC_VERSIONS_STATIC: VersionConfig = VersionConfig {
+    default_version: "0.4".to_string(),
+    supported_versions: vec![
+        "0.3".to_string(),
+        "0.4".to_string(),
+        "0.5".to_string(),
+        "latest".to_string(),
+    ],
+};
+
+#[derive(Deserialize)]
+struct VersionConfig {
+    supported_versions: Vec<String>,
+    default_version: String,
+}
+
+lazy_static::lazy_static! {
+    static ref VERSION_CONFIG: VersionConfig = {
+        let config_path = std::env::var("HOLOCHAIN_VERSION_CONFIG_PATH")
+            .unwrap_or_else(|_| "../../supported-holochain-versions.json".to_string());
+
+        match std::fs::read_to_string(&config_path) {
+            Ok(content) => {
+                serde_json::from_str(&content)
+                    .unwrap_or_else(|e| {
+                        log::warn!("Failed to parse holochain version config from {}: {}. Using static reference.", config_path, e);
+                        SUPPORTED_HC_VERSIONS_STATIC
+                    })
+            }
+            Err(e) => {
+                log::warn!("Failed to read holochain version config from {}: {}. Using static reference.", config_path, e);
+                SUPPORTED_HC_VERSIONS_STATIC
+            }
+        }
+    };
+}
+
+/// Validate if the requested Holochain version is supported
+fn validate_holochain_version(version: Option<&String>) -> Result<(), String> {
+    match version {
+        Some(hc_version) => {
+            let supported_versions = &VERSION_CONFIG.supported_versions;
+            let parsed_version = hc_version.split('.').collect::<Vec<_>>();
+            if parsed_version.len() < 2 {
+                Err(format!("Invalid Holochain version format. Please use the format 'x.y' or 'x.y.z'. requested_version={}", hc_version))
+            }
+            let major_minor_version = format!("{}.{}", parsed_version[0], parsed_version[1]);
+            if supported_versions.iter().any(|supported_version| {
+                supported_version == hc_version || supported_version == major_minor_version
+            }) {
+                Ok(())
+            } else {
+                Err(format!(
+                    "Unsupported Holochain version '{}'. Supported versions are: {}. Please update your workload configuration to use a supported version.",
+                    hc_version,
+                    supported_versions.join(", ")
+                ))
+            }
+        }
+        None => Ok(()), // If no version is specified, this should fallback to default
+    }
+}
+
 impl HostWorkloadApi {
     async fn handle_workload_command(
         &self,
@@ -64,6 +127,18 @@ impl HostWorkloadApi {
                 Ok(workload_status)
             }
             WorkloadResult::Workload(workload) => {
+                // Validate holochain version before attempting to install the holochain conductor and app bundle
+                if let WorkloadManifest::HolochainDhtV1(ref inner) = workload.manifest {
+                    if let Err(version_err) =
+                        validate_holochain_version(inner.holochain_version.as_ref())
+                    {
+                        anyhow::bail!(
+                            "Invalid holochain version provided in workload configuration. err={}",
+                            version_err
+                        );
+                    }
+                }
+
                 // TODO(correctness): consider status.actual to inform assumptions towards the current state
                 // TODO(backlog,ux): spawn longer-running tasks and report back Pending, and set up a periodic status updates while the spawned task is running
                 let desired_state = &workload.status.desired;
@@ -643,14 +718,20 @@ mod util {
                     http_gw_enable,
                     http_gw_allowed_fns,
 
-                    // TODO(feat): support this
-                    holochain_version: _,
+                    holochain_version,
 
                     // not relevant here
                     happ_binary_url: _,
                     network_seed: _,
                     memproof: _,
                 } = *inner;
+
+                // Validate holochain version before proceeding
+                if let Err(validation_error) =
+                    validate_holochain_version(holochain_version.as_ref())
+                {
+                    anyhow::bail!("Holochain version validation failed: {}", validation_error);
+                }
 
                 // this is used to store the key=value pairs for the attrset that is passed to `.override attrs`
                 let mut override_attrs = vec![
@@ -688,6 +769,10 @@ mod util {
                             .collect::<Vec<String>>()
                             .join(" "),
                     ));
+                }
+
+                if let Some(version) = holochain_version {
+                    override_attrs.push(format!(r#"holochainVersion = "{}""#, version));
                 }
 
                 if http_gw_enable {
@@ -779,4 +864,46 @@ pub struct HcHttpGwWorkerKvBucketValue {
     pub desired_state: WorkloadStateDiscriminants,
     pub hc_http_gw_url_base: Url,
     pub installed_app_id: String,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_get_supported_holochain_versions() {
+        let versions = &VERSION_CONFIG.supported_versions;
+        assert!(versions.contains(&"0.4".to_string()));
+        assert!(versions.contains(&"latest".to_string()));
+        assert!(!versions.is_empty());
+    }
+
+    #[test]
+    fn test_validate_holochain_version_supported() {
+        // Test supported versions
+        assert!(validate_holochain_version(Some(&"0.4".to_string())).is_ok());
+        assert!(validate_holochain_version(Some(&"0.3".to_string())).is_ok());
+        assert!(validate_holochain_version(Some(&"latest".to_string())).is_ok());
+        assert!(validate_holochain_version(Some(&"0.4.0".to_string())).is_ok());
+
+        // Test None (should be okay)
+        assert!(validate_holochain_version(None).is_ok());
+    }
+
+    #[test]
+    fn test_validate_holochain_version_unsupported() {
+        // Test unsupported versions
+        let result = validate_holochain_version(Some(&"0.2".to_string()));
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .contains("Unsupported Holochain version '0.2'"));
+
+        let result = validate_holochain_version(Some(&"1.0".to_string()));
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Supported versions are:"));
+
+        let result = validate_holochain_version(Some(&"invalid".to_string()));
+        assert!(result.is_err());
+    }
 }

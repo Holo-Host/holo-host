@@ -1,0 +1,15 @@
+{
+  "default_version": "0.4",
+  "supported_versions": [
+    "0.3",
+    "0.4",
+    "0.5",
+    "latest"
+  ],
+  "version_mappings": {
+    "0.3": "holonix_0_3",
+    "0.4": "holonix_0_4",
+    "0.5": "holonix_0_5",
+    "latest": "holonix_0_5"
+  }
+} 
