@@ -27,6 +27,7 @@ use ham::{
 };
 use nats_utils::{macros::ApiOptions, types::ServiceError};
 use serde::{Deserialize, Serialize};
+use std::io::{Error as StdError, ErrorKind as StdErrorKind};
 use std::{fmt::Debug, net::Ipv4Addr, path::Path, sync::Arc};
 use url::Url;
 use util::{
@@ -53,40 +54,42 @@ struct WorkloadResultError {
 const HOLOCHAIN_ADMIN_PORT_DEFAULT: u16 = 8000;
 const HOLOCHAIN_HTTP_GW_PORT_DEFAULT: u16 = 8090;
 
-const SUPPORTED_HC_VERSIONS_STATIC: VersionConfig = VersionConfig {
-    default_version: "0.4".to_string(),
-    supported_versions: vec![
-        "0.3".to_string(),
-        "0.4".to_string(),
-        "0.5".to_string(),
-        "latest".to_string(),
-    ],
-};
-
 #[derive(Deserialize)]
 struct VersionConfig {
     supported_versions: Vec<String>,
-    default_version: String,
+}
+impl VersionConfig {
+    pub fn get_supported_versions() -> Self {
+        let supported_hc_versions_static = VersionConfig {
+            supported_versions: vec![
+                "0.3".to_string(),
+                "0.4".to_string(),
+                "0.5".to_string(),
+                "latest".to_string(),
+            ],
+        };
+
+        let config_path = std::env::var("HOLOCHAIN_VERSION_CONFIG_PATH")
+            .unwrap_or_else(|_| "../../supported-holochain-versions.json".to_string());
+
+        std::fs::read_to_string(&config_path)
+            .and_then(|content| {
+                serde_json::from_str(&content)
+                    .map_err(|e| StdError::new(StdErrorKind::InvalidData, e))
+            })
+            .unwrap_or_else(|e| {
+                log::warn!(
+                    "Failed to read or parse Holochain version config from '{}'. err={}. Using static default.",
+                    config_path, e
+                );
+                supported_hc_versions_static
+            })
+    }
 }
 
 lazy_static::lazy_static! {
     static ref VERSION_CONFIG: VersionConfig = {
-        let config_path = std::env::var("HOLOCHAIN_VERSION_CONFIG_PATH")
-            .unwrap_or_else(|_| "../../supported-holochain-versions.json".to_string());
-
-        match std::fs::read_to_string(&config_path) {
-            Ok(content) => {
-                serde_json::from_str(&content)
-                    .unwrap_or_else(|e| {
-                        log::warn!("Failed to parse holochain version config from {}: {}. Using static reference.", config_path, e);
-                        SUPPORTED_HC_VERSIONS_STATIC
-                    })
-            }
-            Err(e) => {
-                log::warn!("Failed to read holochain version config from {}: {}. Using static reference.", config_path, e);
-                SUPPORTED_HC_VERSIONS_STATIC
-            }
-        }
+        VersionConfig::get_supported_versions()
     };
 }
 
@@ -97,11 +100,11 @@ fn validate_holochain_version(version: Option<&String>) -> Result<(), String> {
             let supported_versions = &VERSION_CONFIG.supported_versions;
             let parsed_version = hc_version.split('.').collect::<Vec<_>>();
             if parsed_version.len() < 2 {
-                Err(format!("Invalid Holochain version format. Please use the format 'x.y' or 'x.y.z'. requested_version={}", hc_version))
+                return Err(format!("Invalid Holochain version format. Please use the format 'x.y' or 'x.y.z'. requested_version={}", hc_version));
             }
             let major_minor_version = format!("{}.{}", parsed_version[0], parsed_version[1]);
             if supported_versions.iter().any(|supported_version| {
-                supported_version == hc_version || supported_version == major_minor_version
+                supported_version == hc_version || supported_version == &major_minor_version
             }) {
                 Ok(())
             } else {
@@ -552,6 +555,7 @@ impl HostWorkloadApi {
 }
 
 mod util {
+    use crate::host_api::validate_holochain_version;
     use anyhow::Context;
     use bson::oid::ObjectId;
     use db_utils::schemas::workload::{WorkloadManifest, WorkloadManifestHolochainDhtV1};
