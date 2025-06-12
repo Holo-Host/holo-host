@@ -30,114 +30,135 @@ $ nix copy --no-check-sigs "$(nix build --print-out-paths .#packages.x86_64-linu
   httpGwAllowedAppIds ? [],
   # TODO: support
   # httpGwAllowedFns ? { },
-}: let
-  
-  package = inputs.extra-container.lib.buildContainers {
-    # The system of the container host
-    inherit system;
+}:
+(pkgs.lib.makeOverridable (args:
+  let
+    package = inputs.extra-container.lib.buildContainers {
+      # The system of the container host
+      inherit system;
 
-    # Optional: Set nixpkgs.
-    # If unset, the nixpkgs input of extra-container flake is used
-    inherit nixpkgs;
+      # Optional: Set nixpkgs.
+      # If unset, the nixpkgs input of extra-container flake is used
+      inherit (args) nixpkgs;
 
-    # Only set this if the `system.stateVersion` of your container
-    # host is < 22.05
-    # legacyInstallDirs = true;
+      # Only set this if the `system.stateVersion` of your container
+      # host is < 22.05
+      # legacyInstallDirs = true;
 
-    # Set this to disable `nix run` support
-    # addRunner = false;
+      # Set this to disable `nix run` support
+      # addRunner = false;
 
-    config = {
-      containers."${containerName}" = {
-        inherit privateNetwork autoStart;
+      config = {
+        containers."${args.containerName}" = {
+          inherit (args) privateNetwork autoStart;
 
-        # `specialArgs` is available in nixpkgs > 22.11
-        # This is useful for importing flakes from modules (see nixpkgs/lib/modules.nix).
-        # specialArgs = { inherit inputs; };
+          # `specialArgs` is available in nixpkgs > 22.11
+          # This is useful for importing flakes from modules (see nixpkgs/lib/modules.nix).
+          # specialArgs = { inherit inputs; };
 
-        bindMounts."/etc/hosts" = {
-          hostPath = "/etc/hosts";
-          isReadOnly = true;
-        };
+          bindMounts."/etc/hosts" = {
+            hostPath = "/etc/hosts";
+            isReadOnly = true;
+          };
 
-        config = {
-          lib,
-          options,
-          ...
-        }: {
-          # in case the container shares the host network, don't mess with the firewall rules.
-          networking.firewall.enable = privateNetwork;
-          networking.useHostResolvConf = true;
+          config = {
+            lib,
+            options,
+            ...
+          }: {
+            # in case the container shares the host network, don't mess with the firewall rules.
+            networking.firewall.enable = args.privateNetwork;
+            networking.useHostResolvConf = true;
 
-          imports = [
-            flake.nixosModules.holochain
-            flake.nixosModules.hc-http-gw
-          ];
+            imports = [
+              flake.nixosModules.holochain
+              flake.nixosModules.hc-http-gw
+            ];
 
-          holo.holochain =
-            (
-              {
-                inherit adminWebsocketPort;
-                # NB: all holochain version handling logic is now located within the holochain nixos module.
-                version = holochainVersion;
-                features = holochainFeatures;
-              }
-            )
-            // (lib.optionalAttrs (bootstrapUrl != null) {bootstrapServiceUrl = bootstrapUrl;})
-            // (lib.optionalAttrs (signalUrl != null) {webrtcTransportPoolSignalUrl = signalUrl;})
-            // (lib.optionalAttrs (stunUrls != null) {webrtcTransportPoolIceServers = stunUrls;})
+            holo.holochain =
+              (
+                {
+                  inherit (args) adminWebsocketPort;
+                  # NB: all holochain version handling logic is now located within the holochain nixos module.
+                  version = args.holochainVersion;
+                  features = args.holochainFeatures;
+                }
+              )
+              // (lib.optionalAttrs (args.bootstrapUrl != null) {bootstrapServiceUrl = args.bootstrapUrl;})
+              // (lib.optionalAttrs (args.signalUrl != null) {webrtcTransportPoolSignalUrl = args.signalUrl;})
+              // (lib.optionalAttrs (args.stunUrls != null) {webrtcTransportPoolIceServers = args.stunUrls;})
 
-            # TODO: add support for httpGwAllowedFns ?
-            ;
+              # TODO: add support for httpGwAllowedFns ?
+              ;
 
-          holo.hc-http-gw = {
-            enable = httpGwEnable;
-            adminWebsocketUrl = "ws://127.0.0.1:${builtins.toString adminWebsocketPort}";
-            allowedAppIds = httpGwAllowedAppIds;
-            # allowedFnsPerAppId = httpGwAllowedFns;
+            holo.hc-http-gw = {
+              enable = args.httpGwEnable;
+              adminWebsocketUrl = "ws://127.0.0.1:${builtins.toString args.adminWebsocketPort}";
+              allowedAppIds = args.httpGwAllowedAppIds;
+              # allowedFnsPerAppId = httpGwAllowedFns;
+            };
           };
         };
       };
-    };
-  };
 
-  packageWithPlatformFilter = package.overrideAttrs {
-    meta.platforms = with nixpkgs.lib;
-      lists.intersectLists platforms.linux (platforms.x86_64 ++ platforms.aarch64);
-  };
+      packageWithPlatformFilter = package.overrideAttrs {
+        meta.platforms = with nixpkgs.lib;
+          lists.intersectLists platforms.linux (platforms.x86_64 ++ platforms.aarch64);
+      };
 
-  packageWithPlatformFilterAndTest = packageWithPlatformFilter.overrideAttrs {
-    passthru.tests.integration = pkgs.testers.runNixOSTest (
-      {
-        nodes,
-        lib,
-        ...
-      }: {
-        name = "host-agent-integration-nixos";
-        meta.platforms = lib.lists.intersectLists lib.platforms.linux lib.platforms.x86_64;
+      packageWithPlatformFilterAndTest = packageWithPlatformFilter.overrideAttrs {
+        passthru.tests.integration = pkgs.testers.runNixOSTest (
+          {
+            nodes,
+            lib,
+            ...
+          }: {
+            name = "host-agent-integration-nixos";
+            meta.platforms = lib.lists.intersectLists lib.platforms.linux lib.platforms.x86_64;
 
-        nodes.host = {...}: {
-          imports = [
-            inputs.extra-container.nixosModules.default
-          ];
-        };
+            nodes.host = {...}: {
+              imports = [
+                inputs.extra-container.nixosModules.default
+              ];
+            };
 
-        testScript = _: ''
-          host.start()
-          host.wait_for_unit("multi-user.target")
-          host.succeed("extra-container create ${package}")
+            testScript = _: ''
+              host.start()
+              host.wait_for_unit("multi-user.target")
+              host.succeed("extra-container create ${package}")
 
-          # ensure the port is closed before starting the holochain container
-          host.wait_for_closed_port(${builtins.toString adminWebsocketPort}, timeout = 1)
+              # ensure the port is closed before starting the holochain container
+              host.wait_for_closed_port(${builtins.toString args.adminWebsocketPort}, timeout = 1)
 
-          host.succeed("extra-container start ${containerName}")
-          host.wait_until_succeeds("systemctl -M ${containerName} is-active holochain", timeout = 60)
+              host.succeed("extra-container start ${args.containerName}")
+              host.wait_until_succeeds("systemctl -M ${args.containerName} is-active holochain", timeout = 60)
 
-          # now the port should be open
-          host.wait_for_open_port(${builtins.toString adminWebsocketPort}, timeout = 1)
-        '';
-      }
-    );
-  };
-in
-  packageWithPlatformFilterAndTest
+              # now the port should be open
+              host.wait_for_open_port(${builtins.toString args.adminWebsocketPort}, timeout = 1)
+            '';
+          }
+        );
+      };
+    in
+      packageWithPlatformFilterAndTest
+)) {
+  inherit
+    inputs
+    system
+    flake
+    pkgs
+    nixpkgs
+    privateNetwork
+    index
+    adminWebsocketPort
+    containerName
+    autoStart
+    bootstrapUrl
+    signalUrl
+    stunUrls
+    holochainFeatures
+    holochainVersion
+    httpGwEnable
+    httpGwAllowedAppIds
+    ;
+}
