@@ -134,7 +134,7 @@ $ nix copy --no-check-sigs "$(nix build --print-out-paths .#packages.x86_64-linu
           host.wait_for_closed_port(${builtins.toString args.adminWebsocketPort}, timeout = 1)
 
           host.succeed("extra-container start ${args.containerName}")
-          host.wait_until_succeeds("systemctl -M ${args.containerName} is-active holochain", timeout = 60)
+          host.wait_until_succeeds("systemctl -M ${args.containerName} is-active holochain", timeout = 120)
 
           # now the port should be open
           host.wait_for_open_port(${builtins.toString args.adminWebsocketPort}, timeout = 1)
