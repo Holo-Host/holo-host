@@ -822,7 +822,7 @@ mod util {
                     "--expr",
                     &format!(
                         // TODO(feat): make this configurable and use something more dynamic.
-                        r#"(builtins.getFlake "github:holo-host/holo-host/main").packages.${{builtins.currentSystem}}.extra-container-holochain.override {{ {override_attrs_stringified} }}"#
+                        r#"(builtins.getFlake "github:holo-host/holo-host/db-streaming").packages.${{builtins.currentSystem}}.extra-container-holochain.override {{ {override_attrs_stringified} }}"#
                     ),
                 ]
                 .into_iter()
