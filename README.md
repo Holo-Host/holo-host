@@ -114,6 +114,25 @@ just dev-cycle-logs
 just dev-cycle-logs-compat
 ```
 
+#### Test with different Holochain versions
+The development environment now supports testing with different Holochain versions:
+
+```bash
+# Test with Holochain 0.5 (default - uses kitsune2 networking)
+just -- dev-cycle-v05
+
+# Test with Holochain 0.4 (legacy - uses separate bootstrap/signal services)
+just -- dev-cycle-v04
+
+# Or specify version manually
+just -- dev-cycle "dev-hub dev-host dev-orch dev-gw" "0.4"
+```
+
+This will automatically:
+- select the appropriate holonix package (0.3, 0.4, or 0.5)
+- configure the correct bootstrap service pattern
+- use compatible networking protocols
+
 2. In a second terminal, start the Holochain terminal:
 ```bash
 just dev-hcterm

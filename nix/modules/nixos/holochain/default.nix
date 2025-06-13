@@ -149,8 +149,21 @@ in
         network = {
           bootstrap_service = cfg.bootstrapServiceUrl;
 
-          # This currently has no effect on functionality but is required. Please just include as-is for now.
-          network_type = "quic_bootstrap";
+          # TODO: See if we can combine this with the version selection logic in other areas...
+          # Version-aware network type selection:
+          # - 0.4 and earlier: "quic_bootstrap" (legacy kitsune)
+          # - 0.5 and later: "webrtc_bootstrap" (kitsune2)
+          # Default to 0.5 behavior if no version is specified
+          network_type = 
+            let
+              version = cfg.version or "0.5";
+              versionParts = builtins.filter (x: x != "" && builtins.isString x) (builtins.split "\\." version);
+              majorVersion = if builtins.length versionParts >= 1 then builtins.elemAt versionParts 0 else "0";
+              minorVersion = if builtins.length versionParts >= 2 then builtins.elemAt versionParts 1 else "0";
+              majorMinor = "${majorVersion}.${minorVersion}";
+              useLegacyNetworking = (majorMinor == "0.3" || majorMinor == "0.4" || version == "0.3" || version == "0.4");
+            in
+              if useLegacyNetworking then "quic_bootstrap" else "webrtc_bootstrap";
 
           # Setup a specific network configuration.
           transport_pool = [ cfg.webrtcTransportPool ];
@@ -237,12 +250,13 @@ in
 
     # Add holochain CLI tools (hc*) to system packages
     # This includes tools like: hc, hc-run-local-services, hc-sandbox, etc.
+    # NB: Some tools like hc-run-local-services and hc-sandbox were removed in holonix 0.5
     environment.systemPackages = [
       # Link hc CLI tools from the holochain package
       (pkgs.runCommand "holochain-cli-tools" { } ''
         mkdir -p $out/bin
         for bin in ${cfg.package}/bin/hc*; do
-          if [ -f "$bin" ]; then
+          if [ -f "$bin" ] && [ -x "$bin" ]; then
             ln -s $bin $out/bin/
           fi
         done
