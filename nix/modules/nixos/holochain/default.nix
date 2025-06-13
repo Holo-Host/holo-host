@@ -226,7 +226,7 @@ in
             selectHolochainVersion (cfg.version or hcVersionsConfig.default_version) hcVersionsConfig
           else
             # Holochain package fallback if/when the holochain version config is missing.
-            options.holo.holochain.package.default
+            inputs.holonix_0_4.packages.${pkgs.system}.holochain
       );
 
     users.groups.${cfg.group} = { };
