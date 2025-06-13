@@ -30,7 +30,7 @@ in
 
     package = lib.mkOption {
       type = lib.types.package;
-      default = inputs.holonix_0_4.packages.${pkgs.system}.holochain;
+      default = inputs.holonix_0_5.packages.${pkgs.system}.holochain;
       description = "The Holochain package to use. By default, this is dynamically selected based on the 'version' and 'versionConfigPath' options.";
     };
 
@@ -239,7 +239,7 @@ in
             selectHolochainVersion (cfg.version or hcVersionsConfig.default_version) hcVersionsConfig
           else
             # Holochain package fallback if/when the holochain version config is missing.
-            inputs.holonix_0_4.packages.${pkgs.system}.holochain
+            inputs.holonix_0_5.packages.${pkgs.system}.holochain
       );
 
     users.groups.${cfg.group} = { };
