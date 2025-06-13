@@ -40,11 +40,11 @@ in
       description = "The desired holochain version string (e.g., '0.4', '0.5.1', 'latest').";
     };
 
-    versionConfigPath = lib.mkOption {
+      versionConfigPath = lib.mkOption {
       type = with lib.types; nullOr path;
-      default = ../../supported-holochain-versions.json;
+        default = ../../supported-holochain-versions.json;
       description = "Path to the supported-holochain-versions.json file.";
-    };
+      };
 
     features = lib.mkOption {
       type = with lib.types; nullOr (listOf str);
@@ -229,82 +229,82 @@ in
             options.holo.holochain.package.default
       );
 
-      users.groups.${cfg.group} = { };
-      users.users.${cfg.user} = {
-        isSystemUser = true;
-        inherit (cfg) group;
+    users.groups.${cfg.group} = { };
+    users.users.${cfg.user} = {
+      isSystemUser = true;
+      inherit (cfg) group;
+    };
+
+    # Add holochain CLI tools (hc*) to system packages
+    # This includes tools like: hc, hc-run-local-services, hc-sandbox, etc.
+    environment.systemPackages = [
+      # Link hc CLI tools from the holochain package
+      (pkgs.runCommand "holochain-cli-tools" { } ''
+        mkdir -p $out/bin
+        for bin in ${cfg.package}/bin/hc*; do
+          if [ -f "$bin" ]; then
+            ln -s $bin $out/bin/
+          fi
+        done
+      '')
+    ];
+
+    systemd.services.holochain = {
+      enable = true;
+
+      after = [
+        "network.target"
+      ];
+      wants = [
+        "network.target"
+      ];
+      wantedBy = lib.lists.optional cfg.autoStart "multi-user.target";
+
+      restartIfChanged = true;
+
+      environment = {
+        RUST_LOG = "${cfg.rust.log},wasmer_compiler_cranelift=warn";
+        RUST_BACKTRACE = cfg.rust.backtrace;
+        WASM_LOG = cfg.wasmLog;
       };
 
-      # Add holochain CLI tools (hc*) to system packages
-      # This includes tools like: hc, hc-run-local-services, hc-sandbox, etc.
-      environment.systemPackages = [
-        # Link hc CLI tools from the holochain package
-        (pkgs.runCommand "holochain-cli-tools" { } ''
-          mkdir -p $out/bin
-          for bin in ${cfg.package}/bin/hc*; do
-            if [ -f "$bin" ]; then
-              ln -s $bin $out/bin/
-            fi
-          done
-        '')
-      ];
+      preStart = ''
+        if [[ ! -e "${cfg.passphraseFile}" ]]; then
+          echo generating new passphrase at "${cfg.passphraseFile}".
+          ${lib.getExe pkgs.pwgen} 64 1 > "${cfg.passphraseFile}"
+        else
+          echo using existing passphrase at file ${cfg.passphraseFile}.
+        fi
+      '';
 
-      systemd.services.holochain = {
-        enable = true;
-
-        after = [
-          "network.target"
-        ];
-        wants = [
-          "network.target"
-        ];
-        wantedBy = lib.lists.optional cfg.autoStart "multi-user.target";
-
-        restartIfChanged = true;
-
-        environment = {
-          RUST_LOG = "${cfg.rust.log},wasmer_compiler_cranelift=warn";
-          RUST_BACKTRACE = cfg.rust.backtrace;
-          WASM_LOG = cfg.wasmLog;
+      serviceConfig =
+        let
+          StateDirectory = "holochain";
+        in
+        {
+          User = cfg.user;
+          Group = cfg.user;
+          # %S is short for StateDirectory
+          WorkingDirectory = "%S/${StateDirectory}";
+          inherit StateDirectory;
+          StateDirectoryMode = "0700";
+          Restart = "always";
+          RestartSec = 1;
+          Type = "notify"; # The conductor sends a notify signal to systemd when it is ready
+          NotifyAccess = "all";
         };
 
-        preStart = ''
-          if [[ ! -e "${cfg.passphraseFile}" ]]; then
-            echo generating new passphrase at "${cfg.passphraseFile}".
-            ${lib.getExe pkgs.pwgen} 64 1 > "${cfg.passphraseFile}"
-          else
-            echo using existing passphrase at file ${cfg.passphraseFile}.
-          fi
-        '';
+      script = builtins.toString (
+        pkgs.writeShellScript "holochain-wrapper" ''
+          set -xeE
 
-        serviceConfig =
-          let
-            StateDirectory = "holochain";
-          in
-          {
-            User = cfg.user;
-            Group = cfg.user;
-            # %S is short for StateDirectory
-            WorkingDirectory = "%S/${StateDirectory}";
-            inherit StateDirectory;
-            StateDirectoryMode = "0700";
-            Restart = "always";
-            RestartSec = 1;
-            Type = "notify"; # The conductor sends a notify signal to systemd when it is ready
-            NotifyAccess = "all";
-          };
-
-        script = builtins.toString (
-          pkgs.writeShellScript "holochain-wrapper" ''
-            set -xeE
-
-            ${lib.getExe' cfg.package "holochain"} \
-              --piped \
-              --config-path ${cfg.conductorConfigYaml} \
-              < "${cfg.passphraseFile}"
-          ''
-        );
-      };
+          ${lib.getExe' cfg.package "holochain"} \
+            --piped \
+            --config-path ${cfg.conductorConfigYaml} \
+            < "${cfg.passphraseFile}"
+        ''
+      );
+    };
     })
     (lib.mkIf (cfg.features != null) {
       holo.holochain.package = lib.mkForce (cfg.package.override {

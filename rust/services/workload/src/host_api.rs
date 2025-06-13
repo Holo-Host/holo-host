@@ -814,6 +814,9 @@ mod util {
                     "passing the these overrides to holochain: '{override_attrs_stringified}'"
                 );
 
+                let flake_url = std::env::var("HOLO_HOST_FLAKE_URL")
+                    .unwrap_or_else(|_| "github:holo-host/holo-host/db-streaming".to_string());
+
                 let nix_build_args = [
                     "--refresh",
                     "--extra-experimental-features",
@@ -822,7 +825,7 @@ mod util {
                     "--expr",
                     &format!(
                         // TODO(feat): make this configurable and use something more dynamic.
-                        r#"(builtins.getFlake "github:holo-host/holo-host/main").packages.${{builtins.currentSystem}}.extra-container-holochain.override {{ {override_attrs_stringified} }}"#
+                        r#"(builtins.getFlake "{flake_url}").packages.${{builtins.currentSystem}}.extra-container-holochain.override {{ {override_attrs_stringified} }}"#
                     ),
                 ]
                 .into_iter()

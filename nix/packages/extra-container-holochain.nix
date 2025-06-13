@@ -84,7 +84,7 @@ $ nix copy --no-check-sigs "$(nix build --print-out-paths .#packages.x86_64-linu
                 # NB: all holochain version handling logic is now located within the holochain nixos module.
                 version = args.holochainVersion;
                 features = args.holochainFeatures;
-              }
+            }
             )
             // (lib.optionalAttrs (args.bootstrapUrl != null) {bootstrapServiceUrl = args.bootstrapUrl;})
             // (lib.optionalAttrs (args.signalUrl != null) {webrtcTransportPoolSignalUrl = args.signalUrl;})
