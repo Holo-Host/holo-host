@@ -1,2 +1,2 @@
-export * from "./en.ts";
-export * from "./fr.ts";
+export * from "./en";
+export * from "./fr";

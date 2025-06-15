@@ -6,7 +6,7 @@
     setLanguage,
   } from "../lang";
   import { defaultTheme } from "../theme";
-  import Dropdown from "./Dropdown.svelte";
+  import Dropdown from "./dropdown.svelte";
 
   const languages = getSupportedLanguages().map((lang) => ({
     label: getTranslationWithLang(lang, "topbar.language"),

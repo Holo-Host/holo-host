@@ -8,7 +8,9 @@
   style:--background-color={defaultTheme.colors.background.card}
   style:--shadow-color={defaultTheme.colors.shadow}
   style:--shadow={defaultTheme.shadow}
-></div>
+>
+  {@render children()}
+</div>
 
 <style lang="css">
   .card {

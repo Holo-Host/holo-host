@@ -1,6 +1,6 @@
 import type { Component } from "svelte";
 import { derived, readable } from "svelte/store";
-import { NotFoundComponent, routes } from "./routes.ts";
+import { NotFoundComponent, routes } from "./routes";
 
 export type RouteRenderer = {
   component: Component;

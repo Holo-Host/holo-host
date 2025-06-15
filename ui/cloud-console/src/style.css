@@ -78,3 +78,27 @@ button {
   margin: 30px;
   gap: 30px;
 }
+
+.flex {
+  display: flex;
+}
+
+.column {
+  flex-direction: column;
+}
+
+.wrap {
+  flex-wrap: wrap;
+}
+
+.gap5 {
+  gap: 5px;
+}
+
+.gap10 {
+  gap: 10px;
+}
+
+.cursor-pointer {
+  cursor: pointer;
+}

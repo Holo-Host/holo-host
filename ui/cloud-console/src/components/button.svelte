@@ -1,22 +1,32 @@
 <script lang="ts">
   import { defaultTheme } from "../theme";
-  const {
-    children,
-    href,
-    onclick,
-  }: {
+
+  type Prop = {
     children?: any;
     href?: string;
     onclick?: (event: MouseEvent) => void;
-  } = $props();
+    variant?: "primary" | "secondary";
+  };
+  const { children, href, variant, onclick }: Prop = $props();
+
+  const backgroundColor = $derived(
+    variant === "secondary"
+      ? defaultTheme.colors.background.default
+      : defaultTheme.colors.background.primary
+  );
+  const textColor = $derived(
+    variant === "secondary"
+      ? defaultTheme.colors.text.black
+      : defaultTheme.colors.text.white
+  );
 </script>
 
 <a
   class="button"
   {href}
   {onclick}
-  style:--background-color={defaultTheme.colors.background.primary}
-  style:--text-color={defaultTheme.colors.text.white}
+  style:--background-color={backgroundColor}
+  style:--text-color={textColor}
   style:--shadow={defaultTheme.shadow}
   style:--shadow-color={defaultTheme.colors.shadow}
 >

@@ -1,4 +1,4 @@
-import type { Lang } from "./type.ts";
+import type { Lang } from "./type";
 
 export const en: Lang = {
   default: {

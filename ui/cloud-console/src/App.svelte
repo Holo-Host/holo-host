@@ -1,6 +1,6 @@
 <script lang="ts">
-  import Drawer from "./components/Drawer.svelte";
-  import Topbar from "./components/Topbar.svelte";
+  import Drawer from "./components/drawer.svelte";
+  import Topbar from "./components/topbar.svelte";
   import { routeComponent } from "./router";
 </script>
 

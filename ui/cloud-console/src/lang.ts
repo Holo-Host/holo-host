@@ -1,4 +1,4 @@
-import * as Langs from "./langs/index.ts";
+import * as Langs from "./langs";
 import { writable, get } from "svelte/store";
 
 const LS_LANGUAGE_KEY = "language";

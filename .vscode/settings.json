@@ -41,6 +41,9 @@
     "editor.defaultFormatter": "redhat.vscode-xml"
   },
   "rust-analyzer.checkOnSave": true,
+  "[json]": {
+    "editor.tabSize": 2
+  },
   "[svelte]": {
     "editor.defaultFormatter": "svelte.svelte-vscode",
     "editor.tabSize": 2

@@ -1,9 +1,9 @@
 import type { Component } from "svelte";
-import Dashboard from "./pages/Dashboard.svelte";
-import ApiTokens from "./pages/ApiTokens.svelte";
-import Constellations from "./pages/Constellations.svelte";
-import Billing from "./pages/Billing.svelte";
-import Settings from "./pages/Settings.svelte";
+import Dashboard from "./pages/dashboard/page.svelte";
+import ApiTokens from "./pages/api-tokens/page.svelte";
+import Constellations from "./pages/constellations/page.svelte";
+import Billing from "./pages/billing/page.svelte";
+import Settings from "./pages/settings/page.svelte";
 
 export type Route = {
   path: string;

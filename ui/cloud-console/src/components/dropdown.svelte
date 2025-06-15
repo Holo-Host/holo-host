@@ -1,12 +1,19 @@
 <script lang="ts">
+  import type { Snippet } from "svelte";
   import { defaultTheme } from "../theme";
 
-  const { children, items, itemTemplate, onItemSelected } = $props();
+  type Prop<T> = {
+    children: any;
+    items: T[];
+    itemTemplate?: Snippet<[T]>;
+    onItemSelected?: (item: T) => void;
+  };
+  const props: Prop<unknown> = $props();
   let isOpen = $state(false);
 
   function handleItemClick(item) {
     isOpen = false;
-    onItemSelected(item);
+    props.onItemSelected?.(item);
   }
 
   let dropdownEl: HTMLElement = $state(null);
@@ -38,13 +45,17 @@
   {#if isOpen}
     <div class="dropdown-container">
       <div class="dropdown-menu" bind:this={dropdownMenuEl}>
-        {#each items as item}
+        {#each props.items as item}
           <button
             style:--hover-color={defaultTheme.colors.background.secondary}
             class="dropdown-item"
             onclick={() => handleItemClick(item)}
           >
-            {@render itemTemplate(item)}
+            {#if !!props.itemTemplate}
+              {@render props.itemTemplate(item)}
+            {:else}
+              {item}
+            {/if}
           </button>
         {/each}
       </div>
@@ -56,7 +67,7 @@
     bind:this={dropdownEl}
     onclick={() => (isOpen = !isOpen)}
   >
-    {@render children()}
+    {@render props.children()}
   </button>
 </div>
 
