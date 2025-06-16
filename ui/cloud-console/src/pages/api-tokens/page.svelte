@@ -1,12 +1,11 @@
 <script lang="ts">
   import Card from "@/components/card.svelte";
   import Button from "@/components/button.svelte";
-  import Table, { type Column } from "@/components/table.svelte";
   import Badge from "@/components/badge.svelte";
-  import type { ApiKey } from "./types";
-  import { deleteApiKey, getApiKeys } from "./data";
   import Dropdown from "@/components/dropdown.svelte";
-  import GenerateToken from "./generate-token.svelte";
+  import { deleteApiKey, getApiKeys } from "./data";
+  import type { ApiKey } from "./types";
+  import Table, { type Column } from "@/components/table.svelte";
 
   const columns: Column<ApiKey>[] = [
     {
@@ -32,7 +31,6 @@
   ];
 
   const data = getApiKeys();
-  let isGenerateTokenModalVisible = $state(false);
 
   function onActionSelected(item: ApiKey, action: string) {
     switch (action) {
@@ -43,13 +41,10 @@
   }
 </script>
 
-<GenerateToken bind:visible={isGenerateTokenModalVisible} />
 <div class="page">
   <div class="header">
     <h1 class="header-title">API Tokens</h1>
-    <Button onclick={() => (isGenerateTokenModalVisible = true)}>
-      Generate new token
-    </Button>
+    <Button href="/generate-token">Generate new token</Button>
   </div>
   <Card>
     <Table {columns} rows={data} />

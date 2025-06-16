@@ -83,12 +83,24 @@ button {
   display: flex;
 }
 
+.grow {
+  flex-grow: 1;
+}
+
 .column {
   flex-direction: column;
 }
 
 .wrap {
   flex-wrap: wrap;
+}
+
+.align-center {
+  align-items: center;
+}
+
+.justify-center {
+  justify-content: center;
 }
 
 .gap5 {

@@ -4,6 +4,7 @@
   type Prop = {
     label: string;
     variant?: "defualt" | "success" | "warning" | "danger";
+    onClick?: () => void;
   };
   const props: Prop = $props();
 
@@ -20,13 +21,15 @@
   });
 </script>
 
-<div
+<button
   class="badge"
+  class:cursor-pointer={!!props.onClick}
   style:--border-color={defaultTheme.colors.border}
   style:--background-color={backgroundColor}
+  onclick={() => props.onClick()}
 >
   {props.label}
-</div>
+</button>
 
 <style lang="css">
   .badge {

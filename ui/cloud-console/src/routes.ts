@@ -4,6 +4,7 @@ import ApiTokens from "./pages/api-tokens/page.svelte";
 import Constellations from "./pages/constellations/page.svelte";
 import Billing from "./pages/billing/page.svelte";
 import Settings from "./pages/settings/page.svelte";
+import GenerateToken from "./pages/generate-token/page.svelte";
 
 export type Route = {
   path: string;
@@ -37,5 +38,9 @@ export const routes: Route[] = [
   {
     path: "/settings",
     component: Settings,
+  },
+  {
+    path: "/generate-token",
+    component: GenerateToken,
   },
 ];

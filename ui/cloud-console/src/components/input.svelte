@@ -6,6 +6,8 @@
     id?: string;
     placeholder?: string;
     label?: string;
+    grow?: boolean;
+    onKeyDown?: (e: KeyboardEvent) => void;
   };
 
   type TextProp = BaseProp & {
@@ -78,16 +80,12 @@
   function onAutocompleteSelected(e: MouseEvent, item: string) {
     e.preventDefault();
     if (props.type === "number") return;
-
-    value =
-      props.autocomplete
-        .filter((item) => String(value).includes(item))
-        .join(" ") + ` ${item}`;
-    value = value.trim();
+    value = item;
+    props.onChange?.(item);
   }
 </script>
 
-<div class="flex column gap5">
+<div class="flex column gap5" class:grow={props.grow}>
   <label for={props.id}>
     {props.label}
   </label>
@@ -99,6 +97,8 @@
     oninput={onInput}
     onfocus={onFocus}
     onfocusout={onFocusOut}
+    onkeydown={props.onKeyDown}
+    style:--border-color={defaultTheme.colors.border}
     bind:value
   />
   {#if props.type !== "number" && isFocused && props.autocomplete && autocomplete.length > 0}
@@ -138,6 +138,7 @@
   input {
     font-size: 20px;
     padding: 10px 20px;
+    border: 1px solid var(--border-color);
   }
 
   .autocomplete-container {

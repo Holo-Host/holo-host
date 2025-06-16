@@ -25,6 +25,7 @@
   }
   .modal {
     display: block;
+    max-width: 500px;
     max-height: calc(100vh - 200px);
     overflow-y: auto;
   }
