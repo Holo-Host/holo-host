@@ -3,7 +3,8 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "dev": "vite"
+    "dev": "vite",
+    "build": "vite build --mode production"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^5.1.0",
