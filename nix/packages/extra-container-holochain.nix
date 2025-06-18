@@ -8,13 +8,13 @@ optionally deploy locally to a dev machine:
 
 $ nix copy --no-check-sigs "$(nix build --print-out-paths .#packages.x86_64-linux.extra-container-holochain)" --to  'ssh-ng://root@towards-allograph.dmz.internal'
 */
+
 {
   inputs,
   system,
   flake,
   pkgs,
   nixpkgs ? inputs.nixpkgs-2411,
-  privateNetwork ? false,
   index ? 0,
   adminWebsocketPort ? 8000 + index,
   containerName ? "holochain${builtins.toString index}",
@@ -25,14 +25,40 @@ $ nix copy --no-check-sigs "$(nix build --print-out-paths .#packages.x86_64-linu
   stunUrls ? null,
   holochainFeatures ? null,
   holochainVersion ? null,
+  privateNetwork ? true,
   # hc-http-gw related args
   httpGwEnable ? false,
   httpGwAllowedAppIds ? [],
+  httpGwPort ? null,  # dynamically set based on `portAllocation.HOLOCHAIN_HTTP_GW_PORT_DEFAULT` below
   # TODO: support
   # httpGwAllowedFns ? { },
 }:
 
+let
+  portAllocation = import ../lib/port-allocation.nix { inherit (pkgs) lib; };
+
+  # Get the standard port from the port allocation lib
+  httpGwPortDefault = portAllocation.HOLOCHAIN_HTTP_GW_PORT_DEFAULT;
+in
+
 (pkgs.lib.makeOverridable (args: let
+  
+  hcAdminPort = args.adminWebsocketPort;
+  httpGwPortOverride = args.httpGwPort;
+
+  # Dynamically calculate the default httpGwPort if no override is provided
+  httpGwPortDynamicDefault = if args.privateNetwork then httpGwPortDefault else (httpGwPortDefault + args.index);
+  httpGwPort = if httpGwPortOverride != null then httpGwPortOverride else httpGwPortDynamicDefault;
+  
+  # Calculate ports for this container
+  containerPorts = portAllocation.allocatePorts {
+    basePorts = portAllocation.standardPorts.holochain;
+    containerName = args.containerName;
+    index = args.index;
+    privateNetwork = args.privateNetwork;
+  };
+  
+  httpGwPortForContainer = if args.privateNetwork then httpGwPortDefault else containerPorts.httpGateway;
   
   package = inputs.extra-container.lib.buildContainers {
     # The system of the container host
@@ -61,6 +87,22 @@ $ nix copy --no-check-sigs "$(nix build --print-out-paths .#packages.x86_64-linu
       containers."${args.containerName}" = {
         privateNetwork = args.privateNetwork;
         autoStart = args.autoStart;
+
+        # Port forwarding for hc-http-gw when using private network
+        forwardPorts = pkgs.lib.optionals (args.privateNetwork && args.httpGwEnable) [
+          {
+            containerPort = httpGwPortDefault;  # Standard port inside container
+            hostPort = httpGwPort;  # Dynamic port on host
+            protocol = "tcp";
+          }
+        ] ++ pkgs.lib.optionals (args.privateNetwork) [
+          # Always forward hc admin websocket port for management access when private network is enabled
+          {
+            containerPort = hcAdminPort;
+            hostPort = hcAdminPort; 
+            protocol = "tcp";
+          }
+        ];
 
         # `specialArgs` is available in nixpkgs > 22.11
         # This is useful for importing flakes from modules (see nixpkgs/lib/modules.nix).
@@ -105,6 +147,8 @@ $ nix copy --no-check-sigs "$(nix build --print-out-paths .#packages.x86_64-linu
             enable = args.httpGwEnable;
             adminWebsocketUrl = "ws://127.0.0.1:${builtins.toString args.adminWebsocketPort}";
             allowedAppIds = args.httpGwAllowedAppIds;
+            # Use standard port inside container when `privateNetwork=true`, otherwise use dynamic port
+            listenPort = httpGwPortForContainer;
             # allowedFnsPerAppId = httpGwAllowedFns;
           };
         };
@@ -171,5 +215,6 @@ in
     holochainVersion
     httpGwEnable
     httpGwAllowedAppIds
+    httpGwPort
     ;
 }

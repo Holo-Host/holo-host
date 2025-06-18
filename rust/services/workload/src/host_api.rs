@@ -29,7 +29,7 @@ use std::io::{Error as StdError, ErrorKind as StdErrorKind};
 use std::{fmt::Debug, net::Ipv4Addr, path::Path, sync::Arc};
 use url::Url;
 use util::{
-    bash, ensure_workload_path, provision_extra_container_closure_path,
+    bash, calculate_http_gw_port, ensure_workload_path, provision_extra_container_closure_path,
     realize_extra_container_path,
 };
 
@@ -50,7 +50,6 @@ struct WorkloadResultError {
 
 // TODO: create something that allocates ports and can be queried for a free one.
 const HOLOCHAIN_ADMIN_PORT_DEFAULT: u16 = 8000;
-const HOLOCHAIN_HTTP_GW_PORT_DEFAULT: u16 = 8090;
 
 #[derive(Deserialize)]
 struct VersionConfig {
@@ -280,16 +279,22 @@ impl HostWorkloadApi {
                                 };
 
                                 if *http_gw_enable {
-                                    /* TODO(feat: multiple workloads per host): dynamically allocate/retrieve ip:port
-                                        multiple options
+                                    /* When we have multiple workloads per host, we dynamically allocate/retrieve ip:port
+                                        NB: We currently support multiple options:
                                         a) we use privateNetwork = true in containers and can use the default hc-http-gw port
                                         b) we use privateNetwork = false in containers and need different hc-http-gw ports
-
                                         option (b) is inherently less secure as the admin websockets will also be shared on the host network namespace
                                     */
 
+                                    // Set network configuration based on env var, defaulting to true.
+                                    let is_private_network = std::env::var("IS_CONTAINER_ON_PRIVATE_NETWORK")
+                                        .unwrap_or_else(|_| "true".to_string())
+                                        .parse::<bool>()
+                                        .unwrap_or(true);
+
+                                    let hc_http_gw_port = calculate_http_gw_port(&workload._id, is_private_network);
                                     let hc_http_gw_url_base = url::Url::parse(&format!(
-                                        "http://127.0.0.1:{HOLOCHAIN_HTTP_GW_PORT_DEFAULT}"
+                                        "http://127.0.0.1:{hc_http_gw_port}"
                                     ))?;
 
                                     match self
@@ -568,6 +573,30 @@ mod util {
 
     use crate::host_api::{get_container_name, HOLOCHAIN_ADMIN_PORT_DEFAULT};
 
+    /// Calculate the http gw port based on network mode and workload ID
+    /// 
+    /// With privateNetwork=true, we can use the standard port inside containers
+    /// and let nixos handle port forwarding to avoid conflicts
+    /// With shared network, use dynamic port allocation based on workload ID
+    /// 
+    /// For holochain gateway access from outside the container, we should use the dynamically allocated host port
+    /// (This will be the same as the container port when privateNetwork=true with port forwarding)
+    pub(crate) fn calculate_http_gw_port(workload_id: &bson::oid::ObjectId, is_private_network: bool) -> u16 {
+        const HOLOCHAIN_HTTP_GW_PORT_DEFAULT: u16 = 8090;
+        if is_private_network {
+            // With private networks, use standard port (forwarded to host)
+            HOLOCHAIN_HTTP_GW_PORT_DEFAULT
+        } else {
+            // With shared network, use dynamic port allocation based on workload ID
+            let workload_hash = workload_id.to_hex();
+            let hash_suffix = &workload_hash[workload_hash.len() - 4..];
+            // Create deterministic port offset from workload id
+            let port_offset = u32::from_str_radix(hash_suffix, 16)
+                .unwrap_or(0) % 1000; // Limit offset to 0-999
+            HOLOCHAIN_HTTP_GW_PORT_DEFAULT + port_offset as u16
+        }
+    }
+
     pub(crate) async fn bash(cmd: &str) -> anyhow::Result<()> {
         let mut workload_cmd = tokio::process::Command::new("/usr/bin/env");
         workload_cmd.args(["bash", "-c", cmd]);
@@ -629,7 +658,7 @@ mod util {
         Ok((path, path_exists))
     }
 
-    // transform the workload into something that can be executed
+    // Transform the workload into something that can be executed
     pub(crate) async fn realize_extra_container_path(
         workload_id: ObjectId,
         manifest: WorkloadManifest,
@@ -724,7 +753,6 @@ mod util {
                     stun_server_urls,
                     http_gw_enable,
                     http_gw_allowed_fns,
-
                     holochain_version,
 
                     // not relevant here
@@ -733,21 +761,36 @@ mod util {
                     memproof: _,
                 } = *inner;
 
-                // Validate holochain version before proceeding
+                // Validate the holochain version before proceeding
                 if let Err(validation_error) =
                     validate_holochain_version(holochain_version.as_ref())
                 {
                     anyhow::bail!("Holochain version validation failed: {}", validation_error);
                 }
 
-                // this is used to store the key=value pairs for the attrset that is passed to `.override attrs`
+                // Set private netowrk flag based on env var, defaulting to true
+                let is_private_network = std::env::var("IS_CONTAINER_ON_PRIVATE_NETWORK")
+                    .unwrap_or_else(|_| "true".to_string())
+                    .parse::<bool>()
+                    .unwrap_or(true);
+
+                // This is used to store the key=value pairs for the attrset that is passed to `.override attrs`
                 let mut override_attrs = vec![
                     format!(r#"containerName = "{}""#, get_container_name(&workload_id)?),
                     format!(r#"adminWebsocketPort = {}"#, HOLOCHAIN_ADMIN_PORT_DEFAULT),
-                    // TODO: clarify if we want to autostart the container uncoditionally
-                    format!(r#"autoStart = true"#),
                     format!(r#"httpGwEnable = {}"#, http_gw_enable),
+                    // NB: We use this setting for both container networking and port allocation defaults
+                    format!(r#"privateNetwork = {}"#, is_private_network),
+                    // TODO: clarify if we want to autostart the container unconditionally
+                    format!(r#"autoStart = true"#),
                 ];
+
+                // If we're not on a private network, we need to set the http gw port to a dynamic value based on workload id,
+                // otherwise, the port will be set to the default value (8090) automatically at container build time
+                if !is_private_network && http_gw_enable {
+                    let http_gw_port = calculate_http_gw_port(&workload_id, is_private_network);
+                    override_attrs.push(format!(r#"httpGwPort = {}"#, http_gw_port));
+                }
 
                 if let Some(url) = bootstrap_server_url {
                     override_attrs.push(format!(r#"bootstrapUrl = "{url}""#));
