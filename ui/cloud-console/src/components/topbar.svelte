@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { logout } from "@/auth";
-  import {clearLoginCredentials
+  import { logout } from "@/api";
+  import {
     getSupportedLanguages,
     getTranslation,
     getTranslationWithLang,
@@ -22,7 +22,7 @@
   type ProfileItem = {
     key: string;
     label: string;
-  };clearLoginCredentials
+  };
   const profileItems: ProfileItem[] = [
     { key: "settings", label: "Settings" },
     { key: "logout", label: "Logout" },
