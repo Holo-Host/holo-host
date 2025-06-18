@@ -80,18 +80,18 @@ jobs:
 
   # host console
   HOST_CONSOLE:
-    name: holo-public-api
+    name: host-console
     uses: ./.github/workflows/reuseable_ui_ci.yml
     with:
-      project: holo-public-api
+      project: host-console
 
   HOST_CONSOLE_DEPLOY_DEV:
-    name: holo-public-api Dev
-    needs: HOLO_PUBLIC_API_CI
+    name: host-console Dev
+    needs: HOST_CONSOLE
     uses: ./.github/workflows/reuseable_ui_deploy.yml
     #if: github.ref == 'refs/heads/main'
     with:
-      project: holo-public-api
+      project: host-console
       environment: dev
       buildArgs: |
         VITE_API_HOST=api.dev.holo.host
