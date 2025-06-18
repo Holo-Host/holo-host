@@ -7,9 +7,6 @@ on:
   push:
     branches:
       - main
-      # IMPORTANT: Remove this edit before merging this to main
-      # TODO: remove this as soon as we have a proper way to deploy db-streaming to the api server
-      - db-streaming
 
 jobs:
   #holo-dns
