@@ -7,7 +7,7 @@ on:
         description: The name of the project to build and test.
 
 env:
-  RUST_VERSION: 1.85.0
+  NODE_VERSION: 23.11.0
 
 jobs:
   ci:
@@ -19,14 +19,12 @@ jobs:
       - name: Set up Node
         uses: actions/setup-node@v3
         with:
-          node-version: 23
+          node-version: ${{ env.NODE_VERSION }}
 
       - name: Install Dependencies
-        run: |
-          cd ui/${{  inputs.project }}
-          npm install
+        working-directory: ui/${{  inputs.project }}
+        run: npm install
 
       - name: Build Project
-        run: |
-          cd ui/${{  inputs.project }}
-          npm run build
+        working-directory: ui/${{  inputs.project }}
+        run: npm run build
