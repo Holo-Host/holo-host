@@ -5,7 +5,6 @@
   import Input from "@/components/input.svelte";
   import Badge from "@/components/badge.svelte";
   import Card from "@/components/card.svelte";
-  import Dropdown from "@/components/dropdown.svelte";
 
   type Prop = {
     visible: boolean;
@@ -71,6 +70,12 @@
         onKeyDown={onPermissionKeyDown}
         bind:value={permissionValue}
       />
+      <span>
+        Permissions are structured as {"{resource}"}.{"{action}"}.{"{owner}"}
+        Therefor, `workload.create.self` will let you create workloads that are owned
+        by the logged in user. By default `all.all.self` refers to all permissions
+        that the user has.
+      </span>
     </div>
     <div class="flex">
       <Button>Generate</Button>

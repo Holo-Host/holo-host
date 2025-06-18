@@ -1,6 +1,7 @@
 import type { Component } from "svelte";
-import { derived, readable } from "svelte/store";
+import { derived, readable, get } from "svelte/store";
 import { NotFoundComponent, routes } from "./routes";
+import { authStore } from "./auth";
 
 export type RouteRenderer = {
   component: Component;
@@ -44,6 +45,11 @@ export function getRouteComponent(
     const match = regex.exec(path);
     if (match) {
       const params = match.groups || {};
+      if (route.isAuthenticated !== false && !get(authStore).isAuthenticated) {
+        localStorage.setItem("redirect", path);
+        window.location.href = "/login";
+        return null;
+      }
       return {
         component: route.component,
         path,
