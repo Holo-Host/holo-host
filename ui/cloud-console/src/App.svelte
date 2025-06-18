@@ -35,5 +35,6 @@
 <style lang="css">
   .page-content {
     flex-direction: column;
+    min-height: 100vh;
   }
 </style>

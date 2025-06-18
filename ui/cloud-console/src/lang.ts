@@ -15,6 +15,7 @@ function getDefaultLanguage() {
 export function setLanguage(language: string) {
   localStorage.setItem(LS_LANGUAGE_KEY, language);
   currentLanguage.set(language);
+  location.reload();
 }
 
 export function getLanguage() {

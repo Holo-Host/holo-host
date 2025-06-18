@@ -45,7 +45,7 @@ export function getRouteComponent(
     const match = regex.exec(path);
     if (match) {
       const params = match.groups || {};
-      if (route.isAuthenticated !== false && !get(authStore).isAuthenticated) {
+      if (route.isAuthenticated !== false && get(authStore) === null) {
         localStorage.setItem("redirect", path);
         window.location.href = "/login";
         return null;

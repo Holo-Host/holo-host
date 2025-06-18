@@ -1,5 +1,6 @@
 <script lang="ts">
-  import {
+  import { logout } from "@/auth";
+  import {clearLoginCredentials
     getSupportedLanguages,
     getTranslation,
     getTranslationWithLang,
@@ -8,10 +9,35 @@
   import { defaultTheme } from "../theme";
   import Dropdown from "./dropdown.svelte";
 
-  const languages = getSupportedLanguages().map((lang) => ({
+  type Language = {
+    label: string;
+    value: string;
+  };
+
+  const languages: Language[] = getSupportedLanguages().map((lang) => ({
     label: getTranslationWithLang(lang, "topbar.language"),
     value: lang,
   }));
+
+  type ProfileItem = {
+    key: string;
+    label: string;
+  };clearLoginCredentials
+  const profileItems: ProfileItem[] = [
+    { key: "settings", label: "Settings" },
+    { key: "logout", label: "Logout" },
+  ];
+
+  function onProfileItemSelected(item: ProfileItem) {
+    switch (item.key) {
+      case "settings":
+        location.href = "/settings";
+        break;
+      case "logout":
+        logout();
+        break;
+    }
+  }
 </script>
 
 <div
@@ -41,7 +67,7 @@
   <!-- Language Selector -->
   <Dropdown
     items={languages}
-    onItemSelected={(item) => setLanguage(item.value)}
+    onItemSelected={(item: Language) => setLanguage(item.value)}
   >
     <div class="language-selector">
       <span>{getTranslation("topbar.language")}</span>
@@ -52,14 +78,14 @@
         expand_more
       </span>
     </div>
-    {#snippet itemTemplate(item)}
+    {#snippet itemTemplate(item: Language)}
       <span>{item.label}</span>
     {/snippet}
   </Dropdown>
   <!-- Profile Dropdown -->
   <Dropdown
-    items={["Settings", "Logout"]}
-    onItemSelected={(item) => console.log(item)}
+    items={profileItems}
+    onItemSelected={(item: ProfileItem) => onProfileItemSelected(item)}
   >
     <div class="user-info">
       <span
@@ -79,8 +105,8 @@
         </span>
       </span>
     </div>
-    {#snippet itemTemplate(item)}
-      <span>{item}</span>
+    {#snippet itemTemplate(item: ProfileItem)}
+      <span>{item.label}</span>
     {/snippet}
   </Dropdown>
 </div>
