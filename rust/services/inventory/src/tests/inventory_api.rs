@@ -82,6 +82,8 @@ mod tests {
     }
 
     #[tokio::test]
+    // TODO: Remove ignore once we re-enable the host eligibility checklogic in the inventory service
+    #[ignore]
     async fn test_handle_inventory_update_with_insufficient_resources() -> Result<()> {
         let mongod = MongodRunner::run().expect("Failed to run Mongodb Runner");
         let db_client = mongod

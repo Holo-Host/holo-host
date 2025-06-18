@@ -1,5 +1,7 @@
 /*
-this can be run on a nixos machine (that has extra-containers installed ?) using:
+This file is a package that configures the container.
+
+This can be run on a nixos machine (that has extra-containers installed ?) using:
 $ nix run --extra-experimental-features "nix-command flakes" --refresh github:holo-host/holo-host#extra-container-holochain -- --restart-changed
 
 optionally deploy locally to a dev machine:
@@ -22,19 +24,23 @@ $ nix copy --no-check-sigs "$(nix build --print-out-paths .#packages.x86_64-linu
   signalUrl ? null,
   stunUrls ? null,
   holochainFeatures ? null,
+  holochainVersion ? null,
   # hc-http-gw related args
   httpGwEnable ? false,
   httpGwAllowedAppIds ? [],
   # TODO: support
   # httpGwAllowedFns ? { },
-}: let
+}:
+
+(pkgs.lib.makeOverridable (args: let
+  
   package = inputs.extra-container.lib.buildContainers {
     # The system of the container host
     inherit system;
 
     # Optional: Set nixpkgs.
     # If unset, the nixpkgs input of extra-container flake is used
-    inherit nixpkgs;
+    nixpkgs = args.nixpkgs;
 
     # Only set this if the `system.stateVersion` of your container
     # host is < 22.05
@@ -44,8 +50,17 @@ $ nix copy --no-check-sigs "$(nix build --print-out-paths .#packages.x86_64-linu
     # addRunner = false;
 
     config = {
-      containers."${containerName}" = {
-        inherit privateNetwork autoStart;
+      # Allow container 5m startup time to allow holochain service to start properly.
+      # (NB: This is needed to accomodate the network updates in holochain versions >= v0.5+)
+      systemd.services."container@${args.containerName}" = {
+        serviceConfig = {
+          TimeoutStartSec = pkgs.lib.mkForce "300s";  # 5 minutes timeout (override default 1min)
+        };
+      };
+
+      containers."${args.containerName}" = {
+        privateNetwork = args.privateNetwork;
+        autoStart = args.autoStart;
 
         # `specialArgs` is available in nixpkgs > 22.11
         # This is useful for importing flakes from modules (see nixpkgs/lib/modules.nix).
@@ -62,7 +77,7 @@ $ nix copy --no-check-sigs "$(nix build --print-out-paths .#packages.x86_64-linu
           ...
         }: {
           # in case the container shares the host network, don't mess with the firewall rules.
-          networking.firewall.enable = privateNetwork;
+          networking.firewall.enable = args.privateNetwork;
           networking.useHostResolvConf = true;
 
           imports = [
@@ -71,41 +86,32 @@ $ nix copy --no-check-sigs "$(nix build --print-out-paths .#packages.x86_64-linu
           ];
 
           holo.holochain =
-            {
-              inherit adminWebsocketPort;
-              package = let
-                # TODO: choose according to the requested version. maybe by overriding the holonix branch?
-                versioned = options.holo.holochain.package.default;
-
-                featured =
-                  if holochainFeatures != null
-                  then let
-                    features = builtins.concatStringsSep "," holochainFeatures;
-                    cargoExtraArgs = "--features ${features}";
-                  in
-                    versioned.override {inherit cargoExtraArgs;}
-                  else versioned;
-
-                finalPkg = featured;
-              in
-                finalPkg;
+            (
+              {
+                adminWebsocketPort = args.adminWebsocketPort;
+                # NB: all holochain version handling logic is now located within the holochain nixos module.
+                features = args.holochainFeatures;
             }
-            // (lib.optionalAttrs (bootstrapUrl != null) {bootstrapServiceUrl = bootstrapUrl;})
-            // (lib.optionalAttrs (signalUrl != null) {webrtcTransportPoolSignalUrl = signalUrl;})
-            // (lib.optionalAttrs (stunUrls != null) {webrtcTransportPoolIceServers = stunUrls;})
-            #
+            )
+            // (lib.optionalAttrs (args.holochainVersion != null) {version = args.holochainVersion;})
+            // (lib.optionalAttrs (args.bootstrapUrl != null) {bootstrapServiceUrl = args.bootstrapUrl;})
+            // (lib.optionalAttrs (args.signalUrl != null) {webrtcTransportPoolSignalUrl = args.signalUrl;})
+            // (lib.optionalAttrs (args.stunUrls != null) {webrtcTransportPoolIceServers = args.stunUrls;})
+
+            # TODO: add support for httpGwAllowedFns ?
             ;
 
           holo.hc-http-gw = {
-            enable = httpGwEnable;
-            adminWebsocketUrl = "ws://127.0.0.1:${builtins.toString adminWebsocketPort}";
-            allowedAppIds = httpGwAllowedAppIds;
+            enable = args.httpGwEnable;
+            adminWebsocketUrl = "ws://127.0.0.1:${builtins.toString args.adminWebsocketPort}";
+            allowedAppIds = args.httpGwAllowedAppIds;
             # allowedFnsPerAppId = httpGwAllowedFns;
           };
         };
       };
     };
   };
+
   packageWithPlatformFilter = package.overrideAttrs {
     meta.platforms = with nixpkgs.lib;
       lists.intersectLists platforms.linux (platforms.x86_64 ++ platforms.aarch64);
@@ -133,16 +139,37 @@ $ nix copy --no-check-sigs "$(nix build --print-out-paths .#packages.x86_64-linu
           host.succeed("extra-container create ${package}")
 
           # ensure the port is closed before starting the holochain container
-          host.wait_for_closed_port(${builtins.toString adminWebsocketPort}, timeout = 1)
+          host.wait_for_closed_port(${builtins.toString args.adminWebsocketPort}, timeout = 1)
 
-          host.succeed("extra-container start ${containerName}")
-          host.wait_until_succeeds("systemctl -M ${containerName} is-active holochain", timeout = 60)
+          host.succeed("extra-container start ${args.containerName}")
+          host.wait_until_succeeds("systemctl -M ${args.containerName} is-active holochain", timeout = 120)
 
           # now the port should be open
-          host.wait_for_open_port(${builtins.toString adminWebsocketPort}, timeout = 1)
+          host.wait_for_open_port(${builtins.toString args.adminWebsocketPort}, timeout = 1)
         '';
       }
     );
   };
 in
   packageWithPlatformFilterAndTest
+)) {
+  inherit
+    inputs
+    system
+    flake
+    pkgs
+    nixpkgs
+    privateNetwork
+    index
+    adminWebsocketPort
+    containerName
+    autoStart
+    bootstrapUrl
+    signalUrl
+    stunUrls
+    holochainFeatures
+    holochainVersion
+    httpGwEnable
+    httpGwAllowedAppIds
+    ;
+}

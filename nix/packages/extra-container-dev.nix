@@ -1,12 +1,46 @@
 # please see the `dev-` prefixed recipes in the toplevel Justfile for usage
+#
+# NB: This package now supports dynamic holochain version selection.
+# This feature currently supports:
+# - assigns `holochainVersion` parameter to override the default version (0.5)
+# - supports "0.3", "0.4", "0.5", and "latest"
+# - automatically selects appropriate bootstrap service pattern:
+#   * 0.4 and earlier: Uses separate bootstrap and signal services (hc-run-local-services)
+#   * 0.5 and later: Uses unified bootstrap service (bootstrap-srv)
+#
+# Examples:
+#   nix build .#extra-container-dev                                         # Uses default (0.5)
+#   nix build .#extra-container-dev.override { holochainVersion = "0.4"; }  # Uses 0.4
+#   nix run nixpkgs#just -- dev-cycle-v04                                  # just receipe for using 0.4
+#   nix run nixpkgs#just -- dev-cycle-v05                                  # just receipe for using 0.5
 {
   inputs,
   system,
   flake,
   perSystem,
   nixpkgs ? inputs.nixpkgs-2411,
+  # Default holochain version to 0.5
+  holochainVersion ? "0.5",
 }: let
   privateNetwork = true;
+
+  # Function to determine if we should use the legacy bootstrap pattern
+  useLegacyBootstrap = let
+    # Handle version strings like "0.4", "0.4.1", "0.5", etc.
+    # Split on dots and filter out empty strings
+    versionParts = builtins.filter (x: x != "" && builtins.isString x) (builtins.split "\\." holochainVersion);
+    majorVersion = if builtins.length versionParts >= 1 then builtins.elemAt versionParts 0 else "0";
+    minorVersion = if builtins.length versionParts >= 2 then builtins.elemAt versionParts 1 else "0";
+    majorMinor = "${majorVersion}.${minorVersion}";
+  in
+    # Use legacy pattern for 0.4.x and earlier
+    (majorMinor == "0.3" || majorMinor == "0.4" || holochainVersion == "0.3" || holochainVersion == "0.4");
+
+  # Select the appropriate holonix input based on version
+  holonixInput = 
+    if holochainVersion == "0.3" then inputs.holonix_0_3
+    else if holochainVersion == "0.4" then inputs.holonix_0_4
+    else inputs.holonix_0_5; # default to 0.5 for "0.5", "latest", etc.
 
   package = inputs.extra-container.lib.buildContainers {
     # The system of the container host
@@ -124,13 +158,20 @@
             wantedBy = [
               "multi-user.target"
             ];
-            script = ''
-              ${pkgs.lib.getExe' perSystem.holonix_0_4.holochain "hc-run-local-services"} \
-                --bootstrap-interface="0.0.0.0" \
-                --bootstrap-port=${builtins.toString bootstrapPort} \
-                --signal-interfaces "0.0.0.0" \
-                --signal-port=${builtins.toString signalPort}
-            '';
+            script = 
+              if useLegacyBootstrap then
+                # Legacy pattern for holonix 0.4 and earlier - separate bootstrap and signal services
+                ''
+                  ${pkgs.lib.getExe' holonixInput.packages.${pkgs.system}.holochain "hc-run-local-services"} \
+                    --bootstrap-port ${builtins.toString bootstrapPort} \
+                    --signal-port ${builtins.toString signalPort}
+                ''
+              else
+                # New pattern for holonix 0.5+ - unified bootstrap-srv
+                ''
+                  ${pkgs.lib.getExe holonixInput.packages.${pkgs.system}.bootstrap-srv} \
+                    --listen "0.0.0.0:${builtins.toString bootstrapPort}"
+                '';
           };
         };
       };

@@ -85,12 +85,13 @@ impl InventoryServiceApi {
         log::debug!("Processing inventory update for host: {host_device_id}");
 
         // Update host inventory and get the host record
-        let host = self
+        let _host = self
             .update_host_inventory(&host_device_id, &host_inventory)
             .await?;
 
+        // TODO: Re-enable this once we have epic to define and implement host eligibility for workloads
         // Handle workloads that are no longer compatible with the host
-        self.handle_ineligible_host_workloads(host).await?;
+        // self.handle_ineligible_host_workloads(host).await?;
 
         Ok(InventoryApiResult {
             status: types::InventoryUpdateStatus::Ok,
@@ -144,23 +145,10 @@ impl InventoryServiceApi {
         Ok(host)
     }
 
-    fn calculate_host_drive_capacity(&self, host_inventory: &HoloInventory) -> i64 {
-        host_inventory
-            .drives
-            .iter()
-            .fold(0_i64, |acc, d| acc + d.capacity_bytes.unwrap_or(0) as i64)
-    }
-
-    async fn handle_ineligible_host_workloads(&self, host: Host) -> Result<(), ServiceError> {
-        let host_id = host._id.ok_or_else(|| {
-            ServiceError::internal(
-                format!("Host missing ID: {}", host.device_id),
-                Some("Database integrity error".to_string()),
-            )
-        })?;
-
+    async fn _handle_ineligible_host_workloads(&self, host: Host) -> Result<(), ServiceError> {
+        let host_id = host._id;
         // Find workloads that exceed host capacity
-        let host_drive_capacity = self.calculate_host_drive_capacity(&host.inventory);
+        let host_drive_capacity = self._calculate_host_drive_capacity(&host.inventory);
         let host_cpu_count = host.inventory.cpus.len() as i64;
 
         let ineligible_workloads = self
@@ -174,10 +162,8 @@ impl InventoryServiceApi {
             })
             .await?;
 
-        let ineligible_workload_ids: Vec<ObjectId> = ineligible_workloads
-            .into_iter()
-            .filter_map(|w| w._id)
-            .collect();
+        let ineligible_workload_ids: Vec<ObjectId> =
+            ineligible_workloads.into_iter().map(|w| w._id).collect();
 
         if !ineligible_workload_ids.is_empty() {
             log::info!(
@@ -210,6 +196,13 @@ impl InventoryServiceApi {
         }
 
         Ok(())
+    }
+
+    fn _calculate_host_drive_capacity(&self, host_inventory: &HoloInventory) -> i64 {
+        host_inventory
+            .drives
+            .iter()
+            .fold(0_i64, |acc, d| acc + d.capacity_bytes.unwrap_or(0) as i64)
     }
 
     async fn init_collection<T>(

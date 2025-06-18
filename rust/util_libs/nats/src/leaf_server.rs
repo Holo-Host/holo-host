@@ -75,6 +75,7 @@ struct NatsConfig {
     #[serde(serialize_with = "serialize_host")]
     host: Host<String>,
     port: u16,
+    max_payload: Option<u64>,
     jetstream: JetStreamConfig,
     leafnodes: LeafNodes,
     #[serde(flatten)]
@@ -106,6 +107,7 @@ impl LeafServer {
         new_config_path: &str,
         host: Host<String>,
         port: u16,
+        max_payload: Option<u64>,
         jetstream_config: JetStreamConfig,
         logging: LoggingOptions,
         leaf_node_remotes: Vec<LeafNodeRemote>,
@@ -115,6 +117,7 @@ impl LeafServer {
                 server_name: server_name.map(ToString::to_string),
                 host,
                 port,
+                max_payload,
                 jetstream: jetstream_config,
                 logging,
                 leafnodes: LeafNodes {

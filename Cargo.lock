@@ -8157,6 +8157,7 @@ dependencies = [
  "futures",
  "ham",
  "hpos-hal",
+ "lazy_static",
  "log",
  "mock_utils",
  "mongodb",

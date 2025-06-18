@@ -27,8 +27,25 @@
     extra-container.url = "github:erikarvstedt/extra-container";
     extra-container.inputs.nixpkgs.follows = "nixpkgs";
 
+    # Add support for multiple holochain versions
+    holonix_0_5 = {
+      url = "github:holochain/holonix?ref=main-0.5";
+      inputs = {
+        nixpkgs.follows = "nixpkgs";
+        crane.follows = "crane";
+        rust-overlay.follows = "rust-overlay";
+      };
+    };
     holonix_0_4 = {
       url = "github:holochain/holonix?ref=main-0.4";
+      inputs = {
+        nixpkgs.follows = "nixpkgs";
+        crane.follows = "crane";
+        rust-overlay.follows = "rust-overlay";
+      };
+    };
+    holonix_0_3 = {
+      url = "github:holochain/holonix?ref=main-0.3";
       inputs = {
         nixpkgs.follows = "nixpkgs";
         crane.follows = "crane";
