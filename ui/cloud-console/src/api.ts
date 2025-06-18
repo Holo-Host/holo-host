@@ -5,14 +5,14 @@ import {
   clearLoginCredentials,
   storeLoginCredentials,
 } from "./auth";
-import { decode, JwtPayload } from "jsonwebtoken";
+import { JwtPayload, jwtDecode } from "jwt-decode"; 
 
 export const host = import.meta.env.VITE_API_HOST ?? "http://localhost:3000";
 
 export async function request(url: string, options: RequestInit) {
   let credentials = get(authStore);
 
-  const claims = decode(credentials.accessToken) as JwtPayload;
+  const claims = jwtDecode(credentials.accessToken) as JwtPayload;
   if (claims.exp - 30 < Date.now() / 1000) {
     credentials = await refreshAccessToken(credentials);
   }
