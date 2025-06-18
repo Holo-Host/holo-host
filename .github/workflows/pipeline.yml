@@ -77,3 +77,23 @@ jobs:
       DIGITAL_OCEAN_TOKEN: ${{ secrets.DIGITAL_OCEAN_TOKEN }}
       SSH_KEY: ${{ secrets.SSH_KEY }}
       SSH_USERNAME: ${{ secrets.SSH_USERNAME }}
+
+  # host console
+  HOST_CONSOLE:
+    name: holo-public-api
+    uses: ./.github/workflows/reuseable_ui_ci.yml
+    with:
+      project: holo-public-api
+
+  HOST_CONSOLE_DEPLOY_DEV:
+    name: holo-public-api Dev
+    needs: HOLO_PUBLIC_API_CI
+    uses: ./.github/workflows/reuseable_ui_deploy.yml
+    #if: github.ref == 'refs/heads/main'
+    with:
+      project: holo-public-api
+      environment: dev
+      buildArgs: |
+        VITE_API_HOST=api.dev.holo.host
+    secrets:
+      DIGITAL_OCEAN_TOKEN: ${{ secrets.DIGITAL_OCEAN_TOKEN }}
