@@ -55,5 +55,8 @@
   "[css]": {
     "editor.defaultFormatter": "esbenp.prettier-vscode",
     "editor.tabSize": 2
-  }
+},
+"[dockerfile]": {
+    "editor.defaultFormatter": "ms-azuretools.vscode-containers"
+}
 }
