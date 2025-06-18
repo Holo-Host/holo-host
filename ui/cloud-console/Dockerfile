@@ -6,7 +6,7 @@ ARG PROJECT_NAME
 WORKDIR /app
 COPY . .
 ENV VITE_API_HOST=${VITE_API_HOST}
-RUN npm install --package-lock-only && npm run build
+RUN npm install && npm run build
 
 FROM nginx:alpine
 COPY --from=builder /app/dist /usr/share/nginx/html

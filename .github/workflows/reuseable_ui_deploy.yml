@@ -30,10 +30,10 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Build Docker Image
+        working-directory: ui/${{ inputs.project }}
         run: |
           docker build ${{ inputs.buildArgs }} \
-          -t registry.digitalocean.com/holo-host/${{ inputs.project }}:${{ inputs.environment }} \
-          ./ui/${{ inputs.project }}
+          -t registry.digitalocean.com/holo-host/${{ inputs.project }}:${{ inputs.environment }} .
 
       - name: Install Doctl
         uses: digitalocean/action-doctl@v2
