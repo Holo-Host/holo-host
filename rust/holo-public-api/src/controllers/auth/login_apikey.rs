@@ -1,4 +1,4 @@
-use actix_web::{get, web, HttpRequest, HttpResponse, Responder};
+use actix_web::{post, web, HttpRequest, HttpResponse, Responder};
 use bson::doc;
 use db_utils::schemas::api_key::{ApiKey, API_KEY_COLLECTION_NAME};
 use utoipa::OpenApi;
@@ -17,7 +17,7 @@ use crate::providers::{
 pub struct OpenApiSpec;
 
 #[utoipa::path(
-    get,
+    post,
     path = "/public/v1/auth/login-with-apikey",
     tag = "Auth",
     summary = "Login with API key",
@@ -29,7 +29,7 @@ pub struct OpenApiSpec;
         (status = 200, body = AuthLoginResponse)
     )
 )]
-#[get("/v1/auth/login-with-apikey")]
+#[post("/v1/auth/login-with-apikey")]
 pub async fn login_with_apikey(
     req: HttpRequest,
     config: web::Data<AppConfig>,

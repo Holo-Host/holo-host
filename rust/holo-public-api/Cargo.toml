@@ -36,6 +36,7 @@ serde = { workspace = true }
 url = { version = "2", features = ["serde"] }
 db_utils = { path = "../util_libs/db" }
 strum = { version = "0.27.1", features = ["derive"] }
+bcrypt = "0.17.0"
 
 [[bin]]
 name = "holo-public-api"
