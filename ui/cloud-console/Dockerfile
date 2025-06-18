@@ -1,10 +1,11 @@
 FROM node:23.11.0-alpine AS builder
 
 ARG VITE_API_HOST
+ARG PROJECT_NAME
 
 WORKDIR /app
-COPY . .
-ENV VITE_API_HOST=VITE_API_HOST
+COPY . ./ui/${PROJECT_NAME}
+ENV VITE_API_HOST=${VITE_API_HOST}
 RUN npm install --package-lock-only && npm run build
 
 FROM nginx:alpine
