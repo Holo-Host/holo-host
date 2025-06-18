@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "lib": ["ESNext", "dom", "dom.iterable"],
+    "composite": true,
+    "baseUrl": ".",
+    "outDir": "build",
+    "paths": {
+      "@": ["./src"],
+      "@/*": ["./src/*"]
+    }
+  }
+}
