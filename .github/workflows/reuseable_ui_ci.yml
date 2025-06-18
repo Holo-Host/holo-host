@@ -20,8 +20,6 @@ jobs:
         uses: actions/setup-node@v3
         with:
           node-version: 23
-          cache: "npm"
-          cache-dependency-path: ui/${{  inputs.project }}/package-lock.json
 
       - name: Install Dependencies
         run: |
