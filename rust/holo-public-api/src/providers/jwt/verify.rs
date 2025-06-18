@@ -3,27 +3,27 @@ use jsonwebtoken::{decode, DecodingKey, Validation};
 use serde::de::DeserializeOwned;
 
 pub fn verify_access_token(
-    token: &str,
-    secret: &str,
+    token: String,
+    secret: String,
 ) -> Result<AccessTokenClaims, jsonwebtoken::errors::Error> {
     verify_jwt::<AccessTokenClaims>(token, secret)
 }
 
 pub fn verify_refresh_token(
-    token: &str,
-    secret: &str,
+    token: String,
+    secret: String,
 ) -> Result<RefreshTokenClaims, jsonwebtoken::errors::Error> {
     verify_jwt::<RefreshTokenClaims>(token, secret)
 }
 
 pub fn verify_jwt<T: DeserializeOwned>(
-    token: &str,
-    secret: &str,
+    token: String,
+    secret: String,
 ) -> Result<T, jsonwebtoken::errors::Error> {
     let mut validation = Validation::default();
     validation.validate_exp = false;
     let token = decode::<T>(
-        token,
+        token.as_ref(),
         &DecodingKey::from_secret(secret.as_ref()),
         &validation,
     );

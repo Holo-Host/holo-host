@@ -29,7 +29,7 @@ where
     if let Some(protocol) = onward_request.super_proto.clone() {
         match protocol {
             SuperProtocol::HolochainHTTP(hc_payload) => {
-                log::debug!("About to send out a Holochain Gateway request via nats");
+                log::debug!("About to send out a Holochain Gateway request via nats: client={nats_client:?}, request_payload={hc_payload:?}, request_headers={request_headers:?}");
 
                 let timeout_duration = Duration::from_secs(10);
                 let response = time::timeout(

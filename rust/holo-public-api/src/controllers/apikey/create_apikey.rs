@@ -87,15 +87,15 @@ pub async fn create_api_key(
 
     // generate api key
     let api_key = providers::auth::generate_api_key();
-    let api_key_hash =
-        match providers::auth::get_apikey_hash(payload.version.clone(), api_key.clone()) {
-            Some(hash) => hash,
-            None => {
-                return HttpResponse::BadRequest().json(ErrorResponse {
-                    message: "invalid api key version".to_string(),
-                });
-            }
-        };
+    let api_key_hash = match providers::auth::hash_apikey(payload.version.clone(), api_key.clone())
+    {
+        Some(hash) => hash,
+        None => {
+            return HttpResponse::BadRequest().json(ErrorResponse {
+                message: "invalid api key version".to_string(),
+            });
+        }
+    };
 
     // create api key in db
     let owner_oid = match ObjectId::parse_str(claims.sub.clone()) {

@@ -10,12 +10,11 @@ use actix_web::{
     test::{self, TestRequest},
     web, App, Error, HttpMessage,
 };
-use mongodb::Database;
 
 #[derive(Clone)]
 pub struct WebData {
     pub config: Option<AppConfig>,
-    pub db: Option<Database>,
+    pub db: Option<mongodb::Client>,
     pub cache: Option<deadpool_redis::Pool>,
     pub auth: Option<AccessTokenClaims>,
 }
@@ -95,8 +94,8 @@ pub fn get_app_config() -> AppConfig {
     }
     AppConfig {
         port: None,
-        mongo_url: "mongodb://admin:password@localhost:27017/".to_string(),
-        redis_url: "redis://localhost:6379".to_string(),
+        mongo_url: Some("mongodb://admin:password@localhost:27017/".to_string()),
+        redis_url: Some("redis://localhost:6379".to_string()),
         enable_internal_docs: None,
         enable_scheduler: None,
         host: None,
@@ -109,14 +108,14 @@ pub fn get_app_config() -> AppConfig {
     }
 }
 
-pub async fn get_db(app_config: &AppConfig) -> mongodb::Client {
-    mongodb::Client::with_uri_str(&app_config.mongo_url)
+pub async fn get_db(app_config: AppConfig) -> mongodb::Client {
+    mongodb::Client::with_uri_str(app_config.mongo_url.unwrap())
         .await
         .expect("Failed to connect to MongoDB")
 }
 
-pub async fn get_cache(app_config: &AppConfig) -> deadpool_redis::Pool {
-    deadpool_redis::Config::from_url(&app_config.redis_url)
+pub async fn get_cache(app_config: AppConfig) -> deadpool_redis::Pool {
+    deadpool_redis::Config::from_url(app_config.redis_url.unwrap())
         .create_pool(Some(deadpool_redis::Runtime::Tokio1))
         .expect("failed to create redis pool")
 }
@@ -137,7 +136,7 @@ pub fn create_credentials(secret: &str, user_id: bson::oid::ObjectId) -> (String
             exp: 900000000000,
             version: 0,
             allow_extending_refresh_token: true,
-            api_key: None,
+            reference_id: None,
         },
         secret,
     )

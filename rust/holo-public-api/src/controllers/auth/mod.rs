@@ -5,6 +5,9 @@ mod auth_dto;
 mod login_apikey;
 mod refresh;
 
+#[cfg(test)]
+mod tests;
+
 #[derive(OpenApi)]
 #[openapi(components(schemas(AuthLoginResponse)))]
 pub struct AuthLoginResponseSpec;

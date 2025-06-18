@@ -1,11 +1,13 @@
 use actix_web::{get, web, HttpRequest, HttpResponse, Responder};
 use bson::doc;
+use db_utils::schemas::api_key::{ApiKey, API_KEY_COLLECTION_NAME};
 use utoipa::OpenApi;
 
 use super::auth_dto::AuthLoginResponse;
 use crate::providers::{
     self, auth,
     config::AppConfig,
+    crud,
     error_response::ErrorResponse,
     jwt::{AccessTokenClaims, RefreshTokenClaims},
 };
@@ -66,7 +68,7 @@ pub async fn login_with_apikey(
             message: "missing or invalid 'api-key'".to_string(),
         });
     }
-    let api_key_hash = auth::get_apikey_hash(api_key[0].to_string(), api_key[1].to_string());
+    let api_key_hash = auth::hash_apikey(api_key[0].to_string(), api_key[1].to_string());
     if api_key_hash.is_none() {
         return HttpResponse::Unauthorized().json(ErrorResponse {
             message: "missing or invalid 'api-key'".to_string(),
@@ -75,17 +77,22 @@ pub async fn login_with_apikey(
     let api_key_hash = api_key_hash.unwrap();
 
     // get user id and permissions from the api key hash
-    let result =
-        match auth::get_user_id_and_permissions_from_apikey(db.get_ref(), api_key_hash).await {
-            Ok(result) => result,
-            Err(err) => {
-                tracing::error!("failed to get user id and permissions: {}", err);
-                return HttpResponse::InternalServerError().json(bson::doc! {
-                    "error": err.to_string(),
-                    "message": "failed to get user id and permissions".to_string(),
-                });
-            }
-        };
+    let result = match crud::find_one::<ApiKey>(
+        db.get_ref().clone(),
+        API_KEY_COLLECTION_NAME.to_string(),
+        bson::doc! { "api_key": api_key_hash },
+    )
+    .await
+    {
+        Ok(result) => result,
+        Err(err) => {
+            tracing::error!("failed to get user id and permissions: {}", err);
+            return HttpResponse::InternalServerError().json(bson::doc! {
+                "error": err.to_string(),
+                "message": "failed to get user id and permissions".to_string(),
+            });
+        }
+    };
     if result.is_none() {
         return HttpResponse::Unauthorized().json(ErrorResponse {
             message: "missing or invalid 'api-key'".to_string(),
@@ -93,10 +100,10 @@ pub async fn login_with_apikey(
     }
     let result = result.unwrap();
     let user_id = result.owner.to_string();
-    let version = auth::get_refresh_token_version(db.get_ref(), user_id.clone()).await;
+    let version = auth::get_refresh_token_version(db.get_ref().clone(), user_id.clone()).await;
     let permissions = result.permissions.clone();
-    let jwt_tokens = auth::sign_jwt_tokens(auth::SignJwtTokenOptions {
-        jwt_secret: config.get_ref().jwt_secret.clone(),
+    let jwt_tokens = auth::sign_tokens(auth::SignJwtTokenOptions {
+        jwt_secret: config.jwt_secret.clone(),
         access_token: AccessTokenClaims {
             sub: user_id.clone(),
             permissions: permissions.clone(),
@@ -108,7 +115,7 @@ pub async fn login_with_apikey(
             sub: user_id.clone(),
             exp: result.expire_at as usize,
             allow_extending_refresh_token: false,
-            api_key: Some(result._id.unwrap().to_string()),
+            reference_id: Some(result._id.unwrap().to_string()),
         },
     });
     if jwt_tokens.is_none() {

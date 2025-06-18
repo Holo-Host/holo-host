@@ -6,6 +6,7 @@
 # nix
 result
 result-*
+nix/secrets/
 
 # rust
 target/

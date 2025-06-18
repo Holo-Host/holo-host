@@ -2,8 +2,8 @@ use anyhow::Result;
 use bson::{doc, oid::ObjectId, Document};
 use mongodb::options::IndexOptions;
 use serde::{Deserialize, Serialize};
-use strum::{AsRefStr, EnumDiscriminants, EnumString, FromRepr};
-use utoipa::ToSchema;
+use strum::{AsRefStr, Display, EnumDiscriminants, EnumString, FromRepr};
+use utoipa::{openapi, PartialSchema, ToSchema};
 
 use super::metadata::Metadata;
 use super::{alias::PubKey, user_permissions::UserPermission};
@@ -24,7 +24,7 @@ pub const USER_COLLECTION_NAME: &str = "user";
     AsRefStr,
     EnumDiscriminants,
     FromRepr,
-    ToSchema,
+    Display,
 )]
 #[serde(rename_all = "snake_case")]
 pub enum UserRole {
@@ -100,3 +100,22 @@ impl MutMetadata for User {
         &mut self.metadata
     }
 }
+
+impl PartialSchema for UserRole {
+    fn schema() -> openapi::RefOr<openapi::schema::Schema> {
+        let schema = openapi::schema::Object::builder()
+            .schema_type(openapi::schema::SchemaType::Type(
+                openapi::schema::Type::Object,
+            ))
+            .title(Some("Permission Action".to_string()))
+            .examples(vec![
+                UserRole::Admin.to_string(),
+                UserRole::User.to_string(),
+                UserRole::Support.to_string(),
+            ])
+            .build();
+
+        openapi::RefOr::T(openapi::schema::Schema::Object(schema))
+    }
+}
+impl ToSchema for UserRole {}

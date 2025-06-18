@@ -129,7 +129,15 @@ impl HostWorkloadApi {
                         )
                         .await?;
 
-                        let happ_bytes = ham::Ham::download_happ_bytes(happ_binary_url)
+                        let parsed_url = match Url::parse(happ_binary_url) {
+                            Ok(url) => url,
+                            Err(e) => {
+                                anyhow::bail!(
+                                    "failed to parse happ_binary_url {happ_binary_url:?}: {e}"
+                                );
+                            }
+                        };
+                        let happ_bytes = ham::Ham::download_happ_bytes(&parsed_url)
                             .await
                             .context(format!("downloading {happ_binary_url:?}"))?;
 
@@ -145,7 +153,7 @@ impl HostWorkloadApi {
                             let (app_info, agent_key) = ham
                                 .install_and_enable_happ(
                                     &happ_bytes,
-                                    Some(network_seed.to_string()),
+                                    network_seed.clone(),
                                     None,
                                     Some(installed_app_id.clone()),
                                 )

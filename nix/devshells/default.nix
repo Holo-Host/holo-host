@@ -3,6 +3,9 @@
   flake,
   system,
 }:
+let
+  inherit (pkgs) lib;
+in
 pkgs.mkShell {
   # Add build dependencies
   packages = [
@@ -10,7 +13,7 @@ pkgs.mkShell {
     pkgs.jq
     pkgs.just
     pkgs.mongosh
-  ];
+  ] ++ lib.optional (system == "aarch64-linux" || system == "x86_64-linux") flake.inputs.extra-container.packages.${system}.default;
 
   # Add environment variables
   env = { };
@@ -25,5 +28,10 @@ pkgs.mkShell {
     }).shellHook
     + ''
       echo $(git rev-parse --show-toplevel)
+      
+      # Check if running in a systemd environment
+      if ! systemctl is-system-running --quiet; then
+        echo "Warning: Not running in a systemd environment. Some container features may not work."
+      fi
     '';
 }

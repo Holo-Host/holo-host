@@ -114,7 +114,7 @@ pub fn parse_fs(block_dev: &str) -> Result<HoloFilesystemInventory, InventoryErr
     match ext4 {
         Ok(ext4) => return Ok(ext4),
         Err(e) => {
-            info!("Failed to find EXT4 on {}: {}", block_dev, e.to_string());
+            info!("Failed to find EXT4 on {}: {}", block_dev, e);
         }
     }
 
@@ -122,7 +122,7 @@ pub fn parse_fs(block_dev: &str) -> Result<HoloFilesystemInventory, InventoryErr
     match fat32 {
         Ok(fat32) => return Ok(fat32),
         Err(e) => {
-            info!("Failed to find FAT32 on {}: {}", block_dev, e.to_string());
+            info!("Failed to find FAT32 on {}: {}", block_dev, e);
         }
     }
 
