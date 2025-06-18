@@ -1,19 +1,9 @@
 use serde::{Deserialize, Serialize};
 use strum_macros::{Display, EnumString};
-use utoipa::ToSchema;
+use utoipa::{openapi, PartialSchema, ToSchema};
 
 #[derive(
-    Serialize,
-    Deserialize,
-    EnumString,
-    Display,
-    Debug,
-    Clone,
-    PartialEq,
-    Eq,
-    Hash,
-    Default,
-    ToSchema,
+    Serialize, Deserialize, EnumString, Display, Debug, Clone, PartialEq, Eq, Hash, Default,
 )]
 #[strum(serialize_all = "title_case")]
 pub enum Jurisdiction {
@@ -493,3 +483,18 @@ pub enum Jurisdiction {
     #[serde(rename = "Zimbabwe")]
     Zimbabwe,
 }
+
+impl PartialSchema for Jurisdiction {
+    fn schema() -> openapi::RefOr<openapi::schema::Schema> {
+        let schema = openapi::schema::Object::builder()
+            .schema_type(openapi::schema::SchemaType::Type(
+                openapi::schema::Type::Object,
+            ))
+            .title(Some("Jurisdiction".to_string()))
+            .examples(vec![Jurisdiction::Unknown.to_string()])
+            .build();
+
+        openapi::RefOr::T(openapi::schema::Schema::Object(schema))
+    }
+}
+impl ToSchema for Jurisdiction {}

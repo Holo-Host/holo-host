@@ -8,6 +8,7 @@ use std::path::PathBuf;
 use strum::{EnumDiscriminants, EnumString, FromRepr};
 use strum_macros::AsRefStr;
 use url::Url;
+use utoipa::ToSchema;
 
 use super::alias::SemVer;
 use super::metadata::Metadata;
@@ -18,7 +19,7 @@ pub const WORKLOAD_COLLECTION_NAME: &str = "workload";
 
 /// Enumeration of possible workload states
 #[derive(
-    Debug, Clone, Serialize, Deserialize, PartialEq, AsRefStr, EnumDiscriminants, FromRepr,
+    Debug, Clone, Serialize, Deserialize, PartialEq, AsRefStr, EnumDiscriminants, FromRepr, ToSchema,
 )]
 #[strum_discriminants(
     derive(EnumString, Serialize, Deserialize),
@@ -128,7 +129,7 @@ pub enum WorkloadStatePayload {
 #[derive(Serialize, Deserialize, Clone, Debug, clap::Args)]
 pub struct WorkloadManifestHolochainDhtV1 {
     #[arg(long, value_delimiter = ',')]
-    pub happ_binary_url: Url,
+    pub happ_binary_url: String,
     #[arg(long, value_delimiter = ',')]
     pub network_seed: Option<String>,
     #[arg(long, value_delimiter = ',', value_parser = parse_key_val::<String, String>)]

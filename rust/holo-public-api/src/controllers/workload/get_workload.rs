@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::{OpenApi, ToSchema};
 
 use crate::{
-    controllers::workload::workload_dto::{to_workload_dto, WorkloadDto},
+    controllers::workload::workload_dto::{WorkloadDto, WorkloadPropertiesDto},
     providers::{self, error_response::ErrorResponse, jwt::AccessTokenClaims},
 };
 
@@ -108,7 +108,39 @@ pub async fn get_workload(
             message: "Permission denied".to_string(),
         });
     }
-    let workload_dto = to_workload_dto(workload.clone());
 
-    HttpResponse::Ok().json(workload_dto)
+    let holochain_manifest = match &workload.manifest {
+        schemas::workload::WorkloadManifest::HolochainDhtV1(inner) => Some(inner),
+        _ => None,
+    };
+    if holochain_manifest.is_none() {
+        return HttpResponse::BadRequest().json(ErrorResponse {
+            message: "Invalid workload manifest".to_string(),
+        });
+    }
+    let holochain_manifest = holochain_manifest.unwrap();
+
+    HttpResponse::Ok().json(WorkloadDto {
+        id: workload._id.unwrap().to_hex(),
+        properties: WorkloadPropertiesDto {
+            instances: Some(workload.min_hosts),
+            network_seed: holochain_manifest.network_seed.clone(),
+            memproof: holochain_manifest.memproof.clone(),
+            bootstrap_server_url: holochain_manifest
+                .bootstrap_server_url
+                .clone()
+                .map(|url| url.to_string()),
+            signal_server_url: holochain_manifest
+                .signal_server_url
+                .clone()
+                .map(|url| url.to_string()),
+            http_gw_allowed_fns: holochain_manifest.http_gw_allowed_fns.clone().map(|fns| {
+                fns.into_iter()
+                    .map(|url| url.to_string())
+                    .collect::<Vec<String>>()
+            }),
+            http_gw_enable: holochain_manifest.http_gw_enable,
+        },
+        status: workload.status.actual,
+    })
 }
