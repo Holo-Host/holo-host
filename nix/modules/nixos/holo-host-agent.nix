@@ -118,9 +118,6 @@ in
         }
         // lib.attrsets.optionalAttrs (cfg.nats.url != null) {
           NATS_URL = cfg.nats.url;
-        }
-        // lib.attrsets.optionalAttrs (config.holo ? "holochain") {
-          HOLOCHAIN_VERSION_CONFIG_PATH = config.holo.holochain.versionConfigPath;
         };
 
       path = config.environment.systemPackages ++ [

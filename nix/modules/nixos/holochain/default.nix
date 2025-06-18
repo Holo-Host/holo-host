@@ -31,19 +31,13 @@ in
     package = lib.mkOption {
       type = lib.types.package;
       default = inputs.holonix_0_5.packages.${pkgs.system}.holochain;
-      description = "The Holochain package to use. By default, this is dynamically selected based on the 'version' and 'versionConfigPath' options.";
+      description = "The Holochain package to use. By default, this is dynamically selected based on the supported versions in `holochainPackage.supportedVersionsConfig`.";
     };
 
     version = lib.mkOption {
       type = lib.types.str;
       default = "0.5";
       description = "The desired holochain version string (e.g., '0.4', '0.5.1', 'latest').";
-    };
-
-    versionConfigPath = lib.mkOption {
-      type = with lib.types; nullOr path;
-      default = ../../supported-holochain-versions.json;
-      description = "Path to the supported-holochain-versions.json file.";
     };
 
     features = lib.mkOption {
@@ -228,10 +222,17 @@ in
       # Dynamically set the holochain package based on the version selection logic
       holochainPackage = 
         let
-          hcVersionsConfig =
-            if cfg.versionConfigPath != null && builtins.pathExists cfg.versionConfigPath
-            then builtins.fromJSON (builtins.readFile cfg.versionConfigPath)
-            else null;
+          # NB: We currently embed the version configuration to avoid file accessibility issues in containers
+          supportedVersionsConfig = {
+            default_version = "0.5";
+            supported_versions = [ "0.3" "0.4" "0.5" "latest" ];
+            version_mappings = {
+              "0.3" = "holonix_0_3";
+              "0.4" = "holonix_0_4";
+              "0.5" = "holonix_0_5";
+              "latest" = "holonix_0_5";
+            };
+          };
 
           # Function to select holochain version
           selectHolochainVersion = version: config:
@@ -263,12 +264,7 @@ in
               then throw "No version mapping found for '${version}'. Available mappings: ${builtins.concatStringsSep ", " (builtins.attrNames versionMappings)}"
               else inputs.${holonixInput}.packages.${pkgs.system}.holochain;
 
-          baseHolochainPackage = 
-            if hcVersionsConfig != null then
-              selectHolochainVersion cfg.version hcVersionsConfig
-            else
-              # Holochain package fallback if/when the holochain version config is missing.
-              inputs.holonix_0_5.packages.${pkgs.system}.holochain;
+          baseHolochainPackage = selectHolochainVersion cfg.version supportedVersionsConfig;
         in
           # Apply features if specified
           if cfg.features != null then
