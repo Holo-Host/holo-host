@@ -30,14 +30,10 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Build Docker Image
-        uses: docker/build-push-action@v6
-        with:
-          build-args: ${{ inputs.buildArgs }}
-          context: ./ui/${{ inputs.project }}
-          load: true
-          push: false
-          platforms: linux/amd64
-          tags: registry.digitalocean.com/holo-host/${{ inputs.project }}:${{ inputs.environment }}
+        run: |
+          docker build ${{ inputs.buildArgs }} \
+          -t registry.digitalocean.com/holo-host/${{ inputs.project }}:${{ inputs.environment }} \
+          ./ui/${{ inputs.project }}
 
       - name: Install Doctl
         uses: digitalocean/action-doctl@v2

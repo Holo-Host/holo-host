@@ -93,8 +93,6 @@ jobs:
     with:
       project: cloud-console
       environment: dev
-      buildArgs: |
-        PROJECT_NAME=cloud-console
-        VITE_API_HOST=api.dev.holo.host
+      buildArgs: --build-arg PROJECT_NAME=cloud-console --build-arg VITE_API_HOST=https://api.dev.holo.host
     secrets:
       DIGITAL_OCEAN_TOKEN: ${{ secrets.DIGITAL_OCEAN_TOKEN }}
