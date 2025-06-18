@@ -35,16 +35,16 @@ in
     };
 
     version = lib.mkOption {
-      type = with lib.types; nullOr str;
-      default = null;
+      type = lib.types.str;
+      default = "0.5";
       description = "The desired holochain version string (e.g., '0.4', '0.5.1', 'latest').";
     };
 
-      versionConfigPath = lib.mkOption {
+    versionConfigPath = lib.mkOption {
       type = with lib.types; nullOr path;
-        default = ../../supported-holochain-versions.json;
+      default = ../../supported-holochain-versions.json;
       description = "Path to the supported-holochain-versions.json file.";
-      };
+    };
 
     features = lib.mkOption {
       type = with lib.types; nullOr (listOf str);
@@ -72,12 +72,12 @@ in
 
     passphraseFile = lib.mkOption {
       type = lib.types.str;
-      default = "./passphrase.txt";
+      default = "passphrase.txt";
     };
 
     adminWebsocketPort = lib.mkOption {
       type = lib.types.int;
-      default = 1234;
+      default = 8000;
     };
 
     adminWebsocketAllowedOrigins = lib.mkOption {
@@ -146,28 +146,55 @@ in
         ];
 
         # Configure the network.
-        network = {
-          bootstrap_service = cfg.bootstrapServiceUrl;
-
-          # TODO: See if we can combine this with the version selection logic in other areas...
-          # Version-aware network type selection:
-          # - 0.4 and earlier: "quic_bootstrap" (legacy kitsune)
-          # - 0.5 and later: "webrtc_bootstrap" (kitsune2)
-          # Default to 0.5 behavior if no version is specified
-          network_type = 
-            let
-              version = cfg.version or "0.5";
-              versionParts = builtins.filter (x: x != "" && builtins.isString x) (builtins.split "\\." version);
-              majorVersion = if builtins.length versionParts >= 1 then builtins.elemAt versionParts 0 else "0";
-              minorVersion = if builtins.length versionParts >= 2 then builtins.elemAt versionParts 1 else "0";
-              majorMinor = "${majorVersion}.${minorVersion}";
-              useLegacyNetworking = (majorMinor == "0.3" || majorMinor == "0.4" || version == "0.3" || version == "0.4");
-            in
-              if useLegacyNetworking then "quic_bootstrap" else "webrtc_bootstrap";
-
-          # Setup a specific network configuration.
-          transport_pool = [ cfg.webrtcTransportPool ];
-        };
+        network = 
+          let
+            version = cfg.version;
+            
+            # Version-aware network configuration:
+            # - 0.5 and later: "webrtc_bootstrap" (kitsune2)
+            # - 0.4 and earlier: "quic_bootstrap" (legacy kitsune)
+            # NB: Defaults to 0.5 behavior if no version is specified
+            #
+            # Parse version string to get numeric major.minor version
+            # Examples: "0.4.1" -> 0.4, "0.5.0" -> 0.5, "0.3" -> 0.3
+            parseVersionNumber = versionStr:
+              let
+                # Split by dots and filter to get only numeric parts
+                splitResult = builtins.split "\\." versionStr;
+                # Filter out empty strings and separators (keep only numeric strings)
+                numericParts = builtins.filter (x: builtins.isString x && builtins.match "[0-9]+" x != null) splitResult;
+                major = if builtins.length numericParts >= 1 then builtins.elemAt numericParts 0 else "0";
+                minor = if builtins.length numericParts >= 2 then builtins.elemAt numericParts 1 else "0";
+                # Convert to float: major.minor
+                majorMinorStr = "${major}.${minor}";
+                # Parse as float using fromJSON (works for simple decimals)
+                versionFloat = builtins.fromJSON majorMinorStr;
+              in
+                versionFloat;
+            
+            versionNumber = parseVersionNumber version;
+            isLegacyVersion = versionNumber < 0.5;            
+            bootstrapField = if isLegacyVersion then "bootstrap_service" else "bootstrap_url";
+            networkType = if isLegacyVersion then "quic_bootstrap" else "webrtc_bootstrap";
+          in
+          {
+            network_type = networkType;
+            ${bootstrapField} = cfg.bootstrapServiceUrl;
+          } 
+          // (lib.optionalAttrs (!isLegacyVersion) {
+            # For modern versions (>= 0.5), add signal_url at network level
+            signal_url = cfg.webrtcTransportPoolSignalUrl;
+          })
+          // (lib.optionalAttrs isLegacyVersion {
+            # For legacy versions (< 0.5), signal_url remains in transport_pool
+            transport_pool = [
+              {
+                type = "webrtc";
+                signal_url = cfg.webrtcTransportPoolSignalUrl;
+                ice_servers = cfg.webrtcTransportPoolIceServers;
+              }
+            ];
+          });
       };
     };
 
@@ -187,24 +214,26 @@ in
     };
 
     user = lib.mkOption {
+      type = lib.types.str;
       default = "holochain";
     };
     group = lib.mkOption {
+      type = lib.types.str;
       default = "holochain";
     };
   };
 
-  config = lib.mkMerge [
-    (lib.mkIf cfg.enable {
-      # Dynamically set the package based on the version selection logic
-      holo.holochain.package = lib.mkDefault (
+  config = 
+    let
+      # Dynamically set the holochain package based on the version selection logic
+      holochainPackage = 
         let
           hcVersionsConfig =
             if cfg.versionConfigPath != null && builtins.pathExists cfg.versionConfigPath
             then builtins.fromJSON (builtins.readFile cfg.versionConfigPath)
             else null;
 
-# Function to select holochain version
+          # Function to select holochain version
           selectHolochainVersion = version: config:
             let
               supportedVersions = config.supported_versions;
@@ -234,96 +263,104 @@ in
               then throw "No version mapping found for '${version}'. Available mappings: ${builtins.concatStringsSep ", " (builtins.attrNames versionMappings)}"
               else inputs.${holonixInput}.packages.${pkgs.system}.holochain;
 
+          baseHolochainPackage = 
+            if hcVersionsConfig != null then
+              selectHolochainVersion cfg.version hcVersionsConfig
+            else
+              # Holochain package fallback if/when the holochain version config is missing.
+              inputs.holonix_0_5.packages.${pkgs.system}.holochain;
         in
-          if hcVersionsConfig != null then
-            selectHolochainVersion (cfg.version or hcVersionsConfig.default_version) hcVersionsConfig
+          # Apply features if specified
+          if cfg.features != null then
+            baseHolochainPackage.override {
+              cargoExtraArgs = "--features ${builtins.concatStringsSep "," cfg.features}";
+            }
           else
-            # Holochain package fallback if/when the holochain version config is missing.
-            inputs.holonix_0_5.packages.${pkgs.system}.holochain
-      );
+            baseHolochainPackage;
+    in
+    lib.mkMerge [
+      (lib.mkIf cfg.enable {
+        # Set the package option using the resolved package
+        holo.holochain.package = lib.mkDefault holochainPackage;
 
-    users.groups.${cfg.group} = { };
-    users.users.${cfg.user} = {
-      isSystemUser = true;
-      inherit (cfg) group;
-    };
-
-    # Add holochain CLI tools (hc*) to system packages
-    # This includes tools like: hc, hc-run-local-services, hc-sandbox, etc.
-    # NB: Some tools like hc-run-local-services and hc-sandbox were removed in holonix 0.5
-    environment.systemPackages = [
-      # Link hc CLI tools from the holochain package
-      (pkgs.runCommand "holochain-cli-tools" { } ''
-        mkdir -p $out/bin
-        for bin in ${cfg.package}/bin/hc*; do
-          if [ -f "$bin" ] && [ -x "$bin" ]; then
-            ln -s $bin $out/bin/
-          fi
-        done
-      '')
-    ];
-
-    systemd.services.holochain = {
-      enable = true;
-
-      after = [
-        "network.target"
-      ];
-      wants = [
-        "network.target"
-      ];
-      wantedBy = lib.lists.optional cfg.autoStart "multi-user.target";
-
-      restartIfChanged = true;
-
-      environment = {
-        RUST_LOG = "${cfg.rust.log},wasmer_compiler_cranelift=warn";
-        RUST_BACKTRACE = cfg.rust.backtrace;
-        WASM_LOG = cfg.wasmLog;
-      };
-
-      preStart = ''
-        if [[ ! -e "${cfg.passphraseFile}" ]]; then
-          echo generating new passphrase at "${cfg.passphraseFile}".
-          ${lib.getExe pkgs.pwgen} 64 1 > "${cfg.passphraseFile}"
-        else
-          echo using existing passphrase at file ${cfg.passphraseFile}.
-        fi
-      '';
-
-      serviceConfig =
-        let
-          StateDirectory = "holochain";
-        in
-        {
-          User = cfg.user;
-          Group = cfg.user;
-          # %S is short for StateDirectory
-          WorkingDirectory = "%S/${StateDirectory}";
-          inherit StateDirectory;
-          StateDirectoryMode = "0700";
-          Restart = "always";
-          RestartSec = 1;
-          Type = "notify"; # The conductor sends a notify signal to systemd when it is ready
-          NotifyAccess = "all";
+        users.groups.${cfg.group} = { };
+        users.users.${cfg.user} = {
+          isSystemUser = true;
+          inherit (cfg) group;
         };
 
-      script = builtins.toString (
-        pkgs.writeShellScript "holochain-wrapper" ''
-          set -xeE
+        # Add holochain CLI tools (hc*) to system packages
+        # This includes tools like: hc, hc-run-local-services, hc-sandbox, etc.
+        # NB: Some tools like hc-run-local-services and hc-sandbox were removed in holonix 0.5
+        environment.systemPackages = [
+          # Link hc CLI tools from the resolved package (not cfg.package to avoid circular dependency)
+          (pkgs.runCommand "holochain-cli-tools" { } ''
+            mkdir -p $out/bin
+            for bin in ${holochainPackage}/bin/hc*; do
+              if [ -f "$bin" ] && [ -x "$bin" ]; then
+                ln -s $bin $out/bin/
+              fi
+            done
+          '')
+        ];
 
-          ${lib.getExe' cfg.package "holochain"} \
-            --piped \
-            --config-path ${cfg.conductorConfigYaml} \
-            < "${cfg.passphraseFile}"
-        ''
-      );
-    };
-    })
-    (lib.mkIf (cfg.features != null) {
-      holo.holochain.package = lib.mkForce (cfg.package.override {
-        cargoExtraArgs = "--features ${builtins.concatStringsSep "," cfg.features}";
-      });
-    })
-  ];
+        systemd.services.holochain = {
+          enable = true;
+
+          after = [
+            "network.target"
+          ];
+          wants = [
+            "network.target"
+          ];
+          wantedBy = lib.lists.optional cfg.autoStart "multi-user.target";
+
+          restartIfChanged = true;
+
+          environment = {
+            RUST_LOG = "${cfg.rust.log},wasmer_compiler_cranelift=warn";
+            RUST_BACKTRACE = cfg.rust.backtrace;
+            WASM_LOG = cfg.wasmLog;
+          };
+
+          preStart = ''
+            passphrase_path="$STATE_DIRECTORY/${cfg.passphraseFile}"
+            if [[ ! -e "$passphrase_path" ]]; then
+              echo generating new passphrase at "$passphrase_path".
+              ${lib.getExe pkgs.pwgen} 64 1 > "$passphrase_path"
+            else
+              echo using existing passphrase at file "$passphrase_path".
+            fi
+          '';
+
+          serviceConfig =
+            let
+              StateDirectory = "holochain";
+            in
+            {
+              User = cfg.user;
+              Group = cfg.user;
+              # %S is short for StateDirectory
+              WorkingDirectory = "%S/${StateDirectory}";
+              inherit StateDirectory;
+              StateDirectoryMode = "0700";
+              Restart = "always";
+              RestartSec = 1;
+              Type = "notify"; # The conductor sends a notify signal to systemd when it is ready
+              NotifyAccess = "all";
+            };
+
+          script = builtins.toString (
+            pkgs.writeShellScript "holochain-wrapper" ''
+              set -xeE
+
+              ${lib.getExe' holochainPackage "holochain"} \
+                --piped \
+                --config-path ${cfg.conductorConfigYaml} \
+                < "$STATE_DIRECTORY/${cfg.passphraseFile}"
+            ''
+          );
+        };
+      })
+    ];
 }

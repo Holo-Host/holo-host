@@ -50,6 +50,14 @@ $ nix copy --no-check-sigs "$(nix build --print-out-paths .#packages.x86_64-linu
     # addRunner = false;
 
     config = {
+      # Allow container 5m startup time to allow holochain service to start properly.
+      # (NB: This is needed to accomodate the network updates in holochain versions >= v0.5+)
+      systemd.services."container@${args.containerName}" = {
+        serviceConfig = {
+          TimeoutStartSec = pkgs.lib.mkForce "300s";  # 5 minutes timeout (override default 1min)
+        };
+      };
+
       containers."${args.containerName}" = {
         privateNetwork = args.privateNetwork;
         autoStart = args.autoStart;
@@ -82,10 +90,10 @@ $ nix copy --no-check-sigs "$(nix build --print-out-paths .#packages.x86_64-linu
               {
                 adminWebsocketPort = args.adminWebsocketPort;
                 # NB: all holochain version handling logic is now located within the holochain nixos module.
-                version = args.holochainVersion;
                 features = args.holochainFeatures;
             }
             )
+            // (lib.optionalAttrs (args.holochainVersion != null) {version = args.holochainVersion;})
             // (lib.optionalAttrs (args.bootstrapUrl != null) {bootstrapServiceUrl = args.bootstrapUrl;})
             // (lib.optionalAttrs (args.signalUrl != null) {webrtcTransportPoolSignalUrl = args.signalUrl;})
             // (lib.optionalAttrs (args.stunUrls != null) {webrtcTransportPoolIceServers = args.stunUrls;})
