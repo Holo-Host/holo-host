@@ -33,7 +33,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           build-args: ${{ inputs.buildArgs }}
-          context: .
+          context: ./ui/${{ inputs.project }}
           load: true
           push: false
           platforms: linux/amd64
