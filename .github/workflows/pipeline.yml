@@ -78,20 +78,20 @@ jobs:
       SSH_KEY: ${{ secrets.SSH_KEY }}
       SSH_USERNAME: ${{ secrets.SSH_USERNAME }}
 
-  # host console
-  HOST_CONSOLE:
-    name: host-console
+  # cloud console
+  CLOUD_CONSOLE:
+    name: cloud-console
     uses: ./.github/workflows/reuseable_ui_ci.yml
     with:
-      project: host-console
+      project: cloud-console
 
-  HOST_CONSOLE_DEPLOY_DEV:
-    name: host-console Dev
-    needs: HOST_CONSOLE
+  CLOUD_CONSOLE_DEPLOY_DEV:
+    name: cloud-console Dev
+    needs: CLOUD_CONSOLE
     uses: ./.github/workflows/reuseable_ui_deploy.yml
     #if: github.ref == 'refs/heads/main'
     with:
-      project: host-console
+      project: cloud-console
       environment: dev
       buildArgs: |
         VITE_API_HOST=api.dev.holo.host
