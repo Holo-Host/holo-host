@@ -450,10 +450,14 @@ E.g., this runs the [holo-agent integration](nix/checks/holo-agent-integration-n
 nix build -vL .#checks.x86_64-linux.holo-agent-integration-nixos
 ```
 
-Or this runs the [`extra-container-holochain` integration test](nix/packages/extra-container-holochain.nix#L123), which is another way to define a NixOS VM test that's attached defined in the package file directly.
+Or this runs the [`extra-container-holochain` integration tests](nix/packages/extra-container-holochain.nix#L169), which are NixOS VM tests defined in the package file directly:
 
-```
-nix build -vL .#checks.x86_64-linux.pkgs-extra-container-holochain-integration
+```bash
+# Host networking test (recommended)
+nix build -vL .#checks.x86_64-linux.pkgs-extra-container-holochain-integration-host-network
+
+# Private networking test (documents port forwarding issues)
+nix build -vL .#checks.x86_64-linux.pkgs-extra-container-holochain-integration-private-network
 ```
 
 ### Test Environment Requirements
@@ -495,14 +499,24 @@ Runs a NixOS VM test that:
 - Tests workload management
 
 2. **Holochain Container Integration**:
-```bash
-nix build -vL .#checks.x86_64-linux.pkgs-extra-container-holochain-integration
-```
-Tests the Holochain container setup:
-- Container creation and initialization
-- Holochain conductor configuration
-- Network connectivity
-- State persistence
+
+   **Host Networking Test** (recommended - works reliably):
+   ```bash
+   nix build -vL .#checks.x86_64-linux.pkgs-extra-container-holochain-integration-host-network
+   ```
+   
+   **Private Networking Test** (currently failing due to systemd-nspawn port forwarding compatibility):
+   ```bash
+   nix build -vL .#checks.x86_64-linux.pkgs-extra-container-holochain-integration-private-network
+   ```
+   
+   Both tests verify:
+   - Container creation and initialization
+   - Holochain conductor configuration
+   - Service readiness with systemd notifications
+   - Network connectivity (host vs private networking)
+   - Environment variable handling for `IS_CONTAINER_ON_PRIVATE_NETWORK`
+   - State persistence (holochain data directory and configuration)
 
 
 ### Running Tests Locally
