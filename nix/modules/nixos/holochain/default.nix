@@ -342,7 +342,8 @@ in
               StateDirectoryMode = "0700";
               Restart = "always";
               RestartSec = 1;
-              Type = "notify"; # The conductor sends a notify signal to systemd when it is ready
+              # The conductor sends a notify signal to systemd when it is ready
+              Type = "notify";
               NotifyAccess = "all";
             };
 

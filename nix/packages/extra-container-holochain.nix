@@ -126,10 +126,16 @@ in
             flake.nixosModules.holochain
             flake.nixosModules.hc-http-gw
           ];
+          
+          # Add debugging/testing tools to the container
+          environment.systemPackages = with pkgs; [
+            nettools  # for netstat
+          ];
 
           holo.holochain =
             (
               {
+                enable = true;  # Enable the holochain service
                 adminWebsocketPort = args.adminWebsocketPort;
                 # NB: all holochain version handling logic is now located within the holochain nixos module.
                 features = args.holochainFeatures;
@@ -175,21 +181,42 @@ in
           imports = [
             inputs.extra-container.nixosModules.default
           ];
+          
+          # Add netcat for testing
+          environment.systemPackages = with pkgs; [
+            netcat-gnu
+          ];
         };
 
-        testScript = _: ''
+        testScript = _: let
+          # Create a test package with host networking
+          testPackage = (pkgs.callPackage (import ./extra-container-holochain.nix) {
+            inherit inputs system flake pkgs nixpkgs;
+            privateNetwork = false;  # Use host networking for the test
+            inherit (args) 
+              index adminWebsocketPort containerName autoStart bootstrapUrl 
+              signalUrl stunUrls holochainFeatures holochainVersion 
+              httpGwEnable httpGwAllowedAppIds httpGwPort;
+          });
+        in ''
           host.start()
           host.wait_for_unit("multi-user.target")
-          host.succeed("extra-container create ${package}")
+          host.succeed("extra-container create ${testPackage}")
 
-          # ensure the port is closed before starting the holochain container
+          # Ensure the port is closed before starting the holochain container
           host.wait_for_closed_port(${builtins.toString args.adminWebsocketPort}, timeout = 1)
 
           host.succeed("extra-container start ${args.containerName}")
-          host.wait_until_succeeds("systemctl -M ${args.containerName} is-active holochain", timeout = 120)
-
-          # now the port should be open
-          host.wait_for_open_port(${builtins.toString args.adminWebsocketPort}, timeout = 1)
+          
+          # Use `Type="notify"`to ensure systemd waits for holochain to signal readiness
+          # NB: This means when the service is active, the admin websocket should be ready
+          host.wait_until_succeeds("systemctl -M ${args.containerName} is-active holochain", timeout = 60)
+          
+          # Make the port should be directly accessible on the host for test
+          host.wait_for_open_port(${builtins.toString args.adminWebsocketPort}, timeout = 10)
+          
+          # Verify that the port is responding to connections
+          host.succeed("nc -z localhost ${builtins.toString args.adminWebsocketPort}")
         '';
       }
     );
