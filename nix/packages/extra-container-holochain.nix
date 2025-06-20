@@ -87,6 +87,12 @@ in
       containers."${args.containerName}" = {
         privateNetwork = args.privateNetwork;
         autoStart = args.autoStart;
+        
+        # Network configuration for systemd-nspawn port forwarding
+        # NB:These addresses are required for proper iptables rule creation
+        # We're using unique IP addresses based on container index to avoid conflicts
+        hostAddress = pkgs.lib.mkIf args.privateNetwork "10.0.${builtins.toString (85 + args.index)}.1";
+        localAddress = pkgs.lib.mkIf args.privateNetwork "10.0.${builtins.toString (85 + args.index)}.2";
 
         # Port forwarding for hc-http-gw when using private network
         forwardPorts = pkgs.lib.optionals (args.privateNetwork && args.httpGwEnable) [
@@ -287,7 +293,7 @@ in
             
             # Since port forwarding fails, we can still test state persistence by checking the container directly
             # Verify that holochain state directory exists inside the container
-            host.succeed("systemctl -M ${args.containerName} exec /usr/bin/env test -d /var/lib/holochain")
+            host.succeed("machinectl shell ${args.containerName} /usr/bin/env test -d /var/lib/holochain")
             
             # Test state persistence by stopping and restarting the container
             host.succeed("extra-container stop ${args.containerName}")
@@ -297,7 +303,7 @@ in
             host.wait_until_succeeds("systemctl -M ${args.containerName} is-active holochain", timeout = 60)
             
             # Verify that holochain state directory still exists and persists data after restart
-            host.succeed("systemctl -M ${args.containerName} exec /usr/bin/env test -d /var/lib/holochain")
+            host.succeed("machinectl shell ${args.containerName} /usr/bin/env test -d /var/lib/holochain")
             host.succeed("test -d /var/lib/nixos-containers/${args.containerName}/var/lib/holochain")
           '';
         }

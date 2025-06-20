@@ -533,3 +533,9 @@ Please see the [LICENSE](./LICENSE) file.
 
 [just]: https://just.systems/man/en/
 [nix develop]: https://zero-to-nix.com/concepts/dev-env/
+
+# Check if the environment variable is set correctly in the host agent
+sudo systemctl show holo-host-agent.service | grep Environment | grep CONTAINER
+
+# Or check the service environment directly
+sudo systemctl cat holo-host-agent.service | grep -A10 -B10 CONTAINER
