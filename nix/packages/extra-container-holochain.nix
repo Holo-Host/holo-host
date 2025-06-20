@@ -60,6 +60,15 @@ in
   
   httpGwPortForContainer = if args.privateNetwork then httpGwPortDefault else containerPorts.httpGateway;
   
+  # Base IP offset for private network addressing to avoid conflicts with common ranges
+  # This ensures container networks don't conflict with:
+  # - 10.0.1.x (common router/gateway ranges)  
+  # - 10.0.2.x (QEMU default network)
+  # - 10.0.10.x (common VPN ranges)
+  # - 10.0.20.x (common Docker networks)
+  # Each container gets a unique /30 subnet: 10.0.(baseOffset + index).0/30
+  privateNetworkBaseOffset = 85;
+  
   package = inputs.extra-container.lib.buildContainers {
     # The system of the container host
     inherit system;
@@ -78,21 +87,118 @@ in
     config = {
       # Allow container 5m startup time to allow holochain service to start properly.
       # (NB: This is needed to accomodate the network updates in holochain versions >= v0.5+)
-      systemd.services."container@${args.containerName}" = {
-        serviceConfig = {
-          TimeoutStartSec = pkgs.lib.mkForce "300s";  # 5 minutes timeout (override default 1min)
-        };
-      };
-
-      containers."${args.containerName}" = {
+      # Container timeout and socat port forwarding services for extra-containers
+      systemd.services = pkgs.lib.mkMerge [
+        # Base container timeout configuration
+        {
+          "container@${args.containerName}" = {
+            serviceConfig = {
+              TimeoutStartSec = pkgs.lib.mkForce "300s";  # 5 minutes timeout (override default 1min)
+            };
+          };
+        }
+        
+        # socat-based port forwarding services optimized for extra-containers
+        # These services provide reliable port forwarding when privateNetwork=true
+        # by creating TCP tunnels that bypass systemd-nspawn's unreliable forwardPorts
+        (pkgs.lib.mkIf args.privateNetwork {
+          "socat-${args.containerName}-admin" = {
+            description = "socat port tunnel for ${args.containerName} admin websocket (${builtins.toString args.adminWebsocketPort})";
+            
+            # Proper extra-containers lifecycle management
+            after = [ 
+              "container@${args.containerName}.service" 
+              "network-online.target"
+            ];
+            wants = [ 
+              "container@${args.containerName}.service"
+              "network-online.target" 
+            ];
+            wantedBy = [ "multi-user.target" ];
+            
+            # Bind to container lifecycle - this ensures the socat service stops when container stops
+            bindsTo = [ "container@${args.containerName}.service" ];
+            
+            serviceConfig = {
+              Type = "exec";
+              Restart = "always";
+              RestartSec = "2s";
+              
+              # Wait for container network interface to be ready (extra-containers specific)
+              ExecStartPre = [
+                "${pkgs.bash}/bin/bash -c 'timeout=30; while [ $timeout -gt 0 ] && ! ${pkgs.iproute2}/bin/ip route show | grep -q \"10.0.${builtins.toString (privateNetworkBaseOffset + args.index)}.0/30\"; do sleep 1; timeout=$((timeout-1)); done'"
+              ];
+              
+              # Create the socat tunnel from host to container
+              ExecStart = "${pkgs.socat}/bin/socat TCP-LISTEN:${builtins.toString args.adminWebsocketPort},fork,reuseaddr TCP:10.0.${builtins.toString (privateNetworkBaseOffset + args.index)}.2:${builtins.toString args.adminWebsocketPort}";
+              
+              # Clean shutdown handling
+              KillMode = "mixed";
+              KillSignal = "SIGTERM";
+              TimeoutStopSec = "10s";
+            };
+          };
+        })
+        
+        # socat service for HTTP gateway (when enabled)
+        (pkgs.lib.mkIf (args.privateNetwork && args.httpGwEnable) {
+          "socat-${args.containerName}-httpgw" = {
+            description = "socat port tunnel for ${args.containerName} HTTP gateway (${builtins.toString httpGwPort})";
+            
+            # Proper extra-containers lifecycle management
+            after = [ 
+              "container@${args.containerName}.service"
+              "network-online.target"
+            ];
+            wants = [ 
+              "container@${args.containerName}.service"
+              "network-online.target"
+            ];
+            wantedBy = [ "multi-user.target" ];
+            
+            # Bind to container lifecycle
+            bindsTo = [ "container@${args.containerName}.service" ];
+            
+            serviceConfig = {
+              Type = "exec";
+              Restart = "always";
+              RestartSec = "2s";
+              
+              # Wait for container network to be ready
+              ExecStartPre = [
+                "${pkgs.bash}/bin/bash -c 'timeout=30; while [ $timeout -gt 0 ] && ! ${pkgs.iproute2}/bin/ip route show | grep -q \"10.0.${builtins.toString (privateNetworkBaseOffset + args.index)}.0/30\"; do sleep 1; timeout=$((timeout-1)); done'"
+              ];
+              
+              # Create the socat tunnel
+              ExecStart = "${pkgs.socat}/bin/socat TCP-LISTEN:${builtins.toString httpGwPort},fork,reuseaddr TCP:10.0.${builtins.toString (privateNetworkBaseOffset + args.index)}.2:${builtins.toString httpGwPortDefault}";
+              
+              # Clean shutdown handling
+              KillMode = "mixed";
+              KillSignal = "SIGTERM";
+              TimeoutStopSec = "10s";
+            };
+          };
+        })
+      ];
+  
+        containers."${args.containerName}" = {
         privateNetwork = args.privateNetwork;
         autoStart = args.autoStart;
         
         # Network configuration for systemd-nspawn port forwarding
-        # NB:These addresses are required for proper iptables rule creation
+        # NB: These addresses are required for proper iptables rule creation
         # We're using unique IP addresses based on container index to avoid conflicts
-        hostAddress = pkgs.lib.mkIf args.privateNetwork "10.0.${builtins.toString (85 + args.index)}.1";
-        localAddress = pkgs.lib.mkIf args.privateNetwork "10.0.${builtins.toString (85 + args.index)}.2";
+        hostAddress = pkgs.lib.mkIf args.privateNetwork "10.0.${builtins.toString (privateNetworkBaseOffset + args.index)}.1";
+        localAddress = pkgs.lib.mkIf args.privateNetwork "10.0.${builtins.toString (privateNetworkBaseOffset + args.index)}.2";
+        
+        # Additional network configuration for systemd-nspawn port forwarding
+        # Enable virtual ethernet and proper network bridge creation
+        extraFlags = pkgs.lib.optionals args.privateNetwork [
+          "--network-veth"
+          "--resolv-conf=bind-host"
+        ];
+        
+
 
         # Port forwarding for hc-http-gw when using private network
         forwardPorts = pkgs.lib.optionals (args.privateNetwork && args.httpGwEnable) [
@@ -126,7 +232,29 @@ in
         }: {
           # in case the container shares the host network, don't mess with the firewall rules.
           networking.firewall.enable = args.privateNetwork;
-          networking.useHostResolvConf = true;
+          networking.useHostResolvConf = pkgs.lib.mkForce (!args.privateNetwork);
+          
+          # Configure systemd-networkd and systemd-resolved for proper container networking
+          systemd.network = pkgs.lib.mkIf args.privateNetwork {
+            enable = true;
+            networks."80-container-host0" = {
+              matchConfig.Virtualization = "container";
+              matchConfig.Name = "host0";
+              networkConfig = {
+                DHCP = "yes";
+                LinkLocalAddressing = "yes";
+                LLDP = "yes";
+                EmitLLDP = "customer-bridge";
+              };
+              dhcpV4Config.UseTimezone = "yes";
+            };
+          };
+          
+          # Enable systemd-resolved for container DNS when using private networking
+          services.resolved = pkgs.lib.mkIf args.privateNetwork {
+            enable = true;
+            llmnr = "false";  # disable link-local multicast name resolution
+          };
 
           imports = [
             flake.nixosModules.holochain
@@ -286,12 +414,11 @@ in
             # NB: This means when the service is active, the admin websocket should be ready
             host.wait_until_succeeds("systemctl -M ${args.containerName} is-active holochain", timeout = 60)
             
-            # Test if port forwarding is working - this currently fails due to systemd-nspawn compatibility issues
-            # Expected to timeout due to systemd version mismatch between host (249) and container (256)
-            # host.wait_for_open_port(${builtins.toString args.adminWebsocketPort}, timeout = 15)
-            # host.succeed("nc -z localhost ${builtins.toString args.adminWebsocketPort}")
+            # Test port forwarding via socat
+            # NB: The socat service should create a reliable tunnel from host to container
+            host.wait_for_open_port(${builtins.toString args.adminWebsocketPort}, timeout = 30)
+            host.succeed("nc -z localhost ${builtins.toString args.adminWebsocketPort}")
             
-            # Since port forwarding fails, we can still test state persistence by checking the container directly
             # Verify that holochain state directory exists inside the container
             host.succeed("machinectl shell ${args.containerName} /usr/bin/env test -d /var/lib/holochain")
             
