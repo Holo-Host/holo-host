@@ -49,7 +49,7 @@
   }
 
   function generateApiToken() {
-    const permissionObj = permissions.map((perm) => {
+    const permissionObj = permissionsSelected.map((perm) => {
       const [resource, action, owner] = perm.split(".");
       return {
         resource,
