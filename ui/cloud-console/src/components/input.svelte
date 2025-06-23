@@ -8,12 +8,13 @@
     label?: string;
     grow?: boolean;
     onKeyDown?: (e: KeyboardEvent) => void;
+    validator?: z.ZodType;
+    isValid?: boolean;
   };
 
   type TextProp = BaseProp & {
     type?: "text" | "password" | "email";
     value?: string;
-    validator?: z.ZodString;
     autocomplete?: string[];
     onChange?: (value: string) => void;
   };
@@ -21,13 +22,18 @@
   type NumberProp = BaseProp & {
     type?: "number";
     value?: number;
-    validator?: z.ZodNumber;
     onChange?: (value: number) => void;
   };
 
   type Prop = TextProp | NumberProp;
-  let { value = $bindable(), ...props }: Prop = $props();
+  let {
+    value = $bindable(),
+    isValid = $bindable(false),
+    ...props
+  }: Prop = $props();
+  let hasChangedInput = $state(false);
   const validationError = $derived.by(() => {
+    if (!hasChangedInput) return false;
     if (!props.validator) return false;
     if (value === null) return false;
     try {
@@ -62,6 +68,8 @@
   function onInput(e: Event) {
     const target = e.target as HTMLInputElement;
     if (!target) return;
+    hasChangedInput = true;
+    isValid = validationError === false;
     switch (props.type) {
       case "number":
         props.onChange?.(Number(target.value));
@@ -99,6 +107,8 @@
     onfocusout={onFocusOut}
     onkeydown={props.onKeyDown}
     style:--border-color={defaultTheme.colors.border}
+    style:--error-border-color={defaultTheme.colors.danger}
+    class:error={!!validationError}
     bind:value
   />
   {#if props.type !== "number" && isFocused && props.autocomplete && autocomplete.length > 0}
@@ -139,6 +149,9 @@
     font-size: 20px;
     padding: 10px 20px;
     border: 1px solid var(--border-color);
+  }
+  .error {
+    border: 1px solid var(--error-border-color);
   }
 
   .autocomplete-container {

@@ -5,7 +5,7 @@ import {
   clearLoginCredentials,
   storeLoginCredentials,
 } from "./auth";
-import { JwtPayload, jwtDecode } from "jwt-decode"; 
+import { JwtPayload, jwtDecode } from "jwt-decode";
 
 export const host = import.meta.env.VITE_API_HOST ?? "http://localhost:3000";
 
@@ -28,18 +28,28 @@ export async function request(url: string, options: RequestInit) {
   });
 }
 
-export async function login(email: string, password: string) {
-  const req = await fetch(`${host}/public/v1/auth/login-with-password`, {
-    method: "post",
+export async function requestNoAuth(url: string, options: RequestInit) {
+  return fetch(`${host}${url}`, {
+    ...options,
     headers: {
+      ...options.headers,
       accept: "*/*",
-      "content-type": "application/json",
+      "Content-Type": "application/json",
     },
-    body: JSON.stringify({
-      email,
-      password,
-    }),
   });
+}
+
+export async function login(email: string, password: string) {
+  const req = await requestNoAuth(
+    `${host}/public/v1/auth/login-with-password`,
+    {
+      method: "post",
+      body: JSON.stringify({
+        email,
+        password,
+      }),
+    }
+  );
   if (!req.ok) {
     console.error("failed to login");
     return;
@@ -60,12 +70,8 @@ export async function logout() {
 
 async function refreshAccessToken(auth: AuthStore) {
   const { accessToken, refreshToken } = auth;
-  const req = await fetch(`${host}/public/v1/auth/refresh`, {
+  const req = await requestNoAuth(`${host}/public/v1/auth/refresh`, {
     method: "post",
-    headers: {
-      accept: "*/*",
-      "content-type": "application/json",
-    },
     body: JSON.stringify({
       access_token: accessToken,
       refresh_token: refreshToken,

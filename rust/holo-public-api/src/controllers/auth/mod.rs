@@ -2,9 +2,11 @@ use actix_web::web;
 use auth_dto::AuthLoginResponse;
 use utoipa::OpenApi;
 mod auth_dto;
+mod email_verify;
 mod login_apikey;
 mod login_password;
 mod refresh;
+mod register;
 
 #[cfg(test)]
 mod tests;
@@ -17,6 +19,8 @@ pub fn setup_public_controllers(cfg: &mut web::ServiceConfig) {
     cfg.service(login_apikey::login_with_apikey);
     cfg.service(login_password::login_with_password);
     cfg.service(refresh::refresh);
+    cfg.service(register::register);
+    cfg.service(email_verify::email_verify);
 }
 
 pub fn setup_private_controllers(_cfg: &mut web::ServiceConfig) {}
@@ -27,5 +31,7 @@ pub fn setup_docs(_internal: bool) -> utoipa::openapi::OpenApi {
     openapi.merge(login_apikey::OpenApiSpec::openapi());
     openapi.merge(login_password::OpenApiSpec::openapi());
     openapi.merge(refresh::OpenApiSpec::openapi());
+    openapi.merge(register::OpenApiSpec::openapi());
+    openapi.merge(email_verify::OpenApiSpec::openapi());
     openapi
 }

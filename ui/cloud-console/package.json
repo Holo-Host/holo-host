@@ -13,6 +13,7 @@
     "zod": "^3.25.64"
   },
   "dependencies": {
+    "@floating-ui/dom": "^1.7.1",
     "jwt-decode": "^4.0.0"
   }
 }

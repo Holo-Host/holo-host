@@ -55,7 +55,7 @@ pub async fn login_with_password(
         cache,
         req.clone(),
         providers::limiter::LimiterOptions {
-            rate_limit_max_requests: 3,
+            rate_limit_max_requests: 5,
             rate_limit_window: 300,
         },
     )

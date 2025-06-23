@@ -6,8 +6,9 @@
     href?: string;
     onclick?: (event: MouseEvent) => void;
     variant?: "primary" | "secondary";
+    disabled?: boolean;
   };
-  const { children, href, variant, onclick }: Prop = $props();
+  const { children, href, variant, onclick, disabled }: Prop = $props();
 
   const backgroundColor = $derived(
     variant === "secondary"
@@ -23,12 +24,14 @@
 
 <a
   class="button"
+  class:disabled
   {href}
-  {onclick}
+  onclick={disabled ? null : onclick}
   style:--background-color={backgroundColor}
   style:--text-color={textColor}
   style:--shadow={defaultTheme.shadow}
   style:--shadow-color={defaultTheme.colors.shadow}
+  style:--disabled-background-color={defaultTheme.colors.background.disabled}
 >
   {@render children()}
 </a>
@@ -50,6 +53,15 @@
 
     &:hover {
       box-shadow: var(--shadow) rgba(0, 0, 0, 0.3);
+    }
+  }
+
+  .disabled {
+    background-color: var(--disabled-background-color);
+    cursor: default;
+
+    &:hover {
+      box-shadow: none;
     }
   }
 </style>

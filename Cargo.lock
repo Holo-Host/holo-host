@@ -2505,6 +2505,7 @@ dependencies = [
  "futures-util",
  "jsonwebtoken",
  "mongodb",
+ "rand 0.9.1",
  "redis 0.30.0",
  "serde",
  "serde_json",
