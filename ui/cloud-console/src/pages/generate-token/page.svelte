@@ -6,6 +6,7 @@
   import Badge from "@/components/badge.svelte";
   import Card from "@/components/card.svelte";
   import { defaultTheme } from "@/theme";
+  import { request } from "@/api";
 
   type Prop = {
     visible: boolean;
@@ -25,24 +26,46 @@
     return permissions;
   });
 
+  let description = $state("");
+  let expireAt = $state(new Date(Date.now() + 86400000 * 7));
   let permissionValue = $state("");
   let permissionsSelected = $state<string[]>(["all.all.self"]);
   function onPermissionAdd(value: string) {
     const perm = permissions.find((item) => item === value.trim());
     if (!perm) return;
     permissionsSelected.push(perm);
-    permissionValue = "";
+    description = "";
   }
   function onPermissionRemove(value: string) {
     permissionsSelected = permissionsSelected.filter((item) => item !== value);
   }
   function onPermissionKeyDown(e: KeyboardEvent) {
     if (e.key === "Enter") {
-      if (permissionValue.split(".").length !== 3) return;
+      if (description.split(".").length !== 3) return;
 
-      permissionsSelected.push(permissionValue);
-      permissionValue = "";
+      permissionsSelected.push(description);
+      description = "";
     }
+  }
+
+  function generateApiToken() {
+    const permissionObj = permissions.map((perm) => {
+      const [resource, action, owner] = perm.split(".");
+      return {
+        resource,
+        action,
+        owner,
+      };
+    });
+    request("/protected/v1/apikey", {
+      method: "post",
+      body: JSON.stringify({
+        description,
+        expire_at: expireAt.getTime(),
+        permissions: permissionObj,
+        version: "v1",
+      }),
+    });
   }
 </script>
 
@@ -54,9 +77,16 @@
     <h2>Create a new personal access token</h2>
     <div class="flex column gap10">
       <div class="flex gap10 grow">
-        <Input grow label="Name" validator={z.string().min(3)} />
+        <Input
+          grow
+          label="Name"
+          validator={z
+            .string()
+            .min(3, { message: '"Name" must be at least 3 characters long' })}
+          bind:value={description}
+        />
         <div style:margin-top="25px">
-          <DatePicker value={new Date(Date.now() + 86400000 * 7)} />
+          <DatePicker bind:value={expireAt} />
         </div>
       </div>
       <div class="flex wrap gap10">
@@ -88,7 +118,7 @@
       </div>
     </div>
     <div class="flex">
-      <Button>Generate</Button>
+      <Button onclick={generateApiToken}>Generate</Button>
     </div>
   </Card>
 </div>

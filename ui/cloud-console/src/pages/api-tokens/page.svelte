@@ -30,7 +30,10 @@
     },
   ];
 
-  const data = getApiKeys();
+  let data: ApiKey[] = $state([]);
+  $effect(() => {
+    getApiKeys().then((d) => (data = d));
+  });
 
   function onActionSelected(item: ApiKey, action: string) {
     switch (action) {

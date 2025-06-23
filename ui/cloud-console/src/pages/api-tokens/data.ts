@@ -1,24 +1,28 @@
+import { request } from "@/api";
 import type { ApiKey } from "./types";
 
-const data: ApiKey[] = [
-  {
-    id: "",
-    name: "My ApiKey",
-    permissions: ["all.all.self"],
-    expiresAt: new Date(Date.now() + 1000000000),
-  },
-  {
-    id: "",
-    name: "Workload Apikey",
-    permissions: ["workload.read.self", "workload.create.self"],
-    expiresAt: new Date(),
-  },
-];
-
-export function getApiKeys() {
-  return data;
+export async function getApiKeys() {
+  const req = await request("/protected/v1/apikeys?page=1&limit=100", {
+    method: "get",
+  });
+  if (!req.ok) {
+    console.error("failed to get api keys");
+    return [];
+  }
+  const rawData = await req.json();
+  const data = rawData["items"];
+  return data.map((item) => ({
+    id: item.id,
+    name: item.description,
+    expiresAt: new Date(item.expire_at),
+    permissions: item.permissions.map(
+      (perm) => perm.resource + "." + perm.action + "." + perm.owner
+    ),
+  }));
 }
 
-export function deleteApiKey(key: ApiKey) {
-  console.log("deleted api key");
+export async function deleteApiKey(key: ApiKey) {
+  await request(`/protected/v1/apikey/${key.id}`, {
+    method: "delete",
+  });
 }

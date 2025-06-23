@@ -40,16 +40,13 @@ export async function requestNoAuth(url: string, options: RequestInit) {
 }
 
 export async function login(email: string, password: string) {
-  const req = await requestNoAuth(
-    `${host}/public/v1/auth/login-with-password`,
-    {
-      method: "post",
-      body: JSON.stringify({
-        email,
-        password,
-      }),
-    }
-  );
+  const req = await requestNoAuth(`/public/v1/auth/login-with-password`, {
+    method: "post",
+    body: JSON.stringify({
+      email,
+      password,
+    }),
+  });
   if (!req.ok) {
     console.error("failed to login");
     return;
@@ -70,7 +67,7 @@ export async function logout() {
 
 async function refreshAccessToken(auth: AuthStore) {
   const { accessToken, refreshToken } = auth;
-  const req = await requestNoAuth(`${host}/public/v1/auth/refresh`, {
+  const req = await requestNoAuth(`/public/v1/auth/refresh`, {
     method: "post",
     body: JSON.stringify({
       access_token: accessToken,
@@ -79,6 +76,7 @@ async function refreshAccessToken(auth: AuthStore) {
   });
   if (!req.ok) {
     console.error("failed to refresh token");
+    void logout();
     return;
   }
   const res: { access_token: string; refresh_token: string } = await req.json();
