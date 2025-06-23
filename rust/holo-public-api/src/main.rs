@@ -1,4 +1,4 @@
-use actix_web::{middleware::from_fn, web, App, HttpServer};
+use actix_web::{http, middleware::from_fn, web, App, HttpServer};
 use utoipa_scalar::Servable as Scalar;
 
 #[cfg(test)]
@@ -64,9 +64,17 @@ async fn main() -> std::io::Result<()> {
     println!("Started server on {}", host.clone());
     let port = app_config.port.unwrap_or(3000);
     HttpServer::new(move || {
+        // create cors policy
+        let cors_policy = actix_cors::Cors::default()
+            .allow_any_origin()
+            .allow_any_method()
+            .allowed_header(http::header::CONTENT_TYPE)
+            .allowed_header(http::header::AUTHORIZATION)
+            .allowed_header(http::header::ACCEPT);
+
         // create app with required app data
         let mut app = App::new()
-            .wrap(actix_cors::Cors::permissive())
+            .wrap(cors_policy)
             .app_data(web::Data::new(app_config.clone()))
             .app_data(web::Data::new(mongodb_client.clone()))
             .app_data(web::Data::new(cache_pool.clone()))
