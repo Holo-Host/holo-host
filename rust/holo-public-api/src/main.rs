@@ -66,6 +66,7 @@ async fn main() -> std::io::Result<()> {
     HttpServer::new(move || {
         // create app with required app data
         let mut app = App::new()
+            .wrap(actix_cors::Cors::permissive())
             .app_data(web::Data::new(app_config.clone()))
             .app_data(web::Data::new(mongodb_client.clone()))
             .app_data(web::Data::new(cache_pool.clone()))
@@ -89,13 +90,11 @@ async fn main() -> std::io::Result<()> {
         app = app.service(web::scope("public").configure(controllers::setup_public_controllers));
 
         // protected routes
-        app = app.service(
+        app.service(
             web::scope("protected")
                 .wrap(from_fn(middlewares::auth::auth_middleware))
                 .configure(controllers::setup_private_controllers),
-        );
-
-        app.wrap(actix_cors::Cors::permissive())
+        )
     })
     .bind(("0.0.0.0", port))?
     .run()
