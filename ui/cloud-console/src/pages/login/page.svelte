@@ -6,6 +6,8 @@
 
   let email = $state("");
   let password = $state("");
+  let isEmailValid = $state(false);
+  let isPasswordValid = $state(false);
 
   async function onLogin() {
     login(email, password);
@@ -17,9 +19,18 @@
     type="email"
     label="email"
     placeholder="john.doe@example.com"
-    validator={z.string().email()}
     bind:value={email}
+    bind:isValid={isEmailValid}
+    validator={z.string().email()}
   />
-  <Input type="password" label="password" bind:value={password} />
-  <Button onclick={onLogin}>Login</Button>
+  <Input
+    type="password"
+    label="password"
+    bind:value={password}
+    bind:isValid={isPasswordValid}
+    validator={z.string().min(8)}
+  />
+  <Button disabled={!isEmailValid || !isPasswordValid} onclick={onLogin}>
+    Login
+  </Button>
 </div>
