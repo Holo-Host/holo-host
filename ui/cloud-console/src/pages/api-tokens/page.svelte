@@ -39,6 +39,7 @@
     switch (action) {
       case "delete":
         deleteApiKey(item);
+        data = data.filter((d) => d.id !== item.id);
         break;
     }
   }

@@ -58,7 +58,12 @@
   }
 </script>
 
-<div class="column gap10" style:margin-top="100px" style:width="400px">
+<div
+  class="column gap10"
+  style:margin-top="100px"
+  style:width="400px"
+  style:margin-bottom="100px"
+>
   {#if registered}
     <span>You have successfully registered.</span>
   {:else if loading}

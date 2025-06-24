@@ -7,7 +7,7 @@ mod sign_tokens;
 
 pub use common::{generate_api_key, get_apikey_from_headers};
 pub use get_refresh_token_version::get_refresh_token_version;
-pub use hash_apikey::hash_apikey;
+pub use hash_apikey::{hash_apikey, compare_and_fetch_apikey};
 pub use permissions::{get_all_accessible_owners_from_permissions, verify_all_permissions};
 pub use sign_tokens::{sign_tokens, SignJwtTokenOptions};
 

@@ -9,9 +9,9 @@ body {
 #app {
   display: flex;
   width: 100%;
-  min-height: 100vh;
+  min-height: min-content;
   justify-content: center;
-  align-items: center;
+  align-items: start;
 }
 
 a {

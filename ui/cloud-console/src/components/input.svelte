@@ -10,6 +10,7 @@
     onKeyDown?: (e: KeyboardEvent) => void;
     validator?: z.ZodType;
     isValid?: boolean;
+    readonly?: boolean;
   };
 
   type TextProp = BaseProp & {
@@ -102,6 +103,7 @@
     name={props.id}
     type={props.type}
     placeholder={props.placeholder}
+    readonly={props.readonly}
     oninput={onInput}
     onfocus={onFocus}
     onfocusout={onFocusOut}

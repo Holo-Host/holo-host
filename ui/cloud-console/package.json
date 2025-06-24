@@ -9,6 +9,7 @@
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^5.1.0",
     "svelte": "^5.34.3",
+    "tippy.js": "^6.3.7",
     "vite": "^6.3.5",
     "zod": "^3.25.64"
   },

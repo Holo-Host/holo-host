@@ -5,8 +5,10 @@
   import Input from "@/components/input.svelte";
   import Badge from "@/components/badge.svelte";
   import Card from "@/components/card.svelte";
+  import Modal from "@/components/modal.svelte";
   import { defaultTheme } from "@/theme";
   import { request } from "@/api";
+  import tippy, { createSingleton } from "tippy.js";
 
   type Prop = {
     visible: boolean;
@@ -30,25 +32,28 @@
   let expireAt = $state(new Date(Date.now() + 86400000 * 7));
   let permissionValue = $state("");
   let permissionsSelected = $state<string[]>(["all.all.self"]);
+  let generatedToken = $state("");
+  let showGeneratedToken = $state(false);
+
   function onPermissionAdd(value: string) {
     const perm = permissions.find((item) => item === value.trim());
     if (!perm) return;
     permissionsSelected.push(perm);
-    description = "";
+    permissionValue = "";
   }
   function onPermissionRemove(value: string) {
     permissionsSelected = permissionsSelected.filter((item) => item !== value);
   }
   function onPermissionKeyDown(e: KeyboardEvent) {
     if (e.key === "Enter") {
-      if (description.split(".").length !== 3) return;
+      if (permissionValue.split(".").length !== 3) return;
 
-      permissionsSelected.push(description);
-      description = "";
+      permissionsSelected.push(permissionValue);
+      permissionValue = "";
     }
   }
 
-  function generateApiToken() {
+  async function generateApiToken() {
     const permissionObj = permissionsSelected.map((perm) => {
       const [resource, action, owner] = perm.split(".");
       return {
@@ -57,7 +62,7 @@
         owner,
       };
     });
-    request("/protected/v1/apikey", {
+    const req = await request("/protected/v1/apikey", {
       method: "post",
       body: JSON.stringify({
         description,
@@ -66,8 +71,41 @@
         version: "v1",
       }),
     });
+    const data = await req.json();
+    generatedToken = data["api_key"];
+  }
+  async function onCopyGeneratedToken(event: MouseEvent) {
+    await navigator.clipboard.writeText(generatedToken);
   }
 </script>
+
+{#if generatedToken !== ""}
+  <Modal>
+    <div class="flex gap10 column">
+      <div class="gap10 grow align-center">
+        <Input
+          type={showGeneratedToken ? "text" : "password"}
+          value={generatedToken}
+          readonly
+        />
+        <button
+          style:margin-bottom="17px"
+          onclick={() => (showGeneratedToken = !showGeneratedToken)}
+        >
+          {#if showGeneratedToken}
+            Hide
+          {:else}
+            Show
+          {/if}
+        </button>
+      </div>
+      <Button onclick={onCopyGeneratedToken}>Copy</Button>
+      <Button variant="secondary" onclick={() => (generatedToken = "")}>
+        Close
+      </Button>
+    </div>
+  </Modal>
+{/if}
 
 <div class="page">
   <div class="header">
