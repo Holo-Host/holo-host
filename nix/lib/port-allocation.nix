@@ -12,10 +12,12 @@
       # Generate a deterministic port offset based on container name/index
       generatePortOffset = containerName: index: 
         let
-          # Use a simple hash of the container name for deterministic offset
+          # Hash the container name to create deterministic offset
           nameHash = builtins.hashString "sha256" containerName;
-          # Take last 2 digits and add index to create offset
-          baseOffset = lib.mod (lib.toInt (lib.substring 62 2 nameHash)) 50;
+          # Use the container name and hash len to generate a simple offset
+          hashLength = lib.stringLength nameHash;
+          nameLength = lib.stringLength containerName;
+          baseOffset = lib.mod (hashLength + nameLength) 50;
         in
           baseOffset + (index * 10);
       
