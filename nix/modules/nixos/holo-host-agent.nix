@@ -100,6 +100,19 @@ in
   };
 
   config = lib.mkIf cfg.enable {
+    # Add required packages for socat port forwarding when using private networking
+    environment.systemPackages = with pkgs; [
+      git
+      nats-server
+      natscli
+      nsc
+    ] ++ lib.optionals cfg.containerPrivateNetwork [
+      # Additional packages needed for socat port forwarding with private networking
+      socat
+      netcat-gnu
+      iproute2
+    ];
+
     systemd.services.holo-host-agent = {
       enable = true;
 
