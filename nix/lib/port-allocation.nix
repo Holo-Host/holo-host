@@ -7,7 +7,7 @@
   HOLOCHAIN_HTTP_GW_PORT_DEFAULT = 8090;
 
   # Allocate ports for a container with the given base ports and index
-  allocatePorts = { basePorts, containerName ? "", index ? 0, privateNetwork ? true }:
+  allocatePorts = { basePorts, containerName ? "", index ? 0, privateNetwork ? false }:
     let
       # Generate a deterministic port offset based on container name/index
       generatePortOffset = containerName: index: 

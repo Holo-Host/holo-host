@@ -285,12 +285,15 @@ impl HostWorkloadApi {
                                         option (b) is inherently less secure as the admin websockets will also be shared on the host network namespace
                                     */
 
-                                    // Set network configuration based on env var, defaulting to true.
-                                    let is_private_network =
-                                        std::env::var("IS_CONTAINER_ON_PRIVATE_NETWORK")
-                                            .unwrap_or_else(|_| "true".to_string())
-                                            .parse::<bool>()
-                                            .unwrap_or(true);
+                                    // // Set network configuration based on env var, defaulting to true.
+                                    // let is_private_network =
+                                    //     std::env::var("IS_CONTAINER_ON_PRIVATE_NETWORK")
+                                    //         .unwrap_or_else(|_| "true".to_string())
+                                    //         .parse::<bool>()
+                                    //         .unwrap_or(true);
+                                    // Set private netowrk flag based on env var, defaulting to false
+                                    let is_private_network = std::env::var("IS_CONTAINER_ON_PRIVATE_NETWORK")
+                                        .unwrap_or_default();
 
                                     let hc_http_gw_port =
                                         calculate_http_gw_port(&workload._id, is_private_network);
@@ -771,11 +774,9 @@ mod util {
                     anyhow::bail!("Holochain version validation failed: {}", validation_error);
                 }
 
-                // Set private netowrk flag based on env var, defaulting to true
+                // Set private netowrk flag based on env var, defaulting to false
                 let is_private_network = std::env::var("IS_CONTAINER_ON_PRIVATE_NETWORK")
-                    .unwrap_or_else(|_| "true".to_string())
-                    .parse::<bool>()
-                    .unwrap_or(true);
+                    .unwrap_or_default();
 
                 // This is used to store the key=value pairs for the attrset that is passed to `.override attrs`
                 let mut override_attrs = vec![

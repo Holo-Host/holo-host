@@ -22,7 +22,7 @@
   # Default holochain version to 0.5
   holochainVersion ? "0.5",
 }: let
-  privateNetwork = true;
+  privateNetwork = false;
 
   # Function to determine if we should use the legacy bootstrap pattern
   useLegacyBootstrap = let

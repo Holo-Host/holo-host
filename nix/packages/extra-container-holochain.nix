@@ -25,7 +25,7 @@ $ nix copy --no-check-sigs "$(nix build --print-out-paths .#packages.x86_64-linu
   stunUrls ? null,
   holochainFeatures ? null,
   holochainVersion ? null,
-  privateNetwork ? true,
+  privateNetwork ? false,
   # hc-http-gw related args
   httpGwEnable ? false,
   httpGwAllowedAppIds ? [],
