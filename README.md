@@ -95,24 +95,6 @@ The container system supports two networking modes with different port forwardin
 - Uses socat-based tunneling for reliable connectivity
 - Production-ready with proper isolation
 
-#### socat Port Forwarding Solution
-
-Due to known reliability issues with systemd-nspawn's built-in `forwardPorts`, we implement a robust socat-based port forwarding system for private networking mode.
-
-**What is socat?**
-socat (Socket Cat) is a network utility that creates bidirectional data streams between network endpoints. It's more reliable than systemd-nspawn's port forwarding for container networking.
-
-**How it works:**
-```bash
-# Creates a TCP tunnel from host port to container port
-socat TCP-LISTEN:8000,fork,reuseaddr TCP:10.0.85.2:8000
-```
-
-**Implementation Details:**
-- **TCP-LISTEN:8000** - Listen on port 8000 on the host
-- **fork** - Create a new process for each connection
-- **reuseaddr** - Allow port reuse (important for restarts)
-- **TCP:10.0.85.2:8001** - Forward to container IP port 8001 (internal socat)
 
 **Two-Tier Port Forwarding Architecture:**
 The system uses a two-tier socat architecture to handle the fact that Holochain only binds to localhost inside containers:
@@ -140,31 +122,6 @@ The system uses a two-tier socat architecture to handle the fact that Holochain 
 Host Client → localhost:8000 → Host socat → 10.0.85.2:8001 → Internal socat → 127.0.0.1:8000 → Holochain
 ```
 
-**Lifecycle Management:**
-- socat services start after container network is ready
-- Host-side services wait for internal forwarders to be active
-- Network readiness detection before tunnel creation
-- Clean shutdown handling with proper signal management
-
-**Network Configuration:**
-- Each container gets a unique /30 subnet: `10.0.(85+index).0/30`
-- Host address: `10.0.(85+index).1`
-- Container address: `10.0.(85+index).2`
-- Avoids conflicts with common network ranges (Docker, VPN, etc.)
-
-**Services Created:**
-- `socat-internal-admin-forwarder` - Internal container forwarder (inside container)
-- `socat-internal-httpgw-forwarder` - Internal HTTP gateway forwarder (inside container, when enabled)
-- `socat-${containerName}-admin` - Host-side admin websocket port forwarding
-- `socat-${containerName}-httpgw` - Host-side HTTP gateway port forwarding (when enabled)
-
-**Advantages over systemd-nspawn forwardPorts:**
-- ✅ Reliable port forwarding that actually works
-- ✅ Proper lifecycle management with extra-containers
-- ✅ Network-aware startup (waits for container network)
-- ✅ Clean shutdown and restart handling
-- ✅ Battle-tested socat for network tunneling
-
 **Usage Example:**
 ```nix
 # In your container configuration
@@ -178,103 +135,6 @@ This automatically creates a two-tier socat tunnel system:
 - Host `localhost:8000` → Container `10.0.85.2:8001` → Container `127.0.0.1:8000` (admin)
 - Host `localhost:8080` → Container `10.0.85.2:4000` → Container `127.0.0.1:4000` (HTTP gateway)
 
-**Troubleshooting:**
-```bash
-# Check host-side socat service status (replace holochain0 with actual container name)
-systemctl status socat-holochain0-admin
-
-# Check internal container socat service status
-machinectl shell holochain0 systemctl status socat-internal-admin-forwarder
-
-# View host-side socat service logs
-journalctl -u socat-holochain0-admin -f
-
-# View internal container socat logs
-machinectl shell holochain0 journalctl -u socat-internal-admin-forwarder -f
-
-# Test end-to-end connectivity
-nc -z localhost 8000
-
-# Test container port accessibility
-nc -z 10.0.85.2 8001
-
-# Check what's listening inside container
-machinectl shell holochain0 netstat -tlnp | grep ":800"
-
-# Check container network routes
-ip route show | grep "10.0.85.0/30"
-
-# Check container firewall rules
-machinectl shell holochain0 iptables -L -n | grep "8001\|8000"
-
-# Production-specific troubleshooting:
-# List all socat services (useful when container names are dynamic)
-systemctl list-units --all | grep socat
-
-# Check host-agent configuration
-systemctl status holo-host-agent
-journalctl -u holo-host-agent -f
-
-# Verify environment variables
-systemctl show holo-host-agent | grep Environment
-
-# Check if required packages are installed
-which socat netcat iproute2
-```
-
-#### Background: systemd-nspawn Port Forwarding Issues
-
-The socat solution addresses well-documented reliability issues with systemd-nspawn's built-in port forwarding:
-
-**Known Issues:**
-- systemd-nspawn `forwardPorts` frequently fails to create working port mappings
-- Inconsistent behavior across different systemd versions
-- Poor integration with NixOS containers module
-- Network timing issues during container startup
-
-**Community Solutions:**
-- [NixOS Discourse: Port forwarding of network-namespace'd containers](https://discourse.nixos.org/t/port-forwading-of-a-network-namespaced-container/54926) - Community reports port forwarding failures and suggests workarounds
-- [GitHub Gist: Forward NixOS Container ports](https://gist.github.com/Saturn745/8773e3a44dc073c40600ca89027cd72e) - Documents socat-based solutions for NixOS containers
-- [NixOS Issues #46975 & #28721](https://github.com/NixOS/nixpkgs/issues/46975) - Long-standing systemd-nspawn port forwarding bugs
-
-**Why socat Works:**
-- Operates at the network layer, bypassing systemd-nspawn limitations
-- Mature, battle-tested network tunneling tool
-- Proper integration with systemd service management
-- Reliable across different system configurations
-- Two-tier architecture solves localhost-only binding issues
-- Handles application-specific networking constraints gracefully
-
-**Alternative Approaches Considered:**
-- iptables NAT rules (complex, fragile)
-- SSH tunneling (overhead, authentication complexity)
-- Host networking (loses isolation benefits)
-- Custom network bridges (complex setup, maintenance overhead)
-
-The socat approach provides the best balance of reliability, simplicity, and maintainability for production container deployments.
-
-#### Production Deployment
-
-**Automatic Service Creation:**
-When deploying containers in production environments, the socat port forwarding services are **automatically created** without requiring additional configuration. This ensures consistent behavior between development, testing, and production environments.
-
-**How it Works in Production:**
-1. **Host Agent Deployment**: When `host_agent` creates a container with `privateNetwork = true`, it automatically includes:
-   - Container configuration with internal socat services
-   - Host-side socat services for external access
-   - All required packages and dependencies
-
-2. **No Manual Configuration Required**: Production systems running `holo-host-agent` with `containerPrivateNetwork = true` automatically get:
-   - `socat`, `netcat-gnu`, `iproute2` packages installed
-   - Complete port forwarding infrastructure
-   - Proper service lifecycle management
-
-3. **Environment Variable Control**: The `IS_CONTAINER_ON_PRIVATE_NETWORK` environment variable (set via `holo.host-agent.containerPrivateNetwork`) controls whether containers use private networking and socat port forwarding.
-
-**Production vs Development Consistency:**
-- **Test Environment**: Explicitly imports socat configuration ✅
-- **Production Environment**: Gets socat configuration automatically ✅
-- **Both Environments**: Identical port forwarding behavior ✅
 
 **Deployment Example:**
 ```nix
