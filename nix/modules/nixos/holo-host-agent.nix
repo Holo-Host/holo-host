@@ -93,7 +93,7 @@ in
 
     containerPrivateNetwork = lib.mkOption {
       type = lib.types.bool;
-      default = true;
+      default = false;
       description = "Input flag to determine whether to use private networking. When true, containers are isolated with port forwarding. When false, containers share the host network with dynamic port allocation to avoid conflicts.";
     };
 
