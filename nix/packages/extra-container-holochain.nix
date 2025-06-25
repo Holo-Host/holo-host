@@ -296,7 +296,7 @@ in
                   # Forward to localhost (use port 8001 to avoid conflicting with holochain on 8000)
                   ExecStart = "${pkgs.bash}/bin/bash -c 'echo \"Starting internal socat forwarder: 0.0.0.0:8001 -> 127.0.0.1:${builtins.toString args.adminWebsocketPort}\"; exec ${pkgs.socat}/bin/socat TCP-LISTEN:8001,bind=0.0.0.0,fork,reuseaddr TCP:127.0.0.1:${builtins.toString args.adminWebsocketPort}'";
                   
-                  # Clean shutdown
+                  # Shutdown
                   KillMode = "mixed";
                   KillSignal = "SIGTERM";
                   TimeoutStopSec = "5s";
@@ -323,7 +323,6 @@ in
                   # Forward all nterfaces to localhost
                   ExecStart = "${pkgs.bash}/bin/bash -c 'echo \"Starting internal HTTP gateway socat forwarder: 0.0.0.0:${builtins.toString httpGwPortDefault} -> 127.0.0.1:${builtins.toString httpGwPortDefault}\"; exec ${pkgs.socat}/bin/socat TCP-LISTEN:${builtins.toString httpGwPortDefault},bind=0.0.0.0,fork,reuseaddr TCP:127.0.0.1:${builtins.toString httpGwPortDefault}'";
                   
-                  # Clean shutdown
                   KillMode = "mixed";
                   KillSignal = "SIGTERM";
                   TimeoutStopSec = "5s";

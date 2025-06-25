@@ -94,7 +94,6 @@ lazy_static::lazy_static! {
 fn validate_holochain_version(version: Option<&String>) -> Result<(), String> {
     match version {
         Some(hc_version) => {
-
             let supported_versions = &VERSION_CONFIG.supported_versions;
 
             let parsed_version = hc_version.split('.').collect::<Vec<_>>();
@@ -287,12 +286,14 @@ impl HostWorkloadApi {
                                     */
 
                                     // Set network configuration based on env var, defaulting to true.
-                                    let is_private_network = std::env::var("IS_CONTAINER_ON_PRIVATE_NETWORK")
-                                        .unwrap_or_else(|_| "true".to_string())
-                                        .parse::<bool>()
-                                        .unwrap_or(true);
+                                    let is_private_network =
+                                        std::env::var("IS_CONTAINER_ON_PRIVATE_NETWORK")
+                                            .unwrap_or_else(|_| "true".to_string())
+                                            .parse::<bool>()
+                                            .unwrap_or(true);
 
-                                    let hc_http_gw_port = calculate_http_gw_port(&workload._id, is_private_network);
+                                    let hc_http_gw_port =
+                                        calculate_http_gw_port(&workload._id, is_private_network);
                                     let hc_http_gw_url_base = url::Url::parse(&format!(
                                         "http://127.0.0.1:{hc_http_gw_port}"
                                     ))?;
@@ -574,14 +575,17 @@ mod util {
     use crate::host_api::{get_container_name, HOLOCHAIN_ADMIN_PORT_DEFAULT};
 
     /// Calculate the http gw port based on network mode and workload ID
-    /// 
+    ///
     /// With privateNetwork=true, we can use the standard port inside containers
     /// and let nixos handle port forwarding to avoid conflicts
     /// With shared network, use dynamic port allocation based on workload ID
-    /// 
+    ///
     /// For holochain gateway access from outside the container, we should use the dynamically allocated host port
     /// (This will be the same as the container port when privateNetwork=true with port forwarding)
-    pub(crate) fn calculate_http_gw_port(workload_id: &bson::oid::ObjectId, is_private_network: bool) -> u16 {
+    pub(crate) fn calculate_http_gw_port(
+        workload_id: &bson::oid::ObjectId,
+        is_private_network: bool,
+    ) -> u16 {
         const HOLOCHAIN_HTTP_GW_PORT_DEFAULT: u16 = 8090;
         if is_private_network {
             // With private networks, use standard port (forwarded to host)
@@ -591,8 +595,7 @@ mod util {
             let workload_hash = workload_id.to_hex();
             let hash_suffix = &workload_hash[workload_hash.len() - 4..];
             // Create deterministic port offset from workload id
-            let port_offset = u32::from_str_radix(hash_suffix, 16)
-                .unwrap_or(0) % 1000; // Limit offset to 0-999
+            let port_offset = u32::from_str_radix(hash_suffix, 16).unwrap_or(0) % 1000; // Limit offset to 0-999
             HOLOCHAIN_HTTP_GW_PORT_DEFAULT + port_offset as u16
         }
     }
