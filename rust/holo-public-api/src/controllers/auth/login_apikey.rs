@@ -1,11 +1,13 @@
-use actix_web::{post, web, HttpRequest, HttpResponse, Responder};
+use actix_web::{get, web, HttpRequest, HttpResponse, Responder};
 use bson::doc;
+use db_utils::schemas::api_key::{ApiKey, API_KEY_COLLECTION_NAME};
 use utoipa::OpenApi;
 
 use super::auth_dto::AuthLoginResponse;
 use crate::providers::{
     self, auth,
     config::AppConfig,
+    crud,
     error_response::ErrorResponse,
     jwt::{AccessTokenClaims, RefreshTokenClaims},
 };
@@ -15,7 +17,7 @@ use crate::providers::{
 pub struct OpenApiSpec;
 
 #[utoipa::path(
-    post,
+    get,
     path = "/public/v1/auth/login-with-apikey",
     tag = "Auth",
     summary = "Login with API key",
@@ -27,7 +29,7 @@ pub struct OpenApiSpec;
         (status = 200, body = AuthLoginResponse)
     )
 )]
-#[post("/v1/auth/login-with-apikey")]
+#[get("/v1/auth/login-with-apikey")]
 pub async fn login_with_apikey(
     req: HttpRequest,
     config: web::Data<AppConfig>,
@@ -66,12 +68,31 @@ pub async fn login_with_apikey(
             message: "missing or invalid 'api-key'".to_string(),
         });
     }
-    let result = auth::compare_and_fetch_apikey(
-        api_key[0].to_string(),
-        api_key[1].to_string(),
+    let api_key_hash = auth::hash_apikey(api_key[0].to_string(), api_key[1].to_string());
+    if api_key_hash.is_none() {
+        return HttpResponse::Unauthorized().json(ErrorResponse {
+            message: "missing or invalid 'api-key'".to_string(),
+        });
+    }
+    let api_key_hash = api_key_hash.unwrap();
+
+    // get user id and permissions from the api key hash
+    let result = match crud::find_one::<ApiKey>(
         db.get_ref().clone(),
+        API_KEY_COLLECTION_NAME.to_string(),
+        bson::doc! { "api_key": api_key_hash },
     )
-    .await;
+    .await
+    {
+        Ok(result) => result,
+        Err(err) => {
+            tracing::error!("failed to get user id and permissions: {}", err);
+            return HttpResponse::InternalServerError().json(bson::doc! {
+                "error": err.to_string(),
+                "message": "failed to get user id and permissions".to_string(),
+            });
+        }
+    };
     if result.is_none() {
         return HttpResponse::Unauthorized().json(ErrorResponse {
             message: "missing or invalid 'api-key'".to_string(),
