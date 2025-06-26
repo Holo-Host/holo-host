@@ -60,7 +60,7 @@
         <span class="hex" style:--color={defaultTheme.colors.background.danger}
         ></span>
       </div>
-      <span>Are you sure you want to delete this API key?</span>
+      <span>Are you sure you want to delete this API token?</span>
       <div class="justify-center align-center gap20" style:z-index="2">
         <Button variant="danger" onclick={onDeleteApikey}>Delete</Button>
         <Button variant="secondary" onclick={() => (apikeyToDelete = null)}>
