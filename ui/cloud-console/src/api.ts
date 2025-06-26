@@ -57,7 +57,7 @@ export async function login(email: string, password: string) {
     refreshToken: res.refresh_token,
     accessToken: res.access_token,
   });
-  location.href = "/";
+  location.href = "/api-tokens";
 }
 
 export async function logout() {

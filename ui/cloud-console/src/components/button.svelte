@@ -5,21 +5,33 @@
     children?: any;
     href?: string;
     onclick?: (event: MouseEvent) => void;
-    variant?: "primary" | "secondary";
+    variant?: "primary" | "secondary" | "danger";
     disabled?: boolean;
   };
   const { children, href, variant, onclick, disabled }: Prop = $props();
 
-  const backgroundColor = $derived(
-    variant === "secondary"
-      ? defaultTheme.colors.background.default
-      : defaultTheme.colors.background.primary
-  );
-  const textColor = $derived(
-    variant === "secondary"
-      ? defaultTheme.colors.text.black
-      : defaultTheme.colors.text.white
-  );
+  const backgroundColor = $derived.by(() => {
+    switch (variant) {
+      default:
+      case "primary":
+        return defaultTheme.colors.background.primary;
+      case "secondary":
+        return defaultTheme.colors.background.default;
+      case "danger":
+        return defaultTheme.colors.background.danger;
+    }
+  });
+  const textColor = $derived.by(() => {
+    switch (variant) {
+      default:
+      case "primary":
+        return defaultTheme.colors.text.white;
+      case "secondary":
+        return defaultTheme.colors.text.black;
+      case "danger":
+        return defaultTheme.colors.text.white;
+    }
+  });
 </script>
 
 <a

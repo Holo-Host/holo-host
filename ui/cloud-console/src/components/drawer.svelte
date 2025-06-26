@@ -5,31 +5,31 @@
   const { path } = $props();
 
   const entries = [
-    {
-      name: getTranslation("drawer.dashboard"),
-      icon: "dashboard",
-      href: "/",
-    },
-    {
-      name: getTranslation("drawer.constellations"),
-      icon: "laptop_windows",
-      href: "/constellations",
-    },
+    // {
+    //   name: getTranslation("drawer.dashboard"),
+    //   icon: "dashboard",
+    //   href: "/",
+    // },
+    // {
+    //   name: getTranslation("drawer.constellations"),
+    //   icon: "laptop_windows",
+    //   href: "/constellations",
+    // },
     {
       name: getTranslation("drawer.api-tokens"),
       icon: "key",
       href: "/api-tokens",
     },
-    {
-      name: getTranslation("drawer.billing"),
-      icon: "payments",
-      href: "/billing",
-    },
-    {
-      name: getTranslation("drawer.settings"),
-      icon: "settings",
-      href: "/settings",
-    },
+    // {
+    //   name: getTranslation("drawer.billing"),
+    //   icon: "payments",
+    //   href: "/billing",
+    // },
+    // {
+    //   name: getTranslation("drawer.settings"),
+    //   icon: "settings",
+    //   href: "/settings",
+    // },
   ];
 </script>
 
@@ -38,8 +38,7 @@
   style:background-color={defaultTheme.colors.background.card}
 >
   <div class="header">
-    <img src="/icons/drawer/logo.svg" alt="logo" width="56" />
-    <img src="/icons/drawer/holo.svg" alt="holo" width="114" />
+    <img src="/icons/drawer/logo.svg" alt="logo" width="170" />
   </div>
   <div class="entries">
     {#each entries as entry (entry.name)}

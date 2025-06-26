@@ -20,6 +20,7 @@ export const defaultTheme = {
       card: "#fff",
       default: "#f7f8fd",
       disabled: "#B9BACF",
+      danger: "#dd0000"
     },
   },
   shadow: "0px 4px 8px 0px",

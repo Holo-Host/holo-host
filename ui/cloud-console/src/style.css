@@ -114,7 +114,19 @@ button {
 .gap10 {
   gap: 10px;
 }
+.gap20 {
+  gap: 20px;
+}
 
 .cursor-pointer {
   cursor: pointer;
+}
+
+.hex::before {
+  content: "\2B22";
+  font-size: 260px;
+  line-height: 120px;
+  height: 135px;
+  top: -80px;
+  position: relative;
 }

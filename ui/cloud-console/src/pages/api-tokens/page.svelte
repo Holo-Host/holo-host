@@ -6,6 +6,8 @@
   import { deleteApiKey, getApiKeys } from "./data";
   import type { ApiKey } from "./types";
   import Table, { type Column } from "@/components/table.svelte";
+  import Modal from "@/components/modal.svelte";
+  import { defaultTheme } from "@/theme";
 
   const columns: Column<ApiKey>[] = [
     {
@@ -29,6 +31,7 @@
       renderer: ActionsRenderer,
     },
   ];
+  let apikeyToDelete = $state<ApiKey | null>(null);
 
   let data: ApiKey[] = $state([]);
   $effect(() => {
@@ -38,12 +41,35 @@
   function onActionSelected(item: ApiKey, action: string) {
     switch (action) {
       case "delete":
-        deleteApiKey(item);
-        data = data.filter((d) => d.id !== item.id);
+        apikeyToDelete = item;
         break;
     }
   }
+  function onDeleteApikey() {
+    deleteApiKey(apikeyToDelete);
+    data = data.filter((d) => d.id !== apikeyToDelete.id);
+    apikeyToDelete = null;
+  }
 </script>
+
+{#if !!apikeyToDelete}
+  <Modal>
+    <div class="column justify-center align-center gap20" style:margin="40px">
+      <div class="hex-container">
+        <span class="icons-outlined">delete</span>
+        <span class="hex" style:--color={defaultTheme.colors.background.danger}
+        ></span>
+      </div>
+      <span>Are you sure you want to delete this API key?</span>
+      <div class="justify-center align-center gap20" style:z-index="2">
+        <Button variant="danger" onclick={onDeleteApikey}>Delete</Button>
+        <Button variant="secondary" onclick={() => (apikeyToDelete = null)}>
+          Cancel
+        </Button>
+      </div>
+    </div>
+  </Modal>
+{/if}
 
 <div class="page">
   <div class="header">
@@ -87,6 +113,28 @@
   .header {
     .header-title {
       flex-grow: 1;
+    }
+  }
+
+  .hex-container {
+    display: block;
+    margin: 0;
+    height: 125px;
+
+    .hex {
+      position: relative;
+      top: 0;
+      color: var(--color);
+    }
+    .icons-outlined {
+      position: relative;
+      width: 0;
+      height: 0;
+      top: 20px;
+      left: 47px;
+      font-size: 60px;
+      z-index: 1;
+      color: white;
     }
   }
 </style>
