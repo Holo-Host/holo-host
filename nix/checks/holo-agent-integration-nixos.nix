@@ -36,6 +36,101 @@ pkgs.testers.runNixOSTest (
           nats.store_dir = "/var/lib/holo-host-agent/store_dir";
         };
       };
+
+    hostAgentCli = lib.getExe flake.packages.${system}.rust-workspace.individual.host_agent;
+
+    # Mock workload variables
+    workloadId = "test-workload-123";
+    containerName = "test123";
+    testDeveloper = "test-developer";
+    testManifest = {
+        type = "HolochainDhtV1";
+        happ_binary_url = "https://gist.github.com/steveej/5443d6d15395aa23081f1ee04712b2b3/raw/c82daf7f03ef459fa9ec4f28c8eeb9602596cc22/humm-earth-core-happ.happ";
+        network_seed = null;
+        memproof = null;
+        bootstrap_server_url = "https://bootstrap.holo.host/";
+        signal_server_url = "wss://sbd.holo.host/";
+        stun_server_urls = null;
+        holochain_feature_flags = ["unstable-functions" "unstable-sharding" "chc" "unstable-countersigning"];
+        holochain_version = "0.4.2";
+        http_gw_enable = true;
+        http_gw_allowed_fns = null;
+      };
+      defaultSystemSpecs = {
+        capacity = {
+          drive = 1;
+          cores = 1;
+        };
+        avg_network_speed = 0;
+        avg_uptime = 0.0;
+      };
+
+    # Mock workload deployment message
+    workloadDeployMsg = builtins.toJSON {
+      _id = workloadId;
+      version = "0.0.1";
+      metadata = {
+        is_deleted = false;
+        deleted_at = null;
+        updated_at = "2025-06-25T14:32:35.541+00:00";
+        created_at = "2025-06-25T14:32:35.541+00:00";
+      };
+      assigned_developer = testDeveloper;
+      min_hosts = 1;
+      assigned_hosts = [];
+      status = {
+        desired = "Running";
+        actual = "Assigned";
+        payload = null;
+      };
+      manifest = testManifest;
+      system_specs = defaultSystemSpecs;
+    };
+
+    # Mock workload update message
+    workloadUpdateMsg = builtins.toJSON {
+      _id = workloadId;
+      version = "0.0.1";
+      metadata = {
+        is_deleted = false;
+        deleted_at = null;
+        updated_at = "2025-06-25T16:20:00.000+00:00";
+        created_at = "2025-06-25T14:32:35.541+00:00";
+      };
+      assigned_developer = testDeveloper;
+      min_hosts = 1;
+      assigned_hosts = [];
+      status = {
+        desired = "Running";
+        actual = "Running";
+        payload = null;
+      };
+      manifest = testManifest;
+      system_specs = defaultSystemSpecs;
+    };
+
+    # Mock workload deletion message
+    workloadDeleteMsg = builtins.toJSON {
+      _id = workloadId;
+      version = "0.0.1";
+      metadata = {
+        is_deleted = true;
+        deleted_at = "2025-06-25T16:21:00.000+00:00";
+        updated_at = "2025-06-25T16:21:00.000+00:00";
+        created_at = "2025-06-25T14:32:35.541+00:00";
+      };
+      assigned_developer = testDeveloper;
+      min_hosts = 1;
+      assigned_hosts = [];
+      status = {
+        desired = "Deleted";
+        actual = "Running";
+        payload = null;
+      };
+      manifest = testManifest;
+      system_specs = defaultSystemSpecs;
+    };
+
   in
   {
     name = "host-agent-integration-nixos";
@@ -216,11 +311,18 @@ pkgs.testers.runNixOSTest (
           host5.wait_for_unit('holo-host-agent')
 
         with subtest("running the setup script on the hosts"):
-          host1.succeed("${hostSetupScript}", timeout = 1)
-          host2.succeed("${hostSetupScript}", timeout = 1)
-          host3.succeed("${hostSetupScript}", timeout = 1)
-          host4.succeed("${hostSetupScript}", timeout = 1)
-          host5.succeed("${hostSetupScript}", timeout = 1)
+          # Wait for NATS servers to be ready on all hosts before running setup scripts
+          host1.wait_for_open_port(port = ${builtins.toString nodes.host1.holo.host-agent.nats.listenPort}, timeout = 10)
+          host2.wait_for_open_port(port = ${builtins.toString nodes.host2.holo.host-agent.nats.listenPort}, timeout = 10)
+          host3.wait_for_open_port(port = ${builtins.toString nodes.host3.holo.host-agent.nats.listenPort}, timeout = 10)
+          host4.wait_for_open_port(port = ${builtins.toString nodes.host4.holo.host-agent.nats.listenPort}, timeout = 10)
+          host5.wait_for_open_port(port = ${builtins.toString nodes.host5.holo.host-agent.nats.listenPort}, timeout = 10)
+          
+          host1.succeed("${hostSetupScript}", timeout = 10)
+          host2.succeed("${hostSetupScript}", timeout = 10)
+          host3.succeed("${hostSetupScript}", timeout = 10)
+          host4.succeed("${hostSetupScript}", timeout = 10)
+          host5.succeed("${hostSetupScript}", timeout = 10)
 
         with subtest("wait until all hosts receive all published messages"):
           host1.succeed("${pkgs.writeShellScript "receive-all-msgs" ''set -x; ${natsCmdHosts} --trace sub --stream "${testStreamName}" '${testStreamName}.integrate' --count=10''}", timeout = 5)
@@ -235,13 +337,65 @@ pkgs.testers.runNixOSTest (
             for i in `seq 1 5`; do
               ${natsCmdHub} pub --count=10 "${testStreamName}.host''${i}" --js-domain ${hubJsDomain} "{\"message\":\"hello host''${i}\"}"
             done
-          ''}", timeout = 1)
+          ''}", timeout = 10)
 
           host1.succeed("${pkgs.writeShellScript "receive-specific-msgs" ''${natsCmdHosts} sub --stream "${testStreamName}" '${testStreamName}.host1' --count=10''}", timeout = 5)
           host2.succeed("${pkgs.writeShellScript "receive-specific-msgs" ''${natsCmdHosts} sub --stream "${testStreamName}" '${testStreamName}.host2' --count=10''}", timeout = 5)
           host3.succeed("${pkgs.writeShellScript "receive-specific-msgs" ''${natsCmdHosts} sub --stream "${testStreamName}" '${testStreamName}.host3' --count=10''}", timeout = 5)
           host4.succeed("${pkgs.writeShellScript "receive-specific-msgs" ''${natsCmdHosts} sub --stream "${testStreamName}" '${testStreamName}.host4' --count=10''}", timeout = 5)
           host5.succeed("${pkgs.writeShellScript "receive-specific-msgs" ''${natsCmdHosts} sub --stream "${testStreamName}" '${testStreamName}.host5' --count=10''}", timeout = 5)
+
+        # #TODO: Add test suite for the workload host<>orchestrator deployment workflow
+        # with subtest("test workload deployment and container management"):
+        #   # Publish workload deployment message
+        #   hub.succeed("${pkgs.writeShellScript "deploy-workload" ''
+        #     set -xeE
+        #     ${natsCmdHub} pub "WORKLOAD.${workloadId}.update" --js-domain ${hubJsDomain} '${workloadDeployMsg}'
+        #   ''}", timeout = 1)
+          
+        #   # Wait for host to process the workload
+        #   host1.wait_until_succeeds("${pkgs.writeShellScript "check-workload-status" ''
+        #     set -xeE
+        #     # Check if container was created
+        #     machinectl list | grep -q "${containerName}" || exit 1
+        #     # Check if container is running
+        #     machinectl show "${containerName}" | grep -q "State=running" || exit 1
+        #     # Check if holochain service is active
+        #     systemctl -M "${containerName}" is-active holochain || exit 1
+        #     # Check if admin websocket port is accessible
+        #     nc -z localhost 8000 || exit 1
+        #   ''}", timeout = 120)
+          
+        #   # Test workload update (simulates config change in db)
+        #   hub.succeed("${pkgs.writeShellScript "update-workload" ''
+        #     set -xeE
+        #     ${natsCmdHub} pub "WORKLOAD.${workloadId}.update" --js-domain ${hubJsDomain} '${workloadUpdateMsg}'
+        #   ''}", timeout = 1)
+          
+        #   # Wait for host to process the update
+        #   host1.wait_until_succeeds("${pkgs.writeShellScript "check-updated-workload" ''
+        #     set -xeE
+        #     # Container should still be running after update
+        #     machinectl list | grep -q "${containerName}" || exit 1
+        #     machinectl show "${containerName}" | grep -q "State=running" || exit 1
+        #     systemctl -M "${containerName}" is-active holochain || exit 1
+        #     nc -z localhost 8000 || exit 1
+        #   ''}", timeout = 60)
+          
+        #   # Test workload deletion
+        #   hub.succeed("${pkgs.writeShellScript "delete-workload" ''
+        #     set -xeE
+        #     ${natsCmdHub} pub "WORKLOAD.${workloadId}.update" --js-domain ${hubJsDomain} '${workloadDeleteMsg}'
+        #   ''}", timeout = 1)
+          
+        #   # Wait for host to stop and remove the container
+        #   host1.wait_until_succeeds("${pkgs.writeShellScript "check-workload-deleted" ''
+        #     set -xeE
+        #     # Container should be deleted/removed
+        #     ! machinectl list | grep -q "${containerName}" || exit 1
+        #     # Port should be closed
+        #     ! nc -z localhost 8000 || exit 1
+        #   ''}", timeout = 60)
 
         with subtest("bring a host down, publish messages, bring it back up, make sure it receives all messages"):
           host5.shutdown()

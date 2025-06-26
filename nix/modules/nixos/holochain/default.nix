@@ -269,7 +269,9 @@ in
           # Apply features if specified
           if cfg.features != null then
             baseHolochainPackage.override {
-              cargoExtraArgs = "--features ${builtins.concatStringsSep "," cfg.features}";
+              cargoExtraArgs = if builtins.length cfg.features > 0 
+                then "--features ${builtins.concatStringsSep "," cfg.features}"
+                else "";
             }
           else
             baseHolochainPackage;

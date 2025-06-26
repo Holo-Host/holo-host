@@ -30,8 +30,10 @@ use std::{fmt::Debug, net::Ipv4Addr, path::Path, sync::Arc};
 use url::Url;
 use util::{
     bash, calculate_http_gw_port, ensure_workload_path, provision_extra_container_closure_path,
-    realize_extra_container_path,
+    realize_extra_container_path, EnsureWorkloadPathMode
 };
+use std::path::PathBuf;
+
 
 #[derive(Debug, Clone)]
 pub struct HostWorkloadApi {
@@ -151,12 +153,12 @@ impl HostWorkloadApi {
                         let (workload_path_toplevel, _) = ensure_workload_path(
                             &workload._id,
                             None,
-                            util::EnsureWorkloadPathMode::Create,
+                            EnsureWorkloadPathMode::Create,
                         )?;
                         let extra_container_path = realize_extra_container_path(
                             workload._id,
                             workload.manifest.clone(),
-                            (&workload_path_toplevel).into(),
+                            PathBuf::from(&workload_path_toplevel),
                         )
                         .await?;
 
@@ -300,6 +302,10 @@ impl HostWorkloadApi {
 
                                     let hc_http_gw_port =
                                         calculate_http_gw_port(&workload._id, is_private_network);
+
+                                    log::debug!("is_private_network: {is_private_network}");
+                                    log::info!("hc_http_gw_port: {hc_http_gw_port}");
+                                    
                                     let hc_http_gw_url_base = url::Url::parse(&format!(
                                         "http://127.0.0.1:{hc_http_gw_port}"
                                     ))?;
@@ -352,7 +358,7 @@ impl HostWorkloadApi {
                         let (workload_path_toplevel, path_exists) = ensure_workload_path(
                             &workload._id,
                             None,
-                            util::EnsureWorkloadPathMode::Observe,
+                            EnsureWorkloadPathMode::Observe,
                         )?;
 
                         match workload.manifest {
@@ -570,15 +576,15 @@ impl HostWorkloadApi {
 }
 
 mod util {
-    use crate::host_api::validate_holochain_version;
+    use sha2::{Sha256, Digest};
     use anyhow::Context;
     use bson::oid::ObjectId;
     use db_utils::schemas::workload::{WorkloadManifest, WorkloadManifestHolochainDhtV1};
     use futures::{AsyncBufReadExt, StreamExt};
     use std::{path::PathBuf, process::Stdio, str::FromStr};
     use tokio::process::Command;
+    use crate::host_api::{get_container_name, validate_holochain_version, HOLOCHAIN_ADMIN_PORT_DEFAULT};
 
-    use crate::host_api::{get_container_name, HOLOCHAIN_ADMIN_PORT_DEFAULT};
 
     /// Calculate the http gw port based on network mode and workload ID
     ///
@@ -593,16 +599,19 @@ mod util {
         is_private_network: bool,
     ) -> u16 {
         const HOLOCHAIN_HTTP_GW_PORT_DEFAULT: u16 = 8090;
+        const PORT_RANGE: u16 = 10000;
         if is_private_network {
             // With private networks, use standard port (forwarded to host)
             HOLOCHAIN_HTTP_GW_PORT_DEFAULT
         } else {
             // With shared network, use dynamic port allocation based on workload ID
-            let workload_hash = workload_id.to_hex();
-            let hash_suffix = &workload_hash[workload_hash.len() - 4..];
-            // Create deterministic port offset from workload id
-            let port_offset = u32::from_str_radix(hash_suffix, 16).unwrap_or(0) % 1000; // Limit offset to 0-999
-            HOLOCHAIN_HTTP_GW_PORT_DEFAULT + port_offset as u16
+            // Create deterministic port offset from workload id (same as in extra-container-holochain nix package)
+            let hex = workload_id.to_hex();
+            let mut hasher = Sha256::new();
+            hasher.update(hex.as_bytes());
+            let hash = hasher.finalize();
+            let offset = u16::from_le_bytes([hash[0], hash[1]]) % PORT_RANGE;
+            HOLOCHAIN_HTTP_GW_PORT_DEFAULT + offset
         }
     }
 
@@ -786,6 +795,7 @@ mod util {
                 // This is used to store the key=value pairs for the attrset that is passed to `.override attrs`
                 let mut override_attrs = vec![
                     format!(r#"containerName = "{}""#, get_container_name(&workload_id)?),
+                    format!(r#"workloadId = "{}""#, workload_id.to_hex()),
                     format!(r#"adminWebsocketPort = {}"#, HOLOCHAIN_ADMIN_PORT_DEFAULT),
                     format!(r#"httpGwEnable = {}"#, http_gw_enable),
                     // NB: We use this setting for both container networking and port allocation defaults
@@ -797,8 +807,9 @@ mod util {
                 // If we're not on a private network, we need to set the http gw port to a dynamic value based on workload id,
                 // otherwise, the port will be set to the default value (8090) automatically at container build time
                 if !is_private_network && http_gw_enable {
-                    let http_gw_port = calculate_http_gw_port(&workload_id, is_private_network);
-                    override_attrs.push(format!(r#"httpGwPort = {}"#, http_gw_port));
+                    let hc_http_gw_port =
+                        calculate_http_gw_port(&workload_id, is_private_network);
+                    override_attrs.push(format!(r#"httpGwPort = {}"#, hc_http_gw_port));
                 }
 
                 if let Some(url) = bootstrap_server_url {

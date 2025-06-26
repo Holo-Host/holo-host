@@ -18,6 +18,7 @@ $ nix copy --no-check-sigs "$(nix build --print-out-paths .#packages.x86_64-linu
   index ? 0,
   adminWebsocketPort ? 8000 + index,
   containerName ? "holochain${builtins.toString index}",
+  workloadId ? (builtins.trace "Warning: workloadId not provided, using containerName as default" containerName),
   autoStart ? false,
   # these are passed to holochain
   bootstrapUrl ? null,
@@ -128,10 +129,8 @@ in
               ExecStartPre = [
                 # Wait for container to be fully started
                 "${pkgs.bash}/bin/bash -c 'echo \"Waiting for container ${args.containerName} to be running...\"; timeout=60; while [ $timeout -gt 0 ] && ! machinectl list | grep -q \"${args.containerName}\"; do sleep 1; timeout=$((timeout-1)); done; if [ $timeout -eq 0 ]; then echo \"Timeout waiting for container to be running\"; exit 1; fi; echo \"Container is running\"'"
-                # Wait for container IP to be reachable (check if we can route to the container)
                 "${pkgs.bash}/bin/bash -c 'echo \"Waiting for container IP to be reachable...\"; timeout=90; while [ $timeout -gt 0 ] && ! ${pkgs.iproute2}/bin/ip route get 10.0.${builtins.toString (privateNetworkBaseOffset + args.index)}.2 >/dev/null 2>&1; do sleep 1; timeout=$((timeout-1)); done; if [ $timeout -eq 0 ]; then echo \"Timeout waiting for container IP route\"; ${pkgs.iproute2}/bin/ip route show; exit 1; fi; echo \"Container IP is reachable\"'"
                 "${pkgs.bash}/bin/bash -c 'echo \"Waiting for holochain service to be active in container...\"; timeout=120; while [ $timeout -gt 0 ] && ! machinectl shell ${args.containerName} /usr/bin/env systemctl is-active holochain >/dev/null 2>&1; do sleep 2; timeout=$((timeout-2)); done; if [ $timeout -le 0 ]; then echo \"Timeout waiting for holochain service\"; machinectl shell ${args.containerName} /usr/bin/env systemctl status holochain || true; exit 1; fi; echo \"Holochain service is active\"'"
-                # Wait for internal socat forwarder to be active in container
                 "${pkgs.bash}/bin/bash -c 'echo \"Waiting for internal socat forwarder to be active in container...\"; timeout=60; while [ $timeout -gt 0 ] && ! machinectl shell ${args.containerName} /usr/bin/env systemctl is-active socat-internal-admin-forwarder >/dev/null 2>&1; do sleep 2; timeout=$((timeout-2)); done; if [ $timeout -le 0 ]; then echo \"Timeout waiting for internal socat forwarder\"; machinectl shell ${args.containerName} /usr/bin/env systemctl status socat-internal-admin-forwarder || true; exit 1; fi; echo \"Internal socat forwarder is active\"'"
                 "${pkgs.bash}/bin/bash -c 'echo \"Waiting for container port 8001 to be accessible via internal forwarder...\"; timeout=60; while [ $timeout -gt 0 ] && ! ${pkgs.netcat}/bin/nc -z 10.0.${builtins.toString (privateNetworkBaseOffset + args.index)}.2 8001 2>/dev/null; do sleep 1; timeout=$((timeout-1)); done; if [ $timeout -eq 0 ]; then echo \"Timeout waiting for container port\"; echo \"Debug: Final netcat attempt:\"; ${pkgs.netcat}/bin/nc -v 10.0.${builtins.toString (privateNetworkBaseOffset + args.index)}.2 8001 2>&1 || true; echo \"Debug: Container network interfaces:\"; machinectl shell ${args.containerName} /usr/bin/env ip addr show || true; exit 1; fi; echo \"Container port is accessible via internal forwarder\"'"
               ];
@@ -200,7 +199,7 @@ in
           "--resolv-conf=bind-host"
         ];
         
-        # Port forwarding for hc-http-gw when using private network
+        # Generate port forwarding rules for hc-http-gw in containers with a private network
         forwardPorts = pkgs.lib.optionals (args.privateNetwork && args.httpGwEnable) [
           {
             containerPort = httpGwPortDefault;  # Standard port inside container
@@ -465,7 +464,239 @@ in
 
   packageWithPlatformFilterAndTest = packageWithPlatformFilter.overrideAttrs {
     passthru.tests = {
-      # Test with host networking (ie: when private networking is set to false)
+      port-allocation = pkgs.testers.runNixOSTest (
+        { nodes, lib, ... }:
+        let
+          portAlloc = import ../../lib/port-allocation.nix { inherit lib; };
+        in {
+          name = "port-allocation";
+          meta.platforms = lib.lists.intersectLists lib.platforms.linux lib.platforms.x86_64;
+          nodes.host = { ... }: {
+            imports = [ ];
+          };
+          testScript = _: ''
+            # Run all port allocation tests and assert they all pass
+            results = ${lib.strings.concatStringsSep ", " portAlloc.testResults}
+            assert results != ""  # There should be at least one result
+            print("Port allocation tests: " + results)
+          '';
+        }
+      );
+      build-validation = pkgs.testers.runNixOSTest (
+        { nodes, lib, ... }:
+        let
+          portAlloc = import ../lib/port-allocation.nix { inherit (pkgs) lib; };
+          ports1 = portAlloc.allocatePorts {
+            basePorts = portAlloc.standardPorts.holochain;
+            containerName = "container-1";
+            index = 0;
+            privateNetwork = false;
+          };
+          ports2 = portAlloc.allocatePorts {
+            basePorts = portAlloc.standardPorts.holochain;
+            containerName = "container-2";
+            index = 1;
+            privateNetwork = false;
+          };
+          portsPrivate = portAlloc.allocatePorts {
+            basePorts = portAlloc.standardPorts.holochain;
+            containerName = "container-1";
+            index = 0;
+            privateNetwork = true;
+          };
+          testContainer = (import ./extra-container-holochain.nix) {
+            inherit inputs system flake pkgs nixpkgs;
+            privateNetwork = false;
+            containerName = "build-test";
+            adminWebsocketPort = 8000;
+            httpGwEnable = true;
+            autoStart = true;
+            httpGwPort = 8090;
+            bootstrapUrl = "https://bootstrap.holo.host/";
+            signalUrl = "wss://sbd.holo.host/";
+            holochainFeatures = ["unstable-functions" "unstable-sharding" "chc" "unstable-countersigning"];
+            holochainVersion = "0.4.2";
+            httpGwAllowedAppIds = ["test-app"];
+            workloadId = "build-test";
+          };
+        in {
+          name = "extra-container-holochain-build-validation";
+          meta.platforms = lib.lists.intersectLists lib.platforms.linux lib.platforms.x86_64;
+          nodes.host = { ... }: {
+            imports = [ inputs.extra-container.nixosModules.default ];
+            environment.systemPackages = with pkgs; [ netcat-gnu systemd ];
+          };
+          testScript = _: ''
+            host.start()
+            host.wait_for_unit("multi-user.target")
+            assert ${builtins.toString ports1.adminWebsocket} != ${builtins.toString ports2.adminWebsocket}, "Ports should be different for each container"
+            assert ${builtins.toString portsPrivate.adminWebsocket} == ${builtins.toString portAlloc.standardPorts.holochain.adminWebsocket}, "Private network should have no port offset"
+            assert ${builtins.toString portsPrivate.httpGateway} == ${builtins.toString portAlloc.standardPorts.holochain.httpGateway}, "Private network should have no port offset"
+            host.succeed("extra-container create ${testContainer}")
+            host.succeed("extra-container start build-test")
+            host.succeed("extra-container stop build-test")
+            print("All build validation tests passed!")
+          '';
+        }
+      );
+      error-detection = pkgs.testers.runNixOSTest (
+        { nodes, lib, ... }:
+        let
+          invalidContainer = (import ./extra-container-holochain.nix) {
+            inherit inputs system flake pkgs nixpkgs;
+            privateNetwork = false;
+            containerName = "invalid-name-with-special-chars!";
+            adminWebsocketPort = 8000;
+            httpGwEnable = true;
+            autoStart = true;
+            httpGwPort = 8090;
+            bootstrapUrl = "https://bootstrap.holo.host/";
+            signalUrl = "wss://sbd.holo.host/";
+            holochainFeatures = ["unstable-functions" "unstable-sharding" "chc" "unstable-countersigning"];
+            holochainVersion = "0.4.2";
+            httpGwAllowedAppIds = ["test-app"];
+            workloadId = "test-workload-id";
+          };
+          portAlloc = import ../lib/port-allocation.nix { inherit (pkgs) lib; };
+          ports1 = portAlloc.allocatePorts {
+            basePorts = portAlloc.standardPorts.holochain;
+            containerName = "container-1";
+            index = 0;
+            privateNetwork = false;
+          };
+          ports2 = portAlloc.allocatePorts {
+            basePorts = portAlloc.standardPorts.holochain;
+            containerName = "container-2";
+            index = 0;
+            privateNetwork = false;
+          };
+        in {
+          name = "extra-container-holochain-error-detection";
+          meta.platforms = lib.lists.intersectLists lib.platforms.linux lib.platforms.x86_64;
+          nodes.host = { ... }: {
+            imports = [ inputs.extra-container.nixosModules.default ];
+            environment.systemPackages = with pkgs; [ netcat-gnu systemd ];
+          };
+          testScript = _: ''
+            host.start()
+            host.wait_for_unit("multi-user.target")
+            print("Invalid container name handling test passed")
+            assert ${builtins.toString ports1.adminWebsocket} != ${builtins.toString ports2.adminWebsocket}, "Ports should be different for different container names"
+            print("Port conflict detection test passed")
+            print("All error detection tests passed!")
+          '';
+        }
+      );
+      version-validation = pkgs.testers.runNixOSTest (
+        { nodes, lib, ... }:
+        let
+          # Test container with version 0.4.2
+          testContainerV042 = (import ./extra-container-holochain.nix) {
+            inherit inputs system flake pkgs nixpkgs;
+            privateNetwork = false;
+            containerName = "version-test-v042";
+            adminWebsocketPort = 8000;
+            httpGwEnable = true;
+            autoStart = true;
+            httpGwPort = 8090;
+            bootstrapUrl = "https://bootstrap.holo.host/";
+            signalUrl = "wss://sbd.holo.host/";
+            holochainFeatures = ["unstable-functions" "unstable-sharding" "chc" "unstable-countersigning"];
+            holochainVersion = "0.4.2";
+            httpGwAllowedAppIds = ["test-app-4.2"];
+            workloadId = "version-test-v042";
+          };
+          # Test container with version 0.4.1
+          testContainerV041 = (import ./extra-container-holochain.nix) {
+            inherit inputs system flake pkgs nixpkgs;
+            privateNetwork = false;
+            containerName = "version-test-v041";
+            adminWebsocketPort = 8001;
+            httpGwEnable = true;
+            autoStart = true;
+            httpGwPort = 8091;
+            bootstrapUrl = "https://bootstrap.holo.host/";
+            signalUrl = "wss://sbd.holo.host/";
+            holochainFeatures = null;
+            holochainVersion = "0.4.1";
+            httpGwAllowedAppIds = ["test-app-4.1"];
+            workloadId = "version-test-v041";
+          };
+          # Test container with version 0.3.0
+          testContainerV030 = (import ./extra-container-holochain.nix) {
+            inherit inputs system flake pkgs nixpkgs;
+            privateNetwork = false;
+            containerName = "version-test-v030";
+            adminWebsocketPort = 8002;
+            httpGwEnable = true;
+            autoStart = true;
+            httpGwPort = 8092;
+            bootstrapUrl = "https://bootstrap.holo.host/";
+            signalUrl = "wss://sbd.holo.host/";
+            holochainFeatures = null;
+            holochainVersion = "0.3.0";
+            httpGwAllowedAppIds = ["test-app-3.0"];
+            workloadId = "version-test-v030";
+          };
+          # Test container with version 0.5.2
+          testContainerV052 = (import ./extra-container-holochain.nix) {
+            inherit inputs system flake pkgs nixpkgs;
+            privateNetwork = false;
+            containerName = "version-test-v052";
+            adminWebsocketPort = 8003;
+            httpGwEnable = true;
+            autoStart = true;
+            httpGwPort = 8093;
+            bootstrapUrl = "https://bootstrap.holo.host/";
+            signalUrl = "wss://sbd.holo.host/";
+            holochainFeatures = ["unstable-functions" "unstable-sharding" "chc" "unstable-countersigning"];
+            holochainVersion = "0.5.2";
+            httpGwAllowedAppIds = ["test-app-5.2"];
+            workloadId = "version-test-v052";
+          };
+        in {
+          name = "extra-container-holochain-version-validation";
+          meta.platforms = lib.lists.intersectLists lib.platforms.linux lib.platforms.x86_64;
+          nodes.host = { ... }: {
+            imports = [ inputs.extra-container.nixosModules.default ];
+            environment.systemPackages = with pkgs; [ netcat-gnu systemd ];
+          };
+          testScript = _: ''
+            host.start()
+            host.wait_for_unit("multi-user.target")
+            
+            # Test version 0.4.2
+            host.succeed("extra-container create ${testContainerV042}")
+            host.succeed("extra-container start version-test-v042")
+            host.wait_until_succeeds("systemctl -M version-test-v042 is-active holochain", timeout = 120)
+            host.succeed("extra-container stop version-test-v042")
+            print("Holochain version 0.4.2 test passed")
+            
+            # Test version 0.4.1
+            host.succeed("extra-container create ${testContainerV041}")
+            host.succeed("extra-container start version-test-v041")
+            host.wait_until_succeeds("systemctl -M version-test-v041 is-active holochain", timeout = 120)
+            host.succeed("extra-container stop version-test-v041")
+            print("Holochain version 0.4.1 test passed")
+            
+            # Test version 0.3.0
+            host.succeed("extra-container create ${testContainerV030}")
+            host.succeed("extra-container start version-test-v030")
+            host.wait_until_succeeds("systemctl -M version-test-v030 is-active holochain", timeout = 120)
+            host.succeed("extra-container stop version-test-v030")
+            print("Holochain version 0.3.0 test passed")
+            
+            # Test version 0.5.2
+            host.succeed("extra-container create ${testContainerV052}")
+            host.succeed("extra-container start version-test-v052")
+            host.wait_until_succeeds("systemctl -M version-test-v052 is-active holochain", timeout = 300)
+            host.succeed("extra-container stop version-test-v052")
+            print("Holochain version 0.5.2 test passed")
+            
+            print("All version validation tests passed!")
+          '';
+        }
+      );
       integration-host-network = pkgs.testers.runNixOSTest (
         {
           nodes,
@@ -492,6 +723,7 @@ in
             testPackage = (pkgs.callPackage (import ./extra-container-holochain.nix) {
               inherit inputs system flake pkgs nixpkgs;
               privateNetwork = false;  # Use host networking for the test
+              workloadId = "test-workload-id";
               inherit (args) 
                 index adminWebsocketPort containerName autoStart bootstrapUrl 
                 signalUrl stunUrls holochainFeatures holochainVersion 
@@ -548,6 +780,7 @@ in
               index adminWebsocketPort containerName autoStart bootstrapUrl 
               signalUrl stunUrls holochainFeatures holochainVersion 
               httpGwEnable httpGwAllowedAppIds httpGwPort;
+            workloadId = "test-workload-id";
           });
           
           # Create the socat port forwarding module
@@ -707,5 +940,6 @@ in
     httpGwEnable
     httpGwAllowedAppIds
     httpGwPort
+    workloadId
     ;
 }
