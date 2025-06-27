@@ -1,8 +1,8 @@
 use actix_web::{post, web, HttpRequest, HttpResponse, Responder};
 use bson::doc;
 use db_utils::schemas::{
-    user::{self, User, USER_COLLECTION_NAME},
-    user_info::{self, UserInfo, USER_INFO_COLLECTION_NAME},
+    user::{User, USER_COLLECTION_NAME},
+    user_info::{UserInfo, USER_INFO_COLLECTION_NAME},
     user_password::{UserPassword, USER_PASSWORD_COLLECTION_NAME},
 };
 use serde::{Deserialize, Serialize};
@@ -93,13 +93,12 @@ pub async fn login_with_password(
         });
     }
     let user_info = user_info.unwrap();
-    let user_id = user_info.user_id.clone();
 
     let user_password = match crud::find_one::<UserPassword>(
         db.get_ref().clone(),
         USER_PASSWORD_COLLECTION_NAME.to_string(),
         bson::doc! {
-            "owner": user_id,
+            "owner": user_info.user_id,
         },
     )
     .await
@@ -138,7 +137,7 @@ pub async fn login_with_password(
         db.get_ref().clone(),
         USER_COLLECTION_NAME.to_string(),
         bson::doc! {
-            "_id": user_id
+            "_id": user_info.user_id
         },
     )
     .await
