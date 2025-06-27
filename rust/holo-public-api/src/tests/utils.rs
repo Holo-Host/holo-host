@@ -126,6 +126,7 @@ pub fn create_credentials(secret: &str, user_id: bson::oid::ObjectId) -> (String
             sub: user_id.to_string(),
             exp: 0,
             permissions: vec![],
+            initials: None,
         },
         secret,
     )

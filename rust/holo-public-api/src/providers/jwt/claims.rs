@@ -9,6 +9,8 @@ pub struct AccessTokenClaims {
     pub exp: usize,
     /// user permissions for the token
     pub permissions: Vec<UserPermission>,
+    // the initals of the user. Used for cloud console login
+    pub initials: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

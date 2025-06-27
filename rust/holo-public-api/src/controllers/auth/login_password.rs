@@ -1,8 +1,8 @@
 use actix_web::{post, web, HttpRequest, HttpResponse, Responder};
 use bson::doc;
 use db_utils::schemas::{
-    user::{User, USER_COLLECTION_NAME},
-    user_info::{UserInfo, USER_INFO_COLLECTION_NAME},
+    user::{self, User, USER_COLLECTION_NAME},
+    user_info::{self, UserInfo, USER_INFO_COLLECTION_NAME},
     user_password::{UserPassword, USER_PASSWORD_COLLECTION_NAME},
 };
 use serde::{Deserialize, Serialize};
@@ -92,7 +92,8 @@ pub async fn login_with_password(
             message: "invalid email or password".to_string(),
         });
     }
-    let user_id = user_info.unwrap().user_id;
+    let user_info = user_info.unwrap();
+    let user_id = user_info.user_id.clone();
 
     let user_password = match crud::find_one::<UserPassword>(
         db.get_ref().clone(),
@@ -160,6 +161,8 @@ pub async fn login_with_password(
     let user_id = user._id.unwrap().to_hex();
     let day_in_seconds = 24 * 60 * 60;
 
+    let given_name_last_char = user_info.given_names.chars().take(1).collect::<String>();
+    let family_name_last_char = user_info.family_name.chars().take(1).collect::<String>();
     let jwt_tokens = auth::sign_tokens(auth::SignJwtTokenOptions {
         jwt_secret: config.jwt_secret.clone(),
         access_token: AccessTokenClaims {
@@ -167,6 +170,7 @@ pub async fn login_with_password(
             permissions: user.permissions,
             exp: bson::DateTime::now().to_chrono().timestamp() as usize
                 + config.access_token_expiry.unwrap_or(300) as usize,
+            initials: Some(format!("{}{}", given_name_last_char, family_name_last_char)),
         },
         refresh_token: RefreshTokenClaims {
             version: user.refresh_token_version,
