@@ -8,18 +8,12 @@
     variant?: "primary" | "secondary" | "danger";
     disabled?: boolean;
     class?: string;
+    type?: "button" | "submit" | "reset";
   };
-  const {
-    children,
-    href,
-    variant,
-    onclick,
-    disabled,
-    class: className,
-  }: Prop = $props();
+  const props: Prop = $props();
 
   const backgroundColor = $derived.by(() => {
-    switch (variant) {
+    switch (props.variant) {
       default:
       case "primary":
         return defaultTheme.colors.background.primary;
@@ -30,7 +24,7 @@
     }
   });
   const textColor = $derived.by(() => {
-    switch (variant) {
+    switch (props.variant) {
       default:
       case "primary":
         return defaultTheme.colors.text.white;
@@ -42,20 +36,37 @@
   });
 </script>
 
-<div class={className}>
-  <a
-    class="button"
-    class:disabled
-    {href}
-    onclick={disabled ? null : onclick}
-    style:--background-color={backgroundColor}
-    style:--text-color={textColor}
-    style:--shadow={defaultTheme.shadow}
-    style:--shadow-color={defaultTheme.colors.shadow}
-    style:--disabled-background-color={defaultTheme.colors.background.disabled}
-  >
-    {@render children()}
-  </a>
+<div class={props.class}>
+  {#if !!props.href}
+    <a
+      class="button"
+      class:disabled={props.disabled}
+      href={props.href}
+      style:--background-color={backgroundColor}
+      style:--text-color={textColor}
+      style:--shadow={defaultTheme.shadow}
+      style:--shadow-color={defaultTheme.colors.shadow}
+      style:--disabled-background-color={defaultTheme.colors.background
+        .disabled}
+    >
+      {@render props.children()}
+    </a>
+  {:else}
+    <button
+      type={props.type ?? "button"}
+      class="button"
+      class:disabled={props.disabled}
+      onclick={props.disabled ? null : onclick}
+      style:--background-color={backgroundColor}
+      style:--text-color={textColor}
+      style:--shadow={defaultTheme.shadow}
+      style:--shadow-color={defaultTheme.colors.shadow}
+      style:--disabled-background-color={defaultTheme.colors.background
+        .disabled}
+    >
+      {@render props.children()}
+    </button>
+  {/if}
 </div>
 
 <style lang="css">

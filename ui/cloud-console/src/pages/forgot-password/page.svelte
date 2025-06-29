@@ -54,6 +54,16 @@
     }
     done = true;
   }
+  function onSubmit(e: Event) {
+    e.preventDefault();
+    if (!verified) {
+      if (!isEmailValid) return;
+      onVerifyEmail();
+    } else {
+      if (!isCodeValid) return;
+      onResetPassword();
+    }
+  }
 </script>
 
 <div class="justify-center" style:background-color="white" style:height="100%">
@@ -62,65 +72,77 @@
     style:margin-top="100px"
     style:z-index="2"
   >
-    <h2>Forgot Password</h2>
-    {#if done}
-      <span>Password updated successfully</span>
-      <a href="/login">Login</a>
-    {:else if loading}
-      <span>Loading...</span>
-    {:else}
-      <Input
-        class="w100"
-        type="email"
-        label="email"
-        placeholder="john.doe@example.com"
-        bind:value={email}
-        bind:isValid={isEmailValid}
-        validator={z.string().email()}
-      />
-      {#if !verified}
-        <Button class="w100" disabled={!isEmailValid} onclick={onVerifyEmail}>
-          Verify Email
-        </Button>
+    <form onsubmit={onSubmit} class="w100">
+      <h2>Forgot Password</h2>
+      {#if done}
+        <span>Password updated successfully</span>
+        <a href="/login">Login</a>
+      {:else if loading}
+        <span>Loading...</span>
       {:else}
         <Input
           class="w100"
-          type="text"
-          label="Code"
-          placeholder="123456"
-          bind:value={code}
-          bind:isValid={isCodeValid}
-          validator={z.string().min(6).max(6)}
+          type="email"
+          label="email"
+          placeholder="john.doe@example.com"
+          bind:value={email}
+          bind:isValid={isEmailValid}
+          validator={z.string().email()}
         />
-        <Input
-          class="w100"
-          type="password"
-          label="Password"
-          placeholder=""
-          bind:value={password}
-          bind:isValid={isPasswordValid}
-          validator={z.string().min(8)}
-        />
-        <Input
-          class="w100"
-          type="password"
-          label="Renter Password"
-          placeholder=""
-          bind:value={confirmPassword}
-          bind:isValid={isConfirmPasswordValid}
-          validator={z.string().refine((val) => val === password, {
-            message: "Password does not match",
-          })}
-        />
-        <Button class="w100" disabled={!isCodeValid} onclick={onResetPassword}>
-          Update Password
-        </Button>
+        {#if !verified}
+          <Button
+            type="submit"
+            class="w100"
+            disabled={!isEmailValid}
+            onclick={onVerifyEmail}
+          >
+            Verify Email
+          </Button>
+        {:else}
+          <Input
+            class="w100"
+            type="text"
+            label="Code"
+            placeholder="123456"
+            bind:value={code}
+            bind:isValid={isCodeValid}
+            validator={z.string().min(6).max(6)}
+          />
+          <Input
+            class="w100"
+            type="password"
+            label="Password"
+            placeholder=""
+            bind:value={password}
+            bind:isValid={isPasswordValid}
+            validator={z.string().min(8)}
+          />
+          <Input
+            class="w100"
+            type="password"
+            label="Renter Password"
+            placeholder=""
+            bind:value={confirmPassword}
+            bind:isValid={isConfirmPasswordValid}
+            validator={z.string().refine((val) => val === password, {
+              message: "Password does not match",
+            })}
+          />
+          <Button
+            type="submit"
+            class="w100"
+            disabled={!isCodeValid}
+            onclick={onResetPassword}
+          >
+            Update Password
+          </Button>
+        {/if}
+        <div class="grow justify-space-between w100" style:margin-top="10px">
+          <a href="/login">Login</a>
+          <a href="/register">Signup</a>
+        </div>
       {/if}
-      <div class="grow justify-space-between w100" style:margin-top="10px">
-        <a href="/login">Login</a>
-        <a href="/register">Signup</a>
-      </div>
-    {/if}
+    </form>
   </div>
 </div>
 

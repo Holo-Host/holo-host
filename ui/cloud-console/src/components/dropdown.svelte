@@ -98,6 +98,7 @@
 
 <div class={`container ${props.class ?? ""}`}>
   <button
+    type="button"
     class="dropdown"
     bind:this={dropdownEl}
     onclick={() => (isOpen = !isOpen)}
@@ -109,6 +110,7 @@
     <div class="dropdown-menu" bind:this={dropdownMenuEl}>
       {#each props.items as item}
         <button
+          type="button"
           style:--hover-color={defaultTheme.colors.background.secondary}
           class="dropdown-item"
           onclick={() => handleItemClick(item)}

@@ -47,39 +47,58 @@
     }
     window.location.href = `/register?code=${code}`;
   }
+  function onSubmit(e: Event) {
+    e.preventDefault();
+    if (verified) {
+      if (!isEmailValid) return;
+      onVerifyEmail();
+    } else {
+      if (!isCodeValid) return;
+      onVerifyCode();
+    }
+  }
 </script>
 
 <div class="column gap10 align-center" style:margin-top="100px">
-  <h2 style:margin-bottom="20px">Sign up to HOLO</h2>
-  {#if verified}
-    <Input
-      class="w100"
-      type="text"
-      label="Code"
-      placeholder="123456"
-      validator={z.string().min(6).max(6)}
-      bind:value={code}
-      bind:isValid={isCodeValid}
-    />
-    <Button disabled={!isCodeValid} onclick={onVerifyCode}>Continue</Button>
-  {:else if loading}
-    <span>Loading...</span>
-  {:else}
-    <Input
-      class="w100"
-      type="email"
-      label="email"
-      placeholder="john.doe@example.com"
-      validator={z.string().email()}
-      bind:value={email}
-      bind:isValid={isEmailValid}
-    />
-    <Button class="w100" disabled={!isEmailValid} onclick={onVerifyEmail}>
-      Verify Email
-    </Button>
-    <div class="grow justify-space-between w100" style:margin-top="10px">
-      <a href="/forgot-password">Forgot Password</a>
-      <a href="/login">Login</a>
-    </div>
-  {/if}
+  <form onsubmit={onSubmit} class="w100">
+    <h2 style:margin-bottom="20px">Sign up to HOLO</h2>
+    {#if verified}
+      <Input
+        class="w100"
+        type="text"
+        label="Code"
+        placeholder="123456"
+        validator={z.string().min(6).max(6)}
+        bind:value={code}
+        bind:isValid={isCodeValid}
+      />
+      <Button type="submit" disabled={!isCodeValid} onclick={onVerifyCode}>
+        Continue
+      </Button>
+    {:else if loading}
+      <span>Loading...</span>
+    {:else}
+      <Input
+        class="w100"
+        type="email"
+        label="email"
+        placeholder="john.doe@example.com"
+        validator={z.string().email()}
+        bind:value={email}
+        bind:isValid={isEmailValid}
+      />
+      <Button
+        type="submit"
+        class="w100"
+        disabled={!isEmailValid}
+        onclick={onVerifyEmail}
+      >
+        Verify Email
+      </Button>
+      <div class="grow justify-space-between w100" style:margin-top="10px">
+        <a href="/forgot-password">Forgot Password</a>
+        <a href="/login">Login</a>
+      </div>
+    {/if}
+  </form>
 </div>

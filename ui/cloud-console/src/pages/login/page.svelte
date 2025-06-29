@@ -13,6 +13,12 @@
   async function onLogin() {
     login(email, password);
   }
+  async function onSubmit(e: Event) {
+    e.preventDefault();
+    if (!isEmailValid || !isPasswordValid) return;
+
+    onLogin();
+  }
 </script>
 
 <div class="login">
@@ -22,39 +28,42 @@
     style:margin-top="100px"
     style:z-index="2"
   >
-    <h2 style:margin-bottom="20px">Login to HOLO</h2>
-    <Input
-      class="w100"
-      type="email"
-      label="email"
-      placeholder="john.doe@example.com"
-      bind:value={email}
-      bind:isValid={isEmailValid}
-      validator={z.string().email()}
-    />
-    <Input
-      class="w100"
-      type="password"
-      label="password"
-      bind:value={password}
-      bind:isValid={isPasswordValid}
-      validator={z.string().min(8)}
-    />
-    <Button
-      class="w100"
-      disabled={!isEmailValid || !isPasswordValid}
-      onclick={onLogin}
-    >
-      Login
-    </Button>
-    <div
-      class="grow justify-space-between"
-      style:width="100%"
-      style:margin-top="10px"
-    >
-      <a href="/forgot-password">Forgot Password</a>
-      <a href="/register">Signup</a>
-    </div>
+    <form onsubmit={onSubmit}>
+      <h2 style:margin-bottom="20px">Login to HOLO</h2>
+      <Input
+        class="w100"
+        type="email"
+        label="email"
+        placeholder="john.doe@example.com"
+        bind:value={email}
+        bind:isValid={isEmailValid}
+        validator={z.string().email()}
+      />
+      <Input
+        class="w100"
+        type="password"
+        label="password"
+        bind:value={password}
+        bind:isValid={isPasswordValid}
+        validator={z.string().min(8)}
+      />
+      <Button
+        type="submit"
+        class="w100"
+        disabled={!isEmailValid || !isPasswordValid}
+        onclick={onLogin}
+      >
+        Login
+      </Button>
+      <div
+        class="grow justify-space-between"
+        style:width="100%"
+        style:margin-top="10px"
+      >
+        <a href="/forgot-password">Forgot Password</a>
+        <a href="/register">Signup</a>
+      </div>
+    </form>
   </div>
 </div>
 

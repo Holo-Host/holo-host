@@ -120,7 +120,10 @@
     />
     {#if props.type === "password"}
       <div class="password-visible-button">
-        <button onclick={() => (passwordVisible = !passwordVisible)}>
+        <button
+          type="button"
+          onclick={() => (passwordVisible = !passwordVisible)}
+        >
           <span
             class="icons-filled"
             style:--color={defaultTheme.colors.text.subtext}
