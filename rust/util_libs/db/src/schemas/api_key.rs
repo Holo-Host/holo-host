@@ -29,6 +29,9 @@ pub struct ApiKey {
     /// when the api key expires in unixtimestamp (seconds) (this is optional and set by the user)
     /// bson::DateTime::now().to_chrono().timestamp()
     pub expire_at: i64,
+    /// prefix for the api key
+    /// this will be used to locate the api key in the database
+    pub prefix: Option<String>,
 }
 
 impl Default for ApiKey {
@@ -42,6 +45,7 @@ impl Default for ApiKey {
             description: "".to_string(),
             // default expire_at is 30 day
             expire_at: bson::DateTime::now().to_chrono().timestamp() + 60 + 60 * 24 * 30,
+            prefix: None,
         }
     }
 }

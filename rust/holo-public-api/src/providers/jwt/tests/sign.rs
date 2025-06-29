@@ -13,6 +13,7 @@ mod tests {
                 sub: USER_ID.to_string(),
                 exp: 0,
                 permissions: vec![],
+                initials: None,
             },
             SECRET,
         )

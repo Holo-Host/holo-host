@@ -27,3 +27,5 @@ rust/*/*/*/tmp/
 rust/*/*/*/*/tmp/
 
 ham.state*
+
+node_modules
