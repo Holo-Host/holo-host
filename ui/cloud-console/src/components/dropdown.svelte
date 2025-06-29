@@ -136,13 +136,14 @@
     top: 0;
     left: 0;
     max-height: 300px;
-
     margin-top: 30px;
     flex-direction: column;
     background: white;
     border: 1px solid #ccc;
     z-index: 1000;
     overflow-y: auto;
+    border-radius: 7px;
+    box-shadow: 8px 8px 10.7px 0px rgba(3, 6, 42, 0.19);
 
     .dropdown-item {
       padding: 10px 20px;

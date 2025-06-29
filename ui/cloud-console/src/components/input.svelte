@@ -124,7 +124,7 @@
           <button
             class="cursor-pointer autocomplete-item"
             style:--hover-background-color={defaultTheme.colors.background
-              .primary}
+              .secondary}
             onmousedown={(e) => onAutocompleteSelected(e, item)}
           >
             {item}
@@ -170,6 +170,8 @@
       width: fit-content;
       top: 0;
       left: 0;
+      border-radius: 7px;
+      box-shadow: 8px 8px 10.7px 0px rgba(3, 6, 42, 0.19);
 
       .autocomplete-item {
         width: 100%;
@@ -181,7 +183,6 @@
 
         &:hover {
           background-color: var(--hover-background-color);
-          color: white;
         }
       }
     }

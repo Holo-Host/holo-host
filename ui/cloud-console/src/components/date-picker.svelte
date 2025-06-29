@@ -148,9 +148,9 @@
                     class:selected={value.getDate() === day.day &&
                       value.getMonth() === day.month &&
                       value.getFullYear() === day.year}
-                    style:--selected-text-color={defaultTheme.colors.text.white}
+                    style:--selected-text-color={defaultTheme.colors.text.black}
                     style:--selected-background-color={defaultTheme.colors
-                      .background.primary}
+                      .background.secondary}
                   >
                     {day.day}
                   </button>
@@ -200,6 +200,8 @@
       z-index: 20;
       background-color: white;
       border: 1px solid var(--border-color);
+      border-radius: 7px;
+      box-shadow: 8px 8px 10.7px 0px rgba(3, 6, 42, 0.19);
     }
   }
 </style>
