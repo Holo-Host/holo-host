@@ -82,16 +82,16 @@
 {#if generatedToken !== ""}
   <Modal>
     <div class="flex gap10 column">
+      <span style:color={defaultTheme.colors.text.danger}>
+        Copy this token to access the HOLO API. For security this will not be
+        shown again.
+      </span>
       <Input
         class="grow"
         type={showGeneratedToken ? "text" : "password"}
         value={generatedToken}
         readonly
       />
-      <span style:color={defaultTheme.colors.text.danger}>
-        Copy this token to access the HOLO API. For security this will not be
-        shown again.
-      </span>
       <Button onclick={onCopyGeneratedToken}>Copy</Button>
       <Button variant="secondary" onclick={() => (generatedToken = "")}>
         Close

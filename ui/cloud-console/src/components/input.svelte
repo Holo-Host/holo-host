@@ -111,10 +111,11 @@
       onfocus={onFocus}
       onfocusout={onFocusOut}
       onkeydown={props.onKeyDown}
-      style:--border-color={defaultTheme.colors.border}
-      style:--error-border-color={defaultTheme.colors.danger}
       class="w100"
       class:error={!!validationError}
+      style:--border-color={defaultTheme.colors.border}
+      style:--error-border-color={defaultTheme.colors.danger}
+      style:padding-right={props.type === "password" ? "40px" : undefined}
       bind:value
     />
     {#if props.type === "password"}
