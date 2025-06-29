@@ -5,31 +5,35 @@
   const { path } = $props();
 
   const entries = [
-    // {
-    //   name: getTranslation("drawer.dashboard"),
-    //   icon: "dashboard",
-    //   href: "/",
-    // },
-    // {
-    //   name: getTranslation("drawer.constellations"),
-    //   icon: "laptop_windows",
-    //   href: "/constellations",
-    // },
+    {
+      name: getTranslation("drawer.dashboard"),
+      icon: "dashboard",
+      href: "/",
+      disabled: true,
+    },
+    {
+      name: getTranslation("drawer.constellations"),
+      icon: "laptop_windows",
+      href: "/constellations",
+      disabled: true,
+    },
     {
       name: getTranslation("drawer.api-tokens"),
       icon: "key",
       href: "/api-tokens",
     },
-    // {
-    //   name: getTranslation("drawer.billing"),
-    //   icon: "payments",
-    //   href: "/billing",
-    // },
-    // {
-    //   name: getTranslation("drawer.settings"),
-    //   icon: "settings",
-    //   href: "/settings",
-    // },
+    {
+      name: getTranslation("drawer.billing"),
+      icon: "payments",
+      href: "/billing",
+      disabled: true,
+    },
+    {
+      name: getTranslation("drawer.settings"),
+      icon: "settings",
+      href: "/settings",
+      disabled: true,
+    },
   ];
 </script>
 
@@ -43,7 +47,7 @@
   <div class="entries">
     {#each entries as entry (entry.name)}
       <a
-        href={entry.href}
+        href={entry.disabled ? "#" : entry.href}
         class="entry"
         style:background-color={path === entry.href
           ? defaultTheme.colors.background.secondary
@@ -73,7 +77,7 @@
 
     .header {
       margin-top: 30px;
-      margin-bottom: 40px;
+      margin-bottom: 10px;
       margin-left: 30px;
       gap: 20px;
     }

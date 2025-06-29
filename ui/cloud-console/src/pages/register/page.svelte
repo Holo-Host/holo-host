@@ -7,7 +7,12 @@
 </script>
 
 <div class="justify-center" style:background-color="white" style:height="100%">
-  <div class="column gap10" style:width="400px" style:margin-bottom="100px">
+  <div
+    class="column gap10"
+    style:width="400px"
+    style:margin-bottom="100px"
+    style:z-index="2"
+  >
     {#if query.code}
       <RegisterUser code={query.code} email={query.email} />
     {:else}

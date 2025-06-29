@@ -7,8 +7,16 @@
     onclick?: (event: MouseEvent) => void;
     variant?: "primary" | "secondary" | "danger";
     disabled?: boolean;
+    class?: string;
   };
-  const { children, href, variant, onclick, disabled }: Prop = $props();
+  const {
+    children,
+    href,
+    variant,
+    onclick,
+    disabled,
+    class: className,
+  }: Prop = $props();
 
   const backgroundColor = $derived.by(() => {
     switch (variant) {
@@ -34,19 +42,21 @@
   });
 </script>
 
-<a
-  class="button"
-  class:disabled
-  {href}
-  onclick={disabled ? null : onclick}
-  style:--background-color={backgroundColor}
-  style:--text-color={textColor}
-  style:--shadow={defaultTheme.shadow}
-  style:--shadow-color={defaultTheme.colors.shadow}
-  style:--disabled-background-color={defaultTheme.colors.background.disabled}
->
-  {@render children()}
-</a>
+<div class={className}>
+  <a
+    class="button"
+    class:disabled
+    {href}
+    onclick={disabled ? null : onclick}
+    style:--background-color={backgroundColor}
+    style:--text-color={textColor}
+    style:--shadow={defaultTheme.shadow}
+    style:--shadow-color={defaultTheme.colors.shadow}
+    style:--disabled-background-color={defaultTheme.colors.background.disabled}
+  >
+    {@render children()}
+  </a>
+</div>
 
 <style lang="css">
   .button {
@@ -63,6 +73,7 @@
     font-size: 20px;
     transition: 0.3s ease;
     text-decoration: none;
+    width: 100%;
 
     &:hover {
       box-shadow: var(--shadow) rgba(0, 0, 0, 0.3);

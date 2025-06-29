@@ -57,7 +57,12 @@
 </script>
 
 <div class="justify-center" style:background-color="white" style:height="100%">
-  <div class="column gap10" style:margin-top="100px">
+  <div
+    class="column gap10 align-center"
+    style:margin-top="100px"
+    style:z-index="2"
+  >
+    <h2>Forgot Password</h2>
     {#if done}
       <span>Password updated successfully</span>
       <a href="/login">Login</a>
@@ -65,6 +70,7 @@
       <span>Loading...</span>
     {:else}
       <Input
+        class="w100"
         type="email"
         label="email"
         placeholder="john.doe@example.com"
@@ -73,11 +79,12 @@
         validator={z.string().email()}
       />
       {#if !verified}
-        <Button disabled={!isEmailValid} onclick={onVerifyEmail}>
+        <Button class="w100" disabled={!isEmailValid} onclick={onVerifyEmail}>
           Verify Email
         </Button>
       {:else}
         <Input
+          class="w100"
           type="text"
           label="Code"
           placeholder="123456"
@@ -86,6 +93,7 @@
           validator={z.string().min(6).max(6)}
         />
         <Input
+          class="w100"
           type="password"
           label="Password"
           placeholder=""
@@ -94,6 +102,7 @@
           validator={z.string().min(8)}
         />
         <Input
+          class="w100"
           type="password"
           label="Renter Password"
           placeholder=""
@@ -103,11 +112,11 @@
             message: "Password does not match",
           })}
         />
-        <Button disabled={!isCodeValid} onclick={onResetPassword}>
+        <Button class="w100" disabled={!isCodeValid} onclick={onResetPassword}>
           Update Password
         </Button>
       {/if}
-      <div class="grow justify-space-between" style:margin-top="10px">
+      <div class="grow justify-space-between w100" style:margin-top="10px">
         <a href="/login">Login</a>
         <a href="/register">Signup</a>
       </div>

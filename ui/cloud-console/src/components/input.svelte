@@ -6,11 +6,11 @@
     id?: string;
     placeholder?: string;
     label?: string;
-    grow?: boolean;
     onKeyDown?: (e: KeyboardEvent) => void;
     validator?: z.ZodType;
     isValid?: boolean;
     readonly?: boolean;
+    class?: string;
   };
 
   type TextProp = BaseProp & {
@@ -94,7 +94,7 @@
   }
 </script>
 
-<div class="flex column gap5" class:grow={props.grow}>
+<div class={`flex column gap5 ${props.class ?? ""}`}>
   <label for={props.id}>
     {props.label}
   </label>

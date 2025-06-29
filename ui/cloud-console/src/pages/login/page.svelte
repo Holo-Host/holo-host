@@ -1,9 +1,9 @@
 <script lang="ts">
+  import SharedPattern from "@/components/login/shared-pattern.svelte";
   import Button from "@/components/button.svelte";
   import Input from "@/components/input.svelte";
   import { login } from "@/api";
   import { z } from "zod";
-  import SharedPattern from "@/components/login/shared-pattern.svelte";
 
   let email = $state("");
   let password = $state("");
@@ -16,8 +16,15 @@
 </script>
 
 <div class="login">
-  <div class="column" style:width="400px" style:margin-top="100px">
+  <div
+    class="column align-center"
+    style:width="400px"
+    style:margin-top="100px"
+    style:z-index="2"
+  >
+    <h2 style:margin-bottom="20px">Login to HOLO</h2>
     <Input
+      class="w100"
       type="email"
       label="email"
       placeholder="john.doe@example.com"
@@ -26,16 +33,25 @@
       validator={z.string().email()}
     />
     <Input
+      class="w100"
       type="password"
       label="password"
       bind:value={password}
       bind:isValid={isPasswordValid}
       validator={z.string().min(8)}
     />
-    <Button disabled={!isEmailValid || !isPasswordValid} onclick={onLogin}>
+    <Button
+      class="w100"
+      disabled={!isEmailValid || !isPasswordValid}
+      onclick={onLogin}
+    >
       Login
     </Button>
-    <div class="grow justify-space-between" style:margin-top="10px">
+    <div
+      class="grow justify-space-between"
+      style:width="100%"
+      style:margin-top="10px"
+    >
       <a href="/forgot-password">Forgot Password</a>
       <a href="/register">Signup</a>
     </div>

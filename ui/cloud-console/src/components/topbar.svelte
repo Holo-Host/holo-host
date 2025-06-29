@@ -53,6 +53,7 @@
         style:--color={defaultTheme.colors.text.subtext}>search</span
       >
       <input
+        disabled
         type="text"
         placeholder="Search by resource name or public IP"
         style:--text-color={defaultTheme.colors.text.black}

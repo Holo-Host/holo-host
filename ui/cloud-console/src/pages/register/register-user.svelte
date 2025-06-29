@@ -58,90 +58,106 @@
   }
 </script>
 
-{#if registered}
-  <span>
-    You have successfully registered.
-    <a href="/login">Login</a>
-  </span>
-{:else if loading}
-  <span>Loading...</span>
-{:else}
-  <Input
-    type="text"
-    label="Given Names"
-    placeholder="John Smith"
-    bind:value={givenNames}
-    bind:isValid={isGivenNamesValid}
-    validator={z.string().min(3, {
-      message: '"Given Names" must be at least 3 characters long',
-    })}
-  />
-  <Input
-    type="text"
-    label="Family Name"
-    placeholder="Doe"
-    bind:value={familyName}
-    bind:isValid={isFamilyNameValid}
-    validator={z.string().min(3, {
-      message: '"Given Names" must be at least 3 characters long',
-    })}
-  />
-  <Input
-    type="email"
-    label="email"
-    placeholder="john.doe@example.com"
-    bind:value={email}
-    bind:isValid={isEmailValid}
-    validator={z.string().email({ message: "Invalid email" })}
-  />
-  <span>Select Jurisdiction</span>
-  <Dropdown
-    items={jurisdictions}
-    onItemSelected={onJurisdictionSelected}
-    filterFocusItems={(item: string) => item !== "Unknown"}
-  >
-    <div
-      class="dropdown"
-      style:--border-color={defaultTheme.colors.border}
-      style:--background-color={defaultTheme.colors.background.card}
-      style:--text-color={defaultTheme.colors.text.black}
-    >
-      {#if jurisdiction === ""}
-        <span style:color={defaultTheme.colors.text.subtext}>
-          Select Jurisdiction
-        </span>
-      {:else}
-        <span>{jurisdiction}</span>
-      {/if}
+<div class="column gap10 align-center" style:margin-top="100px">
+  <h2 style:margin-bottom="20px">Sign up to HOLO</h2>
+  {#if registered}
+    <span>
+      You have successfully registered.
+      <a href="/login">Login</a>
+    </span>
+  {:else if loading}
+    <span>Loading...</span>
+  {:else}
+    <Input
+      class="w100"
+      type="text"
+      label="Given Names"
+      placeholder="John Smith"
+      bind:value={givenNames}
+      bind:isValid={isGivenNamesValid}
+      validator={z.string().min(3, {
+        message: '"Given Names" must be at least 3 characters long',
+      })}
+    />
+    <Input
+      class="w100"
+      type="text"
+      label="Family Name"
+      placeholder="Doe"
+      bind:value={familyName}
+      bind:isValid={isFamilyNameValid}
+      validator={z.string().min(3, {
+        message: '"Given Names" must be at least 3 characters long',
+      })}
+    />
+    <Input
+      class="w100"
+      type="email"
+      label="email"
+      placeholder="john.doe@example.com"
+      bind:value={email}
+      bind:isValid={isEmailValid}
+      validator={z.string().email({ message: "Invalid email" })}
+    />
+    <div class="w100" style:text-align="left">
+      <span>Select Jurisdiction</span>
     </div>
-    {#snippet itemTemplate(item: string)}
-      <span>{item}</span>
-    {/snippet}
-  </Dropdown>
-  <Input
-    type="password"
-    label="Password"
-    bind:value={password}
-    bind:isValid={isPasswordValid}
-    validator={z
-      .string()
-      .min(8, { message: '"Password" must be at least 8 characters long' })}
-  />
-  <Input
-    type="password"
-    label="Confirm Password"
-    bind:value={confirmPassword}
-    bind:isValid={isConfirmPasswordValid}
-    validator={z.string().refine((val) => val === password, {
-      message: "Password does not match",
-    })}
-  />
-  <Button disabled={!isFormValid} onclick={onRegisterUser}>Register</Button>
-  <div class="grow justify-space-between" style:margin-top="10px">
-    <a href="/forgot-password">Forgot Password</a>
-    <a href="/login">Login</a>
-  </div>
-{/if}
+    <Dropdown
+      class="w100"
+      items={jurisdictions}
+      onItemSelected={onJurisdictionSelected}
+      filterFocusItems={(item: string) => item !== "Unknown"}
+    >
+      <div
+        class="dropdown w100"
+        style:--border-color={defaultTheme.colors.border}
+        style:--background-color={defaultTheme.colors.background.card}
+        style:--text-color={defaultTheme.colors.text.black}
+      >
+        {#if jurisdiction === ""}
+          <span
+            style:color={defaultTheme.colors.text.subtext}
+            style:width="100%"
+          >
+            Select Jurisdiction
+          </span>
+        {:else}
+          <span>{jurisdiction}</span>
+        {/if}
+      </div>
+      {#snippet itemTemplate(item: string)}
+        <span>{item}</span>
+      {/snippet}
+    </Dropdown>
+    <Input
+      class="w100"
+      type="password"
+      label="Password"
+      bind:value={password}
+      bind:isValid={isPasswordValid}
+      validator={z
+        .string()
+        .min(8, { message: '"Password" must be at least 8 characters long' })}
+    />
+    <Input
+      class="w100"
+      type="password"
+      label="Confirm Password"
+      bind:value={confirmPassword}
+      bind:isValid={isConfirmPasswordValid}
+      validator={z.string().refine((val) => val === password, {
+        message: "Password does not match",
+      })}
+    />
+    <Button class="w100" disabled={!isFormValid} onclick={onRegisterUser}
+      >Register</Button
+    >
+    <div class="grow justify-space-between w100" style:margin-top="10px">
+      <a href="/forgot-password">Forgot Password</a>
+      <a href="/login">Login</a>
+    </div>
+  {/if}
+</div>
 
 <style lang="css">
   .dropdown {

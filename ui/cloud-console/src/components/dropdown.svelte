@@ -2,7 +2,7 @@
   import type { Snippet } from "svelte";
   import { defaultTheme } from "../theme";
   import { computePosition } from "@floating-ui/dom";
-//todo: gray out drawer menu options
+  //todo: gray out drawer menu options
   type Prop<T> = {
     children: any;
     items: T[];
@@ -10,6 +10,7 @@
     filterFocusItems?: (item: T) => boolean;
     itemTemplate?: Snippet<[T]>;
     onItemSelected?: (item: T) => void;
+    class?: string;
   };
   const props: Prop<unknown> = $props();
   let isOpen = $state(false);
@@ -95,7 +96,7 @@
   });
 </script>
 
-<div class="container">
+<div class={`container ${props.class ?? ""}`}>
   <button
     class="dropdown"
     bind:this={dropdownEl}

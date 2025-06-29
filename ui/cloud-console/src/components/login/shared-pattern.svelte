@@ -1,27 +1,50 @@
 <script lang="ts">
-  let patternEl: HTMLElement = $state(null);
-  $effect(() => {
-    for (let i = 0; i < 10; i++) {
-      const box = document.createElement("div");
-      box.style.width = "200px";
-      box.style.height = "200px";
-      if (i % 2 === 0) {
-        box.style.backgroundColor = "rgba(1, 186, 255, 1)";
-      } else {
-        box.style.backgroundColor = "rgba(27, 33, 188, 1)";
-      }
-      patternEl.appendChild(box);
+  const diamonds = $derived.by(() => {
+    const colors = ["#0017C1", "#00B7FF"];
+    const amount = 10;
+    const pattern: string[] = [];
+    for (let i = 0; i < amount; i++) {
+      const colorIndex = i % colors.length;
+      pattern.push(colors[colorIndex]);
     }
+    return pattern;
   });
 </script>
 
-<div bind:this={patternEl} class="shared-pattern gap20">
+<div class="pattern-wrapper">
+  <div class="diamond-grid">
+    {#each diamonds as color}
+      <div class="diamond" style:background-color={color}></div>
+    {/each}
+  </div>
 </div>
 
-<style lang="css">
-  .shared-pattern {
+<style>
+  .pattern-wrapper {
     position: fixed;
-    bottom: 200px;
-    right: 200px;
+    bottom: 0;
+    right: 0;
+    z-index: 0;
+    width: 100vw;
+    height: 100vh;
+    pointer-events: none;
+    overflow: visible;
+  }
+
+  .diamond-grid {
+    position: absolute;
+    bottom: calc(20vw * 0.3);
+    right: calc(20vw * -2.5);
+    display: grid;
+    gap: 50px;
+    grid-template-columns: repeat(4, 20vw);
+    grid-template-rows: repeat(2, 20vw);
+    transform: scaleY(0.6) rotate(-45deg);
+    transform-origin: bottom right;
+  }
+
+  .diamond {
+    width: 20vw;
+    height: 20vw;
   }
 </style>

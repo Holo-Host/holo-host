@@ -49,9 +49,11 @@
   }
 </script>
 
-<div class="column gap10" style:margin-top="100px">
+<div class="column gap10 align-center" style:margin-top="100px">
+  <h2 style:margin-bottom="20px">Sign up to HOLO</h2>
   {#if verified}
     <Input
+      class="w100"
       type="text"
       label="Code"
       placeholder="123456"
@@ -64,6 +66,7 @@
     <span>Loading...</span>
   {:else}
     <Input
+      class="w100"
       type="email"
       label="email"
       placeholder="john.doe@example.com"
@@ -71,10 +74,10 @@
       bind:value={email}
       bind:isValid={isEmailValid}
     />
-    <Button disabled={!isEmailValid} onclick={onVerifyEmail}>
+    <Button class="w100" disabled={!isEmailValid} onclick={onVerifyEmail}>
       Verify Email
     </Button>
-    <div class="grow justify-space-between" style:margin-top="10px">
+    <div class="grow justify-space-between w100" style:margin-top="10px">
       <a href="/forgot-password">Forgot Password</a>
       <a href="/login">Login</a>
     </div>

@@ -54,7 +54,10 @@
 
 {#if !!apikeyToDelete}
   <Modal>
-    <div class="column justify-center align-center gap20" style:margin="40px">
+    <div
+      class="column justify-center align-center gap20 text-center"
+      style:margin="40px"
+    >
       <div class="hex-container">
         <span class="icons-outlined">delete</span>
         <span class="hex" style:--color={defaultTheme.colors.background.danger}
@@ -74,10 +77,33 @@
 <div class="page">
   <div class="header">
     <h1 class="header-title">API Tokens</h1>
-    <Button href="/generate-token">Generate new token</Button>
+    {#if data.length > 0}
+      <Button href="/generate-token">Generate new token</Button>
+    {/if}
   </div>
   <Card>
-    <Table {columns} rows={data} />
+    {#if data.length > 0}
+      <Table {columns} rows={data} />
+    {:else}
+      <div
+        class="column justify-center align-center gap20"
+        style:margin-top="100px"
+        style:margin-bottom="100px"
+      >
+        <div class="hex-container">
+          <span class="icons-outlined">key</span>
+          <span
+            class="hex"
+            style:--color={defaultTheme.colors.background.primary}
+          ></span>
+        </div>
+        <h2>Create a personal access token</h2>
+        <p>
+          Personal access tokens function like ordinary OAuth access tokens.
+        </p>
+        <Button href="/generate-token">Generate new token</Button>
+      </div>
+    {/if}
   </Card>
 </div>
 
@@ -120,6 +146,7 @@
     display: block;
     margin: 0;
     height: 125px;
+    text-align: left;
 
     .hex {
       position: relative;
