@@ -15,13 +15,17 @@ pub struct OpenApiSpec;
 #[derive(Serialize, Deserialize, ToSchema)]
 pub struct EmailVerifyRequestDto {
     email: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    check_account_exists: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    redirect_url: Option<String>,
 }
 
 #[utoipa::path(
     post,
     path = "/public/v1/auth/email-verify",
     tag = "Auth",
-    summary = "Start email verification",
+    summary = "Verify Email",
     description = "Some endpoints require the user to verify their email address before they can be used. This endpoint starts the email verification by sending the email a code that can be used to verify the email address.",
     request_body = EmailVerifyRequestDto,
     responses(
@@ -34,6 +38,7 @@ pub async fn email_verify(
     payload: web::Json<EmailVerifyRequestDto>,
     db: web::Data<mongodb::Client>,
     cache: web::Data<deadpool_redis::Pool>,
+    config: web::Data<providers::config::AppConfig>,
 ) -> impl Responder {
     match providers::limiter::limiter_by_ip(
         cache,
@@ -52,6 +57,32 @@ pub async fn email_verify(
             });
         }
     };
+    if payload.check_account_exists == Some(true) {
+        match providers::crud::find_one::<schemas::user_info::UserInfo>(
+            db.get_ref().clone(),
+            schemas::user_info::USER_INFO_COLLECTION_NAME.to_string(),
+            bson::doc! {
+                "email": payload.email.clone()
+            },
+        )
+        .await
+        {
+            Ok(user_info) => {
+                if user_info.is_some() {
+                    return HttpResponse::BadRequest().json(ErrorResponse {
+                        message: "A user already exists with this email address".to_string(),
+                    });
+                }
+            }
+            Err(err) => {
+                tracing::error!("failed to get user info: {}", err);
+                return HttpResponse::InternalServerError().json(bson::doc! {
+                    "error": err.to_string(),
+                    "message": "failed to get user info".to_string(),
+                });
+            }
+        };
+    }
     let email_verify = match providers::crud::find_one::<schemas::email_verify::EmailVerify>(
         db.get_ref().clone(),
         schemas::email_verify::EMAIL_VERIFY_COLLECTION_NAME.to_string(),
@@ -78,7 +109,7 @@ pub async fn email_verify(
             schemas::email_verify::EmailVerify {
                 _id: None,
                 email: payload.email.clone(),
-                code,
+                code: code.clone(),
                 metadata: schemas::metadata::Metadata::default(),
             },
         )
@@ -99,9 +130,7 @@ pub async fn email_verify(
             schemas::email_verify::EMAIL_VERIFY_COLLECTION_NAME.to_string(),
             email_verify.unwrap()._id.unwrap().to_hex(),
             bson::doc! {
-                "$set": {
-                    "code": code,
-                }
+                "code": code.clone(),
             },
         )
         .await
@@ -117,7 +146,29 @@ pub async fn email_verify(
         }
     }
 
-    //todo: send email with verification code
+    match providers::postmark::send_email(
+        config
+            .postmark_api_key
+            .clone()
+            .expect("postmark api key not set"),
+        payload.email.clone(),
+        "verify-email".to_string(),
+        bson::doc! {
+            "code": code.clone(),
+            "redirect_url": payload.redirect_url.clone().map(|url| format!("{}?code={}", url, code))
+        },
+    )
+    .await
+    {
+        Ok(_) => {}
+        Err(err) => {
+            tracing::error!("failed to send email: {}", err);
+            return HttpResponse::InternalServerError().json(bson::doc! {
+                "error": err.to_string(),
+                "message": "failed to send email".to_string(),
+            });
+        }
+    };
 
     HttpResponse::Ok().json(bson::doc! {})
 }

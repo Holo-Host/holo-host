@@ -158,7 +158,7 @@ pub async fn login_with_password(
     }
     let user = user.unwrap();
     let user_id = user._id.unwrap().to_hex();
-    let day_in_seconds = 24 * 60 * 60;
+    let day_in_seconds = 24 * 60 * 60 * 30;
 
     let given_name_last_char = user_info.given_names.chars().take(1).collect::<String>();
     let family_name_last_char = user_info.family_name.chars().take(1).collect::<String>();
@@ -174,7 +174,7 @@ pub async fn login_with_password(
         refresh_token: RefreshTokenClaims {
             version: user.refresh_token_version,
             sub: user_id.clone(),
-            exp: day_in_seconds * 30,
+            exp: bson::DateTime::now().to_chrono().timestamp() as usize + (day_in_seconds * 30),
             allow_extending_refresh_token: false,
             reference_id: None,
         },

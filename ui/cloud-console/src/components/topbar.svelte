@@ -8,6 +8,7 @@
   } from "../lang";
   import { defaultTheme } from "../theme";
   import Dropdown from "./dropdown.svelte";
+  import { authStore } from "@/auth";
 
   type Language = {
     label: string;
@@ -45,18 +46,24 @@
   style:background-color={defaultTheme.colors.background.card}
   style:--shadow-color={defaultTheme.colors.shadow}
 >
-  <div class="search">
-    <span
-      class="icons-outlined search-icon"
-      style:--color={defaultTheme.colors.text.subtext}>search</span
-    >
-    <input
-      type="text"
-      placeholder="Search by resource name or public IP"
-      style:--text-color={defaultTheme.colors.text.black}
-      style:--placeholder-color={defaultTheme.colors.text.subtext}
-    />
-  </div>
+  {#if $authStore}
+    <div class="search">
+      <span
+        class="icons-outlined search-icon"
+        style:--color={defaultTheme.colors.text.subtext}>search</span
+      >
+      <input
+        type="text"
+        placeholder="Search by resource name or public IP"
+        style:--text-color={defaultTheme.colors.text.black}
+        style:--placeholder-color={defaultTheme.colors.text.subtext}
+      />
+    </div>
+  {:else}
+    <div class="grow">
+      <img src="/icons/drawer/logo.svg" alt="logo" />
+    </div>
+  {/if}
   <a
     class="top-bar-tool"
     href="#support"
@@ -82,33 +89,35 @@
       <span>{item.label}</span>
     {/snippet}
   </Dropdown>
-  <!-- Profile Dropdown -->
-  <Dropdown
-    items={profileItems}
-    onItemSelected={(item: ProfileItem) => onProfileItemSelected(item)}
-  >
-    <div class="user-info">
-      <span
-        class="icons-outlined user-info-avatar"
-        style:--color={defaultTheme.colors.text.white}
-        style:--background-color={defaultTheme.colors.background.primary}
-      >
-        person
-      </span>
-      <span>
-        ZA
+  {#if $authStore?.claims?.initials}
+    <!-- Profile Dropdown -->
+    <Dropdown
+      items={profileItems}
+      onItemSelected={(item: ProfileItem) => onProfileItemSelected(item)}
+    >
+      <div class="user-info">
         <span
-          class="icons-outlined"
-          style:--color={defaultTheme.colors.text.subtext}
+          class="icons-outlined user-info-avatar"
+          style:--color={defaultTheme.colors.text.white}
+          style:--background-color={defaultTheme.colors.background.primary}
         >
-          expand_more
+          person
         </span>
-      </span>
-    </div>
-    {#snippet itemTemplate(item: ProfileItem)}
-      <span>{item.label}</span>
-    {/snippet}
-  </Dropdown>
+        <span>
+          {$authStore.claims.initials.toUpperCase()}
+          <span
+            class="icons-outlined"
+            style:--color={defaultTheme.colors.text.subtext}
+          >
+            expand_more
+          </span>
+        </span>
+      </div>
+      {#snippet itemTemplate(item: ProfileItem)}
+        <span>{item.label}</span>
+      {/snippet}
+    </Dropdown>
+  {/if}
 </div>
 
 <style lang="css">
@@ -116,10 +125,10 @@
     display: flex;
     flex-direction: row;
     align-items: center;
+    min-height: 60px;
     height: 60px;
     padding: 0 20px;
     gap: 30px;
-    box-shadow: 0px 2px 0px 0px var(--shadow-color);
 
     .top-bar-tool,
     div {
@@ -132,6 +141,7 @@
       font-size: 16px;
       color: var(--text-color);
       align-items: center;
+      text-decoration: none;
     }
 
     .user-info,

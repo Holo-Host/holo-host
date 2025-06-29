@@ -4,7 +4,7 @@ use mongodb::options::IndexOptions;
 use serde::{Deserialize, Serialize};
 
 use super::metadata::Metadata;
-use crate::mongodb::traits::{IntoIndexes, MutMetadata};
+use crate::{derive_with_metadata, derive_with_mongo_id, mongodb::traits::IntoIndexes};
 
 /// Collection name for hoster documents
 pub const EMAIL_VERIFY_COLLECTION_NAME: &str = "email_verify";
@@ -42,8 +42,5 @@ impl IntoIndexes for EmailVerify {
     }
 }
 
-impl MutMetadata for EmailVerify {
-    fn mut_metadata(&mut self) -> &mut Metadata {
-        &mut self.metadata
-    }
-}
+derive_with_metadata!(EmailVerify);
+derive_with_mongo_id!(EmailVerify);

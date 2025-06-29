@@ -14,7 +14,11 @@ export async function request(url: string, options: RequestInit) {
 
   const claims = jwtDecode(credentials.accessToken) as JwtPayload;
   if (claims.exp - 30 < Date.now() / 1000) {
-    credentials = await refreshAccessToken(credentials);
+    let newCredentials = await refreshAccessToken(credentials);
+    if (newCredentials) {
+      credentials.accessToken = newCredentials.accessToken;
+      credentials.refreshToken = newCredentials.refreshToken;
+    }
   }
 
   return fetch(`${host}${url}`, {
@@ -80,7 +84,7 @@ async function refreshAccessToken(auth: AuthStore) {
     return;
   }
   const res: { access_token: string; refresh_token: string } = await req.json();
-  const credentials: AuthStore = {
+  const credentials: Omit<AuthStore, "claims"> = {
     refreshToken: res.refresh_token,
     accessToken: res.access_token,
   };

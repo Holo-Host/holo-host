@@ -7,8 +7,7 @@
   import Card from "@/components/card.svelte";
   import Modal from "@/components/modal.svelte";
   import { defaultTheme } from "@/theme";
-  import { request } from "@/api";
-  import tippy, { createSingleton } from "tippy.js";
+  import { host, request } from "@/api";
 
   type Prop = {
     visible: boolean;
@@ -29,6 +28,7 @@
   });
 
   let description = $state("");
+  let isDescriptionValid = $state(true);
   let expireAt = $state(new Date(Date.now() + 86400000 * 7));
   let permissionValue = $state("");
   let permissionsSelected = $state<string[]>(["all.all.self"]);
@@ -118,10 +118,11 @@
         <Input
           grow
           label="Name"
+          bind:value={description}
+          bind:isValid={isDescriptionValid}
           validator={z
             .string()
             .min(3, { message: '"Name" must be at least 3 characters long' })}
-          bind:value={description}
         />
         <div style:margin-top="25px">
           <DatePicker bind:value={expireAt} />
@@ -144,19 +145,17 @@
         style:color={defaultTheme.colors.text.subtext}
       >
         <span>
-          Permissions are structured as {"{resource}"}.{"{action}"}.{"{owner}"}
+          Define permissions as a matrix of {"{resource}.{action}.{owner}"}.
+          Check API docs for more details. By default the permission is set to
+          "all.all.self
         </span>
-        <span>
-          Therefor, `workload.create.self` will let you create workloads that
-          are owned by the logged in user.
-        </span>
-        <span>
-          By default `all.all.self` refers to all permissions that the user has.
-        </span>
+        <a href={host}>view api docs</a>
       </div>
     </div>
     <div class="flex">
-      <Button onclick={generateApiToken}>Generate</Button>
+      <Button disabled={!isDescriptionValid} onclick={generateApiToken}>
+        Generate
+      </Button>
     </div>
   </Card>
 </div>

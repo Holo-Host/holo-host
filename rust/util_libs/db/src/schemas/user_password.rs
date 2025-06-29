@@ -4,7 +4,7 @@ use mongodb::options::IndexOptions;
 use serde::{Deserialize, Serialize};
 
 use super::metadata::Metadata;
-use crate::mongodb::traits::{IntoIndexes, MutMetadata};
+use crate::{derive_with_metadata, derive_with_mongo_id, mongodb::traits::IntoIndexes};
 
 /// Collection name for developer documents
 pub const USER_PASSWORD_COLLECTION_NAME: &str = "user_password";
@@ -23,6 +23,9 @@ pub struct UserPassword {
     pub password_hash: String,
 }
 
+derive_with_mongo_id!(UserPassword);
+derive_with_metadata!(UserPassword);
+
 impl IntoIndexes for UserPassword {
     /// Defines MongoDB indices for the UserInfo collection
     ///
@@ -39,11 +42,5 @@ impl IntoIndexes for UserPassword {
         );
         indices.push((owner_index_doc, owner_index_opts));
         Ok(indices)
-    }
-}
-
-impl MutMetadata for UserPassword {
-    fn mut_metadata(&mut self) -> &mut Metadata {
-        &mut self.metadata
     }
 }

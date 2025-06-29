@@ -41,6 +41,32 @@ pub async fn register(
 ) -> impl Responder {
     // todo: add cloudflare turnsite
 
+    // user already exists
+    match providers::crud::find_one::<schemas::user_info::UserInfo>(
+        db.get_ref().clone(),
+        schemas::user_info::USER_INFO_COLLECTION_NAME.to_string(),
+        bson::doc! {
+            "email": payload.email.clone(),
+        },
+    )
+    .await
+    {
+        Ok(user_info) => {
+            if user_info.is_some() {
+                return HttpResponse::BadRequest().json(ErrorResponse {
+                    message: "A user already exists with this email address".to_string(),
+                });
+            }
+        }
+        Err(err) => {
+            tracing::error!("failed to get user info: {}", err);
+            return HttpResponse::InternalServerError().json(bson::doc! {
+                "error": err.to_string(),
+                "message": "failed to get user info".to_string(),
+            });
+        }
+    };
+
     // verification before creating user
     let email_verify = match providers::crud::find_one::<schemas::email_verify::EmailVerify>(
         db.get_ref().clone(),
@@ -69,6 +95,11 @@ pub async fn register(
     if email_verify.code != payload.email_verification_code {
         return HttpResponse::BadRequest().json(ErrorResponse {
             message: "invalid email verification code".to_string(),
+        });
+    }
+    if email_verify.email != payload.email {
+        return HttpResponse::BadRequest().json(ErrorResponse {
+            message: "invalid email".to_string(),
         });
     }
     match providers::crud::delete::<schemas::email_verify::EmailVerify>(

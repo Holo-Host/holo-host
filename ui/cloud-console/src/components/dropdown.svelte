@@ -2,7 +2,7 @@
   import type { Snippet } from "svelte";
   import { defaultTheme } from "../theme";
   import { computePosition } from "@floating-ui/dom";
-
+//todo: gray out drawer menu options
   type Prop<T> = {
     children: any;
     items: T[];

@@ -62,6 +62,7 @@
     font-weight: 500;
     font-size: 20px;
     transition: 0.3s ease;
+    text-decoration: none;
 
     &:hover {
       box-shadow: var(--shadow) rgba(0, 0, 0, 0.3);

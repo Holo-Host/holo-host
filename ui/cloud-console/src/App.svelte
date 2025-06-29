@@ -9,7 +9,10 @@
     <Drawer path={$routeComponent.path} />
   {/if}
   {#if $routeComponent.showHeader}
-    <div style="flex-direction: column; flex-grow: 1;">
+    <div
+      style="flex-direction: column; flex-grow: 1;"
+      style:height="calc(100% - 60px)"
+    >
       <Topbar />
       <div class="page-content">
         <svelte:component
@@ -35,6 +38,6 @@
 <style lang="css">
   .page-content {
     flex-direction: column;
-    min-height: 100vh;
+    min-height: 100%;
   }
 </style>
