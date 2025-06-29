@@ -32,6 +32,8 @@
     isValid = $bindable(false),
     ...props
   }: Prop = $props();
+  let passwordVisible = $state(false);
+  const passwordFieldType = $derived(passwordVisible ? "text" : "password");
   let hasChangedInput = $state(false);
   const validationError = $derived.by(() => {
     if (!hasChangedInput) return false;
@@ -98,21 +100,36 @@
   <label for={props.id}>
     {props.label}
   </label>
-  <input
-    id={props.id}
-    name={props.id}
-    type={props.type}
-    placeholder={props.placeholder}
-    readonly={props.readonly}
-    oninput={onInput}
-    onfocus={onFocus}
-    onfocusout={onFocusOut}
-    onkeydown={props.onKeyDown}
-    style:--border-color={defaultTheme.colors.border}
-    style:--error-border-color={defaultTheme.colors.danger}
-    class:error={!!validationError}
-    bind:value
-  />
+  <div class="w100 align-center">
+    <input
+      id={props.id}
+      name={props.id}
+      type={props.type === "password" ? passwordFieldType : props.type}
+      placeholder={props.placeholder}
+      readonly={props.readonly}
+      oninput={onInput}
+      onfocus={onFocus}
+      onfocusout={onFocusOut}
+      onkeydown={props.onKeyDown}
+      style:--border-color={defaultTheme.colors.border}
+      style:--error-border-color={defaultTheme.colors.danger}
+      class="w100"
+      class:error={!!validationError}
+      bind:value
+    />
+    {#if props.type === "password"}
+      <div class="password-visible-button">
+        <button onclick={() => (passwordVisible = !passwordVisible)}>
+          <span
+            class="icons-filled"
+            style:--color={defaultTheme.colors.text.subtext}
+          >
+            {passwordVisible ? "visibility" : "visibility_off"}
+          </span>
+        </button>
+      </div>
+    {/if}
+  </div>
   {#if props.type !== "number" && isFocused && props.autocomplete && autocomplete.length > 0}
     <div class="autocomplete-container">
       <div
@@ -154,6 +171,15 @@
   }
   .error {
     border: 1px solid var(--error-border-color);
+  }
+  .password-visible-button {
+    position: relative;
+    left: -40px;
+    width: 0;
+
+    button {
+      cursor: pointer;
+    }
   }
 
   .autocomplete-container {

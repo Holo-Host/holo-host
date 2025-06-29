@@ -82,23 +82,16 @@
 {#if generatedToken !== ""}
   <Modal>
     <div class="flex gap10 column">
-      <div class="gap10 grow align-center">
-        <Input
-          type={showGeneratedToken ? "text" : "password"}
-          value={generatedToken}
-          readonly
-        />
-        <button
-          style:margin-bottom="17px"
-          onclick={() => (showGeneratedToken = !showGeneratedToken)}
-        >
-          {#if showGeneratedToken}
-            Hide
-          {:else}
-            Show
-          {/if}
-        </button>
-      </div>
+      <Input
+        class="grow"
+        type={showGeneratedToken ? "text" : "password"}
+        value={generatedToken}
+        readonly
+      />
+      <span style:color={defaultTheme.colors.text.danger}>
+        Copy this token to access the HOLO API. For security this will not be
+        shown again.
+      </span>
       <Button onclick={onCopyGeneratedToken}>Copy</Button>
       <Button variant="secondary" onclick={() => (generatedToken = "")}>
         Close
@@ -113,10 +106,13 @@
   </div>
   <Card>
     <h2>Create a new personal access token</h2>
+    <span style:color={defaultTheme.colors.text.subtext}>
+      Personal access tokens function like ordinary Oauth access tokens
+    </span>
     <div class="flex column gap10">
       <div class="flex gap10 grow">
         <Input
-          grow
+          class="grow"
           label="Name"
           bind:value={description}
           bind:isValid={isDescriptionValid}

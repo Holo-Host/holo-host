@@ -17,7 +17,7 @@
 
 <div class="login">
   <div
-    class="column align-center"
+    class="column align-center gap10"
     style:width="400px"
     style:margin-top="100px"
     style:z-index="2"
