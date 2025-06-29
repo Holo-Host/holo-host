@@ -1,5 +1,5 @@
 <script lang="ts">
-  import SharedPattern from "@/components/login/shared-pattern.svelte";
+  import DiamondPattern from "@/components/diamond-pattern.svelte";
   import Button from "@/components/button.svelte";
   import Input from "@/components/input.svelte";
   import { login } from "@/api";
@@ -58,7 +58,7 @@
   </div>
 </div>
 
-<SharedPattern />
+<DiamondPattern />
 
 <style lang="css">
   .login {

@@ -3,7 +3,7 @@
   import { requestNoAuth } from "@/api";
   import Button from "@/components/button.svelte";
   import Input from "@/components/input.svelte";
-  import SharedPattern from "@/components/login/shared-pattern.svelte";
+  import DiamondPattern from "@/components/diamond-pattern.svelte";
 
   let loading = $state(false);
   let verified = $state(false);
@@ -124,4 +124,4 @@
   </div>
 </div>
 
-<SharedPattern />
+<DiamondPattern />

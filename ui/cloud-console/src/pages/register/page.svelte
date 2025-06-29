@@ -1,7 +1,7 @@
 <script lang="ts">
   import EmailVerify from "./email-verify.svelte";
   import RegisterUser from "./register-user.svelte";
-  import SharedPattern from "@/components/login/shared-pattern.svelte";
+  import DiamondPattern from "@/components/diamond-pattern.svelte";
 
   const { query } = $props();
 </script>
@@ -20,4 +20,4 @@
     {/if}
   </div>
 </div>
-<SharedPattern />
+<DiamondPattern />
