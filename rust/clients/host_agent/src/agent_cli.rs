@@ -1,4 +1,10 @@
+use bson::oid::ObjectId;
 use clap::{Args, Parser, Subcommand};
+use db_utils::schemas::workload::WorkloadManifestHolochainDhtV1;
+use nats_utils::{
+    leaf_server::LEAF_SERVER_DEFAULT_LISTEN_PORT,
+    types::{HcHttpGwRequest, NatsRemoteArgs},
+};
 use netdiag::IPVersion;
 use std::path::PathBuf;
 
@@ -31,6 +37,29 @@ pub enum CommandScopes {
         #[command(subcommand)]
         command: SupportCommands,
     },
+
+    /// Interact with a remote host-agent (via NATS).
+    Remote {
+        #[clap(flatten)]
+        remote_args: RemoteArgs,
+
+        #[command(subcommand)]
+        command: RemoteCommands,
+    },
+}
+
+#[derive(Clone, clap::Parser)]
+pub struct RemoteArgs {
+    #[clap(flatten)]
+    pub nats_remote_args: NatsRemoteArgs,
+
+    #[arg(
+        long,
+        default_value_t = false,
+        help = "don't wait for Ctrl+C being pressed before exiting the process",
+        env = "DONT_WAIT"
+    )]
+    pub dont_wait: bool,
 }
 
 #[derive(Args, Clone, Debug)]
@@ -69,11 +98,35 @@ pub struct DaemonzeArgs {
     )]
     pub(crate) nats_connect_timeout_secs: u64,
 
-    #[arg(long, short, help = "host agent inventory check interval (in seconds)")]
-    pub(crate) host_inventory_check_interval_sec: Option<u64>,
+    #[arg(
+        long,
+        help = "host agent inventory check interval (in seconds)",
+        env = "HOST_INVENTORY_CHECK_DURATION",
+        default_value_t = 3600
+    )]
+    pub(crate) host_inventory_check_interval_sec: u64,
 
-    #[arg(long, help = "host agent inventory file path")]
-    pub(crate) host_inventory_file_path: Option<String>,
+    #[arg(
+        long,
+        help = "host agent inventory file path",
+        env = "HOST_INVENTORY_FILE_PATH",
+        default_value = "/var/lib/holo-host-agent/inventory.json"
+    )]
+    pub(crate) host_inventory_file_path: String,
+
+    #[arg(
+        long,
+        env = "NATS_LEAF_SERVER_LISTEN_HOST",
+        default_value = "127.0.0.1",
+        value_parser = |s: &str| url::Host::<String>::parse(s),
+    )]
+    pub(crate) leaf_server_listen_host: url::Host<String>,
+
+    #[arg(long,
+        env = "NATS_LEAF_SERVER_LISTEN_PORT",
+        default_value_t = LEAF_SERVER_DEFAULT_LISTEN_PORT,
+    )]
+    pub(crate) leaf_server_listen_port: u16,
 }
 
 /// A set of commands for being able to manage the local host. We may (later) want to gate some
@@ -112,5 +165,43 @@ pub enum SupportCommands {
     SupportTunnel {
         #[arg(long)]
         enable: bool,
+    },
+}
+
+/// A set of commands for remotely interacting with a running host-agent instance, by exchanging NATS messages.
+#[derive(Subcommand, Clone)]
+pub enum RemoteCommands {
+    /// Status
+    Ping {},
+
+    /// Manage workloads.
+    HolochainDhtV1Workload {
+        #[arg(long)]
+        workload_id_override: Option<ObjectId>,
+
+        // currently used for the publish subject in case we forego the orchestrator
+        #[arg(long)]
+        host_id: Option<String>,
+
+        #[arg(long)]
+        desired_status: String,
+
+        #[command(flatten)]
+        manifest: Box<WorkloadManifestHolochainDhtV1>,
+
+        #[arg(long)]
+        workload_only: bool,
+
+        #[arg(long)]
+        subject_override: Option<String>,
+
+        #[arg(long, default_value = "WORKLOAD.>")]
+        /// If provided, the CLI will subscribe to the given subject on the remote NATS after publishing the workload message.
+        maybe_wait_on_subject: Option<String>,
+    },
+
+    HcHttpGwReq {
+        #[clap(flatten)]
+        request: HcHttpGwRequest,
     },
 }

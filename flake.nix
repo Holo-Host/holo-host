@@ -27,11 +27,20 @@
     extra-container.url = "github:erikarvstedt/extra-container";
     extra-container.inputs.nixpkgs.follows = "nixpkgs";
 
-    holonix = {
+    holonix_0_4 = {
       url = "github:holochain/holonix?ref=main-0.4";
       inputs = {
         nixpkgs.follows = "nixpkgs";
         crane.follows = "crane";
+        rust-overlay.follows = "rust-overlay";
+      };
+    };
+
+    hc-http-gw = {
+      url = "github:holochain/hc-http-gw";
+      inputs = {
+        holonix.follows = "holonix_0_4";
+        nixpkgs.follows = "nixpkgs";
         rust-overlay.follows = "rust-overlay";
       };
     };

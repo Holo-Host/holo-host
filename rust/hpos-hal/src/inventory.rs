@@ -13,6 +13,7 @@ use std::fmt::{self, Display};
 use std::fs::OpenOptions;
 use std::io;
 use std::io::Read;
+use std::path::Path;
 use std::{fs, fs::File};
 use thiserror::Error;
 use thiserror_context::{impl_context, Context};
@@ -86,6 +87,16 @@ pub struct HoloInventory {
 impl HoloInventory {
     /// Saves the HoloInventory struct to a file in JSON format.
     pub fn save_to_file(&self, path: &str) -> Result<(), InventoryError> {
+        log::trace!("Saving inventory to file: path={path:?}");
+
+        // Ensure directory exists
+        if let Some(parent) = Path::new(path).parent() {
+            if !parent.exists() {
+                fs::create_dir_all(parent)
+                    .context("ERROR: Failed to create host inventory path directory.")?;
+            }
+        }
+
         let file = OpenOptions::new()
             .write(true)
             .create(true)
@@ -212,34 +223,40 @@ impl HoloUsbInventory {
             let usb_dev = usb_dev.unwrap().clone();
             let dev_base = format!("{}", usb_dev.to_string_lossy());
             let usb_path = fs::canonicalize(&dev_base).unwrap_or_default();
-            let usb_path = usb_path.to_string_lossy();
-            debug!("USB link: {}", &usb_path);
-            let usb_class = sysfs::string_attr(format!("{}/bDeviceClass", dev_base));
-            // We aren't interested in things like USB hubs. We should instead ignore those.
-            match usb_class {
-                Some(class) => {
-                    if Self::UNINTERESTING_CLASSES.contains(&class.as_str()) {
-                        continue;
+            let mut usb_path_clone = usb_path.clone();
+            usb_path_clone.push("bDeviceClass");
+
+            if std::fs::exists(usb_path_clone).unwrap_or(false) {
+                let usb_path = usb_path.to_string_lossy();
+                debug!("USB link: {}", &usb_path);
+
+                let usb_class = sysfs::string_attr(format!("{}/bDeviceClass", dev_base));
+                // We aren't interested in things like USB hubs. We should instead ignore those.
+                match usb_class {
+                    Some(class) => {
+                        if Self::UNINTERESTING_CLASSES.contains(&class.as_str()) {
+                            continue;
+                        }
+
+                        // This device is something of potential interest
+                        let vendor_id = sysfs::string_attr(format!("{}/idVendor", dev_base));
+                        let product_id = sysfs::string_attr(format!("{}/idProduct", dev_base));
+                        let subclass = sysfs::string_attr(format!("{}/bDeviceSubClass", dev_base));
+                        let usb_version = sysfs::string_attr(format!("{}/version", dev_base));
+
+                        // Add to inventory
+                        debug!("Adding USB device {}", usb_path);
+                        ret.push(HoloUsbInventory {
+                            class: Some(class),
+                            subclass,
+                            vendor_id,
+                            product_id,
+                            usb_version,
+                            path: usb_path.to_string(),
+                        });
                     }
-
-                    // This device is something of potential interest
-                    let vendor_id = sysfs::string_attr(format!("{}/idVendor", dev_base));
-                    let product_id = sysfs::string_attr(format!("{}/idProduct", dev_base));
-                    let subclass = sysfs::string_attr(format!("{}/bDeviceSubClass", dev_base));
-                    let usb_version = sysfs::string_attr(format!("{}/version", dev_base));
-
-                    // Add to inventory
-                    debug!("Adding USB device {}", usb_path);
-                    ret.push(HoloUsbInventory {
-                        class: Some(class),
-                        subclass,
-                        vendor_id,
-                        product_id,
-                        usb_version,
-                        path: usb_path.to_string(),
-                    });
+                    None => continue,
                 }
-                None => continue,
             }
         }
 
@@ -811,15 +828,19 @@ fn ssh_host_keys() -> Vec<SSHPubKey> {
 const MACHINE_ID_PATH: &str = "/etc/machine-id";
 
 fn systemd_machine_id() -> String {
-    let ret = match fs::read_to_string(MACHINE_ID_PATH) {
-        Ok(id) => id.strip_suffix("\n").unwrap_or_default().to_string(),
+    match fs::read_to_string(MACHINE_ID_PATH).and_then(|content| {
+        content
+            .lines()
+            .next()
+            .ok_or_else(|| std::io::Error::new(io::ErrorKind::InvalidData, "no lines found"))
+            .map(ToString::to_string)
+    }) {
+        Ok(id) => id,
         Err(e) => {
             info!("No systemd machine ID found at {}: {}", MACHINE_ID_PATH, e);
-            return "".to_string(); // most inventory attributes are best-effort
+            "".to_string() // most inventory attributes are best-effort
         }
-    };
-
-    ret
+    }
 }
 
 /// Path to kernel version string

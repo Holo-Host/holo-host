@@ -1,4 +1,5 @@
 {
+  "editor.tabSize": 4,
   "editor.defaultFormatter": "ibecker.treefmt-vscode",
   "direnv.restart.automatic": true,
   "[nix]": {
@@ -17,12 +18,30 @@
   },
   "rust-analyzer.check.command": "clippy",
   "rust-analyzer.check.allTargets": true,
-  "rust-analyzer.check.extraArgs": ["--", "--deny=warnings"],
+  "rust-analyzer.check.extraArgs": [
+    "--",
+    "--no-deps"
+    // unfortunately this causes clippy to stop on the first occurrence of a warning, so actual compiler errors are obfuscated
+    // "--deny=warnings"
+  ],
   "[rust]": {
     "editor.defaultFormatter": "rust-lang.rust-analyzer"
   },
   "files.readonlyInclude": {
     "**/.cargo/registry/src/**/*.rs": true,
     "**/lib/rustlib/src/rust/library/**/*.rs": true
+  },
+  "[toml]": {
+    "editor.defaultFormatter": "tamasfe.even-better-toml"
+  },
+  "[github-actions-workflow]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[xml]": {
+    "editor.defaultFormatter": "redhat.vscode-xml"
+  },
+  "rust-analyzer.checkOnSave": true,
+  "[markdown]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
   }
 }

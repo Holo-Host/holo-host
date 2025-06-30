@@ -1,12 +1,11 @@
-#[cfg(not(target_arch = "aarch64"))]
 #[cfg(test)]
 mod tests {
     use crate::InventoryServiceApi;
     use anyhow::Result;
     use bson::doc;
     use bson::oid::ObjectId;
-    use db_utils::mongodb::MongoDbAPI;
-    use db_utils::schemas::{Capacity, Host};
+    use db_utils::mongodb::api::MongoDbAPI;
+    use db_utils::schemas::{host::Host, workload::Capacity};
     use mock_utils::{
         host::create_mock_inventory, mongodb_runner::MongodRunner, nats_message::NatsMessage,
         workload::create_test_workload,
@@ -15,8 +14,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_handle_authenticated_inventory_update() -> Result<()> {
-        let mongod = MongodRunner::run().expect("Failed to run mongod");
-        let db_client = mongod.client().expect("Failed to create db client");
+        let mongod = MongodRunner::run().expect("Failed to run Mongodb Runner");
+        let db_client = mongod
+            .client()
+            .expect("Failed to connect client to Mongodb");
         let api = InventoryServiceApi::new(&db_client).await?;
 
         // Create a host id to reference in the workload collection
@@ -82,8 +83,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_handle_inventory_update_with_insufficient_resources() -> Result<()> {
-        let mongod = MongodRunner::run().expect("Failed to run mongod");
-        let db_client = mongod.client().expect("Failed to create db client");
+        let mongod = MongodRunner::run().expect("Failed to run Mongodb Runner");
+        let db_client = mongod
+            .client()
+            .expect("Failed to connect client to Mongodb");
         let api = InventoryServiceApi::new(&db_client)
             .await
             .expect("Failed to create api");

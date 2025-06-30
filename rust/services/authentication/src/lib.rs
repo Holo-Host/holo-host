@@ -17,10 +17,13 @@ use async_nats::{AuthError, Message};
 use bson::{self, doc, to_document};
 use core::option::Option::None;
 use data_encoding::BASE64URL_NOPAD;
-use db_utils::mongodb::MutMetadata;
 use db_utils::{
-    mongodb::{IntoIndexes, MongoCollection, MongoDbAPI},
-    schemas::{self, Host, Hoster, User},
+    mongodb::{
+        api::MongoDbAPI,
+        collection::MongoCollection,
+        traits::{IntoIndexes, MutMetadata},
+    },
+    schemas::{self, host::Host, hoster::Hoster, user::User},
 };
 use mongodb::{options::UpdateModifications, Client as MongoDBClient};
 use nats_utils::types::ServiceError;
@@ -51,10 +54,15 @@ pub struct AuthServiceApi {
 impl AuthServiceApi {
     pub async fn new(client: &MongoDBClient) -> Result<Self> {
         Ok(Self {
-            user_collection: Self::init_collection(client, schemas::USER_COLLECTION_NAME).await?,
-            hoster_collection: Self::init_collection(client, schemas::HOSTER_COLLECTION_NAME)
+            user_collection: Self::init_collection(client, schemas::user::USER_COLLECTION_NAME)
                 .await?,
-            host_collection: Self::init_collection(client, schemas::HOST_COLLECTION_NAME).await?,
+            hoster_collection: Self::init_collection(
+                client,
+                schemas::hoster::HOSTER_COLLECTION_NAME,
+            )
+            .await?,
+            host_collection: Self::init_collection(client, schemas::host::HOST_COLLECTION_NAME)
+                .await?,
         })
     }
 
@@ -113,7 +121,7 @@ impl AuthServiceApi {
             return Err(ServiceError::auth(AuthError::new(e), None));
         };
 
-        // 3. If provided, authenticate the Hoster pubkey and email and assign full permissions if successful
+        // 3. Authenticate the Hoster pubkey and email and assign full permissions if successful
         let is_hoster_valid = self
             .verify_is_valid_in_db(user_data.clone())
             .await
@@ -121,12 +129,13 @@ impl AuthServiceApi {
 
         // 4. Assign permissions based on whether the hoster was successfully validated
         let pubkey_lowercase = host_pubkey.to_lowercase();
+        let device_id_lowercase = user_data.device_id.to_lowercase();
         let permissions = if is_hoster_valid {
             // If successful, assign personalized inbox and auth permissions
             let user_unique_auth_subject = &format!("AUTH.{}.>", pubkey_lowercase);
             let user_unique_inbox = &format!("_AUTH_INBOX.{}.>", pubkey_lowercase);
-            let authenticated_user_diagnostics_subject =
-                &format!("DIAGNOSTICS.{}.>", pubkey_lowercase);
+            let authenticated_user_inventory_subject =
+                &format!("INVENTORY.{}.>", device_id_lowercase);
 
             types::Permissions {
                 publish: types::PermissionLimits {
@@ -134,7 +143,7 @@ impl AuthServiceApi {
                         "AUTH.validate".to_string(),
                         user_unique_auth_subject.to_string(),
                         user_unique_inbox.to_string(),
-                        authenticated_user_diagnostics_subject.to_string(),
+                        authenticated_user_inventory_subject.to_string(),
                     ]),
                     deny: None,
                 },
@@ -142,19 +151,19 @@ impl AuthServiceApi {
                     allow: Some(vec![
                         user_unique_auth_subject.to_string(),
                         user_unique_inbox.to_string(),
-                        authenticated_user_diagnostics_subject.to_string(),
+                        authenticated_user_inventory_subject.to_string(),
                     ]),
                     deny: None,
                 },
             }
         } else {
-            // Otherwise, exclusively grant publication permissions for the unauthenticated diagnostics subj
+            // Otherwise, exclusively grant publication permissions for the unauthenticated inventory subj
             // ...to allow the host device to still send diganostic reports
-            let unauthenticated_user_diagnostics_subject =
-                format!("DIAGNOSTICS.{}.unauthenticated.>", pubkey_lowercase);
+            let unauthenticated_user_inventory_subject =
+                format!("INVENTORY.unauthenticated.{}.update.>", device_id_lowercase);
             types::Permissions {
                 publish: types::PermissionLimits {
-                    allow: Some(vec![unauthenticated_user_diagnostics_subject]),
+                    allow: Some(vec![unauthenticated_user_inventory_subject]),
                     deny: None,
                 },
                 subscribe: types::PermissionLimits {
@@ -208,6 +217,7 @@ impl AuthServiceApi {
         };
 
         let types::AuthJWTPayload {
+            device_id,
             host_pubkey,
             maybe_sys_pubkey,
             ..
@@ -229,8 +239,8 @@ impl AuthServiceApi {
             return Err(ServiceError::auth(AuthError::new(format!("{:?}", e)), None));
         };
 
-        // 3. Add User keys to nsc resolver (and automatically create account-signed refernce to user key)
-        utils::add_user_keys_to_resolver(&host_pubkey, &maybe_sys_pubkey)?;
+        // 3. Add User keys to nsc resolver (and automatically create account-signed reference to user key)
+        utils::add_user_keys_to_resolver(&device_id, &host_pubkey, &maybe_sys_pubkey)?;
 
         // 4. Create User JWT files (automatically signed with respective account key)
         let (host_jwt, sys_jwt) = utils::create_user_jwt_files(&host_pubkey, &maybe_sys_pubkey)
@@ -259,8 +269,6 @@ impl AuthServiceApi {
         if let (Some(hoster_hc_pubkey), Some(hoster_email)) =
             (user_data.hoster_hc_pubkey, user_data.email)
         {
-            let host_pubkey = user_data.host_pubkey;
-
             let pipeline = vec![
                 // Step 1: Find the `user` document with a matching `hoster_hc_pubkey``
                 doc! {
@@ -312,11 +320,10 @@ impl AuthServiceApi {
             // If no result is returned or more than 1 item exists, call failed
             if result.is_empty() {
                 println!("Failed update pipeline...");
-                log::error!("Failed DB Authorization. REASON=Failed to locate user collection associated with the valid hoster and user_info document.");
+                log::error!("DB Authorization Failed. REASON=Failed to locate user collection associated with the valid hoster and user_info document.");
                 return Ok(false);
             } else if result.len() > 1 {
-                log::error!("Failed DB Authorization. REASON=Recieved unexpected volume of results when validating user data.");
-                return Ok(false);
+                log::warn!("DB Authorization Warning. REASON=Found more than one record matching hoster email and pubkey when validating user data. Defaulting to first record: {:?}", result[0]);
             }
 
             let DbValidationData {
@@ -327,32 +334,56 @@ impl AuthServiceApi {
             } = &result[0];
 
             if user_info.email != hoster_email {
-                log::error!("Failed DB Authorization. REASON=Invalid hoster email.");
+                log::error!("DB Authorization Failed. REASON=Invalid hoster email.");
                 return Ok(false);
             }
 
             if hoster_pubkey.pubkey != hoster_hc_pubkey {
-                log::error!("Failed DB Authorization. REASON=Invalid hoster pubkey.");
+                log::error!("DB Authorization Failed. REASON=Invalid hoster pubkey.");
                 return Ok(false);
             }
 
             // Now that host & hoster are successfully validated...
             // Create a new host document in db and assign the bidirectional references
-            let mut new_host = Host::default();
-            new_host.metadata.created_at = Some(bson::DateTime::now());
-            new_host.device_id = host_pubkey;
+            let new_host = Host::default();
+            let filter = doc! { "device_id": user_data.device_id.clone() };
+            let update = doc! {
+                "$set": {
+                    "metadata.updated_at": bson::DateTime::now(),
+                    "assigned_hoster": hoster._id,
+                },
+                // If the document doesn't exist, also set the device_id (host_device_id)
+                "$setOnInsert": {
+                    "metadata.is_deleted": false,
+                    "metadata.created_at": bson::DateTime::now(),
+                    "device_id": user_data.device_id,
+                    "avg_uptime": new_host.avg_uptime,
+                    "avg_network_speed": new_host.avg_network_speed,
+                    "avg_latency": new_host.avg_latency,
+                    "assigned_workloads": [],
+                    "assigned_hoster": hoster._id,
+                }
+            };
 
             // Assign Hoster to Host
-            new_host.assigned_hoster = hoster._id.ok_or(ServiceError::internal(
-                "Passed DB Authorization, but failed to assign hoster to host. REASON=Failed."
-                    .to_string(),
-                None,
-            ))?;
-            let host_id = self.host_collection.insert_one_into(new_host).await?;
+            let host: Host = self
+                .host_collection
+                .inner
+                .find_one_and_update(filter, UpdateModifications::Document(update))
+                .upsert(true)
+                .return_document(mongodb::options::ReturnDocument::After)
+                .await?
+                .ok_or_else(|| {
+                    ServiceError::internal(
+                        "Failed to return Host record after calling `find_one_and_update`.",
+                        Some("Host Collection".to_string()),
+                    )
+                })?;
 
             // Assign Host to Hoster
             let mut updated_hoster = hoster.to_owned();
-            updated_hoster.assigned_hosts.push(host_id);
+            updated_hoster.assigned_hosts.push(host._id.unwrap());
+
             self.hoster_collection.update_one_within(
                 doc! {
                     "_id": hoster._id

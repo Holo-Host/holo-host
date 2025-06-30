@@ -1,0 +1,52 @@
+[package]
+name = "holo-gateway"
+description = "A simple, extensible service to gateway HTTP and other traffic over NATS"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+clap = { workspace = true }
+anyhow = { workspace = true }
+serde = { workspace = true }
+log = { workspace = true }
+futures = { workspace = true }
+async-nats = { workspace = true }
+workload = { workspace = true }
+nats_utils = { workspace = true }
+env_logger = { workspace = true }
+serde_json = { workspace = true }
+serde_derive = { workspace = true }
+tokio = { workspace = true }
+http-body-util = "0.1.3"
+lazy_static = "1.5.0"
+terrors = "0.3.2"
+bytes = "1.10.1"
+url = "2.5.4"
+url-parse = "1.0.10"
+http-body = "1.0.1"
+uuid = { version = "1.16.0", features = ["v4"] }
+hyper = { version = "1.6.0", features = ["http1", "http2", "server"] }
+hyper-util = { version = "0.1.10", features = [
+  "http1",
+  "http2",
+  "server",
+  "tokio",
+] }
+holochain_http_gateway = "0.1.0"
+
+[[bin]]
+name = "holo-gateway"
+path = "src/main.rs"
+
+[dev-dependencies]
+mock_utils = { workspace = true }
+http-body-util = "0.1.2"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
+
+[profile.release]
+lto = true
+strip = true
+codegen-units = 1
+
+[features]
+broken = []

@@ -1,0 +1,14 @@
+{
+	"gateway.web-bridge.holo.host": {
+		"aaaa": [ "::1" ],
+		"a": [ "127.0.0.1" ],
+		"cname": [],
+		"ns": []
+	},
+	"web-bridge.holo.host": {
+		"a": [],
+		"aaaa": [],
+		"cname": [],
+		"ns": [ "gateway.web-bridge.holo.host" ]
+	}
+}

@@ -27,7 +27,7 @@ use authentication::{
     AUTH_SRV_SUBJ, VALIDATE_AUTH_SUBJECT,
 };
 use hpos_hal::inventory::HoloInventory;
-use nats_utils::jetstream_client;
+// use nats_utils::{jetstream_client};
 use std::str::FromStr;
 use std::time::Duration;
 use textnonce::TextNonce;
@@ -36,7 +36,9 @@ pub const HOST_AUTH_CLIENT_NAME: &str = "Host Auth";
 pub const HOST_AUTH_CLIENT_INBOX_PREFIX: &str = "_AUTH_INBOX";
 
 pub async fn run(
+    device_id: String,
     mut host_agent_keys: Keys,
+    hub_url: &str,
 ) -> Result<(Keys, async_nats::Client), async_nats::Error> {
     log::info!("Host Auth Client: Connecting to server...");
     log::trace!(
@@ -49,6 +51,8 @@ pub async fn run(
 
     // Fetch Hoster Pubkey and email (from config)
     let mut auth_guard_payload = AuthGuardPayload::default();
+    auth_guard_payload.device_id = device_id.clone();
+
     match HosterConfig::new().await {
         Ok(config) => {
             auth_guard_payload.host_pubkey = host_agent_keys.host_pubkey.to_string();
@@ -80,7 +84,7 @@ pub async fn run(
     );
 
     // Connect to Nats server as auth guard and call NATS AuthCallout
-    let nats_url = jetstream_client::get_nats_url();
+    let nats_url = hub_url;
     let auth_guard_client = async_nats::ConnectOptions::new()
         .name(HOST_AUTH_CLIENT_NAME.to_string())
         .custom_inbox_prefix(user_unique_inbox.to_string())
@@ -104,6 +108,7 @@ pub async fn run(
 
     // ==================== Handle Host User and SYS Authoriation ============================================================
     let payload = AuthJWTPayload {
+        device_id,
         host_pubkey: host_agent_keys.host_pubkey.to_string(),
         maybe_sys_pubkey: host_agent_keys.local_sys_pubkey.clone(),
         nonce: TextNonce::new().to_string(),
@@ -132,15 +137,13 @@ pub async fn run(
         Err(e) => {
             log::error!("{:#?}", e);
             if let RequestErrorKind::TimedOut = e.kind() {
-                let unauthenticated_user_diagnostics_subject = format!(
-                    "DIAGNOSTICS.{}.unauthenticated",
-                    host_agent_keys.host_pubkey
-                );
+                let unauthenticated_user_inventory_subject =
+                    format!("INVENTORY.{}.unauthenticated", host_agent_keys.host_pubkey);
                 let diganostics = HoloInventory::from_host();
                 let payload_bytes = serde_json::to_vec(&diganostics)?;
                 if (auth_guard_client
                     .publish(
-                        unauthenticated_user_diagnostics_subject.to_string(),
+                        unauthenticated_user_inventory_subject.to_string(),
                         payload_bytes.into(),
                     )
                     .await)

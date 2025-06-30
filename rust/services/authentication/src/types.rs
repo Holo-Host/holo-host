@@ -1,5 +1,5 @@
 use anyhow::Result;
-use db_utils::schemas::Hoster;
+use db_utils::schemas::hoster::Hoster;
 use nats_utils::types::{CreateResponse, CreateTag, EndpointTraits};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -27,6 +27,7 @@ pub struct AuthErrorPayload {
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct AuthJWTPayload {
+    pub device_id: String,
     pub host_pubkey: String,              // nkey
     pub maybe_sys_pubkey: Option<String>, // optional nkey
     pub nonce: String,
@@ -49,7 +50,7 @@ pub enum AuthResult {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct AuthApiResult {
     pub result: AuthResult,
-    // NB: `maybe_response_tags` optionally return endpoint scoped vars to be available for use as a response subject in JS Service Endpoint handler
+    // NB: `maybe_response_tags` optionally return endpoint scoped vars to be available for use as a response subject in the Jetstream Service Endpoint Handler
     pub maybe_response_tags: Option<HashMap<String, String>>,
 }
 // NB: The following Traits make API Service compatible as a JS Service Endpoint
@@ -97,7 +98,8 @@ pub struct DbValidationData {
 // Callout Request Types:
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct AuthGuardPayload {
-    pub host_pubkey: String, // nkey pubkey
+    pub device_id: String,   // host machine id
+    pub host_pubkey: String, // host pubkey(nkey)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub hoster_hc_pubkey: Option<String>, // holochain encoded hoster pubkey
     #[serde(skip_serializing_if = "Option::is_none")]

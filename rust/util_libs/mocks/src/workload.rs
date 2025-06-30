@@ -1,10 +1,10 @@
 #![allow(dead_code)]
 
 use bson::oid::ObjectId;
-use db_utils::schemas::{self, Capacity};
+use db_utils::schemas::{self, workload::Capacity};
 
 // Helper function to create a test workload
-pub fn create_test_workload_default() -> schemas::Workload {
+pub fn create_test_workload_default() -> schemas::workload::Workload {
     create_test_workload(None, None, None, None, None, None)
 }
 
@@ -15,8 +15,8 @@ pub fn create_test_workload(
     needed_capacity: Option<Capacity>,
     avg_network_speed: Option<i64>,
     avg_uptime: Option<f64>,
-) -> schemas::Workload {
-    let mut workload = schemas::Workload::default();
+) -> schemas::workload::Workload {
+    let mut workload = schemas::workload::Workload::default();
     if let Some(assigned_developer) = assigned_developer {
         workload.assigned_developer = assigned_developer;
     }

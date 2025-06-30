@@ -1,16 +1,17 @@
 use bson::oid::ObjectId;
-use db_utils::schemas::{self, WorkloadStatus};
+use db_utils::schemas::workload::{Workload, WorkloadStatus};
 use nats_utils::types::{CreateResponse, CreateTag, EndpointTraits};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use strum_macros::AsRefStr;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct ObjectIdJSON {
+pub struct HostIdJSON {
     pub _id: ObjectId,
+    pub device_id: String,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, AsRefStr)]
+#[derive(Serialize, Deserialize, Clone, Debug, AsRefStr, strum_macros::Display)]
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 pub enum WorkloadServiceSubjects {
@@ -23,13 +24,14 @@ pub enum WorkloadServiceSubjects {
     SendStatus,
     Install,
     Uninstall,
-    UpdateInstalled,
+    // /// TODO: Command replaces Add, Update, Delete, Install, Uninstall, SendStatus
+    Command,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorkloadResult {
     pub status: WorkloadStatus,
-    pub workload: Option<schemas::Workload>,
+    pub workload: Option<Workload>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

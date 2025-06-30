@@ -15,14 +15,22 @@ members = [
   "rust/util_libs/db",
   "rust/util_libs/mocks",
   "rust/netdiag",
+  "rust/holo-dns",
+  "rust/holo-gateway",
+  "rust/holo-public-api",
+
   "rust/holochain_zome_testing_0",
   "rust/holochain_zome_testing_0_integrity",
 ]
 
 [workspace.dependencies]
-async-nats = { version = "0.38.0", features = ["service"] }
+async-nats = { version = "0.39.0", features = [
+  "service",
+  "websockets",
+  "ring",
+] }
 tokio = { version = "1", features = ["full"] }
-clap = { version = "4.5.23", features = ["derive"] }
+clap = { version = "4.5.23", features = ["derive", "env"] }
 thiserror = "2.0"
 thiserror-context = "0.1"
 futures = "0.3.31"
@@ -34,9 +42,24 @@ dotenv = "0.15.0"
 env_logger = "0.11.0"
 log = "0.4.17"
 openssl = "0.10"
+mongodb = "3.1.0"
+netdiag = { path = "rust/netdiag" }
+hpos-hal = { path = "rust/hpos-hal" }
+mock_utils = { path = "rust/util_libs/mocks" }
+nats_utils = { path = "rust/util_libs/nats" }
+db_utils = { path = "rust/util_libs/db" }
+orchestrator = { path = "rust/clients/orchestrator" }
+host_agent = { path = "rust/clients/host_agent" }
+inventory = { path = "rust/services/inventory" }
+workload = { path = "rust/services/workload" }
+ham = { path = "rust/ham" }
+bytes = "1.10.1"
 
 [profile.dev]
 opt-level = "z"
 
 [profile.release]
 opt-level = "z"
+
+[patch.crates-io]
+async-nats = { git = "https://github.com/nats-io/nats.rs", rev = "7df9a4ec420aa48bc9e5cf87565d08d8440064ed" }

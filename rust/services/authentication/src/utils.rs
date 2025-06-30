@@ -203,6 +203,7 @@ pub fn generate_auth_response_claim(
 }
 
 pub fn add_user_keys_to_resolver(
+    device_id: &str,
     host_pubkey: &str,
     maybe_sys_pubkey: &Option<String>,
 ) -> Result<(), ServiceError> {
@@ -219,7 +220,7 @@ pub fn add_user_keys_to_resolver(
             "-K",
             WORKLOAD_SK_ROLE,
             "--tag",
-            &format!("pubkey:{}", host_pubkey),
+            &format!("hostId:{}", device_id),
         ])
         .output()
         .context("Failed to add host user with provided keys")

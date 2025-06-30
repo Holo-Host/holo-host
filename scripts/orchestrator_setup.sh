@@ -140,7 +140,7 @@ else
   echo "Added $AUTH_ACCOUNT account."
 fi
 
-# Step 4: Create HPOS Account with JetStream and scoped signing keys
+# Step 4: Create Host (HPOS) Account with JetStream and scoped signing keys
 if nsc describe account $HPOS_ACCOUNT > /dev/null 2>&1; then
   echo "$HPOS_ACCOUNT account exists."
 else
@@ -148,7 +148,7 @@ else
   nsc edit account --name $HPOS_ACCOUNT --js-streams -1 --js-consumer -1 --js-mem-storage 1G --js-disk-storage 5G --conns -1 --leaf-conns -1
   HPOS_WORKLOAD_SK="$(echo "$(nsc edit account -n $HPOS_ACCOUNT --sk generate 2>&1)" | grep -oP "signing key\s*\K\S+")"
   WORKLOAD_ROLE_NAME="workload_role"
-  nsc edit signing-key --sk $HPOS_WORKLOAD_SK --role $WORKLOAD_ROLE_NAME --allow-pub "WORKLOAD.orchestrator.>","WORKLOAD.{{tag(pubkey)}}.>","INVENTORY.*.{{tag(pubkey)}}.update.>","\$JS.API.>","_HPOS_INBOX.{{tag(pubkey)}}.>","_ADMIN_INBOX.orchestrator.>" --allow-sub "WORKLOAD.{{tag(pubkey)}}.>","INVENTORY.*.{{tag(pubkey)}}.>","\$JS.API.>","_HPOS_INBOX.{{tag(pubkey)}}.>" --allow-pub-response
+  nsc edit signing-key --sk $HPOS_WORKLOAD_SK --role $WORKLOAD_ROLE_NAME --allow-pub "WORKLOAD.orchestrator.>","WORKLOAD.{{tag(hostId)}}.>","INVENTORY.{{tag(hostId)}}.>","\$JS.API.>","_HPOS_INBOX.{{tag(hostId)}}.>","_ADMIN_INBOX.orchestrator.>" --allow-sub "WORKLOAD.{{tag(hostId)}}.>","INVENTORY.{{tag(hostId)}}.>","\$JS.API.>","_HPOS_INBOX.{{tag(hostId)}}.>" --allow-pub-response
   echo "Added $HPOS_ACCOUNT account."
 fi
 

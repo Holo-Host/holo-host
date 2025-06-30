@@ -7,7 +7,7 @@ Users: admin user & host user (the authenticated host user) & auth guard user (t
 (NB: Orchestrator admin user can listen to ALL "Inventory.>" subjects)
 
 Endpoints & Managed Subjects:
-    - handle_inventory_update: INVENTORY.{{host_pubkey}}
+    - handle_inventory_update: INVENTORY.{{host_id}}
 */
 
 pub mod types;
@@ -18,10 +18,18 @@ mod tests;
 use anyhow::Result;
 use async_nats::jetstream::ErrorCode;
 use async_nats::Message;
-use bson::{self, doc, oid::ObjectId};
+use bson::{self, doc, oid::ObjectId, DateTime};
 use db_utils::{
-    mongodb::{IntoIndexes, MongoCollection, MongoDbAPI, MutMetadata},
-    schemas::{self, Host, Workload},
+    mongodb::{
+        api::MongoDbAPI,
+        collection::MongoCollection,
+        traits::{IntoIndexes, MutMetadata},
+    },
+    schemas::{
+        self,
+        host::{Host, HOST_COLLECTION_NAME},
+        workload::{Workload, WORKLOAD_COLLECTION_NAME},
+    },
 };
 use hpos_hal::inventory::HoloInventory;
 use mongodb::{options::UpdateModifications, Client as MongoDBClient};
@@ -47,9 +55,8 @@ pub struct InventoryServiceApi {
 impl InventoryServiceApi {
     pub async fn new(client: &MongoDBClient) -> Result<Self> {
         Ok(Self {
-            workload_collection: Self::init_collection(client, schemas::WORKLOAD_COLLECTION_NAME)
-                .await?,
-            host_collection: Self::init_collection(client, schemas::HOST_COLLECTION_NAME).await?,
+            workload_collection: Self::init_collection(client, WORKLOAD_COLLECTION_NAME).await?,
+            host_collection: Self::init_collection(client, HOST_COLLECTION_NAME).await?,
         })
     }
 
@@ -64,32 +71,23 @@ impl InventoryServiceApi {
         );
 
         let subject_sections: Vec<&str> = msg_subject.split('.').collect();
-        let host_pubkey: schemas::PubKey = subject_sections
-            .get(1)
+        let host_device_id_index = 1;
+        let host_device_id = subject_sections
+            .get(host_device_id_index)
             .ok_or_else(|| {
                 ServiceError::internal(
                     "Invalid subject format",
-                    Some("Missing host pubkey in subject".to_string()),
+                    Some("Missing host device id in subject".to_string()),
                 )
             })?
             .to_string();
 
-        log::debug!("Processing inventory update for host: {}", host_pubkey);
+        log::debug!("Processing inventory update for host: {host_device_id}");
 
         // Update host inventory and get the host record
-        self.update_host_inventory(&host_pubkey, &host_inventory)
-            .await?;
-
         let host = self
-            .host_collection
-            .get_one_from(doc! { "device_id": &host_pubkey })
-            .await?
-            .ok_or_else(|| {
-                ServiceError::internal(
-                    format!("Host not found: {}", host_pubkey),
-                    Some("Host lookup failed after inventory update".to_string()),
-                )
-            })?;
+            .update_host_inventory(&host_device_id, &host_inventory)
+            .await?;
 
         // Handle workloads that are no longer compatible with the host
         self.handle_ineligible_host_workloads(host).await?;
@@ -100,23 +98,50 @@ impl InventoryServiceApi {
         })
     }
 
+    // Update Host's Holo Inventory in Host collection,
+    // creating a new Host entry if one doesn't already exist for the provided host_device_id
     async fn update_host_inventory(
         &self,
-        host_pubkey: &schemas::PubKey,
+        host_device_id: &str,
         inventory: &HoloInventory,
-    ) -> Result<(), ServiceError> {
-        self.host_collection
-            .update_one_within(
-                doc! { "device_id": host_pubkey },
-                UpdateModifications::Document(doc! {
-                    "$set": { "inventory": bson::to_bson(inventory)? }
-                }),
-                false,
-            )
-            .await?;
+    ) -> Result<Host, ServiceError> {
+        // Create a default Host instance to extract default values
+        let default_host = Host::default();
+        let filter = doc! { "device_id": host_device_id };
+        let update = doc! {
+            "$set": {
+                "inventory": bson::to_bson(inventory)
+                    .map_err(|e| ServiceError::internal(e.to_string(), None))?,
+                "metadata.updated_at": DateTime::now(),
+            },
+            // If the document doesn't exist, also set the device_id (host_device_id)
+            "$setOnInsert": {
+                "metadata.is_deleted": false,
+                "metadata.created_at": DateTime::now(),
+                "device_id": host_device_id,
+                "avg_uptime": default_host.avg_uptime,
+                "avg_network_speed": default_host.avg_network_speed,
+                "avg_latency": default_host.avg_latency,
+                "assigned_workloads": [],
+            }
+        };
 
-        log::debug!("Updated inventory for host: {}", host_pubkey);
-        Ok(())
+        // Use upsert to either insert or update the document
+        let host = self
+            .host_collection
+            .inner
+            .find_one_and_update(filter, UpdateModifications::Document(update))
+            .upsert(true)
+            .return_document(mongodb::options::ReturnDocument::After)
+            .await?
+            .ok_or_else(|| {
+                ServiceError::internal(
+                    "Failed to return Host record after calling `find_one_and_update`.",
+                    Some("Host Collection".to_string()),
+                )
+            })?;
+
+        Ok(host)
     }
 
     fn calculate_host_drive_capacity(&self, host_inventory: &HoloInventory) -> i64 {
@@ -202,7 +227,9 @@ impl InventoryServiceApi {
             + IntoIndexes
             + MutMetadata,
     {
-        Ok(MongoCollection::<T>::new(client, schemas::DATABASE_NAME, collection_name).await?)
+        let db_name =
+            std::env::var("HOLO_DATABASE_NAME").unwrap_or(schemas::DATABASE_NAME.to_string());
+        Ok(MongoCollection::<T>::new(client, &db_name, collection_name).await?)
     }
 
     fn convert_msg_to_type<T>(msg: Arc<Message>) -> Result<T, ServiceError>
