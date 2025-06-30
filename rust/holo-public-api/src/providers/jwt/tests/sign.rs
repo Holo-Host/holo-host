@@ -3,7 +3,7 @@ mod tests {
     use crate::providers::jwt::{sign_jwt, AccessTokenClaims};
 
     const USER_ID: &str = "67b66b733461bada3a2e8153";
-    const TOKEN: &str = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiI2N2I2NmI3MzM0NjFiYWRhM2EyZTgxNTMiLCJleHAiOjAsInBlcm1pc3Npb25zIjpbXX0.5jYCYlomei0bTBy-bvAHg3vkrCzrRPLaeTn8MTyFFUY";
+    const TOKEN: &str = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiI2N2I2NmI3MzM0NjFiYWRhM2EyZTgxNTMiLCJleHAiOjAsInBlcm1pc3Npb25zIjpbXSwiaW5pdGlhbHMiOm51bGx9.Y-BcDlOFqFGwPbAE1ytaRL1vc22e5nhYouaScUUqWZs";
     const SECRET: &str = "jwt_secret";
 
     #[test]
