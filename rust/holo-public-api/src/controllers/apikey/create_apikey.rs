@@ -87,6 +87,8 @@ pub async fn create_api_key(
 
     // generate api key
     let api_key = providers::auth::generate_api_key();
+    let prefix_length = 6;
+    let prefix = api_key.chars().take(prefix_length).collect::<String>();
     let api_key_hash = match providers::auth::hash_apikey(payload.version.clone(), api_key.clone())
     {
         Some(hash) => hash,
@@ -118,6 +120,7 @@ pub async fn create_api_key(
             permissions: payload.permissions.clone(),
             description: payload.description.clone(),
             expire_at: payload.expire_at,
+            prefix: Some(prefix),
         },
     )
     .await

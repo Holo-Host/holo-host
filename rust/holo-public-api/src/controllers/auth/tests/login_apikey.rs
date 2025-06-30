@@ -26,12 +26,13 @@ mod tests {
                 permissions: vec![],
                 metadata: db_utils::schemas::metadata::Metadata::default(),
                 owner: owner_id,
+                prefix: None,
             },
         )
         .await
         .unwrap();
 
-        let req = test::TestRequest::get()
+        let req = test::TestRequest::post()
             .insert_header(("Content-Type", "application/json"))
             .insert_header((API_KEY_HEADER.to_string(), format!("v0-{}", api_key)))
             .uri("/v1/auth/login-with-apikey");

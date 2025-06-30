@@ -1,0 +1,148 @@
+body {
+  margin: 0;
+  padding: 0;
+  background-color: #f7f8fd;
+  display: flex;
+  font-family: "Lexend", sans-serif;
+}
+
+body {
+  min-height: 100vh;
+}
+
+#app {
+  display: flex;
+  width: 100%;
+  min-height: min-content;
+  justify-content: center;
+  align-items: start;
+}
+
+a {
+  text-decoration: underline;
+  color: black;
+}
+
+div,
+span,
+a,
+p,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: "Lexend", sans-serif;
+  display: flex;
+  margin: 0;
+  padding: 0;
+}
+
+h1 {
+  font-weight: 500;
+  font-size: 48px;
+}
+
+/* fallback */
+@font-face {
+  font-family: "Material Symbols Outlined";
+  font-style: normal;
+  font-weight: 100 700;
+  src: url(/icons/icons.woff2) format("woff2");
+}
+.icons-outlined,
+.icons-filled {
+  font-family: "Material Symbols Outlined";
+  font-weight: normal;
+  font-style: normal;
+  font-size: 24px;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-block;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  font-feature-settings: "liga";
+  -webkit-font-smoothing: antialiased;
+  font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 40;
+}
+.icons-filled {
+  font-variation-settings: "FILL" 1, "wght" 400, "GRAD" 0, "opsz" 40;
+}
+
+button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: none;
+  border: none;
+  outline: none;
+}
+
+.page {
+  flex-direction: column;
+  margin: 30px;
+  gap: 30px;
+}
+
+.flex {
+  display: flex;
+}
+
+.grow {
+  flex-grow: 1;
+}
+
+.column {
+  flex-direction: column;
+}
+
+.wrap {
+  flex-wrap: wrap;
+}
+
+.align-center {
+  align-items: center;
+}
+
+.justify-center {
+  justify-content: center;
+}
+
+.text-center {
+  text-align: center;
+}
+
+.justify-space-between {
+  justify-content: space-between;
+}
+
+.gap5 {
+  gap: 5px;
+}
+
+.gap10 {
+  gap: 10px;
+}
+.gap20 {
+  gap: 20px;
+}
+
+.cursor-pointer {
+  cursor: pointer;
+}
+
+.hex::before {
+  content: "\2B22";
+  font-size: 260px;
+  line-height: 120px;
+  height: 135px;
+  top: -80px;
+  position: relative;
+}
+
+.w100 {
+  width: 100%;
+}
