@@ -50,11 +50,11 @@
   function onSubmit(e: Event) {
     e.preventDefault();
     if (verified) {
-      if (!isEmailValid) return;
-      onVerifyEmail();
-    } else {
       if (!isCodeValid) return;
       onVerifyCode();
+    } else {
+      if (!isEmailValid) return;
+      onVerifyEmail();
     }
   }
 </script>

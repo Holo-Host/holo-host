@@ -28,7 +28,7 @@
   });
 
   let description = $state("");
-  let isDescriptionValid = $state(true);
+  let isDescriptionValid = $state(false);
   let expireAt = $state(new Date(Date.now() + 86400000 * 7));
   let permissionValue = $state("");
   let permissionsSelected = $state<string[]>(["all.all.self"]);

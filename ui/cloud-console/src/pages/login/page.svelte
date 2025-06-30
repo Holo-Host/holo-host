@@ -28,7 +28,7 @@
     style:margin-top="100px"
     style:z-index="2"
   >
-    <form onsubmit={onSubmit}>
+    <form onsubmit={onSubmit} class="w100">
       <h2 style:margin-bottom="20px">Login to HOLO</h2>
       <Input
         class="w100"

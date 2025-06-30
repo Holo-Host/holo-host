@@ -37,11 +37,12 @@
 </script>
 
 <div class={props.class}>
-  {#if !!props.href}
+  {#if !props.type || props.type === "button" || !!props.href}
     <a
       class="button"
       class:disabled={props.disabled}
       href={props.href}
+      onclick={props.onclick}
       style:--background-color={backgroundColor}
       style:--text-color={textColor}
       style:--shadow={defaultTheme.shadow}
@@ -53,7 +54,7 @@
     </a>
   {:else}
     <button
-      type={props.type ?? "button"}
+      type={props.type}
       class="button"
       class:disabled={props.disabled}
       onclick={props.disabled ? null : onclick}
