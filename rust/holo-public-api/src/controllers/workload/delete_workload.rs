@@ -42,14 +42,14 @@ pub async fn delete_workload(
     }
 
     // get workload
-    let workload = match providers::crud::get::<schemas::workload::Workload>(
+    let maybe_workload = match providers::crud::get::<schemas::workload::Workload>(
         db.get_ref().clone(),
         schemas::workload::WORKLOAD_COLLECTION_NAME.to_string(),
         id.to_string().clone(),
     )
     .await
     {
-        Ok(workload) => workload,
+        Ok(maybe_workload) => maybe_workload,
         Err(e) => {
             tracing::error!("Error getting workload: {}", e);
             return HttpResponse::InternalServerError().json(ErrorResponse {
@@ -57,12 +57,12 @@ pub async fn delete_workload(
             });
         }
     };
-    if workload.is_none() {
+    if maybe_workload.is_none() {
         return HttpResponse::NotFound().json(ErrorResponse {
             message: "Workload not found".to_string(),
         });
     }
-    let workload = workload.unwrap();
+    let workload = maybe_workload.unwrap();
 
     // get developer
     let developer = match providers::crud::get::<schemas::developer::Developer>(
@@ -105,7 +105,7 @@ pub async fn delete_workload(
     match providers::crud::delete::<schemas::workload::Workload>(
         db.get_ref().clone(),
         schemas::workload::WORKLOAD_COLLECTION_NAME.to_string(),
-        workload._id.unwrap().to_hex(),
+        workload._id.to_hex(),
     )
     .await
     {

@@ -212,7 +212,7 @@ impl JsStreamService {
     {
         let endpoint_handler: EndpointType<T> =
             EndpointType::try_from(consumer_details.get_endpoint())?;
-        let maybe_response_generator = consumer_details.get_response();
+        let maybe_response_subject_generator = consumer_details.get_response_subject_fn();
         let mut consumer = consumer_details.get_consumer();
         let messages = consumer
             .stream()
@@ -246,7 +246,7 @@ impl JsStreamService {
                     js_context,
                     messages,
                     endpoint_handler,
-                    maybe_response_generator,
+                    maybe_response_subject_generator,
                 )
                 .await;
             }
@@ -260,7 +260,7 @@ impl JsStreamService {
         service_context: Arc<RwLock<JsContext>>,
         mut messages: consumer::pull::Stream,
         endpoint_handler: EndpointType<T>,
-        maybe_response_generator: Option<ResponseSubjectsGenerator>,
+        maybe_response_subject_generator: Option<ResponseSubjectsGenerator>,
     ) where
         T: EndpointTraits,
     {
@@ -281,7 +281,7 @@ impl JsStreamService {
             };
 
             let (response_bytes, maybe_subject_tags) = match result {
-                Ok(r) => (r.get_response(), r.get_tags()),
+                Ok(r) => (r.get_response(), r.get_subject_tags()),
                 Err(err) => (err.to_string().into(), HashMap::new()),
             };
 
@@ -308,11 +308,9 @@ impl JsStreamService {
                     .await
                 {
                     log::error!(
-                        "{}Failed to send reply upon successful message consumption: subj='{}.{}.{}', endpoint={}, service={}, err={:?}",
+                        "{}Failed to send reply upon successful message consumption: subj='{}', endpoint={}, service={}, err={:?}",
                         log_info.prefix,
                         reply,
-                        log_info.service_subject,
-                        log_info.endpoint_subject,
                         log_info.endpoint_name,
                         log_info.service_name,
                         err
@@ -323,7 +321,7 @@ impl JsStreamService {
             }
 
             // Publish a response message to response subjects when an endpoint response subject generator exists for endpoint
-            if let Some(response_subject_fn) = maybe_response_generator.as_ref() {
+            if let Some(response_subject_fn) = maybe_response_subject_generator.as_ref() {
                 let response_subjects = response_subject_fn(maybe_subject_tags);
                 for response_subject in response_subjects.iter() {
                     // TODO(simplify): remove the service_subject?
@@ -341,7 +339,7 @@ impl JsStreamService {
                             "{}Failed to publish new message upon successful message consumption: subj='{}.{}', endpoint={}, service={}, err={:?}",
                             log_info.prefix,
                             log_info.service_subject,
-                            log_info.endpoint_subject,
+                            response_subject,
                             log_info.endpoint_name,
                             log_info.service_name,
                             err

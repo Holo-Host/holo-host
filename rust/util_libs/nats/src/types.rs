@@ -40,25 +40,30 @@ pub trait EndpointTraits:
     + Sync
     + Clone
     + Debug
-    + CreateTag
-    + CreateResponse
+    + GetSubjectTags
+    + GetResponse
+    + GetHeaderMap
     + 'static
 {
 }
 
-pub trait CreateTag: Send + Sync {
-    fn get_tags(&self) -> HashMap<String, String>;
+pub trait GetSubjectTags: Send + Sync {
+    fn get_subject_tags(&self) -> HashMap<String, String>;
 }
 
-pub trait CreateResponse: Send + Sync {
+pub trait GetResponse: Send + Sync {
     fn get_response(&self) -> bytes::Bytes;
+}
+
+pub trait GetHeaderMap: Send + Sync {
+    fn get_header_map(&self) -> Option<HeaderMap>;
 }
 
 #[async_trait]
 pub trait ConsumerExtTrait: Send + Sync + Debug + 'static {
     fn get_consumer(&self) -> PullConsumer;
     fn get_endpoint(&self) -> Box<dyn Any + Send + Sync>;
-    fn get_response(&self) -> Option<ResponseSubjectsGenerator>;
+    fn get_response_subject_fn(&self) -> Option<ResponseSubjectsGenerator>;
 }
 
 #[async_trait]
@@ -72,7 +77,7 @@ where
     fn get_endpoint(&self) -> Box<dyn Any + Send + Sync> {
         Box::new(self.handler.clone())
     }
-    fn get_response(&self) -> Option<ResponseSubjectsGenerator> {
+    fn get_response_subject_fn(&self) -> Option<ResponseSubjectsGenerator> {
         self.response_subject_fn.clone()
     }
 }
@@ -333,7 +338,7 @@ pub enum ServiceError {
         context: Option<String>,
     },
 
-    #[error("Internal error: {message}")]
+    #[error("Workload error: {message}")]
     Workload {
         message: String,
         context: Option<String>,
@@ -659,8 +664,8 @@ pub async fn hc_http_gw_nats_request(
     Ok(response)
 }
 
-impl CreateTag for HcHttpGwResponseMsg {
-    fn get_tags(&self) -> HashMap<String, String> {
+impl GetSubjectTags for HcHttpGwResponseMsg {
+    fn get_subject_tags(&self) -> HashMap<String, String> {
         self.response_subject
             .clone()
             .map(|response_subject| {
@@ -672,12 +677,18 @@ impl CreateTag for HcHttpGwResponseMsg {
     }
 }
 
-impl CreateResponse for HcHttpGwResponseMsg {
+impl GetResponse for HcHttpGwResponseMsg {
     fn get_response(&self) -> bytes::Bytes {
         match serde_json::to_vec(&self.response) {
             Ok(r) => r.into(),
             Err(e) => e.to_string().into(),
         }
+    }
+}
+
+impl GetHeaderMap for HcHttpGwResponseMsg {
+    fn get_header_map(&self) -> Option<async_nats::HeaderMap> {
+        None
     }
 }
 

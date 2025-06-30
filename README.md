@@ -79,6 +79,90 @@ The development environment includes:
 - `dev-host`: Holo Host Agent
 - `dev-gw`: Gateway service
 
+## Container Networking and Port Forwarding
+
+The container system supports two networking modes with different port forwarding approaches:
+
+### Host Networking Mode (`privateNetwork = false`)
+- Containers share the host's network namespace
+- Direct port access without forwarding
+- Recommended for development and testing
+- No additional configuration needed
+
+### Private Networking Mode (`privateNetwork = true`)
+- Containers run in isolated network namespaces
+- Requires port forwarding for external access
+- Uses socat-based tunneling for reliable connectivity
+- Production-ready with proper isolation
+
+
+**Two-Tier Port Forwarding Architecture:**
+The system uses a two-tier socat architecture to handle the fact that Holochain only binds to localhost inside containers:
+
+1. **Internal socat forwarder (inside container):**
+   ```bash
+   # Inside container: forwards 0.0.0.0:8001 → 127.0.0.1:8000
+   socat TCP-LISTEN:8001,bind=0.0.0.0,fork,reuseaddr TCP:127.0.0.1:8000
+   ```
+   - Bridges the gap between Holochain's localhost-only binding and container network
+   - Automatically created when `privateNetwork = true`
+   - Service: `socat-internal-admin-forwarder`
+
+2. **Host-side socat tunnel (on host):**
+   ```bash
+   # On host: forwards localhost:8000 → container:8001
+   socat TCP-LISTEN:8000,fork,reuseaddr TCP:10.0.85.2:8001
+   ```
+   - Provides external access from host to container
+   - Connects to the internal forwarder port (8001)
+   - Service: `socat-${containerName}-admin`
+
+**Port Flow:**
+```
+Host Client → localhost:8000 → Host socat → 10.0.85.2:8001 → Internal socat → 127.0.0.1:8000 → Holochain
+```
+
+**Usage Example:**
+```nix
+# In your container configuration
+privateNetwork = true;
+adminWebsocketPort = 8000;
+httpGwEnable = true;
+httpGwPort = 8080;
+```
+
+This automatically creates a two-tier socat tunnel system:
+- Host `localhost:8000` → Container `10.0.85.2:8001` → Container `127.0.0.1:8000` (admin)
+- Host `localhost:8080` → Container `10.0.85.2:4000` → Container `127.0.0.1:4000` (HTTP gateway)
+
+
+**Deployment Example:**
+```nix
+# Production host configuration
+holo.host-agent = {
+  enable = true;
+  containerPrivateNetwork = true;  # Enables automatic socat support
+  # ... other configuration
+};
+```
+
+When `host_agent` deploys a Holochain workload, it automatically creates:
+- Container with internal socat services
+- Host with external socat services  
+- Complete two-tier port forwarding chain
+
+**Verification in Production:**
+```bash
+# Check that containers are created with socat services
+systemctl list-units | grep socat
+
+# Verify port forwarding is working
+nc -z localhost 8000
+
+# Check container networking
+machinectl list
+```
+
 
 ### Container Packages and Platforms 
 The development environment includes the following key packages or use their platform:
@@ -113,6 +197,25 @@ just dev-cycle-logs
 # if you're able to view logs with the command above
 just dev-cycle-logs-compat
 ```
+
+#### Test with different Holochain versions
+The development environment now supports testing with different Holochain versions:
+
+```bash
+# Test with Holochain 0.5 (default - uses kitsune2 networking)
+just -- dev-cycle-v05
+
+# Test with Holochain 0.4 (legacy - uses separate bootstrap/signal services)
+just -- dev-cycle-v04
+
+# Or specify version manually
+just -- dev-cycle "dev-hub dev-host dev-orch dev-gw" "0.4"
+```
+
+This will automatically:
+- select the appropriate holonix package (0.3, 0.4, or 0.5)
+- configure the correct bootstrap service pattern
+- use compatible networking protocols
 
 2. In a second terminal, start the Holochain terminal:
 ```bash
@@ -431,10 +534,14 @@ E.g., this runs the [holo-agent integration](nix/checks/holo-agent-integration-n
 nix build -vL .#checks.x86_64-linux.holo-agent-integration-nixos
 ```
 
-Or this runs the [`extra-container-holochain` integration test](nix/packages/extra-container-holochain.nix#L123), which is another way to define a NixOS VM test that's attached defined in the package file directly.
+Or this runs the [`extra-container-holochain` integration tests](nix/packages/extra-container-holochain.nix#L169), which are NixOS VM tests defined in the package file directly:
 
-```
-nix build -vL .#checks.x86_64-linux.pkgs-extra-container-holochain-integration
+```bash
+# Host networking test (recommended)
+nix build -vL .#checks.x86_64-linux.pkgs-extra-container-holochain-integration-host-network
+
+# Private networking test (documents port forwarding issues)
+nix build -vL .#checks.x86_64-linux.pkgs-extra-container-holochain-integration-private-network
 ```
 
 ### Test Environment Requirements
@@ -476,14 +583,24 @@ Runs a NixOS VM test that:
 - Tests workload management
 
 2. **Holochain Container Integration**:
-```bash
-nix build -vL .#checks.x86_64-linux.pkgs-extra-container-holochain-integration
-```
-Tests the Holochain container setup:
-- Container creation and initialization
-- Holochain conductor configuration
-- Network connectivity
-- State persistence
+
+   **Host Networking Test** (recommended - works reliably):
+   ```bash
+   nix build -vL .#checks.x86_64-linux.pkgs-extra-container-holochain-integration-host-network
+   ```
+   
+   **Private Networking Test** (currently failing due to systemd-nspawn port forwarding compatibility):
+   ```bash
+   nix build -vL .#checks.x86_64-linux.pkgs-extra-container-holochain-integration-private-network
+   ```
+   
+   Both tests verify:
+   - Container creation and initialization
+   - Holochain conductor configuration
+   - Service readiness with systemd notifications
+   - Network connectivity (host vs private networking)
+   - Environment variable handling for `IS_CONTAINER_ON_PRIVATE_NETWORK`
+   - State persistence (holochain data directory and configuration)
 
 
 ### Running Tests Locally
@@ -500,3 +617,9 @@ Please see the [LICENSE](./LICENSE) file.
 
 [just]: https://just.systems/man/en/
 [nix develop]: https://zero-to-nix.com/concepts/dev-env/
+
+# Check if the environment variable is set correctly in the host agent
+sudo systemctl show holo-host-agent.service | grep Environment | grep CONTAINER
+
+# Or check the service environment directly
+sudo systemctl cat holo-host-agent.service | grep -A10 -B10 CONTAINER
