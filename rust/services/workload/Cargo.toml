@@ -38,9 +38,6 @@ sha2 = "0.10"
 [dev-dependencies]
 dotenv = { workspace = true }
 mock_utils = { workspace = true }
-db_utils = { path = "../../util_libs/db" }
-nats_utils = { path = "../../util_libs/nats" }
-hpos-hal = { path = "../../hpos-hal" }
 serial_test = "2.0"
 ctor = "0.2"
 

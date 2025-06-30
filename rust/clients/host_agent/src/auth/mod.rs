@@ -1,10 +1,10 @@
 pub mod config;
-pub mod init;
+pub mod initialize;
 pub mod utils;
 use crate::{auth, keys};
 use hpos_hal::inventory::HoloInventory;
 
-pub async fn run_validation_loop(
+pub async fn run(
     device_id: String,
     mut keys: keys::Keys,
     hub_url: &str,
@@ -13,7 +13,7 @@ pub async fn run_validation_loop(
     loop {
         log::debug!("About to run the Hosting Agent Authentication Service");
         let auth_guard_client: async_nats::Client;
-        (keys, auth_guard_client) = auth::init::run(device_id.clone(), keys, hub_url).await?;
+        (keys, auth_guard_client) = auth::initialize::try_authorize_host(device_id.clone(), keys, hub_url).await?;
 
         // If authenicated creds exist, then auth call was successful.
         // Close buffer, exit loop, and return.

@@ -1,6 +1,7 @@
 use anyhow::Result;
 use db_utils::schemas::hoster::Hoster;
-use nats_utils::types::{CreateResponse, CreateTag, EndpointTraits};
+use nats_utils::types::{EndpointTraits, GetHeaderMap, GetResponse, GetSubjectTags};
+
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -55,12 +56,12 @@ pub struct AuthApiResult {
 }
 // NB: The following Traits make API Service compatible as a JS Service Endpoint
 impl EndpointTraits for AuthApiResult {}
-impl CreateTag for AuthApiResult {
-    fn get_tags(&self) -> HashMap<String, String> {
+impl GetSubjectTags for AuthApiResult {
+    fn get_subject_tags(&self) -> HashMap<String, String> {
         self.maybe_response_tags.clone().unwrap_or_default()
     }
 }
-impl CreateResponse for AuthApiResult {
+impl GetResponse for AuthApiResult {
     fn get_response(&self) -> bytes::Bytes {
         match self.clone().result {
             AuthResult::Authorization(r) => match serde_json::to_vec(&r) {
@@ -71,6 +72,12 @@ impl CreateResponse for AuthApiResult {
         }
     }
 }
+impl GetHeaderMap for AuthApiResult {
+    fn get_header_map(&self) -> Option<async_nats::HeaderMap> {
+       None
+    }
+}
+
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct UserEmail {

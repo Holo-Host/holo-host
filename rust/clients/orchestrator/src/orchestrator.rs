@@ -8,20 +8,19 @@ use tokio::sync::broadcast;
 use tokio::task::JoinSet;
 
 pub struct Orchestrator {
-    config: OrchestratorConfig,
-    db_client: MongoDBClient,
+    _config: OrchestratorConfig,
     services: JoinSet<Result<(), OrchestratorError>>,
     shutdown_tx: broadcast::Sender<()>,
 }
 
 impl Orchestrator {
-    pub async fn new(args: Args) -> Result<Self, OrchestratorError> {
+    pub async fn initialize(args: Args) -> Result<Self, OrchestratorError> {
         let config = OrchestratorConfig::from_args(args)?;
         let (shutdown_tx, _) = broadcast::channel(1);
         let mut services = JoinSet::new();
         
         // Setup database
-        let db_client = Self::setup_database(&config).await?;
+        let db_client = setup_database(&config).await?;
         
         // Setup auth client service (auth service)
         let auth_client = AuthClient::start(&config).await?;
@@ -36,8 +35,7 @@ impl Orchestrator {
         Ok(Self { 
             services, 
             shutdown_tx, 
-            config,
-            db_client,
+            _config: config,
         })
     }
     
@@ -73,15 +71,15 @@ impl Orchestrator {
         log::info!("Successfully shut down orchestrator");
         Ok(())
     }
+}
+
+async fn setup_database(config: &OrchestratorConfig) -> Result<MongoDBClient, OrchestratorError> {
+    log::info!("Connecting to mongodb at {}", config.mongo_uri);
+    let db_client_options = ClientOptions::parse(&config.mongo_uri)
+        .await
+        .context(format!("mongo db client: connecting to {}", config.mongo_uri))
+        .map_err(|e| OrchestratorError::Configuration(e.to_string()))?;
     
-    async fn setup_database(config: &OrchestratorConfig) -> Result<MongoDBClient, OrchestratorError> {
-        log::info!("Connecting to mongodb at {}", config.mongo_uri);
-        let db_client_options = ClientOptions::parse(&config.mongo_uri)
-            .await
-            .context(format!("mongo db client: connecting to {}", config.mongo_uri))
-            .map_err(|e| OrchestratorError::Configuration(e.to_string()))?;
-        
-        MongoDBClient::with_options(db_client_options)
-            .map_err(OrchestratorError::Database)
-    }
+    MongoDBClient::with_options(db_client_options)
+        .map_err(OrchestratorError::Database)
 }

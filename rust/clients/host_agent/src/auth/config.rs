@@ -17,7 +17,7 @@ pub struct HosterConfig {
 
 impl HosterConfig {
     pub async fn new() -> Result<Self> {
-        let (keypair, email) = get_from_config().await?;
+        let (keypair, email) = try_from_config().await?;
         let hc_pubkey = public_key::to_holochain_encoded_agent_key(&keypair.verifying_key());
         let holoport_id = public_key::to_base36_id(&keypair.verifying_key());
 
@@ -30,7 +30,7 @@ impl HosterConfig {
     }
 }
 
-async fn get_from_config() -> Result<(SigningKey, String)> {
+async fn try_from_config() -> Result<(SigningKey, String)> {
     let config_path = env::var("HPOS_CONFIG_PATH")
         .context("Cannot read HPOS_CONFIG_PATH from env var. Was it set?")?;
     let config_file =

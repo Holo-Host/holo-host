@@ -98,7 +98,7 @@ async fn daemonize(args: &DaemonzeArgs) -> anyhow::Result<()> {
     // the unauth'd inventory call, allowing time for the auth to be investigated/resolved.
     if let keys::AuthCredType::Guard(_) = host_agent_keys.creds {
         log::info!("Starting authentication validation loop for device: {}", device_id);
-        host_agent_keys = auth::run_validation_loop(device_id.clone(), host_agent_keys, &args.hub_url)
+        host_agent_keys = auth::run(device_id.clone(), host_agent_keys, &args.hub_url)
             .await
             .map_err(|e| {
                 anyhow::anyhow!(
@@ -111,7 +111,7 @@ async fn daemonize(args: &DaemonzeArgs) -> anyhow::Result<()> {
     }
 
     log::trace!(
-        "Host Agent Keys after successful authentication: {:#?}",
+        "Host Agent Keys after authentication: {:#?}",
         host_agent_keys
     );
 

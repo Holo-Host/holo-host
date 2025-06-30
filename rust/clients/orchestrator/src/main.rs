@@ -26,13 +26,13 @@ async fn main() -> Result<(), OrchestratorError> {
 
     let args = Args::parse();
 
-    // Setup TLS skip verification if requested
+    // Skip TLS  verification if requested
     if args.nats_remote_args.nats_skip_tls_verification_danger {
         early_in_process_install_crypto_provider();
     }
 
     // Create and run the orchestrator
-    let orchestrator = Orchestrator::new(args).await?;
+    let orchestrator = Orchestrator::initialize(args).await?;
     orchestrator.run().await?;
 
     Ok(())

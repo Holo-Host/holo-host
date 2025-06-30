@@ -35,7 +35,7 @@ use textnonce::TextNonce;
 pub const HOST_AUTH_CLIENT_NAME: &str = "Host Auth";
 pub const HOST_AUTH_CLIENT_INBOX_PREFIX: &str = "_AUTH_INBOX";
 
-pub async fn run(
+pub async fn try_authorize_host(
     device_id: String,
     mut host_agent_keys: Keys,
     hub_url: &str,

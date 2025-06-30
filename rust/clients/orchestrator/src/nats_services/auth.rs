@@ -29,7 +29,8 @@ use authentication::{
 };
 use futures::StreamExt;
 use mongodb::Client as MongoDBClient;
-use nats_utils::types::{CreateResponse};
+use nats_utils::types::GetResponse;
+
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::vec;

@@ -13,7 +13,7 @@ pub struct OrchestratorConfig {
     pub mongo_uri: String,
     pub auth_creds_path: PathBuf,
     pub admin_creds_path: PathBuf,
-    pub skip_tls_verification: bool,
+    pub _skip_tls_verification: bool,
 }
 
 impl OrchestratorConfig {
@@ -30,7 +30,7 @@ impl OrchestratorConfig {
             mongo_uri,
             auth_creds_path,
             admin_creds_path,
-            skip_tls_verification,
+            _skip_tls_verification: skip_tls_verification,
         })
     }
 }
