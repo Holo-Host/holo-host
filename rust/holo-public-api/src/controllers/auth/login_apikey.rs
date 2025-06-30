@@ -99,6 +99,12 @@ pub async fn login_with_apikey(
         });
     }
     let result = result.unwrap();
+    if result.expire_at < bson::DateTime::now().to_chrono().timestamp() {
+        return HttpResponse::Unauthorized().json(ErrorResponse {
+            message: "missing or invalid 'api-key'".to_string(),
+        });
+    }
+
     let user_id = result.owner.to_string();
     let version = auth::get_refresh_token_version(db.get_ref().clone(), user_id.clone()).await;
     let permissions = result.permissions.clone();

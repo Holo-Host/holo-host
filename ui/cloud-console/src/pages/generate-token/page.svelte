@@ -3,11 +3,10 @@
   import Button from "@/components/button.svelte";
   import DatePicker from "@/components/date-picker.svelte";
   import Input from "@/components/input.svelte";
-  import Badge from "@/components/badge.svelte";
   import Card from "@/components/card.svelte";
   import Modal from "@/components/modal.svelte";
   import { defaultTheme } from "@/theme";
-  import { host, request } from "@/api";
+  import { request } from "@/api";
 
   type Prop = {
     visible: boolean;
@@ -124,29 +123,6 @@
         <div style:margin-top="25px">
           <DatePicker bind:value={expireAt} />
         </div>
-      </div>
-      <div class="flex wrap gap10">
-        {#each permissionsSelected as perm}
-          <Badge label={perm} onClick={() => onPermissionRemove(perm)} />
-        {/each}
-      </div>
-      <Input
-        label="Permissions"
-        autocomplete={permissions}
-        onChange={onPermissionAdd}
-        onKeyDown={onPermissionKeyDown}
-        bind:value={permissionValue}
-      />
-      <div
-        class="flex column gap10"
-        style:color={defaultTheme.colors.text.subtext}
-      >
-        <span>
-          Define permissions as a matrix of {"{resource}.{action}.{owner}"}.
-          Check API docs for more details. By default the permission is set to
-          "all.all.self
-        </span>
-        <a href={host}>view api docs</a>
       </div>
     </div>
     <div class="flex">
