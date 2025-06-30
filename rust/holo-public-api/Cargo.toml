@@ -39,7 +39,7 @@ strum = { version = "0.27.1", features = ["derive"] }
 bcrypt = "0.17.0"
 rand = "0.9.1"
 sha2 = "0.10.8"
-reqwest = "0.12.20"
+reqwest = { version = "0.12.20", default-features = false, features = ["rustls-tls"] }
 
 [[bin]]
 name = "holo-public-api"
