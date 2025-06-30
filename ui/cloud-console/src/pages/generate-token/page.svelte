@@ -54,6 +54,7 @@
   }
 
   async function generateApiToken() {
+    if (!isDescriptionValid || description === "") return;
     const permissionObj = permissionsSelected.map((perm) => {
       const [resource, action, owner] = perm.split(".");
       return {

@@ -89,7 +89,7 @@ jobs:
     name: cloud-console Dev
     needs: CLOUD_CONSOLE
     uses: ./.github/workflows/reuseable_ui_deploy.yml
-    if: github.ref == 'refs/heads/main'
+    #if: github.ref == 'refs/heads/main'
     with:
       project: cloud-console
       environment: dev
