@@ -8,16 +8,35 @@ use db_utils::schemas::{
     user_permissions::{PermissionAction, UserPermission},
 };
 use serde::{Deserialize, Serialize};
-use utoipa::{OpenApi, ToSchema};
+use strum::Display;
+use utoipa::{openapi, OpenApi, PartialSchema, ToSchema};
 
 use crate::providers::{self, error_response::ErrorResponse, jwt::AccessTokenClaims};
 
-#[derive(Serialize, Deserialize, ToSchema)]
+#[derive(Serialize, Deserialize, Display)]
 #[serde(rename_all = "snake_case")]
 pub enum PublicKeyRoleInfo {
     Developer,
     Hoster,
 }
+
+impl PartialSchema for PublicKeyRoleInfo {
+    fn schema() -> openapi::RefOr<openapi::schema::Schema> {
+        let schema = openapi::schema::Object::builder()
+            .schema_type(openapi::schema::SchemaType::Type(
+                openapi::schema::Type::Object,
+            ))
+            .title(Some("Public Key Role Info".to_string()))
+            .examples(vec![
+                PublicKeyRoleInfo::Developer.to_string(),
+                PublicKeyRoleInfo::Hoster.to_string(),
+            ])
+            .build();
+
+        openapi::RefOr::T(openapi::schema::Schema::Object(schema))
+    }
+}
+impl ToSchema for PublicKeyRoleInfo {}
 
 #[derive(Serialize, Deserialize, ToSchema)]
 pub struct PublicKeyWithRole {

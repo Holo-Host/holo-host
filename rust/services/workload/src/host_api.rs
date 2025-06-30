@@ -12,8 +12,8 @@ use async_nats::{jetstream::kv::Store, Message};
 use bson::oid::ObjectId;
 use core::option::Option::None;
 use db_utils::schemas::workload::{
-    WorkloadManifest, WorkloadManifestHolochainDhtV1, WorkloadState, WorkloadStateDiscriminants,
-    WorkloadStatePayload, WorkloadStatus,
+    HappBinaryFormat, WorkloadManifest, WorkloadManifestHolochainDhtV1, WorkloadState,
+    WorkloadStateDiscriminants, WorkloadStatePayload, WorkloadStatus,
 };
 use futures::TryFutureExt;
 use ham::{
@@ -26,14 +26,13 @@ use ham::{
 use nats_utils::{macros::ApiOptions, types::ServiceError};
 use serde::{Deserialize, Serialize};
 use std::io::{Error as StdError, ErrorKind as StdErrorKind};
+use std::path::PathBuf;
 use std::{fmt::Debug, net::Ipv4Addr, path::Path, sync::Arc};
 use url::Url;
 use util::{
     bash, calculate_http_gw_port, ensure_workload_path, provision_extra_container_closure_path,
-    realize_extra_container_path, EnsureWorkloadPathMode
+    realize_extra_container_path, EnsureWorkloadPathMode,
 };
-use std::path::PathBuf;
-
 
 #[derive(Debug, Clone)]
 pub struct HostWorkloadApi {
@@ -177,7 +176,7 @@ impl HostWorkloadApi {
                         let workload_state_payload = match (desired_state, &workload.manifest) {
                             (WorkloadState::Running, WorkloadManifest::HolochainDhtV1(boxed)) => {
                                 let WorkloadManifestHolochainDhtV1 {
-                                    happ_binary_url,
+                                    happ_binary,
                                     network_seed,
                                     http_gw_enable,
 
@@ -200,6 +199,14 @@ impl HostWorkloadApi {
                                     HOLOCHAIN_ADMIN_PORT_DEFAULT,
                                 )
                                 .await?;
+
+                                let happ_binary_url = match happ_binary {
+                                    HappBinaryFormat::HappBinaryUrl(url) => url,
+                                    _ => anyhow::bail!(
+                                        "Invalid happ binary format provided in workload configuration. Currently the only accepted format is the happ binary url. happ_binary_format={:?}",
+                                        happ_binary
+                                    ),
+                                };
 
                                 let happ_bytes = ham::Ham::download_happ_bytes(happ_binary_url)
                                     .await
@@ -305,7 +312,7 @@ impl HostWorkloadApi {
 
                                     log::debug!("is_private_network: {is_private_network}");
                                     log::info!("hc_http_gw_port: {hc_http_gw_port}");
-                                    
+
                                     let hc_http_gw_url_base = url::Url::parse(&format!(
                                         "http://127.0.0.1:{hc_http_gw_port}"
                                     ))?;
@@ -576,15 +583,16 @@ impl HostWorkloadApi {
 }
 
 mod util {
-    use sha2::{Sha256, Digest};
+    use crate::host_api::{
+        get_container_name, validate_holochain_version, HOLOCHAIN_ADMIN_PORT_DEFAULT,
+    };
     use anyhow::Context;
     use bson::oid::ObjectId;
     use db_utils::schemas::workload::{WorkloadManifest, WorkloadManifestHolochainDhtV1};
     use futures::{AsyncBufReadExt, StreamExt};
+    use sha2::{Digest, Sha256};
     use std::{path::PathBuf, process::Stdio, str::FromStr};
     use tokio::process::Command;
-    use crate::host_api::{get_container_name, validate_holochain_version, HOLOCHAIN_ADMIN_PORT_DEFAULT};
-
 
     /// Calculate the http gw port based on network mode and workload ID
     ///
@@ -774,7 +782,7 @@ mod util {
                     holochain_version,
 
                     // not relevant here
-                    happ_binary_url: _,
+                    happ_binary: _,
                     network_seed: _,
                     memproof: _,
                 } = *inner;
@@ -807,8 +815,7 @@ mod util {
                 // If we're not on a private network, we need to set the http gw port to a dynamic value based on workload id,
                 // otherwise, the port will be set to the default value (8090) automatically at container build time
                 if !is_private_network && http_gw_enable {
-                    let hc_http_gw_port =
-                        calculate_http_gw_port(&workload_id, is_private_network);
+                    let hc_http_gw_port = calculate_http_gw_port(&workload_id, is_private_network);
                     override_attrs.push(format!(r#"httpGwPort = {}"#, hc_http_gw_port));
                 }
 

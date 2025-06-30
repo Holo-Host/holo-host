@@ -8,6 +8,7 @@ use std::path::PathBuf;
 use strum::{EnumDiscriminants, EnumString, FromRepr};
 use strum_macros::AsRefStr;
 use url::Url;
+use utoipa::ToSchema;
 
 use super::alias::SemVer;
 use super::metadata::Metadata;
@@ -18,7 +19,7 @@ pub const WORKLOAD_COLLECTION_NAME: &str = "workload";
 
 /// Enumeration of possible workload states
 #[derive(
-    Debug, Clone, Serialize, Deserialize, PartialEq, AsRefStr, EnumDiscriminants, FromRepr,
+    Debug, Clone, Serialize, Deserialize, PartialEq, AsRefStr, EnumDiscriminants, FromRepr, ToSchema,
 )]
 #[strum_discriminants(
     derive(EnumString, Serialize, Deserialize),
@@ -119,10 +120,36 @@ pub enum WorkloadStatePayload {
     HolochainDhtV1(Bson),
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub enum HappBinaryFormat {
+    HappBinaryUrl(Url),
+    HappBinaryBlake3Hash(String),
+}
+
+impl std::fmt::Display for HappBinaryFormat {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            HappBinaryFormat::HappBinaryUrl(url) => write!(f, "URL: {}", url),
+            HappBinaryFormat::HappBinaryBlake3Hash(hash) => write!(f, "Blake3Hash: {}", hash),
+        }
+    }
+}
+
+/// Parse into the `HappBinaryFormat` from the clap cli arg (str)
+fn parse_happ_binary(s: &str) -> Result<HappBinaryFormat, Box<dyn std::error::Error + Send + Sync + 'static>> {
+    if s.starts_with("http://") || s.starts_with("https://") {
+        let url = Url::parse(s)?;
+        Ok(HappBinaryFormat::HappBinaryUrl(url))
+    } else {
+        // assume (for now) that it's a blake3 hash if it's not a valid Url
+        Ok(HappBinaryFormat::HappBinaryBlake3Hash(s.to_string()))
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, clap::Args)]
 pub struct WorkloadManifestHolochainDhtV1 {
-    #[arg(long, value_delimiter = ',')]
-    pub happ_binary_url: Url,
+    #[arg(long, value_parser = parse_happ_binary)]
+    pub happ_binary: HappBinaryFormat,
     #[arg(long, value_delimiter = ',')]
     pub network_seed: Option<String>,
     #[arg(long, value_delimiter = ',', value_parser = parse_key_val::<String, String>)]

@@ -13,7 +13,7 @@ pub fn start_service(port: u16, permit: &Permit) {
 
 /// This is the callback from the DNS server that handles the incoming requests and formluates
 /// responses.
-fn resolver_handler(question: &DnsQuestion) -> Vec<DnsRecord> {
+pub(crate) fn resolver_handler(question: &DnsQuestion) -> Vec<DnsRecord> {
     debug!("Received DNS query: {:?}", question);
     // No ChaosNet today. Internet records only.
     if question.class != DnsClass::Internet {
@@ -29,9 +29,9 @@ fn resolver_handler(question: &DnsQuestion) -> Vec<DnsRecord> {
         DnsType::A => {
             let mut ret = vec![];
             debug!("Confirming A query for {}", &question.name.to_string());
-            if cache.contains_key(&question.name.to_string()) {
+            if cache.contains_key(&question.name.to_string().to_lowercase()) {
                 // Add names to ret. TODO: We should randomise this list.
-                for rec in cache[&question.name.to_string()].a.iter() {
+                for rec in cache[&question.name.to_string().to_lowercase()].a.iter() {
                     ret.push(DnsRecord::A(question.name.clone(), rec.parse().unwrap()));
                 }
             }
@@ -41,9 +41,9 @@ fn resolver_handler(question: &DnsQuestion) -> Vec<DnsRecord> {
         DnsType::AAAA => {
             let mut ret = vec![];
             debug!("Confirming AAAA query for {}", &question.name.to_string());
-            if cache.contains_key(&question.name.to_string()) {
+            if cache.contains_key(&question.name.to_string().to_lowercase()) {
                 // Add names to ret
-                for rec in cache[&question.name.to_string()].aaaa.iter() {
+                for rec in cache[&question.name.to_string().to_lowercase()].aaaa.iter() {
                     ret.push(DnsRecord::AAAA(question.name.clone(), rec.parse().unwrap()));
                 }
             }
@@ -53,8 +53,11 @@ fn resolver_handler(question: &DnsQuestion) -> Vec<DnsRecord> {
         DnsType::CNAME => {
             let mut ret = vec![];
             debug!("Confirming CNAME record lookup for {:?}", question);
-            if cache.contains_key(&question.name.to_string()) {
-                for rec in cache[&question.name.to_string()].cname.iter() {
+            if cache.contains_key(&question.name.to_string().to_lowercase()) {
+                for rec in cache[&question.name.to_string().to_lowercase()]
+                    .cname
+                    .iter()
+                {
                     ret.push(DnsRecord::CNAME(
                         question.name.clone(),
                         DnsName::new(rec).unwrap(),
@@ -67,8 +70,8 @@ fn resolver_handler(question: &DnsQuestion) -> Vec<DnsRecord> {
         DnsType::NS => {
             let mut ret = vec![];
             debug!("Confirming NS record lookup for {:?}", question);
-            if cache.contains_key(&question.name.to_string()) {
-                for rec in cache[&question.name.to_string()].ns.iter() {
+            if cache.contains_key(&question.name.to_string().to_lowercase()) {
+                for rec in cache[&question.name.to_string().to_lowercase()].ns.iter() {
                     ret.push(DnsRecord::NS(
                         question.name.clone(),
                         DnsName::new(rec).unwrap(),
