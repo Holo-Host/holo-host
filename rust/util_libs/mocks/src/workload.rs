@@ -17,6 +17,9 @@ pub fn create_test_workload(
     avg_uptime: Option<f64>,
 ) -> schemas::workload::Workload {
     let mut workload = schemas::workload::Workload::default();
+    let id = ObjectId::new();
+    workload._id = id;
+
     if let Some(assigned_developer) = assigned_developer {
         workload.assigned_developer = assigned_developer;
     }

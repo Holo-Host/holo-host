@@ -33,18 +33,14 @@ pub enum WorkloadState {
     Assigned,
     /// Workload installation pending on host device
     Pending,
-    /// Workload installed on host device
-    Installed,
+    // /// Workload installed on host device
+    // Installed,
     /// Workload running on host device
     Running,
-    /// Workload is being updated
-    Updating,
     /// Workload update completed
     Updated,
     /// Workload marked for deletion
     Deleted,
-    /// Workload links removed
-    Removed,
     /// Workload uninstalled from host device
     Uninstalled,
     /// Error state with message
@@ -63,7 +59,6 @@ pub struct WorkloadStatus {
     pub desired: WorkloadState,
     /// Actual current state of the workload
     pub actual: WorkloadState,
-
     pub payload: WorkloadStatePayload,
 }
 
@@ -91,8 +86,7 @@ pub struct SystemSpecs {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Workload {
     /// MongoDB ObjectId of the workload document
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub _id: Option<ObjectId>,
+    pub _id: ObjectId,
     /// Common metadata fields
     pub metadata: Metadata,
     /// Reference to the user who created this workload
@@ -126,10 +120,36 @@ pub enum WorkloadStatePayload {
     HolochainDhtV1(Bson),
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub enum HappBinaryFormat {
+    HappBinaryUrl(Url),
+    HappBinaryBlake3Hash(String),
+}
+
+impl std::fmt::Display for HappBinaryFormat {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            HappBinaryFormat::HappBinaryUrl(url) => write!(f, "URL: {}", url),
+            HappBinaryFormat::HappBinaryBlake3Hash(hash) => write!(f, "Blake3Hash: {}", hash),
+        }
+    }
+}
+
+/// Parse into the `HappBinaryFormat` from the clap cli arg (str)
+fn parse_happ_binary(s: &str) -> Result<HappBinaryFormat, Box<dyn std::error::Error + Send + Sync + 'static>> {
+    if s.starts_with("http://") || s.starts_with("https://") {
+        let url = Url::parse(s)?;
+        Ok(HappBinaryFormat::HappBinaryUrl(url))
+    } else {
+        // assume (for now) that it's a blake3 hash if it's not a valid Url
+        Ok(HappBinaryFormat::HappBinaryBlake3Hash(s.to_string()))
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, clap::Args)]
 pub struct WorkloadManifestHolochainDhtV1 {
-    #[arg(long, value_delimiter = ',')]
-    pub happ_binary_url: String,
+    #[arg(long, value_parser = parse_happ_binary)]
+    pub happ_binary: HappBinaryFormat,
     #[arg(long, value_delimiter = ',')]
     pub network_seed: Option<String>,
     #[arg(long, value_delimiter = ',', value_parser = parse_key_val::<String, String>)]
@@ -186,7 +206,7 @@ impl Default for Workload {
         let semver = version.to_string();
 
         Self {
-            _id: None,
+            _id: ObjectId::new(),
             metadata: Metadata {
                 is_deleted: false,
                 created_at: Some(DateTime::now()),

@@ -27,8 +27,25 @@
     extra-container.url = "github:erikarvstedt/extra-container";
     extra-container.inputs.nixpkgs.follows = "nixpkgs";
 
+    # Add support for multiple holochain versions
+    holonix_0_5 = {
+      url = "github:holochain/holonix?ref=main-0.5";
+      inputs = {
+        nixpkgs.follows = "nixpkgs";
+        crane.follows = "crane";
+        rust-overlay.follows = "rust-overlay";
+      };
+    };
     holonix_0_4 = {
       url = "github:holochain/holonix?ref=main-0.4";
+      inputs = {
+        nixpkgs.follows = "nixpkgs";
+        crane.follows = "crane";
+        rust-overlay.follows = "rust-overlay";
+      };
+    };
+    holonix_0_3 = {
+      url = "github:holochain/holonix?ref=main-0.3";
       inputs = {
         nixpkgs.follows = "nixpkgs";
         crane.follows = "crane";
@@ -48,9 +65,24 @@
 
   outputs =
     inputs:
-    inputs.blueprint {
-      inherit inputs;
-      prefix = "nix/";
-      nixpkgs.config.allowUnfree = true;
+    let
+      portAlloc = import ./nix/lib/port-allocation.nix { lib = inputs.nixpkgs.lib; };
+      pkgs = import inputs.nixpkgs { system = "x86_64-linux"; };
+      blueprintOutputs = inputs.blueprint {
+        inherit inputs;
+        prefix = "nix/";
+        nixpkgs.config.allowUnfree = true;
+      };
+    in
+    blueprintOutputs // {
+      checks.x86_64-linux.port-allocation = pkgs.runCommand "port-allocation-check" {} ''
+        echo "${builtins.concatStringsSep "\n" portAlloc.testResults}" > $out
+      '';
+      checks.x86_64-linux.extra-container-build-validation = 
+        blueprintOutputs.packages.x86_64-linux.extra-container-holochain.tests.build-validation;
+      checks.x86_64-linux.extra-container-error-detection = 
+        blueprintOutputs.packages.x86_64-linux.extra-container-holochain.tests.error-detection;
+      checks.x86_64-linux.extra-container-version-validation = 
+        blueprintOutputs.packages.x86_64-linux.extra-container-holochain.tests.version-validation;
     };
 }

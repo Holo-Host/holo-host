@@ -19,7 +19,7 @@ struct Cli {
     addr: Ipv4Addr,
 
     /// The port number of the Holochain conductor's admin interface
-    #[arg(long, default_value = "4444")]
+    #[arg(long, default_value = "8000")]
     port: u16,
 
     #[arg(long)]
