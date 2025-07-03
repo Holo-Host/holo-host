@@ -21,7 +21,7 @@ nats_utils = { workspace = true }
 db_utils = { workspace = true }
 workload = { workspace = true }
 inventory = { workspace = true }
-authentication = { path = "../../services/authentication" }
+authentication = { workspace = true }
 url = { version = "2", features = ["serde"] }
 bson = { version = "2.6.1", features = ["chrono-0_4"] }
 serde_with = { version = "3.1", features = ["macros"] }

@@ -1,9 +1,8 @@
 use crate::nats_clients::{auth::AuthClient, admin::AdminClient, OrchestratorClient};
 use crate::{config::OrchestratorConfig, errors::OrchestratorError, Args};
-use crate::nats_services;
+use crate::{admin, auth};
 
-use anyhow::{Context, Result};
-use mongodb::{options::ClientOptions, Client as MongoDBClient};
+use anyhow::Result;
 use tokio::sync::broadcast;
 use tokio::task::JoinSet;
 
@@ -16,21 +15,21 @@ pub struct Orchestrator {
 impl Orchestrator {
     pub async fn initialize(args: Args) -> Result<Self, OrchestratorError> {
         let config = OrchestratorConfig::from_args(args)?;
+
+        // Setup database
+        let db_client = config.setup_database().await?;
+
+        // Setup service shutdown mechanism
         let (shutdown_tx, _) = broadcast::channel(1);
         let mut services = JoinSet::new();
         
-        // Setup database
-        let db_client = setup_database(&config).await?;
-        
-        // Setup auth client service (auth service)
+        // Setup auth client and its service
         let auth_client = AuthClient::start(&config).await?;
+        services.spawn(auth::run(auth_client.client, db_client.clone(), shutdown_tx.subscribe()));
         
-        // Setup admin client services (workload and inventory)
+        // Setup admin client and its services
         let admin_client = AdminClient::start(&config).await?;
-        
-        // Spawn services with proper error handling
-        services.spawn(nats_services::run_auth(auth_client.client, db_client.clone(), shutdown_tx.subscribe()));
-        services.spawn(nats_services::run_workload_and_inventory(admin_client.client, db_client.clone(), shutdown_tx.subscribe()));
+        services.spawn(admin::run(admin_client.client, db_client.clone(), shutdown_tx.subscribe()));
         
         Ok(Self { 
             services, 
@@ -71,15 +70,4 @@ impl Orchestrator {
         log::info!("Successfully shut down orchestrator");
         Ok(())
     }
-}
-
-async fn setup_database(config: &OrchestratorConfig) -> Result<MongoDBClient, OrchestratorError> {
-    log::info!("Connecting to mongodb at {}", config.mongo_uri);
-    let db_client_options = ClientOptions::parse(&config.mongo_uri)
-        .await
-        .context(format!("mongo db client: connecting to {}", config.mongo_uri))
-        .map_err(|e| OrchestratorError::Configuration(e.to_string()))?;
-    
-    MongoDBClient::with_options(db_client_options)
-        .map_err(OrchestratorError::Database)
 }

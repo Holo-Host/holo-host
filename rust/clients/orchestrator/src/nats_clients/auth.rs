@@ -17,7 +17,7 @@ pub struct AuthClient {
 impl OrchestratorClient for AuthClient {
     type Output = Self;
     
-    fn name(&self) -> &str { "auth" }
+    fn name(&self) -> &str { "orchestrator auth client" }
 
     async fn start(config: &OrchestratorConfig) -> Result<Self, OrchestratorError> {
         log::info!("Starting orchestrator auth service...");

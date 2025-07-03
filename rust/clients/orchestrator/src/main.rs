@@ -2,7 +2,8 @@ mod orchestrator;
 mod config;
 mod errors;
 mod nats_clients;
-mod nats_services;
+mod auth;
+mod admin;
 
 use clap::Parser;
 use dotenv::dotenv;

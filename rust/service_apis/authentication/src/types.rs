@@ -1,9 +1,10 @@
-use anyhow::Result;
 use db_utils::schemas::hoster::Hoster;
 use nats_utils::types::{EndpointTraits, GetHeaderMap, GetResponse, GetSubjectTags};
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use thiserror::Error;
+use textnonce::TextNonce;
 
 // The workload_sk_role is assigned when the host agent is created during the auth flow.
 // NB: This role name *must* match the `ROLE_NAME_WORKLOAD` in the `hub_auth_setup.sh` script file.
@@ -104,7 +105,7 @@ pub struct DbValidationData {
 //////////////////////////
 // Callout Request Types:
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
-pub struct AuthGuardPayload {
+pub struct AuthGuardToken {
     pub device_id: String,   // host machine id
     pub host_pubkey: String, // host pubkey(nkey)
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -116,11 +117,21 @@ pub struct AuthGuardPayload {
     host_signature: Vec<u8>, // used to verify the host keypair
 }
 // NB: Currently there is no way to pass headers in the auth callout.
-// Therefore the host_signature is passed within the b64 encoded `AuthGuardPayload` token
-impl AuthGuardPayload {
-    pub fn try_add_signature<T>(mut self, sign_handler: T) -> Result<Self>
+// Therefore the host_signature is passed within the b64 encoded `AuthGuardToken` token
+impl AuthGuardToken {
+    pub fn from_args(host_pubkey: String, device_id: String,  nonce: TextNonce, hc_pubkey: String, email: String) -> Self {
+        let mut auth_guard_token = AuthGuardToken::default();
+        auth_guard_token.host_pubkey = host_pubkey;
+        auth_guard_token.device_id = device_id;
+        auth_guard_token.nonce = nonce.to_string();
+        auth_guard_token.hoster_hc_pubkey = Some(hc_pubkey);
+        auth_guard_token.email = Some(email);
+        auth_guard_token
+    }
+
+    pub fn try_add_signature<T>(mut self, sign_handler: T) -> AuthSignResult<Self>
     where
-        T: Fn(&[u8]) -> Result<String>,
+        T: Fn(&[u8]) -> AuthSignResult<String>,
     {
         let payload_bytes = serde_json::to_vec(&self)?;
         let signature = sign_handler(&payload_bytes)?;
@@ -181,7 +192,7 @@ pub struct NatsClientInfo {
 #[derive(Debug, Serialize, Deserialize, Default, Clone)]
 pub struct ConnectOptions {
     #[serde(rename = "auth_token")]
-    pub user_auth_token: String, // This is the b64 encoding of the `AuthGuardPayload` -- used to validate user
+    pub user_auth_token: String, // This is the b64 encoding of the `AuthGuardToken` -- used to validate user
     #[serde(rename = "jwt")]
     pub user_jwt: String, // This is the jwt string of the `UserClaim`
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -279,3 +290,42 @@ pub struct PermissionLimits {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub deny: Option<Vec<String>>,
 }
+
+// Shared authentication error type that can be used by both service API and clients
+#[derive(Debug, Error)]
+pub enum AuthError {
+    #[error("Serialization failed: {0}")]
+    Serialization(#[from] serde_json::Error),
+    
+    #[error("Signature creation failed: {0}")]
+    SignatureFailed(String),
+    
+    #[error("Authentication failed: {0}")]
+    AuthenticationFailed(String),
+    
+    #[error("Configuration error: {0}")]
+    ConfigurationError(String),
+    
+    #[error("Service error: {0}")]
+    ServiceError(String),
+}
+
+impl AuthError {
+    pub fn signature_failed(msg: &str) -> Self {
+        Self::SignatureFailed(msg.to_string())
+    }
+    
+    pub fn auth_failed(msg: &str) -> Self {
+        Self::AuthenticationFailed(msg.to_string())
+    }
+    
+    pub fn config_error(msg: &str) -> Self {
+        Self::ConfigurationError(msg.to_string())
+    }
+    
+    pub fn service_error(msg: &str) -> Self {
+        Self::ServiceError(msg.to_string())
+    }
+}
+
+pub type AuthSignResult<T> = Result<T, AuthError>;

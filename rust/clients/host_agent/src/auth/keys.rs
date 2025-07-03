@@ -1,12 +1,16 @@
-use anyhow::{anyhow, Context, Result};
 use data_encoding::BASE64URL_NOPAD;
 use nats_utils::jetstream_client::{get_local_creds_path, get_nats_creds_by_nsc};
 use nkeys::KeyPair;
-use std::fs::File;
+use std::fs::{create_dir_all, File};
 use std::io::{Read, Write};
 use std::path::PathBuf;
 use std::process::Command;
 use std::str::FromStr;
+
+use crate::local_cmds::host::errors::{HostAgentError, HostAgentResult};
+
+#[cfg(unix)]
+use std::os::unix::fs::OpenOptionsExt;
 
 impl std::fmt::Debug for Keys {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -33,9 +37,9 @@ impl std::fmt::Debug for Keys {
 
 #[derive(Clone)]
 pub struct CredPaths {
-    host_creds_path: PathBuf,
+    pub host_creds_path: PathBuf,
     #[allow(dead_code)]
-    sys_creds_path: Option<PathBuf>,
+    pub sys_creds_path: Option<PathBuf>,
 }
 
 #[derive(Clone)]
@@ -54,15 +58,13 @@ pub struct Keys {
 }
 
 impl Keys {
-    pub fn new() -> Result<Self> {
-        let host_key_path = std::env::var("HOSTING_AGENT_HOST_NKEY_PATH")
-            .context("Cannot read HOSTING_AGENT_HOST_NKEY_PATH from env var")?;
+    pub fn new() -> HostAgentResult<Self> {
+        let host_key_path = std::env::var("HOSTING_AGENT_HOST_NKEY_PATH")?;
         let host_kp = KeyPair::new_user();
         write_keypair_to_file(PathBuf::from_str(&host_key_path)?, host_kp.clone())?;
         let host_pk = host_kp.public_key();
 
-        let sys_key_path = std::env::var("HOSTING_AGENT_SYS_NKEY_PATH")
-            .context("Cannot read SYS_NKEY_PATH from env var")?;
+        let sys_key_path = std::env::var("HOSTING_AGENT_SYS_NKEY_PATH")?;
         let local_sys_kp = KeyPair::new_user();
         write_keypair_to_file(PathBuf::from_str(&sys_key_path)?, local_sys_kp.clone())?;
         let local_sys_pk = local_sys_kp.public_key();
@@ -83,11 +85,15 @@ impl Keys {
     pub fn try_from_storage(
         maybe_host_creds_path: &Option<PathBuf>,
         maybe_sys_creds_path: &Option<PathBuf>,
-    ) -> Result<Self> {
-        let host_key_path: String = std::env::var("HOSTING_AGENT_HOST_NKEY_PATH")
-            .context("Cannot read HOSTING_AGENT_HOST_NKEY_PATH from env var")?;
-        let host_keypair = try_read_keypair_from_file(PathBuf::from_str(&host_key_path.clone())?)?
-            .ok_or_else(|| anyhow!("Host keypair not found at path {:?}", host_key_path))?;
+    ) -> HostAgentResult<Self> {
+        let host_key_path = std::env::var("HOSTING_AGENT_HOST_NKEY_PATH")?;
+        let host_keypair = try_read_keypair_from_file(PathBuf::from_str(&host_key_path)?)?
+            .ok_or_else(|| {
+                HostAgentError::service_failed(
+                    "host keypair loading",
+                    &format!("Host keypair not found at path {:?}", host_key_path),
+                )
+            })?;
         let host_pk = host_keypair.public_key();
 
         let auth_guard_creds =
@@ -113,8 +119,7 @@ impl Keys {
             creds: AuthCredType::Guard(auth_guard_creds), // Set auth_guard_creds as default user cred
         };
 
-        let sys_key_path = std::env::var("HOSTING_AGENT_SYS_NKEY_PATH")
-            .context("Cannot read HOSTING_AGENT_SYS_NKEY_PATH from env var")?;
+        let sys_key_path = std::env::var("HOSTING_AGENT_SYS_NKEY_PATH")?;
         let keys = match try_read_keypair_from_file(PathBuf::from_str(&sys_key_path)?)? {
             Some(kp) => {
                 let local_sys_pk = kp.public_key();
@@ -125,16 +130,17 @@ impl Keys {
             None => default_keys,
         };
 
-        Ok(keys.clone().add_creds_paths(
-            host_creds_path,
-            Some(sys_creds_path)
-        ).unwrap_or_else(move |e| {
-            log::error!("Error: Cannot locate authenticated cred files. Defaulting to auth_guard_creds. Err={}",e);
-            keys
-        }))
+        let keys_clone = keys.clone();
+        match keys_clone.add_creds_paths(host_creds_path, Some(sys_creds_path)) {
+            Ok(authenticated_keys) => Ok(authenticated_keys),
+            Err(e) => {
+                log::error!("Cannot locate authenticated cred files. Defaulting to auth_guard_creds. Err={}", e);
+                Ok(keys)
+            }
+        }
     }
 
-    pub fn _add_local_sys(mut self, sys_key_path: Option<PathBuf>) -> Result<Self> {
+    pub fn _add_local_sys(mut self, sys_key_path: Option<PathBuf>) -> HostAgentResult<Self> {
         let sys_key_path = sys_key_path.map_or_else(
             || PathBuf::from_str(&get_nats_creds_by_nsc("HOLO", "HPOS", "sys")),
             Ok,
@@ -163,35 +169,27 @@ impl Keys {
         mut self,
         host_creds_file_path: PathBuf,
         maybe_sys_creds_file_path: Option<PathBuf>,
-    ) -> Result<Self> {
+    ) -> HostAgentResult<Self> {
         match host_creds_file_path.try_exists() {
-            Ok(is_ok) => {
-                if !is_ok {
-                    return Err(anyhow!(
-                        "Failed to locate host creds path. Found broken sym link. Path={:?}",
-                        host_creds_file_path
-                    ));
-                }
-
+            Ok(true) => {
                 let creds = match maybe_sys_creds_file_path {
-                    Some(sys_path) => match sys_path.try_exists() {
-                        Ok(is_ok) => {
-                            if !is_ok {
-                                return Err(anyhow!("Failed to locate sys creds path. Found broken sym link. Path={:?}", sys_path));
-                            }
-                            CredPaths {
+                    Some(sys_path) => {
+                        match sys_path.try_exists() {
+                            Ok(true) => CredPaths {
                                 host_creds_path: host_creds_file_path,
                                 sys_creds_path: Some(sys_path),
+                            },
+                            Ok(false) => {
+                                return Err(HostAgentError::service_failed(
+                                    "sys creds validation",
+                                    &format!("Sys creds file does not exist. Path={:?}", sys_path),
+                                ));
+                            }
+                            Err(e) => {
+                                return Err(HostAgentError::service_failed("sys creds validation", &format!("Failed to check sys creds path existence. Path={:?} Err={}", sys_path, e)));
                             }
                         }
-                        Err(e) => {
-                            return Err(anyhow!(
-                                "Failed to locate sys creds path. Path={:?} Err={}",
-                                sys_path,
-                                e
-                            ));
-                        }
-                    },
+                    }
                     None => CredPaths {
                         host_creds_path: host_creds_file_path,
                         sys_creds_path: None,
@@ -200,10 +198,19 @@ impl Keys {
                 self.creds = AuthCredType::Authenticated(creds);
                 Ok(self)
             }
-            Err(e) => Err(anyhow!(
-                "Failed to locate host creds path. Path={:?} Err={}",
-                host_creds_file_path,
-                e
+            Ok(false) => Err(HostAgentError::service_failed(
+                "host creds validation",
+                &format!(
+                    "Host creds file does not exist. Path={:?}",
+                    host_creds_file_path
+                ),
+            )),
+            Err(e) => Err(HostAgentError::service_failed(
+                "host creds validation",
+                &format!(
+                    "Failed to check host creds path existence. Path={:?} Err={}",
+                    host_creds_file_path, e
+                ),
             )),
         }
     }
@@ -212,45 +219,66 @@ impl Keys {
         &self,
         host_user_jwt: String,
         host_sys_user_jwt: String,
-    ) -> Result<Self> {
-        //  Save user jwt and sys jwt local to hosting agent
-        let host_path = PathBuf::from_str(&format!("{}/{}", get_local_creds_path(), "host.jwt"))?;
+    ) -> HostAgentResult<Self> {
+        let local_creds_path = PathBuf::from(get_local_creds_path());
+        create_dir_all(&local_creds_path)?;
+
+        let host_path = local_creds_path.join("host.jwt");
+        let sys_path = local_creds_path.join("sys.jwt");
+
+        let mut created_files = Vec::new();
+
         log::trace!("host_path={:?}", host_path);
         write_to_file(host_path.clone(), host_user_jwt.as_bytes())?;
+        created_files.push(host_path.clone());
         log::trace!("Wrote JWT to host file");
 
-        let sys_path = PathBuf::from_str(&format!("{}/{}", get_local_creds_path(), "sys.jwt"))?;
         log::trace!("sys_path={:?}", sys_path);
-        write_to_file(sys_path.clone(), host_sys_user_jwt.as_bytes())?;
+        if let Err(e) = write_to_file(sys_path.clone(), host_sys_user_jwt.as_bytes()) {
+            cleanup_files(&created_files);
+            return Err(HostAgentError::service_failed(
+                "sys JWT write",
+                &format!("Failed to write sys JWT to {:?}: {}", sys_path, e),
+            ));
+        }
+        created_files.push(sys_path.clone());
         log::trace!("Wrote JWT to sys file");
 
         // Import host user jwt to local nsc resolver
         // TODO: Determine why the following works in cmd line, but doesn't seem to work when run in current program / run
-        Command::new("nsc")
+        if let Err(e) = Command::new("nsc")
             .arg("import")
             .arg("user")
             .arg("--file")
-            .arg(format!("{:?}", host_path))
+            .arg(host_path.to_string_lossy().as_ref())
             .output()
-            .context("Failed to add import new host user on hosting agent.")?;
+        {
+            // Cleanup on failure
+            cleanup_files(&created_files);
+            return Err(HostAgentError::from(e));
+        }
         log::trace!("Imported host user successfully");
 
         // Import sys user jwt to local nsc resolver
-        Command::new("nsc")
+        if let Err(e) = Command::new("nsc")
             .arg("import")
             .arg("user")
             .arg("--file")
-            .arg(format!("{:?}", sys_path))
+            .arg(sys_path.to_string_lossy().as_ref())
             .output()
-            .context("Failed to add import new sys user on hosting agent.")?;
+        {
+            // Cleanup on failure
+            cleanup_files(&created_files);
+            return Err(HostAgentError::from(e));
+        }
         log::trace!("Imported sys user successfully");
 
-        // Save user creds and sys creds local to hosting agent
         let host_user_name = format!("host_user_{}", self.host_pubkey);
         let host_creds_path =
             PathBuf::from_str(&get_nats_creds_by_nsc("HOLO", "WORKLOAD", &host_user_name))?;
-        Command::new("nsc")
-            .args([
+
+        if let Err(e) = execute_nsc_command(
+            &[
                 "generate",
                 "creds",
                 "--name",
@@ -258,10 +286,14 @@ impl Keys {
                 "--account",
                 "WORKLOAD",
                 "--output-file",
-                &host_creds_path.to_string_lossy(),
-            ])
-            .output()
-            .context("Failed to add host user key to hosting agent")?;
+                host_creds_path.to_string_lossy().as_ref(),
+            ],
+            "Failed to generate host user credentials",
+        ) {
+            cleanup_files(&created_files);
+            return Err(e);
+        }
+        created_files.push(host_creds_path.clone());
         log::trace!(
             "Generated host user creds. creds_path={:?}",
             host_creds_path
@@ -271,8 +303,9 @@ impl Keys {
         if self.local_sys_pubkey.as_ref().is_some() {
             let sys_user_name = format!("sys_user_{}", self.host_pubkey);
             let path = PathBuf::from_str(&get_nats_creds_by_nsc("HOLO", "SYS", &sys_user_name))?;
-            Command::new("nsc")
-                .args([
+
+            if let Err(e) = execute_nsc_command(
+                &[
                     "generate",
                     "creds",
                     "--name",
@@ -280,78 +313,140 @@ impl Keys {
                     "--account",
                     "SYS",
                     "--output-file",
-                    &path.to_string_lossy(),
-                ])
-                .output()
-                .context("Failed to add sys user key to hosting agent")?;
+                    path.to_string_lossy().as_ref(),
+                ],
+                "Failed to generate sys user credentials",
+            ) {
+                cleanup_files(&created_files);
+                return Err(e);
+            }
             log::trace!("Generated sys user creds. creds_path={:?}", path);
             sys_creds_file_name = Some(path);
         }
 
-        self.to_owned()
+        self.clone()
             .add_creds_paths(host_creds_path, sys_creds_file_name)
     }
 
-    pub fn get_host_creds_path(&self) -> Option<PathBuf> {
-        if let AuthCredType::Authenticated(creds) = self.to_owned().creds {
-            return Some(creds.host_creds_path);
-        };
-        None
+    pub fn get_host_creds_path(&self) -> Option<&PathBuf> {
+        match &self.creds {
+            AuthCredType::Authenticated(creds) => Some(&creds.host_creds_path),
+            AuthCredType::Guard(_) => None,
+        }
     }
 
-    pub fn _get_sys_creds_path(&self) -> Option<PathBuf> {
-        if let AuthCredType::Authenticated(creds) = self.to_owned().creds {
-            return creds.sys_creds_path;
-        };
-        None
+    pub fn _get_sys_creds_path(&self) -> Option<&PathBuf> {
+        match &self.creds {
+            AuthCredType::Authenticated(creds) => creds.sys_creds_path.as_ref(),
+            AuthCredType::Guard(_) => None,
+        }
     }
 
-    pub fn host_sign(&self, payload: &[u8]) -> Result<String> {
+    pub fn host_sign(&self, payload: &[u8]) -> HostAgentResult<String> {
         let signature = self.host_keypair.sign(payload)?;
 
         Ok(BASE64URL_NOPAD.encode(&signature))
     }
 }
 
-fn write_keypair_to_file(key_file_path: PathBuf, keypair: KeyPair) -> Result<()> {
+fn execute_nsc_command(args: &[&str], error_msg: &str) -> HostAgentResult<()> {
+    log::debug!("Executing nsc command: nsc {}", args.join(" "));
+
+    let output = Command::new("nsc").args(args).output()?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        return Err(HostAgentError::service_failed(
+            "nsc command",
+            &format!(
+                "{}: exit code {}\nstdout: {}\nstderr: {}",
+                error_msg,
+                output.status.code().unwrap_or(-1),
+                stdout,
+                stderr
+            ),
+        ));
+    }
+
+    log::debug!("nsc command completed successfully");
+    Ok(())
+}
+
+fn cleanup_files(files: &[PathBuf]) {
+    for file in files {
+        if let Err(e) = std::fs::remove_file(file) {
+            log::warn!("Failed to cleanup file {:?}: {}", file, e);
+        } else {
+            log::debug!("Cleaned up file: {:?}", file);
+        }
+    }
+}
+
+fn write_keypair_to_file(key_file_path: PathBuf, keypair: KeyPair) -> HostAgentResult<()> {
     let seed = keypair.seed()?;
     write_to_file(key_file_path, seed.as_bytes())
 }
 
-fn write_to_file(file_path: PathBuf, data: &[u8]) -> Result<()> {
-    // TODO: ensure dirs already exist and create them if not...
-    let mut file = File::create(&file_path)?;
-    file.write_all(data)?;
+// Writes data to a file with secure permissions (readable only by owner)
+fn write_to_file(file_path: PathBuf, data: &[u8]) -> HostAgentResult<()> {
+    // Ensure parent directories exist
+    if let Some(parent) = file_path.parent() {
+        create_dir_all(parent)?;
+    }
+
+    #[cfg(unix)]
+    {
+        // Create file with restrictive permissions (600 - read/write for owner only)
+        let mut file = std::fs::OpenOptions::new()
+            .create(true)
+            .write(true)
+            .truncate(true)
+            .mode(0o600)
+            .open(&file_path)?;
+
+        file.write_all(data)?;
+    }
+
+    #[cfg(not(unix))]
+    {
+        // Fallback for non-Unix systems
+        let mut file = File::create(&file_path)?;
+        file.write_all(data)?;
+    }
+
     Ok(())
 }
 
-fn try_read_keypair_from_file(key_file_path: PathBuf) -> Result<Option<KeyPair>> {
+fn try_read_keypair_from_file(key_file_path: PathBuf) -> HostAgentResult<Option<KeyPair>> {
     match try_read_from_file(key_file_path)? {
         Some(kps) => Ok(Some(KeyPair::from_seed(&kps)?)),
         None => Ok(None),
     }
 }
 
-fn try_read_from_file(file_path: PathBuf) -> Result<Option<String>> {
+fn try_read_from_file(file_path: PathBuf) -> HostAgentResult<Option<String>> {
     match file_path.try_exists() {
-        Ok(link_is_ok) => {
-            if !link_is_ok {
-                return Err(anyhow!(
-                    "Failed to read path {:?}. Found broken sym link.",
-                    file_path
-                ));
-            }
-
-            let mut file_content = File::open(&file_path)
-                .context(format!("Failed to open config file {:#?}", file_path))?;
+        Ok(true) => {
+            // File exists, try to read it
+            let mut file_content = File::open(&file_path)?;
 
             let mut s = String::new();
             file_content.read_to_string(&mut s)?;
+
             Ok(Some(s.trim().to_string()))
         }
-        Err(_) => {
-            log::debug!("No user file found at {:?}.", file_path);
+        Ok(false) => {
+            // File doesn't exist (including broken symlinks)
+            log::debug!("No file found at {:?}", file_path);
             Ok(None)
+        }
+        Err(e) => {
+            // Permission denied or other I/O error
+            Err(HostAgentError::service_failed(
+                "file existence check",
+                &format!("Failed to check file existence at {:?}: {}", file_path, e),
+            ))
         }
     }
 }

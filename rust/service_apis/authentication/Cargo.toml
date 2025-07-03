@@ -18,6 +18,7 @@ dotenv = { workspace = true }
 thiserror = { workspace = true }
 bson = { version = "2.6.1", features = ["chrono-0_4"] }
 url = { version = "2", features = ["serde"] }
+textnonce = "1.0.0"
 async-trait = "0.1.83"
 mongodb = "3.1"
 base32 = "0.5.1"

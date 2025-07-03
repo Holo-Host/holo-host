@@ -18,7 +18,6 @@ use tokio::process::{Child, Command};
 use tokio::sync::Mutex;
 use url::Host;
 
-pub const LEAF_SERVER_CONFIG_PATH: &str = "test_leaf_server.conf";
 pub const LEAF_SERVER_DEFAULT_LISTEN_PORT: u16 = 4222;
 
 #[derive(Serialize, Debug, Clone)]

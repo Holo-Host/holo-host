@@ -267,6 +267,12 @@ impl From<&ServerAddr> for DeServerAddr {
     }
 }
 
+impl From<ServerAddr> for DeServerAddr {
+    fn from(value: ServerAddr) -> Self {
+        Self(value)
+    }
+}
+
 impl<'a> Deserialize<'a> for DeServerAddr {
     fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
     where

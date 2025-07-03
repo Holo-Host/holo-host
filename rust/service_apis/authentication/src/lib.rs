@@ -97,7 +97,7 @@ impl AuthServiceApi {
         };
 
         // 2. Validate Host signature, returning validation error if not successful
-        let user_data = utils::base64_to_data::<types::AuthGuardPayload>(
+        let user_data = utils::base64_to_data::<types::AuthGuardToken>(
             &auth_request_claim.auth_request.connect_opts.user_auth_token,
         )
         .map_err(|e| ServiceError::auth(AuthError::new(e), None))?;
@@ -264,7 +264,7 @@ impl AuthServiceApi {
     // Helper function to initialize mongodb collections
     async fn verify_is_valid_in_db(
         &self,
-        user_data: types::AuthGuardPayload,
+        user_data: types::AuthGuardToken,
     ) -> Result<bool, ServiceError> {
         if let (Some(hoster_hc_pubkey), Some(hoster_email)) =
             (user_data.hoster_hc_pubkey, user_data.email)

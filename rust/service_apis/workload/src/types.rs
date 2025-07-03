@@ -4,6 +4,7 @@ use nats_utils::types::{EndpointTraits, GetHeaderMap, GetResponse, GetSubjectTag
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use strum_macros::AsRefStr;
+use thiserror::Error;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct HostIdJSON {
@@ -33,6 +34,72 @@ pub enum WorkloadServiceSubjects {
 //     pub status: WorkloadStatus,
 //     pub workload: Option<Workload>,
 // }
+
+// Shared workload error type that can be used by both service API and clients
+#[derive(Debug, Error)]
+pub enum WorkloadError {
+    #[error("Serialization failed: {0}")]
+    Serialization(#[from] serde_json::Error),
+    
+    #[error("I/O operation failed: {0}")]
+    Io(#[from] std::io::Error),
+    
+    #[error("NATS operation failed: {0}")]
+    Nats(String),
+    
+    #[error("Jetstream operation failed: {0}")]
+    Jetstream(String),
+    
+    #[error("Key-value store operation failed: {0}")]
+    KeyValue(String),
+    
+    #[error("HTTP request failed: {0}")]
+    Http(#[from] reqwest::Error),
+    
+    #[error("Workload management failed: {0}")]
+    WorkloadManagement(String),
+    
+    #[error("Configuration error: {0}")]
+    Configuration(String),
+    
+    #[error("Service error: {0}")]
+    Service(String),
+    
+    #[error("Invalid state: {0}")]
+    InvalidState(String),
+}
+
+impl WorkloadError {
+    pub fn nats_failed(msg: &str) -> Self {
+        Self::Nats(msg.to_string())
+    }
+    
+    pub fn jetstream_failed(msg: &str) -> Self {
+        Self::Jetstream(msg.to_string())
+    }
+    
+    pub fn kv_failed(msg: &str) -> Self {
+        Self::KeyValue(msg.to_string())
+    }
+    
+    pub fn workload_failed(msg: &str) -> Self {
+        Self::WorkloadManagement(msg.to_string())
+    }
+    
+    pub fn config_error(msg: &str) -> Self {
+        Self::Configuration(msg.to_string())
+    }
+    
+    pub fn service_error(msg: &str) -> Self {
+        Self::Service(msg.to_string())
+    }
+    
+    pub fn invalid_state(msg: &str) -> Self {
+        Self::InvalidState(msg.to_string())
+    }
+}
+
+pub type WorkloadOpResult<T> = Result<T, WorkloadError>;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum WorkloadResult {

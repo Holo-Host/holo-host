@@ -1,7 +1,12 @@
-use crate::agent_cli::SupportCommands;
+pub mod errors;
+pub mod types;
+
+use errors::{SupportError, SupportResult};
+use types::SupportCommands;
+
 use netdiag::*;
 
-pub fn support_command(command: &SupportCommands) -> Result<(), std::io::Error> {
+pub fn support_command(command: &SupportCommands) -> SupportResult<()> {
     // TODO: Fill these in under a separate set of commits to keep PRs simple.
     match command {
         SupportCommands::NetTest {
@@ -32,6 +37,8 @@ pub fn support_command(command: &SupportCommands) -> Result<(), std::io::Error> 
             };
 
             let stats = do_requests(&cfg);
+            let mut any_failed = false;
+
             for stat in stats.iter() {
                 match &stat.result {
                     Ok(_) => {
@@ -39,12 +46,14 @@ pub fn support_command(command: &SupportCommands) -> Result<(), std::io::Error> 
                     }
                     Err(e) => {
                         println!("Request failed with: {}", e);
+                        any_failed = true;
                     }
                 }
                 for phase in &stat.stats {
                     let result = match &phase.error {
                         None => "succeeded".to_string(),
                         Some(e) => {
+                            any_failed = true;
                             format!("failed with: {}", e)
                         }
                     };
@@ -60,16 +69,26 @@ pub fn support_command(command: &SupportCommands) -> Result<(), std::io::Error> 
                     );
                 }
             }
+
+            if any_failed {
+                return Err(SupportError::diagnostic_failed(
+                    "network connectivity test",
+                    "One or more network tests failed",
+                ));
+            }
         }
         SupportCommands::SupportTunnel { enable } => {
             // This is independent of the implementation, which will be plumbed through once we
             // have an implementation for https://github.com/Holo-Host/holo-host-private/issues/14.
             match enable {
                 true => {
-                    println!("Support Tunnel not yet implemented")
+                    return Err(SupportError::diagnostic_failed(
+                        "support tunnel",
+                        "Support tunnel functionality not yet implemented",
+                    ));
                 }
                 false => {
-                    println!("Support Tunnel already disabled")
+                    println!("Support Tunnel already disabled");
                 }
             }
         }

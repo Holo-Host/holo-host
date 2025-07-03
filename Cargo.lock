@@ -562,6 +562,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+ "textnonce",
  "thiserror 2.0.12",
  "tokio",
  "url",
@@ -3031,6 +3032,7 @@ version = "0.0.1"
 dependencies = [
  "anyhow",
  "async-nats",
+ "async-trait",
  "authentication",
  "bson",
  "bytes",

@@ -20,6 +20,8 @@ pub struct AdminClient {
 
 impl OrchestratorClient for AdminClient {
     type Output = Self;
+    
+    fn name(&self) -> &str { "orchestrator admin client" }
 
     async fn start(config: &OrchestratorConfig) -> Result<Self, OrchestratorError> {
         log::info!("Starting orchestrator admin client...");
@@ -52,6 +54,4 @@ impl OrchestratorClient for AdminClient {
         self.client.close().await
         .map_err(|e| OrchestratorError::Shutdown(format!("Failed to close admin client: {}", e)))
     }
-    
-    fn name(&self) -> &str { "admin" }
 }
