@@ -5,7 +5,6 @@ use nats_utils::{
     jetstream_client,
     leaf_server::{
         JetStreamConfig, LeafNodeRemote, LeafNodeRemoteTlsConfig, LeafServer, LoggingOptions,
-        LEAF_SERVER_CONFIG_PATH,
     },
     types::{DeServerAddr, JsClientBuilder, NatsRemoteArgs},
 };
@@ -35,12 +34,21 @@ pub async fn run(
         (maybe_tempfile.path().to_owned(), Some(tempdir))
     };
 
+    // Create the config file path within the store directory
+    let config_path = store_dir.join("leaf_server.conf");
+    let config_path_str = config_path.to_str().ok_or_else(|| {
+        anyhow::anyhow!(
+            "Failed to convert config path {:?} to UTF-8 string",
+            config_path
+        )
+    })?;
+
     let jetstream_config = JetStreamConfig {
         store_dir,
         // TODO: make this configurable
-        max_memory_store: 1024 * 1024 * 1024, // 1 GB
+        max_memory_store: 2 * 1024 * 1024 * 1024, // 2 GB
         // TODO: make this configurable
-        max_file_store: 1024 * 1024 * 1024, // 1 GB
+        max_file_store: 2 * 1024 * 1024 * 1024, // 2 GB
     };
 
     let logging_options = LoggingOptions {
@@ -73,7 +81,7 @@ pub async fn run(
     // Create a new Leaf Server instance
     let mut leaf_server = LeafServer::new(
         Some(&server_name),
-        LEAF_SERVER_CONFIG_PATH,
+        config_path_str,
         leaf_server_listen_host,
         leaf_server_listen_port,
         Some(3145728), // 3MiB in bytes (temp solution - matches holo-nats server configuration)

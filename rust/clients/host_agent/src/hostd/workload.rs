@@ -42,6 +42,7 @@ use workload::{
 pub async fn run(
     host_client: Arc<RwLock<JsClient>>,
     host_id: &str,
+    jetstream_domain: &str,
 ) -> Result<(), async_nats::Error> {
     log::info!("Host Agent Client: starting workload service...");
     log::info!("host_id : {}", host_id);
@@ -53,6 +54,7 @@ pub async fn run(
         description: WORKLOAD_SRV_DESC.to_string(),
         version: WORKLOAD_SRV_VERSION.to_string(),
         service_subject: WORKLOAD_SRV_SUBJ.to_string(),
+        maybe_source_js_domain: Some(jetstream_domain.to_string()),
     };
 
     let worload_api_js_service = host_client
