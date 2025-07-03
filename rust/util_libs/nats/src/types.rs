@@ -287,6 +287,7 @@ pub struct JsServiceBuilder {
     pub description: String,
     pub version: String,
     pub service_subject: String,
+    pub maybe_source_js_domain: Option<String>,
 }
 
 #[derive(Clone, Debug)]

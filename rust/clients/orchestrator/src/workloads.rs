@@ -45,6 +45,7 @@ pub async fn run(
         description: WORKLOAD_SRV_DESC.to_string(),
         version: WORKLOAD_SRV_VERSION.to_string(),
         service_subject: WORKLOAD_SRV_SUBJ.to_string(),
+        maybe_source_js_domain: None,
     };
 
     // Register Workload Streams for Orchestrator to consume and proceess
