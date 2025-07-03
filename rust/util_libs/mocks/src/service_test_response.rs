@@ -1,4 +1,4 @@
-use nats_utils::types::{CreateResponse, CreateTag, EndpointTraits};
+use nats_utils::types::{EndpointTraits, GetHeaderMap, GetResponse, GetSubjectTags};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -8,15 +8,21 @@ pub struct TestResponse {
     pub message: String,
 }
 
-impl CreateTag for TestResponse {
-    fn get_tags(&self) -> HashMap<String, String> {
+impl GetSubjectTags for TestResponse {
+    fn get_subject_tags(&self) -> HashMap<String, String> {
         HashMap::new()
     }
 }
 
-impl CreateResponse for TestResponse {
+impl GetResponse for TestResponse {
     fn get_response(&self) -> bytes::Bytes {
         serde_json::to_vec(&self).unwrap().into()
+    }
+}
+
+impl GetHeaderMap for TestResponse {
+    fn get_header_map(&self) -> Option<async_nats::HeaderMap> {
+        None
     }
 }
 

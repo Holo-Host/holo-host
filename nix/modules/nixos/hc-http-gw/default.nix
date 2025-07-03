@@ -15,6 +15,10 @@
 
 let
   cfg = config.holo.hc-http-gw;
+  
+  # Import port allocation lib to handle port configuration
+  portAllocation = import ../../../lib/port-allocation.nix { inherit lib; };
+  httpGwPortDefault = portAllocation.HOLOCHAIN_HTTP_GW_PORT_DEFAULT;
 in
 {
   options.holo.hc-http-gw = {
@@ -62,7 +66,21 @@ in
 
     listenPort = lib.mkOption {
       type = lib.types.int;
-      default = 8090;
+      default = httpGwPortDefault;
+      description = "Port for hc-http-gw to listen on. Use this to ensure a unique listenting port when deplying multiple containers accross a shared network namespace.";
+    };
+
+    # Dynamic port allocation helpers
+    portRange = lib.mkOption {
+      type = lib.types.attrs;
+      default = { start = httpGwPortDefault; end = httpGwPortDefault + 100; };
+      description = "Port range for dynamic allocation when multiple containers share network namespace";
+    };
+
+    autoAllocatePort = lib.mkOption {
+      type = lib.types.bool;
+      default = false;
+      description = "Automatically allocate an available port from portRange when enabled";
     };
 
     allowedAppIds = lib.mkOption {
