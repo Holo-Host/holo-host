@@ -22,6 +22,7 @@ pub async fn run(
     nats_connect_timeout_secs: u64,
     leaf_server_listen_host: Host<String>,
     leaf_server_listen_port: u16,
+    hub_jetstream_domain: Option<String>,
 ) -> anyhow::Result<(jetstream_client::JsClient, LeafServer)> {
     let (
         store_dir,
@@ -49,6 +50,7 @@ pub async fn run(
         max_memory_store: 2 * 1024 * 1024 * 1024, // 2 GB
         // TODO: make this configurable
         max_file_store: 2 * 1024 * 1024 * 1024, // 2 GB
+        domain: hub_jetstream_domain, // Use the same domain as hub for cross-domain access
     };
 
     let logging_options = LoggingOptions {
