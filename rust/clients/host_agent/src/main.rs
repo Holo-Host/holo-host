@@ -7,8 +7,8 @@ mod types;
 use clap::Parser;
 use dotenv::dotenv;
 
-use local_cmds::host::{errors::HostAgentResult, host_d_command, host_info_command};
-use local_cmds::support::support_command;
+use local_cmds::host::{errors::HostAgentResult, init_host_d, call_host_info_command};
+use local_cmds::support::call_support_command;
 use types::{self as app_cli};
 
 #[tokio::main]
@@ -20,13 +20,13 @@ async fn main() -> HostAgentResult<()> {
     match cli.scope {
         app_cli::CommandScopes::Daemonize(daemonize_args) => {
             log::info!("Spawning host agent.");
-            host_d_command(&daemonize_args).await?;
+            init_host_d(&daemonize_args).await?;
         }
         app_cli::CommandScopes::Host { command } => {
-            host_info_command(&command)?;
+            call_host_info_command(&command)?;
         }
         app_cli::CommandScopes::Support { command } => {
-            support_command(&command)?;
+            call_support_command(&command)?;
         }
         app_cli::CommandScopes::Remote {
             remote_args,

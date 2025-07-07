@@ -6,7 +6,7 @@ use types::SupportCommands;
 
 use netdiag::*;
 
-pub fn support_command(command: &SupportCommands) -> SupportResult<()> {
+pub fn call_support_command(command: &SupportCommands) -> SupportResult<()> {
     // TODO: Fill these in under a separate set of commits to keep PRs simple.
     match command {
         SupportCommands::NetTest {

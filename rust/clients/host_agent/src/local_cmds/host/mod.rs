@@ -14,7 +14,7 @@ use tokio::task::JoinSet;
 
 use hpos_hal::inventory::HoloInventory;
 
-pub fn host_info_command(command: &HostCommands) -> HostAgentResult<()> {
+pub fn call_host_info_command(command: &HostCommands) -> HostAgentResult<()> {
     // TODO: Fill these in under a separate set of commits to keep PRs simple.
     match command {
         HostCommands::ModelInfo => {
@@ -32,7 +32,7 @@ pub fn host_info_command(command: &HostCommands) -> HostAgentResult<()> {
     }
 }
 
-pub async fn host_d_command(args: &DaemonzeArgs) -> HostAgentResult<()> {
+pub async fn init_host_d(args: &DaemonzeArgs) -> HostAgentResult<()> {
     agent_cli_types::validate_args(args)?;
 
     // Setup service shutdown mechanism
