@@ -1,8 +1,7 @@
 use super::jetstream_client::JsClient;
 use anyhow::{Context, Result};
-use async_nats::jetstream::consumer::PullConsumer;
-use async_nats::jetstream::ErrorCode;
-use async_nats::{HeaderMap, Message, ServerAddr};
+use async_nats::jetstream::{consumer::PullConsumer, ErrorCode};
+use async_nats::{AuthError, HeaderMap, Message, ServerAddr};
 use async_trait::async_trait;
 use bytes::Bytes;
 use educe::Educe;
@@ -41,25 +40,30 @@ pub trait EndpointTraits:
     + Sync
     + Clone
     + Debug
-    + CreateTag
-    + CreateResponse
+    + GetSubjectTags
+    + GetResponse
+    + GetHeaderMap
     + 'static
 {
 }
 
-pub trait CreateTag: Send + Sync {
-    fn get_tags(&self) -> HashMap<String, String>;
+pub trait GetSubjectTags: Send + Sync {
+    fn get_subject_tags(&self) -> HashMap<String, String>;
 }
 
-pub trait CreateResponse: Send + Sync {
+pub trait GetResponse: Send + Sync {
     fn get_response(&self) -> bytes::Bytes;
+}
+
+pub trait GetHeaderMap: Send + Sync {
+    fn get_header_map(&self) -> Option<HeaderMap>;
 }
 
 #[async_trait]
 pub trait ConsumerExtTrait: Send + Sync + Debug + 'static {
     fn get_consumer(&self) -> PullConsumer;
     fn get_endpoint(&self) -> Box<dyn Any + Send + Sync>;
-    fn get_response(&self) -> Option<ResponseSubjectsGenerator>;
+    fn get_response_subject_fn(&self) -> Option<ResponseSubjectsGenerator>;
 }
 
 #[async_trait]
@@ -73,7 +77,7 @@ where
     fn get_endpoint(&self) -> Box<dyn Any + Send + Sync> {
         Box::new(self.handler.clone())
     }
-    fn get_response(&self) -> Option<ResponseSubjectsGenerator> {
+    fn get_response_subject_fn(&self) -> Option<ResponseSubjectsGenerator> {
         self.response_subject_fn.clone()
     }
 }
@@ -243,8 +247,9 @@ pub struct JsClientBuilder {
 #[derive(Clone, Debug, Educe)]
 #[educe(Deref)]
 pub struct DeServerAddr(pub ServerAddr);
-impl DeServerAddr {
-    pub(crate) fn as_ref(&self) -> &ServerAddr {
+
+impl AsRef<ServerAddr> for DeServerAddr {
+    fn as_ref(&self) -> &ServerAddr {
         &self.0
     }
 }
@@ -260,6 +265,12 @@ impl FromStr for DeServerAddr {
 impl From<&ServerAddr> for DeServerAddr {
     fn from(value: &ServerAddr) -> Self {
         Self(value.clone())
+    }
+}
+
+impl From<ServerAddr> for DeServerAddr {
+    fn from(value: ServerAddr) -> Self {
+        Self(value)
     }
 }
 
@@ -282,6 +293,7 @@ pub struct JsServiceBuilder {
     pub description: String,
     pub version: String,
     pub service_subject: String,
+    pub maybe_source_js_domain: Option<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -316,6 +328,12 @@ pub enum ServiceError {
         operation: Option<String>,
     },
 
+    #[error("Authentication error: {source}")]
+    Authentication {
+        source: AuthError,
+        subject: Option<String>,
+    },
+
     #[error("NATS error: {message}")]
     NATS {
         message: String,
@@ -328,7 +346,7 @@ pub enum ServiceError {
         context: Option<String>,
     },
 
-    #[error("Internal error: {message}")]
+    #[error("Workload error: {message}")]
     Workload {
         message: String,
         context: Option<String>,
@@ -354,6 +372,14 @@ impl ServiceError {
             source: error,
             collection,
             operation,
+        }
+    }
+
+    /// Creates a new Authentication error with subject
+    pub fn auth(error: AuthError, subject: Option<String>) -> Self {
+        Self::Authentication {
+            source: error,
+            subject,
         }
     }
 
@@ -383,6 +409,11 @@ impl ServiceError {
         matches!(self, Self::Database { .. })
     }
 
+    /// Returns true if this is a Authentication error
+    pub fn is_auth(&self) -> bool {
+        matches!(self, Self::Authentication { .. })
+    }
+
     /// Returns true if this is a NATS error
     pub fn is_nats(&self) -> bool {
         matches!(self, Self::NATS { .. })
@@ -398,6 +429,7 @@ impl ServiceError {
         match self {
             Self::Request { message, .. } => message.clone(),
             Self::Database { source, .. } => source.to_string(),
+            Self::Authentication { source, .. } => source.to_string(),
             Self::NATS { message, .. } => message.clone(),
             Self::Internal { message, .. } => message.clone(),
             Self::Workload { message, .. } => message.clone(),
@@ -405,13 +437,23 @@ impl ServiceError {
     }
 }
 
-// Manual implementation of From instead of using #[from]
+// Manual implementation of From instead of using #[from] for mongodb::error::Error
 impl From<mongodb::error::Error> for ServiceError {
     fn from(error: mongodb::error::Error) -> Self {
         Self::Database {
             source: error,
             collection: None,
             operation: None,
+        }
+    }
+}
+
+// Manual implementation of From instead of using #[from] for AuthError
+impl From<AuthError> for ServiceError {
+    fn from(error: AuthError) -> Self {
+        Self::Authentication {
+            source: error,
+            subject: None,
         }
     }
 }
@@ -452,7 +494,7 @@ pub struct NatsRemoteArgs {
     pub nats_user: Option<String>,
 
     #[clap(long, env = "NATS_URL")]
-    #[educe(Default( expression = DeServerAddr(ServerAddr::from_str(NATS_URL_DEFAULT).expect("default url parses"))))]
+    #[educe(Default( expression = DeServerAddr(ServerAddr::from_str(NATS_URL_DEFAULT).expect("default nats url to parse"))))]
     pub nats_url: DeServerAddr,
     #[clap(
         long,
@@ -630,8 +672,8 @@ pub async fn hc_http_gw_nats_request(
     Ok(response)
 }
 
-impl CreateTag for HcHttpGwResponseMsg {
-    fn get_tags(&self) -> HashMap<String, String> {
+impl GetSubjectTags for HcHttpGwResponseMsg {
+    fn get_subject_tags(&self) -> HashMap<String, String> {
         self.response_subject
             .clone()
             .map(|response_subject| {
@@ -643,12 +685,18 @@ impl CreateTag for HcHttpGwResponseMsg {
     }
 }
 
-impl CreateResponse for HcHttpGwResponseMsg {
+impl GetResponse for HcHttpGwResponseMsg {
     fn get_response(&self) -> bytes::Bytes {
         match serde_json::to_vec(&self.response) {
             Ok(r) => r.into(),
             Err(e) => e.to_string().into(),
         }
+    }
+}
+
+impl GetHeaderMap for HcHttpGwResponseMsg {
+    fn get_header_map(&self) -> Option<async_nats::HeaderMap> {
+        None
     }
 }
 

@@ -7,7 +7,7 @@ use super::types::{
 };
 use anyhow::{Context, Result};
 use async_nats::jetstream::consumer::{self, AckPolicy};
-use async_nats::jetstream::stream::{self, DeleteStatus, Info, Stream};
+use async_nats::jetstream::stream::{self, DeleteStatus, External, Info, Stream};
 use async_nats::jetstream::Context as JsContext;
 use futures::StreamExt;
 use serde::Serialize;
@@ -44,21 +44,40 @@ impl JsStreamService {
         description: &str,
         version: &str,
         service_subject: &str,
+        maybe_source_js_domain: Option<String>,
     ) -> Result<Self, async_nats::Error>
     where
         Self: 'static,
     {
+        let service_stream_subject = format!("{}.>", service_subject);
+        let sources = maybe_source_js_domain.map(|source_jetstream_domain| {
+            vec![stream::Source {
+                name: name.to_string(),
+                filter_subject: Some(service_stream_subject.clone()),
+                external: Some(External {
+                    api_prefix: format!("$JS.{}.API", source_jetstream_domain),
+                    delivery_prefix: None,
+                }),
+                ..Default::default()
+            }]
+        });
+
         let stream = context
             .get_or_create_stream(&stream::Config {
                 name: name.to_string(),
                 description: Some(description.to_string()),
-                subjects: vec![format!("{}.>", service_subject)],
+                subjects: vec![service_stream_subject],
                 allow_direct: true,
+                // The oldest age messages form this steam may become before the discard policy kicks in
+                max_age: std::time::Duration::from_secs(14400), // max age limit = 4 hours
+                // The largest size this stream may become in total bytes before the discard policy kicks in
+                max_bytes: 500 * 1024 * 1024, // 500 MiB
+                sources,
                 ..Default::default()
             })
             .await?;
 
-        let service_log_prefix = format!("JS-LOG::{}::", name);
+        let service_log_prefix = format!("SERVICE_LOG::{}::", name);
 
         Ok(JsStreamService {
             name: name.to_string(),
@@ -212,7 +231,7 @@ impl JsStreamService {
     {
         let endpoint_handler: EndpointType<T> =
             EndpointType::try_from(consumer_details.get_endpoint())?;
-        let maybe_response_generator = consumer_details.get_response();
+        let maybe_response_subject_generator = consumer_details.get_response_subject_fn();
         let mut consumer = consumer_details.get_consumer();
         let messages = consumer
             .stream()
@@ -246,7 +265,7 @@ impl JsStreamService {
                     js_context,
                     messages,
                     endpoint_handler,
-                    maybe_response_generator,
+                    maybe_response_subject_generator,
                 )
                 .await;
             }
@@ -260,18 +279,16 @@ impl JsStreamService {
         service_context: Arc<RwLock<JsContext>>,
         mut messages: consumer::pull::Stream,
         endpoint_handler: EndpointType<T>,
-        maybe_response_generator: Option<ResponseSubjectsGenerator>,
+        maybe_response_subject_generator: Option<ResponseSubjectsGenerator>,
     ) where
         T: EndpointTraits,
     {
         while let Some(Ok(js_msg)) = messages.next().await {
             log::trace!(
-                "{}Consumer received message: subj='{}.{}', endpoint={}, service={}",
+                "{}Consumer received message: endpoint_name={}, subject='{}'",
                 log_info.prefix,
-                log_info.service_subject,
-                log_info.endpoint_subject,
                 log_info.endpoint_name,
-                log_info.service_name
+                log_info.endpoint_subject
             );
 
             // TODO(learning; author: stefan): on which level do sync vs async play out?
@@ -281,7 +298,7 @@ impl JsStreamService {
             };
 
             let (response_bytes, maybe_subject_tags) = match result {
-                Ok(r) => (r.get_response(), r.get_tags()),
+                Ok(r) => (r.get_response(), r.get_subject_tags()),
                 Err(err) => (err.to_string().into(), HashMap::new()),
             };
 
@@ -308,13 +325,11 @@ impl JsStreamService {
                     .await
                 {
                     log::error!(
-                        "{}Failed to send reply upon successful message consumption: subj='{}.{}.{}', endpoint={}, service={}, err={:?}",
+                        "{}Failed to send reply upon successful message consumption: endpoint_name={}, subject='{}', reply_subj='{}', err={:?}",
                         log_info.prefix,
-                        reply,
-                        log_info.service_subject,
-                        log_info.endpoint_subject,
                         log_info.endpoint_name,
-                        log_info.service_name,
+                        log_info.endpoint_subject,
+                        reply,
                         err
                     );
 
@@ -323,12 +338,12 @@ impl JsStreamService {
             }
 
             // Publish a response message to response subjects when an endpoint response subject generator exists for endpoint
-            if let Some(response_subject_fn) = maybe_response_generator.as_ref() {
+            if let Some(response_subject_fn) = maybe_response_subject_generator.as_ref() {
                 let response_subjects = response_subject_fn(maybe_subject_tags);
                 for response_subject in response_subjects.iter() {
                     // TODO(simplify): remove the service_subject?
-                    let subject = format!("{}.{}", log_info.service_subject, response_subject);
 
+                    let subject = format!("{}.{}", log_info.service_subject, response_subject);
                     log::debug!("publishing a response on {subject}");
 
                     if let Err(err) = service_context
@@ -338,12 +353,10 @@ impl JsStreamService {
                         .await
                     {
                         log::error!(
-                            "{}Failed to publish new message upon successful message consumption: subj='{}.{}', endpoint={}, service={}, err={:?}",
+                            "{}Failed to publish new message upon successful message consumption: endpoint_name={}, subject='{}', err={:?}",
                             log_info.prefix,
-                            log_info.service_subject,
-                            log_info.endpoint_subject,
                             log_info.endpoint_name,
-                            log_info.service_name,
+                            log_info.endpoint_subject,
                             err
                         );
                     };
@@ -354,12 +367,10 @@ impl JsStreamService {
             // Send back message acknowledgment
             if let Err(err) = js_msg.ack().await {
                 log::error!(
-                    "{}Failed to send ACK new message upon successful message consumption: subj='{}.{}', endpoint={}, service={}, err={:?}",
+                    "{}Failed to send ACK new message upon successful message consumption: endpoint_name={}, subject='{}', err={:?}",
                     log_info.prefix,
-                    log_info.service_subject,
-                    log_info.endpoint_subject,
                     log_info.endpoint_name,
-                    log_info.service_name,
+                    log_info.endpoint_subject,
                     err
                 );
 

@@ -164,6 +164,7 @@ impl JsClient {
             .request_timeout(Some(p.request_timeout.unwrap_or(Duration::from_secs(30))))
             .custom_inbox_prefix(&p.inbox_prefix);
 
+        // TODO: Remove repetition. Merge this pattern and the `Credentials::Password` pattern below.
         if let Some((user, pass)) = p.nats_remote_args.maybe_user_password()? {
             connect_options = connect_options.user_and_password(user, pass);
         }
@@ -322,6 +323,7 @@ impl JsClient {
             &params.description,
             &params.version,
             &params.service_subject,
+            params.maybe_source_js_domain,
         )
         .await?;
 
@@ -379,6 +381,36 @@ where
     }))
 }
 
+// Helpers:
+fn get_nsc_root_path() -> String {
+    std::env::var("NSC_PATH").unwrap_or_else(|_| "/.local/share/nats/nsc".to_string())
+}
+
+pub fn get_local_creds_path() -> String {
+    std::env::var("LOCAL_CREDS_PATH")
+        .unwrap_or_else(|_| format!("{}/local_creds", get_nsc_root_path()))
+}
+
+pub fn get_nats_creds_by_nsc(operator: &str, account: &str, user: &str) -> String {
+    format!(
+        "{}/keys/creds/{}/{}/{}.creds",
+        get_nsc_root_path(),
+        operator,
+        account,
+        user
+    )
+}
+
+pub fn get_nats_jwt_by_nsc(operator: &str, account: &str, user: &str) -> String {
+    format!(
+        "{}/stores/{}/accounts/{}/users/{}.jwt",
+        get_nsc_root_path(),
+        operator,
+        account,
+        user
+    )
+}
+
 pub fn get_event_listeners() -> Vec<EventListener> {
     // TODO: Use duration in handlers..
     let published_msg_handler = move |msg: &str, client_name: &str, _duration: Duration| {
@@ -389,7 +421,7 @@ pub fn get_event_listeners() -> Vec<EventListener> {
     };
 
     let event_listeners = vec![
-        on_msg_published_event(published_msg_handler), // Shouldn't this be the 'NATS_LISTEN_PORT'?
+        on_msg_published_event(published_msg_handler),
         on_msg_failed_event(failure_handler),
     ];
 

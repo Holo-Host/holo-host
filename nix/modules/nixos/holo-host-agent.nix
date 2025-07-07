@@ -69,6 +69,41 @@ in
         default = "${cfg.nats.listenHost}:${builtins.toString cfg.nats.listenPort}";
       };
 
+      nscPath = lib.mkOption {
+        type = lib.types.path;
+        default = "/var/lib/.local/share/nats/nsc";
+      };
+
+      sharedCredsPath = lib.mkOption {
+        type = lib.types.path;
+        default = "${cfg.nats.nscPath}/shared_creds";
+      };
+
+      localCredsPath = lib.mkOption {
+        type = lib.types.path;
+        default = "${cfg.nats.nscPath}/local_creds";
+      };
+
+      hostNkeyPath = lib.mkOption {
+        type = lib.types.path;
+        default = "${cfg.nats.localCredsPath}/host.nk";
+      };
+
+      sysNkeyPath = lib.mkOption {
+        type = lib.types.path;
+        default = "${cfg.nats.localCredsPath}/sys.nk";
+      };
+
+      hposCredsPath = lib.mkOption {
+        type = lib.types.path;
+        default = "/var/lib/holo-host-agent/server-key-config.json";
+      };
+
+      hposCredsPw = lib.mkOption {
+        type = lib.types.str;
+        default = "pass";
+      };
+
       hub = {
         url = lib.mkOption {
           type = lib.types.str;
@@ -91,9 +126,28 @@ in
       };
     };
 
+    containerPrivateNetwork = lib.mkOption {
+      type = lib.types.bool;
+      default = false;
+      description = "Input flag to determine whether to use private networking. When true, containers are isolated with port forwarding. When false, containers share the host network with dynamic port allocation to avoid conflicts.";
+    };
+
   };
 
   config = lib.mkIf cfg.enable {
+    # Add required packages for socat port forwarding when using private networking
+    environment.systemPackages = with pkgs; [
+      git
+      nats-server
+      natscli
+      nsc
+    ] ++ lib.optionals cfg.containerPrivateNetwork [
+      # Additional packages needed for socat port forwarding with private networking
+      socat
+      netcat-gnu
+      iproute2
+    ];
+
     systemd.services.holo-host-agent = {
       enable = true;
 
@@ -113,8 +167,15 @@ in
             else
               "${cfg.logLevel},request=error,tungstenite=error,async_nats=error,mio=error,tokio_tungstenite=error";
           RUST_BACKTRACE = cfg.rust.backtrace;
-          NATS_LISTEN_PORT = builtins.toString cfg.nats.listenPort;
+          NSC_PATH = cfg.nats.nscPath;
+          LOCAL_CREDS_PATH = cfg.nats.localCredsPath;
+          HOSTING_AGENT_HOST_NKEY_PATH = cfg.nats.hostNkeyPath;
+          HOSTING_AGENT_SYS_NKEY_PATH = cfg.nats.sysNkeyPath;
+          HPOS_CONFIG_PATH = cfg.nats.hposCredsPath;
+          DEVICE_SEED_DEFAULT_PASSWORD = builtins.toString cfg.nats.hposCredsPw;
+          # NATS_LISTEN_PORT = builtins.toString cfg.nats.listenPort;
           NIX_REMOTE = "daemon";
+          IS_CONTAINER_ON_PRIVATE_NETWORK = builtins.toString cfg.containerPrivateNetwork;
         }
         // lib.attrsets.optionalAttrs (cfg.nats.url != null) {
           NATS_URL = cfg.nats.url;
@@ -126,6 +187,14 @@ in
         pkgs.natscli
         pkgs.nsc
       ];
+
+      preStart = ''
+        echo "Start Host Auth Setup"
+        mkdir -p ${cfg.nats.hostNkeyPath}
+        mkdir -p ${cfg.nats.sysNkeyPath}
+        mkdir -p ${cfg.nats.hposCredsPath}
+        echo "Finshed Host Auth Setup"
+      '';
 
       script =
         let

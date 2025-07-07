@@ -29,6 +29,7 @@ async fn test_service_initialization() -> Result<()> {
         "Test Service Description",
         "0.0.1",
         "TEST",
+        None,
     )
     .await
     .expect("Failed to spin up Jetstream Service");
@@ -59,6 +60,7 @@ async fn test_add_consumer() -> Result<()> {
         "Test Service Description",
         "0.0.1",
         "TEST",
+        None,
     )
     .await
     .expect("Failed to spin up Jetstream Service");
@@ -107,6 +109,7 @@ async fn test_adding_async_consumer() -> Result<()> {
         "Test Service Description",
         "0.0.1",
         "TEST",
+        None,
     )
     .await
     .expect("Failed to spin up Jetstream Service");
@@ -157,6 +160,7 @@ async fn test_consumer_message_handling() -> Result<()> {
         "Test Service Description",
         "0.0.1",
         "TEST",
+        None,
     )
     .await
     .expect("Failed to spin up Jetstream Service");
