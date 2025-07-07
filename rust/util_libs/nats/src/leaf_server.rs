@@ -12,7 +12,6 @@ use std::io::Write;
 use std::path::PathBuf;
 use std::process::Stdio;
 use std::str::FromStr;
-// Child, Command,
 use std::sync::Arc;
 use tokio::process::{Child, Command};
 use tokio::sync::Mutex;
@@ -25,6 +24,8 @@ pub struct JetStreamConfig {
     pub store_dir: PathBuf,
     pub max_memory_store: u64,
     pub max_file_store: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub domain: Option<String>,
 }
 
 #[derive(Debug, Serialize, Clone)]
@@ -212,5 +213,38 @@ impl LeafServer {
             "{}:{}",
             self.nats_config.host, self.nats_config.port
         ))?)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_leaf_server_with_domain() {
+        let config = JetStreamConfig {
+            store_dir: PathBuf::from("/tmp/test"),
+            max_memory_store: 1024 * 1024 * 1024,
+            max_file_store: 1024 * 1024 * 1024,
+            domain: Some("holo".to_string()),
+        };
+
+        let config_json = serde_json::to_string_pretty(&config).unwrap();
+        assert!(config_json.contains("\"domain\": \"holo\""));
+        println!("Generated config: {}", config_json);
+    }
+
+    #[test]
+    fn test_leaf_server_without_domain() {
+        let config = JetStreamConfig {
+            store_dir: PathBuf::from("/tmp/test"),
+            max_memory_store: 1024 * 1024 * 1024,
+            max_file_store: 1024 * 1024 * 1024,
+            domain: None,
+        };
+
+        let config_json = serde_json::to_string_pretty(&config).unwrap();
+        assert!(!config_json.contains("\"domain\""));
+        println!("Generated config: {}", config_json);
     }
 }

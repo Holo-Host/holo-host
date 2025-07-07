@@ -1,5 +1,5 @@
 pub mod agent_cli;
-pub mod agent_d;
+pub mod agent_client;
 
 use crate::local_cmds::host::errors::{HostAgentError, HostAgentResult};
 

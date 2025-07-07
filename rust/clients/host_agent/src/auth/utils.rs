@@ -1,6 +1,5 @@
 use data_encoding::BASE64URL_NOPAD;
 use hpos_hal::inventory::HoloInventory;
-use serde_json;
 
 use crate::local_cmds::host::errors::HostAgentResult;
 

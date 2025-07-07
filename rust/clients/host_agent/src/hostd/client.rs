@@ -17,7 +17,9 @@ use nats_utils::{
 use std::{path::PathBuf, time::Duration};
 
 use crate::local_cmds::host::errors::{HostAgentError, HostAgentResult};
-use crate::local_cmds::host::types::agent_d::{HostClient, HostClientConfig, TypeSpecificArgs};
+use crate::local_cmds::host::types::agent_client::{
+    HostClient, HostClientConfig, TypeSpecificArgs,
+};
 use async_trait::async_trait;
 
 const HOST_AGENT_CLIENT_NAME: &str = "Host Agent";

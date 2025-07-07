@@ -13,7 +13,12 @@ pub enum HostCommands {
 
 #[derive(Args, Clone, Debug)]
 pub struct DaemonzeArgs {
-    #[arg(long, help = "directory to contain the NATS persistence")]
+    #[arg(
+        long,
+        help = "directory to contain the NATS persistence",
+        env = "LEAF_SERVER_CONFIG_PATH",
+        default_value = "/var/lib/holo-host-agent/store_dir"
+    )]
     pub(crate) store_dir: Option<PathBuf>,
 
     #[arg(help = "path to NATS credentials used for the LeafNode SYS user management")]
@@ -39,6 +44,14 @@ pub struct DaemonzeArgs {
         help = "whether to tolerate unknown remote TLS certificates for the connection to the hub"
     )]
     pub(crate) hub_tls_insecure: bool,
+
+    #[arg(
+        long,
+        help = "nats hub jetstream domain name",
+        env = "NATS_HUB_JETSTREAM_DOMAIN_NAME",
+        default_value = "holo"
+    )]
+    pub(crate) hub_jetstream_domain: String,
 
     #[arg(
         long,

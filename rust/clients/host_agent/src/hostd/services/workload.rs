@@ -41,6 +41,7 @@ use crate::local_cmds::host::errors::{HostAgentError, HostAgentResult};
 pub async fn run(
     host_client: Arc<RwLock<JsClient>>,
     host_id: &str,
+    jetstream_domain: &str,
     mut shutdown_rx: broadcast::Receiver<()>,
 ) -> HostAgentResult<()> {
     log::info!("Host Agent Client: starting workload service...");
@@ -53,6 +54,7 @@ pub async fn run(
         description: WORKLOAD_SRV_DESC.to_string(),
         version: WORKLOAD_SRV_VERSION.to_string(),
         service_subject: WORKLOAD_SRV_SUBJ.to_string(),
+        maybe_source_js_domain: Some(jetstream_domain.to_string()),
     };
 
     let workload_api_js_service = host_client
@@ -118,16 +120,11 @@ pub async fn run(
 
     log::info!("Workload service setup complete, waiting for shutdown signal...");
 
+    // Wait for shutdown signal
     // Keep the service running until shutdown signal is received
     // and pass the shutdown signal to the spawned HC HTTP GW watcher
-    loop {
-        tokio::select! {
-            _ = shutdown_rx.recv() => {
-                log::info!("Shutdown signal received in workload service");
-                break;
-            }
-        }
-    }
+    let _ = shutdown_rx.recv().await;
+    log::info!("Shutdown signal received in workload service");
 
     log::info!("Workload service shutting down gracefully");
     Ok(())
@@ -167,16 +164,14 @@ async fn get_or_create_nats_kv_store(
                         })
                 }
                 async_nats::jetstream::context::KeyValueErrorKind::InvalidStoreName => {
-                    return Err(WorkloadError::kv_failed(&format!(
+                    Err(WorkloadError::kv_failed(&format!(
                         "invalid store name '{}', this is a bug.",
                         hc_http_gw_worker_kv_bucket_name
                     )))
                 }
-                async_nats::jetstream::context::KeyValueErrorKind::JetStream => {
-                    return Err(WorkloadError::jetstream_failed(
-                        "jetstream error, this is a bug.",
-                    ))
-                }
+                async_nats::jetstream::context::KeyValueErrorKind::JetStream => Err(
+                    WorkloadError::jetstream_failed("jetstream error, this is a bug."),
+                ),
             }
         }
     }

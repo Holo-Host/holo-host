@@ -18,7 +18,9 @@ This client is responsible for:
 use std::{path::PathBuf, time::Duration};
 
 use crate::local_cmds::host::errors::{HostAgentError, HostAgentResult};
-use crate::local_cmds::host::types::agent_d::{HostClient, HostClientConfig, TypeSpecificArgs};
+use crate::local_cmds::host::types::agent_client::{
+    HostClient, HostClientConfig, TypeSpecificArgs,
+};
 use async_trait::async_trait;
 
 pub const HOST_AUTH_CLIENT_NAME: &str = "Host Auth";

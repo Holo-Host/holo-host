@@ -1,4 +1,4 @@
-mod auth;
+mod service;
 mod utils;
 
 use mongodb::Client as MongoDBClient;
@@ -12,7 +12,7 @@ pub async fn run(
     mut shutdown_rx: broadcast::Receiver<()>,
 ) -> Result<(), OrchestratorError> {
     log::info!("Starting auth service...");
-    let _ = auth::run(auth_client.clone(), db_client)
+    let _ = service::run(auth_client.clone(), db_client)
         .await
         .map_err(|e| OrchestratorError::Client(format!("Inventory client error: {:?}", e)));
 

@@ -3,8 +3,8 @@ use nats_utils::types::{EndpointTraits, GetHeaderMap, GetResponse, GetSubjectTag
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use thiserror::Error;
 use textnonce::TextNonce;
+use thiserror::Error;
 
 // The workload_sk_role is assigned when the host agent is created during the auth flow.
 // NB: This role name *must* match the `ROLE_NAME_WORKLOAD` in the `hub_auth_setup.sh` script file.
@@ -75,10 +75,9 @@ impl GetResponse for AuthApiResult {
 }
 impl GetHeaderMap for AuthApiResult {
     fn get_header_map(&self) -> Option<async_nats::HeaderMap> {
-       None
+        None
     }
 }
-
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct UserEmail {
@@ -119,7 +118,14 @@ pub struct AuthGuardToken {
 // NB: Currently there is no way to pass headers in the auth callout.
 // Therefore the host_signature is passed within the b64 encoded `AuthGuardToken` token
 impl AuthGuardToken {
-    pub fn from_args(host_pubkey: String, device_id: String,  nonce: TextNonce, hc_pubkey: String, email: String) -> Self {
+    pub fn from_args(
+        host_pubkey: String,
+        device_id: String,
+        nonce: TextNonce,
+        hc_pubkey: String,
+        email: String,
+    ) -> Self {
+        #![allow(clippy::field_reassign_with_default)]
         let mut auth_guard_token = AuthGuardToken::default();
         auth_guard_token.host_pubkey = host_pubkey;
         auth_guard_token.device_id = device_id;
@@ -296,16 +302,16 @@ pub struct PermissionLimits {
 pub enum AuthError {
     #[error("Serialization failed: {0}")]
     Serialization(#[from] serde_json::Error),
-    
+
     #[error("Signature creation failed: {0}")]
     SignatureFailed(String),
-    
+
     #[error("Authentication failed: {0}")]
     AuthenticationFailed(String),
-    
+
     #[error("Configuration error: {0}")]
     ConfigurationError(String),
-    
+
     #[error("Service error: {0}")]
     ServiceError(String),
 }
@@ -314,15 +320,15 @@ impl AuthError {
     pub fn signature_failed(msg: &str) -> Self {
         Self::SignatureFailed(msg.to_string())
     }
-    
+
     pub fn auth_failed(msg: &str) -> Self {
         Self::AuthenticationFailed(msg.to_string())
     }
-    
+
     pub fn config_error(msg: &str) -> Self {
         Self::ConfigurationError(msg.to_string())
     }
-    
+
     pub fn service_error(msg: &str) -> Self {
         Self::ServiceError(msg.to_string())
     }

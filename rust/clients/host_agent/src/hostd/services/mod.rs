@@ -10,7 +10,7 @@ use crate::auth::keys::Keys;
 use crate::hostd::client::HostAgentClient;
 use crate::local_cmds::host::errors::{HostAgentError, HostAgentResult};
 use crate::local_cmds::host::types::agent_cli::DaemonzeArgs;
-use crate::local_cmds::host::types::agent_d::{
+use crate::local_cmds::host::types::agent_client::{
     ClientType, HostClient, HostClientConfig, HostDArgs,
 };
 
@@ -60,13 +60,20 @@ pub async fn run(
     });
 
     // Spawn workload service
+    let hub_jetstream_domain = args.hub_jetstream_domain.clone();
     let workload_shutdown_rx = shutdown_tx.subscribe();
     hostd_client_tasks.spawn({
         let hostd_client_arc = Arc::clone(&hostd_client_arc);
         let device_id = device_id.to_string();
         async move {
             log::info!("Starting workload service...");
-            workload::run(hostd_client_arc, &device_id, workload_shutdown_rx).await
+            workload::run(
+                hostd_client_arc,
+                &device_id,
+                &hub_jetstream_domain,
+                workload_shutdown_rx,
+            )
+            .await
         }
     });
 

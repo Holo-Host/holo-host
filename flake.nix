@@ -84,5 +84,12 @@
         blueprintOutputs.packages.x86_64-linux.extra-container-holochain.tests.error-detection;
       checks.x86_64-linux.extra-container-version-validation = 
         blueprintOutputs.packages.x86_64-linux.extra-container-holochain.tests.version-validation;
+      checks.x86_64-linux.holo-agent-integration-nixos = 
+        import ./nix/checks/holo-agent-integration-nixos.nix { 
+          inherit inputs; 
+          flake = blueprintOutputs; 
+          pkgs = pkgs; 
+          system = "x86_64-linux"; 
+        };
     };
 }

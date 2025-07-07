@@ -28,7 +28,9 @@
 use crate::{
     auth::{client::AuthClient, config::HosterConfig, keys::Keys},
     local_cmds::host::errors::{HostAgentError, HostAgentResult},
-    local_cmds::host::types::agent_d::{ClientType, HostAuthArgs, HostClient, HostClientConfig},
+    local_cmds::host::types::agent_client::{
+        ClientType, HostAuthArgs, HostClient, HostClientConfig,
+    },
 };
 
 use async_nats::{HeaderMap, HeaderName, HeaderValue, RequestErrorKind};
@@ -76,7 +78,7 @@ pub async fn authorize_host(
         auth_guard_token,
     };
     let host_client_config = HostClientConfig::new(
-        &device_id,
+        device_id,
         host_agent_keys.clone(),
         ClientType::HostAuth(host_auth_args),
     )?;
@@ -120,7 +122,10 @@ pub async fn authorize_host(
     {
         Ok(msg) => msg,
         Err(e) => {
-            log::error!("Host Agent Auth Service: Authentication request failed: {:#?}", e);
+            log::error!(
+                "Host Agent Auth Service: Authentication request failed: {:#?}",
+                e
+            );
 
             // Handle timeout, falling back to the unauthenticated inventory publication
             if let RequestErrorKind::TimedOut = e.kind() {
@@ -156,7 +161,10 @@ pub async fn authorize_host(
     // Deserialize the response and handle errors
     let auth_response = serde_json::from_slice::<AuthJWTResult>(&response_msg.payload)?;
 
-    log::info!("Host Agent Auth Service: Received AUTH response: {:#?}", auth_response);
+    log::info!(
+        "Host Agent Auth Service: Received AUTH response: {:#?}",
+        auth_response
+    );
 
     // Handle authentication response with explicit state matching
     let updated_keys = match auth_response.status {

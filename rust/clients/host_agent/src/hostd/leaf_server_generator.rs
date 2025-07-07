@@ -21,6 +21,7 @@ pub async fn run(
     maybe_store_dir: &Option<PathBuf>,
     hub_url: &str,
     hub_tls_insecure: bool,
+    maybe_hub_jetstream_domain: Option<String>,
     nats_connect_timeout_secs: u64,
     leaf_server_listen_host: &Host<String>,
     leaf_server_listen_port: u16,
@@ -52,9 +53,10 @@ pub async fn run(
     let jetstream_config = JetStreamConfig {
         store_dir,
         // TODO: make this configurable
-        max_memory_store: 1024 * 1024 * 1024, // 1 GB
+        max_memory_store: 2 * 1024 * 1024 * 1024, // 2 GB
         // TODO: make this configurable
-        max_file_store: 1024 * 1024 * 1024, // 1 GB
+        max_file_store: 2 * 1024 * 1024 * 1024, // 2 GB
+        domain: maybe_hub_jetstream_domain, // Use the same domain as hub for cross-domain access
     };
 
     let logging_options = LoggingOptions {
@@ -129,6 +131,7 @@ pub async fn run(
             })
             .await
             .map_err(HostAgentError::from);
+
             match host_workload_client {
                 Ok(client) => break client,
                 Err(e) => {
@@ -138,10 +141,11 @@ pub async fn run(
                 }
             }}} => client,
         _ = {
-            log::debug!("will time out waiting for NATS after {nats_connect_timeout_secs:?}");
+            log::debug!("Will time out waiting for NATS after {nats_connect_timeout_secs:?}..");
             tokio::time::sleep(tokio::time::Duration::from_secs(nats_connect_timeout_secs))
          } => {
             log::error!("Timed out waiting for NATS on {nats_url:?}");
+
             // Ensure leaf server is closed before bailing out
             if let Err(e) = leaf_server.close().await {
                 log::warn!("Failed to close leaf server after NATS timeout: {}", e);
@@ -165,7 +169,7 @@ pub async fn run(
     };
 
     // Close the NATS client before returning the leaf server
-    // TODO: Look into why this is needed and remove..
+    // TODO: Look into why this "bare client" is needed and remove entirely..
     if let Err(e) = nats_client.close().await {
         log::warn!("Failed to close NATS client: {}", e);
     }
@@ -174,16 +178,16 @@ pub async fn run(
     // ATTN: without this time the inventory isn't always sent..
     tokio::select! {
         _ = tokio::time::sleep(Duration::from_secs(5)) => {
-            log::debug!("Completed 5-second wait period");
+            log::debug!("Completed 5-second wait period after nats 'bare client' initializaton");
         }
         _ = shutdown_rx.recv() => {
-            log::info!("Shutdown signal received during wait period");
+            log::info!("Shutdown signal received during nats 'bare client' wait period");
             // Ensure leaf server is closed before returning error
             if let Err(e) = leaf_server.close().await {
                 log::warn!("Failed to close leaf server after shutdown signal: {}", e);
             }
             return Err(HostAgentError::service_failed(
-                "leaf server wait period",
+                "Nats bare client wait period",
                 "Shutdown signal received during wait period"
             ));
         }

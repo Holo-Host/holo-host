@@ -7,7 +7,7 @@ mod types;
 use clap::Parser;
 use dotenv::dotenv;
 
-use local_cmds::host::{errors::HostAgentResult, init_host_d, call_host_info_command};
+use local_cmds::host::{call_host_info_command, errors::HostAgentResult, init_host_d};
 use local_cmds::support::call_support_command;
 use types::{self as app_cli};
 

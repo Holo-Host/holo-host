@@ -31,7 +31,7 @@ pub async fn run(
                 // Create auth client with shutdown listener
                 let auth_result = tokio::select! {
                     result = service::authorize_host(device_id, keys.clone(), hub_url) => {
-                        result.map_err(HostAgentError::from)
+                        result
                     },
                     _ = shutdown_rx.recv() => {
                         log::info!("Auth shutdown signal received during authentication attempt for device '{}'", device_id);

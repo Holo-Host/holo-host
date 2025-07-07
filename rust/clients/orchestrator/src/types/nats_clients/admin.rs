@@ -21,10 +21,6 @@ pub struct AdminClient {
 impl OrchestratorClient for AdminClient {
     type Output = Self;
 
-    fn name(&self) -> &str {
-        "orchestrator admin client"
-    }
-
     async fn start(config: &OrchestratorConfig) -> Result<Self, OrchestratorError> {
         log::info!("Starting orchestrator admin client...");
         log::info!("admin_creds_path : {:?}", config.admin_creds_path);

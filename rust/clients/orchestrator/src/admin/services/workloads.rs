@@ -14,22 +14,23 @@ This service is responsible for:
     - keeping service running until explicitly cancelled out
 */
 
-use std::sync::Arc;
-
-use super::utils::{add_workload_consumer, create_callback_subject_to_host};
 use anyhow::Result;
 use mongodb::Client as MongoDBClient;
+use std::sync::Arc;
+use std::time::Duration;
+
 use nats_utils::{
     generate_service_call,
     jetstream_client::JsClient,
     types::{JsServiceBuilder, ServiceConsumerBuilder, ServiceError},
 };
-use std::time::Duration;
 use workload::{
     orchestrator_api::OrchestratorWorkloadApi, types::WorkloadServiceSubjects,
     TAG_MAP_PREFIX_ASSIGNED_HOST, WORKLOAD_ORCHESTRATOR_SUBJECT_PREFIX, WORKLOAD_SRV_DESC,
     WORKLOAD_SRV_NAME, WORKLOAD_SRV_SUBJ, WORKLOAD_SRV_VERSION,
 };
+
+use crate::admin::utils::{add_workload_consumer, create_callback_subject_to_host};
 
 pub async fn run(
     mut orchestrator_client: JsClient,
@@ -45,6 +46,7 @@ pub async fn run(
         description: WORKLOAD_SRV_DESC.to_string(),
         version: WORKLOAD_SRV_VERSION.to_string(),
         service_subject: WORKLOAD_SRV_SUBJ.to_string(),
+        maybe_source_js_domain: None,
     };
 
     // Register Workload Streams for Orchestrator to consume and proceess

@@ -92,6 +92,7 @@ pub async fn init_host_d(args: &DaemonzeArgs) -> HostAgentResult<()> {
         &args.store_dir,
         &args.hub_url,
         args.hub_tls_insecure,
+        Some(args.hub_jetstream_domain.clone()),
         args.nats_connect_timeout_secs,
         &args.leaf_server_listen_host,
         args.leaf_server_listen_port,
