@@ -1,13 +1,19 @@
 mod auth;
 mod utils;
 
+use mongodb::Client as MongoDBClient;
+use tokio::sync::broadcast;
+
+use crate::errors::OrchestratorError;
+
 pub async fn run(
-    auth_client: Client,
+    auth_client: async_nats::Client,
     db_client: MongoDBClient,
     mut shutdown_rx: broadcast::Receiver<()>,
 ) -> Result<(), OrchestratorError> {
     log::info!("Starting auth service...");
-    let _ = auth::run(auth_client.clone(), db_client).await
+    let _ = auth::run(auth_client.clone(), db_client)
+        .await
         .map_err(|e| OrchestratorError::Client(format!("Inventory client error: {:?}", e)));
 
     loop {
@@ -25,7 +31,9 @@ pub async fn run(
 
     // Close auth client
     log::info!("Auth client stopped");
-    auth_client.drain().await
+    auth_client
+        .drain()
+        .await
         .map_err(|e| OrchestratorError::Shutdown(format!("Failed to drain auth client: {}", e)))?;
 
     Ok(())

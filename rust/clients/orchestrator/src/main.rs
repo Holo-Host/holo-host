@@ -1,7 +1,5 @@
-mod orchestrator;
-mod config;
+mod types;
 mod errors;
-mod nats_clients;
 mod auth;
 mod admin;
 
@@ -9,7 +7,7 @@ use clap::Parser;
 use dotenv::dotenv;
 use nats_utils::jetstream_client::tls_skip_verifier::early_in_process_install_crypto_provider;
 use nats_utils::types::NatsRemoteArgs;
-use orchestrator::Orchestrator;
+use types::Orchestrator;
 use errors::OrchestratorError;
 
 // Re-export the Args struct from main.rs

@@ -1,7 +1,7 @@
 pub mod auth;
 pub mod admin;
 
-use crate::{config::OrchestratorConfig, errors::OrchestratorError};
+use crate::{types::config::OrchestratorConfig, errors::OrchestratorError};
 
 pub trait OrchestratorClient {
     type Output;

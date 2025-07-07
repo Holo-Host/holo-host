@@ -1,23 +1,24 @@
-use anyhow::{Result};
-use async_nats::Client;
+use anyhow::Result;
 use std::path::PathBuf;
 use std::time::Duration;
 
-use crate::nats_clients::OrchestratorClient;
-use crate::{config::OrchestratorConfig, errors::OrchestratorError};
+use crate::types::nats_clients::OrchestratorClient;
+use crate::{errors::OrchestratorError, types::config::OrchestratorConfig};
 
 pub const ORCHESTRATOR_AUTH_CLIENT_NAME: &str = "Orchestrator Auth Manager";
 pub const ORCHESTRATOR_AUTH_CLIENT_INBOX_PREFIX: &str = "_AUTH_INBOX.orchestrator";
 
 pub struct AuthClient {
-    pub client: Client,
-    creds_path: PathBuf
+    pub client: async_nats::Client,
+    _creds_path: PathBuf,
 }
 
 impl OrchestratorClient for AuthClient {
     type Output = Self;
-    
-    fn name(&self) -> &str { "orchestrator auth client" }
+
+    fn name(&self) -> &str {
+        "orchestrator auth client"
+    }
 
     async fn start(config: &OrchestratorConfig) -> Result<Self, OrchestratorError> {
         log::info!("Starting orchestrator auth service...");
@@ -25,7 +26,7 @@ impl OrchestratorClient for AuthClient {
         let creds_path = config.auth_creds_path.clone();
         let nats_url = &config.nats_remote_args.nats_url.as_ref();
         log::info!("auth nats_url : {nats_url:?}");
-    
+
         let nats_connect_timeout_secs: u64 = 180;
         let auth_client = tokio::select! {
             client = async {loop {
@@ -38,7 +39,7 @@ impl OrchestratorClient for AuthClient {
                     .connect(nats_url)
                     .await
                     .map_err(|e| anyhow::anyhow!("Connecting Orchestrator Auth Client to NATS via {nats_url:?}: {e}"));
-    
+
                 match auth_client {
                     Ok(client) => break Ok::<async_nats::Client, async_nats::Error>(client),
                     Err(e) => {
@@ -55,13 +56,18 @@ impl OrchestratorClient for AuthClient {
                 return Err(OrchestratorError::Nats(anyhow::anyhow!("Timed out waiting for NATS on {nats_url:?}").into()));
             }
         };
-        
+
         log::debug!("Orchestrator auth client is ready");
-        Ok(Self { client: auth_client, creds_path })
+        Ok(Self {
+            client: auth_client,
+            _creds_path: creds_path,
+        })
     }
-    
+
     async fn stop(&self) -> Result<(), OrchestratorError> {
-        self.client.drain().await
+        self.client
+            .drain()
+            .await
             .map_err(|e| OrchestratorError::Shutdown(format!("Failed to drain auth client: {}", e)))
     }
 }

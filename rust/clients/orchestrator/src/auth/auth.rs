@@ -17,8 +17,8 @@ This service is responsible for:
     - keeping service running until explicitly cancelled out
 */
 
-use crate::nats_clients::auth::ORCHESTRATOR_AUTH_CLIENT_INBOX_PREFIX;
-use crate::nats_services::utils;
+use crate::auth::utils;
+use crate::types::nats_clients::auth::ORCHESTRATOR_AUTH_CLIENT_INBOX_PREFIX;
 
 use anyhow::{anyhow, Context, Result};
 use async_nats::service::ServiceExt;
@@ -33,12 +33,12 @@ use nats_utils::types::GetResponse;
 
 use std::path::PathBuf;
 use std::str::FromStr;
-use std::vec;
 use std::sync::Arc;
+use std::vec;
 
 pub async fn run(
     orchestrator_auth_client: Client,
-    db_client: MongoDBClient
+    db_client: MongoDBClient,
 ) -> Result<Client, async_nats::Error> {
     // Root Keypair associated with AUTH account
     let root_account_key_path = std::env::var("ORCHESTRATOR_ROOT_AUTH_NKEY_PATH")
@@ -60,11 +60,11 @@ pub async fn run(
     let signing_account_keypair = Arc::new(
         utils::try_read_keypair_from_file(PathBuf::from_str(&signing_account_key_path.clone())?)?
             .ok_or_else(|| {
-                anyhow!(
-                    "Signing AUTH Account keypair not found at path {:?}",
-                    signing_account_key_path
-                )
-            })?,
+            anyhow!(
+                "Signing AUTH Account keypair not found at path {:?}",
+                signing_account_key_path
+            )
+        })?,
     );
     let signing_account_pubkey = signing_account_keypair.public_key().clone();
 
