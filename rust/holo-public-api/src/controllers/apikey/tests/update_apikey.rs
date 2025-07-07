@@ -30,7 +30,6 @@ mod tests {
                 permissions: vec![],
                 metadata: db_utils::schemas::metadata::Metadata::default(),
                 owner: owner_id,
-                prefix: None,
             },
         )
         .await

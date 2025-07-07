@@ -2,7 +2,10 @@
 mod tests {
     use crate::{
         controllers::auth::{auth_dto::AuthLoginResponse, login_apikey::login_with_apikey},
-        providers::{auth::API_KEY_HEADER, crud},
+        providers::{
+            auth::{hash_apikey, API_KEY_HEADER},
+            crud,
+        },
         tests::utils,
     };
     use actix_web::{http::StatusCode, test};
@@ -15,18 +18,18 @@ mod tests {
         let db = utils::get_db(config.clone()).await;
         let owner_id = ObjectId::new();
         let api_key = bson::uuid::Uuid::new().to_string().replace("-", "");
+        let api_key_hash = hash_apikey("v1".to_string(), api_key.clone()).unwrap();
         crud::create::<ApiKey>(
             db.clone(),
             API_KEY_COLLECTION_NAME.to_string(),
             ApiKey {
                 _id: None,
-                api_key: api_key.clone(),
+                api_key: api_key_hash.clone(),
                 description: "test-api-key".to_string(),
-                expire_at: 10,
+                expire_at: 99999999999,
                 permissions: vec![],
                 metadata: db_utils::schemas::metadata::Metadata::default(),
                 owner: owner_id,
-                prefix: None,
             },
         )
         .await
@@ -34,7 +37,7 @@ mod tests {
 
         let req = test::TestRequest::post()
             .insert_header(("Content-Type", "application/json"))
-            .insert_header((API_KEY_HEADER.to_string(), format!("v0-{}", api_key)))
+            .insert_header((API_KEY_HEADER.to_string(), format!("v1-{}", api_key)))
             .uri("/v1/auth/login-with-apikey");
         let resp = utils::perform_integration_test(
             login_with_apikey,
