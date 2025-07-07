@@ -247,8 +247,9 @@ pub struct JsClientBuilder {
 #[derive(Clone, Debug, Educe)]
 #[educe(Deref)]
 pub struct DeServerAddr(pub ServerAddr);
-impl DeServerAddr {
-    pub fn as_ref(&self) -> &ServerAddr {
+
+impl AsRef<ServerAddr> for DeServerAddr {
+    fn as_ref(&self) -> &ServerAddr {
         &self.0
     }
 }
