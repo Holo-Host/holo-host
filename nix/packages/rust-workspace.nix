@@ -71,6 +71,7 @@ craneLib.buildPackage (
                 (craneLib.fileset.commonCargoSources ../../rust/hpos-hal)
                 (craneLib.fileset.commonCargoSources ../../rust/service_apis/workload)
                 (craneLib.fileset.commonCargoSources ../../rust/service_apis/inventory)
+                (craneLib.fileset.commonCargoSources ../../rust/service_apis/authentication)
                 (craneLib.fileset.commonCargoSources ../../rust/ham)
                 (craneLib.fileset.commonCargoSources ../../rust/netdiag)
               ]
