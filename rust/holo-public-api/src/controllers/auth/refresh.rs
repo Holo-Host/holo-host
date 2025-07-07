@@ -154,6 +154,7 @@ pub async fn refresh(
             exp: bson::DateTime::now().to_chrono().timestamp() as usize
                 + config.access_token_expiry.unwrap_or(300) as usize,
             permissions,
+            initials: access_token_result.initials,
         },
         config.jwt_secret.as_ref(),
     ) {

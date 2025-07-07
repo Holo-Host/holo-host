@@ -28,6 +28,8 @@ pub struct AppConfig {
     pub rate_limit_max_requests: Option<u32>,
     /// defaults to 60 seconds
     pub rate_limit_window: Option<u32>,
+    // postmark api key
+    pub postmark_api_key: Option<String>,
 }
 
 pub fn load_config() -> Result<AppConfig, config::ConfigError> {
