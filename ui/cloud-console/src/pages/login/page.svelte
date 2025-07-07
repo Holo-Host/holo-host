@@ -28,8 +28,8 @@
     style:margin-top="100px"
     style:z-index="2"
   >
-    <form onsubmit={onSubmit} class="w100">
-      <h2 style:margin-bottom="20px">Login to HOLO</h2>
+    <h2 style:margin-bottom="20px">Login to HOLO</h2>
+    <form onsubmit={onSubmit} class="column w100 gap10">
       <Input
         class="w100"
         type="email"

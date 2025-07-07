@@ -1,8 +1,8 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
   import { defaultTheme } from "../theme";
-  import { computePosition } from "@floating-ui/dom";
-  //todo: gray out drawer menu options
+  import { computePosition, autoPlacement } from "@floating-ui/dom";
+
   type Prop<T> = {
     children: any;
     items: T[];
@@ -25,7 +25,13 @@
 
   $effect(() => {
     if (dropdownEl && dropdownMenuEl) {
-      computePosition(dropdownEl, dropdownMenuEl).then(({ x, y }) => {
+      computePosition(dropdownEl, dropdownMenuEl, {
+        middleware: [
+          autoPlacement({
+            allowedPlacements: ["bottom", "top"],
+          }),
+        ],
+      }).then(({ x, y }) => {
         Object.assign(dropdownMenuEl.style, {
           left: `${x}px`,
           top: `${y}px`,
@@ -138,7 +144,6 @@
     top: 0;
     left: 0;
     max-height: 300px;
-    margin-top: 30px;
     flex-direction: column;
     background: white;
     border: 1px solid #ccc;

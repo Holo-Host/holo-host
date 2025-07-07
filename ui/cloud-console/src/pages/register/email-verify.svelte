@@ -45,7 +45,7 @@
       console.error("failed to verify registration code");
       return;
     }
-    window.location.href = `/register?code=${code}`;
+    window.location.href = `/register?code=${code}&email=${email}`;
   }
   function onSubmit(e: Event) {
     e.preventDefault();
@@ -60,8 +60,8 @@
 </script>
 
 <div class="column gap10 align-center" style:margin-top="100px">
+  <h2 style:margin-bottom="20px">Sign up to HOLO</h2>
   <form onsubmit={onSubmit} class="w100">
-    <h2 style:margin-bottom="20px">Sign up to HOLO</h2>
     {#if verified}
       <Input
         class="w100"

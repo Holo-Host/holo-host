@@ -71,9 +71,10 @@
     class="column gap10 align-center"
     style:margin-top="100px"
     style:z-index="2"
+    style:width="400px"
   >
+    <h2>Forgot Password</h2>
     <form onsubmit={onSubmit} class="w100">
-      <h2>Forgot Password</h2>
       {#if done}
         <span>Password updated successfully</span>
         <a href="/login">Login</a>
@@ -96,7 +97,7 @@
             disabled={!isEmailValid}
             onclick={onVerifyEmail}
           >
-            Verify Email
+            Send Email
           </Button>
         {:else}
           <Input

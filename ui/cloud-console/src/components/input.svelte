@@ -11,6 +11,7 @@
     isValid?: boolean;
     readonly?: boolean;
     class?: string;
+    disabled?: boolean;
   };
 
   type TextProp = BaseProp & {
@@ -104,6 +105,7 @@
     <input
       id={props.id}
       name={props.id}
+      disabled={props.disabled}
       type={props.type === "password" ? passwordFieldType : props.type}
       placeholder={props.placeholder}
       readonly={props.readonly}
@@ -178,6 +180,7 @@
   }
   .password-visible-button {
     position: relative;
+    top: 2px;
     left: -40px;
     width: 0;
 

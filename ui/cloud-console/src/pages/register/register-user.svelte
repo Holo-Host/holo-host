@@ -69,8 +69,8 @@
   style:width="400px"
   style:max-width="400px"
 >
+  <h2 style:margin-bottom="20px">Sign up to HOLO</h2>
   <form onsubmit={onSubmit} class="w100">
-    <h2 style:margin-bottom="20px">Sign up to HOLO</h2>
     {#if registered}
       <span>
         You have successfully registered.
@@ -102,6 +102,7 @@
         })}
       />
       <Input
+        disabled
         class="w100"
         type="email"
         label="email"
@@ -121,6 +122,7 @@
       >
         <div
           class="dropdown w100"
+          style:margin-bottom="20px"
           style:--border-color={defaultTheme.colors.border}
           style:--background-color={defaultTheme.colors.background.card}
           style:--text-color={defaultTheme.colors.text.black}

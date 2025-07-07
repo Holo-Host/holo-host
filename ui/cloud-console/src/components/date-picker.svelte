@@ -1,5 +1,6 @@
 <script lang="ts">
   import { defaultTheme } from "@/theme";
+  import { autoPlacement, computePosition } from "@floating-ui/dom";
 
   type Prop = {
     value?: Date;
@@ -86,6 +87,23 @@
     return () => {
       removeEventListener("click", handleClickOutside);
     };
+  });
+
+  $effect(() => {
+    if (datePickerToggleEl && datePickerEl) {
+      computePosition(datePickerToggleEl, datePickerEl, {
+        middleware: [
+          autoPlacement({
+            allowedPlacements: ["bottom", "top"],
+          }),
+        ],
+      }).then(({ x, y }) => {
+        Object.assign(datePickerEl.style, {
+          left: `${x}px`,
+          top: `${y}px`,
+        });
+      });
+    }
   });
 </script>
 
@@ -184,12 +202,15 @@
   }
 
   .date-picker-container {
-    display: block;
-    position: relative;
-    top: 20px;
-    left: -200px;
-    width: 0;
-    height: 0;
+    display: flex;
+    position: absolute;
+    width: min-content;
+    top: 0;
+    left: 0;
+    /* top: 20px;
+    left: -200px; */
+    /* width: 0;
+    height: 0; */
 
     .date-picker {
       display: flex;
