@@ -30,15 +30,17 @@ pub fn setup_public_controllers(cfg: &mut web::ServiceConfig) {
 
 pub fn setup_private_controllers(_cfg: &mut web::ServiceConfig) {}
 
-pub fn setup_docs(_internal: bool) -> utoipa::openapi::OpenApi {
+pub fn setup_docs(internal: bool) -> utoipa::openapi::OpenApi {
     let mut openapi = utoipa::openapi::OpenApi::default();
     openapi.merge(AuthLoginResponseSpec::openapi());
     openapi.merge(login_apikey::OpenApiSpec::openapi());
-    openapi.merge(login_password::OpenApiSpec::openapi());
-    openapi.merge(refresh::OpenApiSpec::openapi());
-    openapi.merge(register::OpenApiSpec::openapi());
-    openapi.merge(email_verify::OpenApiSpec::openapi());
-    openapi.merge(forgot_password::OpenApiSpec::openapi());
-    openapi.merge(email_verify_check::OpenApiSpec::openapi());
+    if internal {
+        openapi.merge(login_password::OpenApiSpec::openapi());
+        openapi.merge(refresh::OpenApiSpec::openapi());
+        openapi.merge(register::OpenApiSpec::openapi());
+        openapi.merge(email_verify::OpenApiSpec::openapi());
+        openapi.merge(forgot_password::OpenApiSpec::openapi());
+        openapi.merge(email_verify_check::OpenApiSpec::openapi());
+    }
     openapi
 }
