@@ -13,6 +13,7 @@ members = [
   "rust/util_libs/nats",
   "rust/util_libs/db",
   "rust/util_libs/mocks",
+  "rust/util_libs/squashfs",
   "rust/netdiag",
   "rust/holo-dns",
   "rust/holo-gateway",
