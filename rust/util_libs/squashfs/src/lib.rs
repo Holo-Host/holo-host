@@ -34,7 +34,6 @@ pub fn read_file(
     squashfs_path: String,
     file_path: String,
 ) -> Result<Option<Vec<u8>>, std::io::Error> {
-    // TODO: check if file exists
     let mut file = File::open(squashfs_path)?;
     let buf_reader = std::io::BufReader::new(&mut file);
     let reader = FilesystemReader::from_reader(buf_reader)?;
