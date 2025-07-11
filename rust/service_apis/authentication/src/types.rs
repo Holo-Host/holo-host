@@ -6,9 +6,9 @@ use std::collections::HashMap;
 use textnonce::TextNonce;
 use thiserror::Error;
 
-// The workload_sk_role is assigned when the host agent is created during the auth flow.
-// NB: This role name *must* match the `ROLE_NAME_WORKLOAD` in the `hub_auth_setup.sh` script file.
-pub const WORKLOAD_SK_ROLE: &str = "workload_role";
+// HOST_SK_ROLE is assigned when the host agent is created during the auth flow.
+// NB: This role name *must* match the `HOST_ROLE_NAME` in the `hub_auth_setup.sh` script file.
+pub const HOST_SK_ROLE: &str = "host_role";
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum AuthState {

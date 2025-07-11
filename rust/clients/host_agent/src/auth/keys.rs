@@ -101,7 +101,7 @@ impl Keys {
 
         let host_user_name = format!("host_user_{}", host_pk);
         let host_creds_path = maybe_host_creds_path.to_owned().map_or_else(
-            || PathBuf::from_str(&get_nats_creds_by_nsc("HOLO", "WORKLOAD", &host_user_name)),
+            || PathBuf::from_str(&get_nats_creds_by_nsc("HOLO", "HPOS", &host_user_name)),
             Ok,
         )?;
 
@@ -275,7 +275,7 @@ impl Keys {
 
         let host_user_name = format!("host_user_{}", self.host_pubkey);
         let host_creds_path =
-            PathBuf::from_str(&get_nats_creds_by_nsc("HOLO", "WORKLOAD", &host_user_name))?;
+            PathBuf::from_str(&get_nats_creds_by_nsc("HOLO", "HPOS", &host_user_name))?;
 
         if let Err(e) = execute_nsc_command(
             &[
@@ -284,7 +284,7 @@ impl Keys {
                 "--name",
                 &host_user_name,
                 "--account",
-                "WORKLOAD",
+                "HPOS",
                 "--output-file",
                 host_creds_path.to_string_lossy().as_ref(),
             ],

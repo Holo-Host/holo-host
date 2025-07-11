@@ -1,7 +1,7 @@
 /*
 Endpoints & Managed Subjects:
-    - `update_workload`: handles the "WORKLOAD.<host_pukey>.update" subject
-    - `fetch_workload_status`: handles the "WORKLOAD.<host_pukey>.send_status" subject
+    - `update_workload`: handles the "WORKLOAD.<host_id>.update" subject
+    - `fetch_workload_status`: handles the "WORKLOAD.<host_id>.send_status" subject
 */
 
 use crate::types::WorkloadResult;

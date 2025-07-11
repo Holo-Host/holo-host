@@ -240,7 +240,9 @@ impl AuthServiceApi {
         };
 
         // 3. Add User keys to nsc resolver (and automatically create account-signed reference to user key)
-        utils::add_user_keys_to_resolver(&device_id, &host_pubkey, &maybe_sys_pubkey)?;
+        utils::add_user_keys_to_resolver(&device_id, &host_pubkey, &maybe_sys_pubkey)
+            .await
+            .map_err(|e| ServiceError::internal(e.to_string(), None))?;
 
         // 4. Create User JWT files (automatically signed with respective account key)
         let (host_jwt, sys_jwt) = utils::create_user_jwt_files(&host_pubkey, &maybe_sys_pubkey)

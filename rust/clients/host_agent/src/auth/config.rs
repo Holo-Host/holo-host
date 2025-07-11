@@ -9,7 +9,7 @@ use std::path::Path;
 use crate::local_cmds::host::errors::{HostAgentError, HostAgentResult};
 
 // Configuration for the Hoster - contains identity information
-pub struct HosterConfig {
+pub struct HosterInfo {
     // Email address of the hoster/admin
     pub email: String,
     // Ed25519 signing key pair
@@ -22,9 +22,9 @@ pub struct HosterConfig {
     pub holoport_id: String,
 }
 
-impl HosterConfig {
+impl HosterInfo {
     /*
-    Creates a new HosterConfig by loading configuration from env vars
+    Creates a new HosterInfo struct by loading configuration from env vars
     # Errors
         Returns an error if:
         - Required env vars are not set
@@ -33,7 +33,7 @@ impl HosterConfig {
         - Config format is unsupported
     */
     pub async fn new() -> HostAgentResult<Self> {
-        let (keypair, email) = try_from_config().await?;
+        let (keypair, email) = from_config().await?;
         let verifying_key = keypair.verifying_key();
         let hc_pubkey = public_key::to_holochain_encoded_agent_key(&verifying_key);
         let holoport_id = public_key::to_base36_id(&verifying_key);
@@ -48,15 +48,15 @@ impl HosterConfig {
 }
 
 // Attempts to load configuration from the files specified by env vars
-async fn try_from_config() -> HostAgentResult<(SigningKey, String)> {
+async fn from_config() -> HostAgentResult<(SigningKey, String)> {
     // Load and validate configuration file path
     let config_path = env::var("HPOS_CONFIG_PATH")?;
 
     // Validate config file exists and is readable
     if !Path::new(&config_path).exists() {
         return Err(HostAgentError::service_failed(
-            "configuration file access",
-            &format!("Configuration file does not exist: {}", config_path),
+            "Hoster configuration file access",
+            &format!("Hoster configuration file does not exist: {}", config_path),
         ));
     }
 
@@ -68,8 +68,8 @@ async fn try_from_config() -> HostAgentResult<(SigningKey, String)> {
     // Validate password file exists
     if !Path::new(&password_file_path).exists() {
         return Err(HostAgentError::service_failed(
-            "password file access",
-            &format!("Password file does not exist: {}", password_file_path),
+            "Device seed password file access",
+            &format!("Device seed password file does not exist: {}", password_file_path),
         ));
     }
 

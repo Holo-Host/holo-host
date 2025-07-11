@@ -15,6 +15,7 @@
 
 let
   cfg = config.holo.host-agent;
+  rootPath = "/var/lib/holo-host-agent/";
 in
 {
   imports = [
@@ -28,12 +29,18 @@ in
     };
 
     autoStart = lib.mkOption {
+      type = lib.types.bool;
       default = true;
     };
 
     package = lib.mkOption {
       type = lib.types.package;
       default = inputs.self.packages.${pkgs.stdenv.system}.rust-workspace.passthru.individual.host_agent;
+    };
+
+    hostAuthScriptPath = lib.mkOption {
+      type = lib.types.path;
+      default = inputs.self.packages.${pkgs.stdenv.system}.host-agent-auth-setup;
     };
 
     logLevel = lib.mkOption {
@@ -54,7 +61,7 @@ in
     };
 
     nats = {
-      listenHost = lib.mkOption {
+      host = lib.mkOption {
         type = lib.types.str;
         default = "127.0.0.1";
       };
@@ -66,42 +73,65 @@ in
 
       url = lib.mkOption {
         type = lib.types.str;
-        default = "${cfg.nats.listenHost}:${builtins.toString cfg.nats.listenPort}";
+        default = "${cfg.nats.host}:${builtins.toString cfg.nats.listenPort}";
       };
 
-      nscPath = lib.mkOption {
-        type = lib.types.path;
-        default = "/var/lib/.local/share/nats/nsc";
+      nsc = {
+        path = lib.mkOption {
+          type = lib.types.path;
+          default = "/root/.local/share/nats/nsc";
+        };
+
+        sharedCredsPath = lib.mkOption {
+          type = lib.types.path;
+          default = "${rootPath}/store_dir/shared_creds";
+        };
+        
+        localCredsPath = lib.mkOption {
+          type = lib.types.path;
+          default = "${rootPath}/store_dir/local_creds";
+        };
+
+        hostNkeyPath = lib.mkOption {
+          type = lib.types.path;
+          default = "${cfg.nats.nsc.localCredsPath}/host.nk";
+        };
+
+        sysNkeyPath = lib.mkOption {
+          type = lib.types.path;
+          default = "${cfg.nats.nsc.localCredsPath}/sys.nk";
+        };
+
+        resolverPath = lib.mkOption {
+          type = lib.types.path;
+          default = "/root/.local/share/nats/nsc/main-resolver.conf";
+        };
       };
 
-      sharedCredsPath = lib.mkOption {
-        type = lib.types.path;
-        default = "${cfg.nats.nscPath}/shared_creds";
+      # Note: Old SCP-based options removed in favor of secure Nix store approach
+      # Use sharedCredsSource and sharedCredsHash for secure credential distribution
+
+      # Secure Nix store approach
+      sharedCredsSource = lib.mkOption {
+        type = lib.types.nullOr lib.types.path;
+        description = "Path to a derivation that produces the shared credentials (more secure than SCP)";
+        default = null;
       };
 
-      localCredsPath = lib.mkOption {
-        type = lib.types.path;
-        default = "${cfg.nats.nscPath}/local_creds";
+      sharedCredsHash = lib.mkOption {
+        type = lib.types.nullOr lib.types.str;
+        description = "Expected SHA256 hash of the shared credentials for integrity verification";
+        default = null;
       };
 
-      hostNkeyPath = lib.mkOption {
-        type = lib.types.path;
-        default = "${cfg.nats.localCredsPath}/host.nk";
-      };
-
-      sysNkeyPath = lib.mkOption {
-        type = lib.types.path;
-        default = "${cfg.nats.localCredsPath}/sys.nk";
-      };
-
-      hposCredsPath = lib.mkOption {
+      hosterCredsPath = lib.mkOption {
         type = lib.types.path;
         default = "/var/lib/holo-host-agent/server-key-config.json";
       };
 
-      hposCredsPw = lib.mkOption {
-        type = lib.types.str;
-        default = "pass";
+      hosterCredsPwFile = lib.mkOption {
+        type = lib.types.path;
+        default = "/var/lib/holo-host-agent/hpos_creds_pw.txt";
       };
 
       hub = {
@@ -148,14 +178,70 @@ in
       iproute2
     ];
 
+    # Remove the insecure SCP service and replace with secure Nix store approach
+    systemd.services.holo-host-agent-setup-shared-creds = lib.mkIf (cfg.nats.sharedCredsSource != null) {
+      description = "Setup shared creds directory for holo-host-agent from Nix store";
+      wantedBy = [ "holo-host-agent.service" ];
+      before = [ "holo-host-agent.service" ];
+      after = [ "network-online.target" ];
+      wants = [ "network-online.target" ];
+      serviceConfig = {
+        Type = "oneshot";
+        User = "root";
+        ProtectSystem = "strict";
+        ProtectHome = true;
+        NoNewPrivileges = true;
+        PrivateTmp = true;
+        ProtectKernelTunables = true;
+        ProtectKernelModules = true;
+        ProtectControlGroups = true;
+      };
+      script = ''
+        set -e
+        echo "Setting up shared creds from Nix store derivation"
+        
+        # Clean existing directory
+        rm -rf ${cfg.nats.nsc.sharedCredsPath}
+        mkdir -p ${cfg.nats.nsc.sharedCredsPath}
+        
+        # Copy from Nix store derivation
+        cp -r ${cfg.nats.sharedCredsSource}/* ${cfg.nats.nsc.sharedCredsPath}/
+        
+        # Verify integrity if hash is provided
+        if [ -n "${cfg.nats.sharedCredsHash}" ]; then
+          echo "Verifying shared creds integrity..."
+          ACTUAL_HASH=$(find ${cfg.nats.nsc.sharedCredsPath} -type f -exec sha256sum {} \; | sort | sha256sum | cut -d' ' -f1)
+          if [ "$ACTUAL_HASH" != "${cfg.nats.sharedCredsHash}" ]; then
+            echo "ERROR: Shared creds integrity check failed!"
+            echo "Expected: ${cfg.nats.sharedCredsHash}"
+            echo "Actual: $ACTUAL_HASH"
+            exit 1
+          fi
+          echo "Shared creds integrity verified successfully"
+        fi
+        
+        # Set secure permissions
+        chmod -R 600 ${cfg.nats.nsc.sharedCredsPath}/*
+        chown -R holo-host-agent:holo-host-agent ${cfg.nats.nsc.sharedCredsPath}
+        
+        # Create and secure localCredsPath directory
+        mkdir -p ${cfg.nats.nsc.localCredsPath}
+        chmod 700 ${cfg.nats.nsc.localCredsPath}
+        chown holo-host-agent:holo-host-agent ${cfg.nats.nsc.localCredsPath}
+        
+        echo "Shared creds setup completed successfully"
+      '';
+    };
+
     systemd.services.holo-host-agent = {
       enable = true;
-
       after = [
         "network-online.target"
+        "holo-host-agent-setup-shared-creds.service"
       ];
       wants = [
         "network-online.target"
+        "holo-host-agent-setup-shared-creds.service"
       ];
       wantedBy = lib.lists.optional cfg.autoStart "multi-user.target";
 
@@ -167,15 +253,15 @@ in
             else
               "${cfg.logLevel},request=error,tungstenite=error,async_nats=error,mio=error,tokio_tungstenite=error";
           RUST_BACKTRACE = cfg.rust.backtrace;
-          NSC_PATH = cfg.nats.nscPath;
-          LOCAL_CREDS_PATH = cfg.nats.localCredsPath;
-          HOSTING_AGENT_HOST_NKEY_PATH = cfg.nats.hostNkeyPath;
-          HOSTING_AGENT_SYS_NKEY_PATH = cfg.nats.sysNkeyPath;
-          HPOS_CONFIG_PATH = cfg.nats.hposCredsPath;
-          DEVICE_SEED_DEFAULT_PASSWORD = builtins.toString cfg.nats.hposCredsPw;
-          # NATS_LISTEN_PORT = builtins.toString cfg.nats.listenPort;
+          NSC_PATH = cfg.nats.nsc.path;
+          LOCAL_CREDS_PATH = cfg.nats.nsc.localCredsPath;
+          HOSTING_AGENT_HOST_NKEY_PATH = cfg.nats.nsc.hostNkeyPath;
+          HOSTING_AGENT_SYS_NKEY_PATH = cfg.nats.nsc.sysNkeyPath;
+          HPOS_CONFIG_PATH = cfg.nats.hosterCredsPath;
+          DEVICE_SEED_DEFAULT_PASSWORD_FILE = builtins.toString cfg.nats.hosterCredsPwFile;
           NIX_REMOTE = "daemon";
           IS_CONTAINER_ON_PRIVATE_NETWORK = builtins.toString cfg.containerPrivateNetwork;
+          # NATS_LISTEN_PORT = builtins.toString cfg.nats.listenPort;
         }
         // lib.attrsets.optionalAttrs (cfg.nats.url != null) {
           NATS_URL = cfg.nats.url;
@@ -189,10 +275,22 @@ in
       ];
 
       preStart = ''
-        echo "Start Host Auth Setup"
-        mkdir -p ${cfg.nats.hostNkeyPath}
-        mkdir -p ${cfg.nats.sysNkeyPath}
-        mkdir -p ${cfg.nats.hposCredsPath}
+        echo "Starting Host Auth Setup"
+        if [ ! -d ${cfg.nats.nsc.sharedCredsPath} ]; then
+          echo "ERROR: Shared creds directory ${cfg.nats.nsc.sharedCredsPath} does not exist!"
+          exit 1
+        fi
+        mkdir -p ${cfg.nats.nsc.localCredsPath}
+        mkdir -p ${cfg.nats.nsc.hostNkeyPath}
+        mkdir -p ${cfg.nats.nsc.sysNkeyPath}
+        mkdir -p ${cfg.nats.hosterCredsPath}
+
+        init_host_auth_guard() {
+          ${cfg.hostAuthScriptPath} ${builtins.toString cfg.nats.nsc.path} ${builtins.toString cfg.nats.nsc.sharedCredsPath}
+          echo "Finished Host Auth Guard Setup"
+        }
+        init_host_auth_guard()
+
         echo "Finshed Host Auth Setup"
       '';
 

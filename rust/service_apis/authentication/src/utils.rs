@@ -6,6 +6,7 @@ use data_encoding::{BASE32HEX_NOPAD, BASE64URL_NOPAD};
 use jsonwebtoken::{decode, Algorithm, DecodingKey, Validation};
 use nats_utils::{jetstream_client, types::ServiceError};
 use nkeys::KeyPair;
+use nsc_client::NSCClient;
 use serde::Deserialize;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
@@ -13,7 +14,7 @@ use std::io::Write;
 use std::process::Command;
 use std::sync::Arc;
 use std::time::SystemTime;
-use types::WORKLOAD_SK_ROLE;
+use types::HOST_SK_ROLE;
 
 pub fn handle_internal_err(err_msg: &str) -> ServiceError {
     log::error!("{}", err_msg);
@@ -202,68 +203,54 @@ pub fn generate_auth_response_claim(
     Ok(auth_response_claim)
 }
 
-pub fn add_user_keys_to_resolver(
+pub async fn add_user_keys_to_resolver(
     device_id: &str,
     host_pubkey: &str,
     maybe_sys_pubkey: &Option<String>,
 ) -> Result<(), ServiceError> {
-    match Command::new("nsc")
-        .args([
-            "add",
-            "user",
-            "-a",
-            "WORKLOAD",
-            "-n",
-            &format!("host_user_{}", host_pubkey),
-            "-k",
-            host_pubkey,
-            "-K",
-            WORKLOAD_SK_ROLE,
-            "--tag",
-            &format!("hostId:{}", device_id),
-        ])
-        .output()
-        .context("Failed to add host user with provided keys")
-        .map_err(|e| ServiceError::internal(e.to_string(), None))
-    {
-        Ok(r) => {
-            let stderr = String::from_utf8_lossy(&r.stderr);
-            if !r.stderr.is_empty() && !stderr.contains("already exists") {
-                return Err(ServiceError::internal(stderr.to_string(), None));
-            }
-        }
-        Err(e) => {
-            return Err(e);
-        }
-    };
+    // Get NSC proxy configuration from environment
+    let nsc_proxy_url = std::env::var("NSC_PROXY_URL")
+        .unwrap_or_else(|_| "http://nats-server-0.holotest.dev:5000".to_string());
+    let nsc_auth_key = std::env::var("NSC_PROXY_AUTH_KEY")
+        .map_err(|_| ServiceError::internal("NSC_PROXY_AUTH_KEY not set".to_string(), None))?;
 
-    if let Some(sys_pubkey) = maybe_sys_pubkey.clone() {
-        match Command::new("nsc")
-            .args([
-                "add",
-                "user",
-                "-a",
-                "SYS",
-                "-n",
-                &format!("sys_user_{}", host_pubkey),
-                "-k",
-                &sys_pubkey,
-            ])
-            .output()
-            .context("Failed to add host sys user with provided keys")
-            .map_err(|e| ServiceError::internal(e.to_string(), None))
-        {
-            Ok(r) => {
-                let stderr = String::from_utf8_lossy(&r.stderr);
-                if !r.stderr.is_empty() && !stderr.contains("already exists") {
-                    return Err(ServiceError::internal(stderr.to_string(), None));
-                }
-            }
-            Err(e) => {
-                return Err(e);
-            }
-        };
-    };
+    // Create NSC client
+    let nsc_client = NSCClient::new(nsc_proxy_url, nsc_auth_key)
+        .map_err(|e| ServiceError::internal(format!("Failed to create NSC client: {}", e), None))?;
+
+    // Add host user to HPOS account
+    let response = nsc_client
+        .add_user(
+            "HPOS",
+            &format!("host_user_{}", host_pubkey),
+            host_pubkey,
+            Some(HOST_SK_ROLE),
+            Some(&format!("hostId:{}", device_id)),
+        )
+        .await
+        .map_err(|e| ServiceError::internal(format!("Failed to add host user: {}", e), None))?;
+
+    if !response.success && !response.stderr.contains("already exists") {
+        return Err(ServiceError::internal(
+            format!("Failed to add host user: {}", response.stderr),
+            None,
+        ));
+    }
+
+    // Add sys user if provided
+    if let Some(sys_pubkey) = maybe_sys_pubkey {
+        let sys_response = nsc_client
+            .add_user("SYS", &format!("sys_user_{}", host_pubkey), sys_pubkey, None, None)
+            .await
+            .map_err(|e| ServiceError::internal(format!("Failed to add sys user: {}", e), None))?;
+
+        if !sys_response.success && !sys_response.stderr.contains("already exists") {
+            return Err(ServiceError::internal(
+                format!("Failed to add sys user: {}", sys_response.stderr),
+                None,
+            ));
+        }
+    }
 
     Ok(())
 }
@@ -274,7 +261,7 @@ pub fn create_user_jwt_files(
 ) -> Result<(String, String)> {
     let host_jwt = std::fs::read_to_string(jetstream_client::get_nats_jwt_by_nsc(
         "HOLO",
-        "WORKLOAD",
+        "HPOS",
         &format!("host_user_{}.jwt", host_pubkey),
     ))
     .map_err(|e| ServiceError::internal(e.to_string(), None))?;

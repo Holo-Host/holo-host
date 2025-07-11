@@ -1,155 +1,156 @@
-/*
-  Opinionated module to configure a NATS server to be used with other holo-host components.
-  The main use-case for this module will be to host a NATS cluster that is reachable by all hosts.
-*/
-{ lib, config, ... }:
-let
-  cfg = config.holo.nats-server;
-in
-{
-  imports = [ ];
 
+# Module to configure a machine as a holo-nats-server.
+# This is the main nats-server module that imports all service-specific modules
+{inputs, ...}: {
+  lib,
+  config,
+  pkgs,
+  ...
+}: let
+  cfg = config.holo.nats-server;
+in {
   options.holo.nats-server = {
     enable = lib.mkOption {
-      description = "enable holo NATS server";
+      description = "Enable NATS Server";
+      type = lib.types.bool;
       default = true;
     };
 
-    host = lib.mkOption {
-      description = "native client listen host";
-      type = lib.types.str;
-      default = "127.0.0.1";
-    };
-
-    port = lib.mkOption {
-      description = "native client port";
-      type = lib.types.int;
-      default = 4222;
-    };
-
-    leafnodePort = lib.mkOption {
-      description = "native leafnode port";
-      type = lib.types.int;
-      default = 7422;
-    };
-
-    jetstream = {
-      domain = lib.mkOption {
-        description = "jetstream domain name";
+    # NATS Server configuration
+    server = {
+      host = lib.mkOption {
         type = lib.types.str;
-        default = "holo";
+        default = "127.0.0.1";
+        description = "NATS Server hostname";
       };
-      enabled = lib.mkOption {
-        description = "enable jetstream in nats server";
-        type = lib.types.bool;
-        default = true;
-      };
-    };
 
-    websocket = {
       port = lib.mkOption {
-        description = "websocket listen port";
         type = lib.types.int;
-        default = 4223;
-      };
-
-      externalPort = lib.mkOption {
-        description = "expected external websocket port";
-        type = lib.types.nullOr lib.types.int;
-        default = 443;
-      };
-
-      openFirewall = lib.mkOption {
-        description = "allow incoming TCP connections to the externalWebsocket port";
-        default = false;
+        default = 4222;
+        description = "NATS Server port";
       };
     };
 
-    caddy = {
-      enable = lib.mkOption {
-        description = "enable holo NATS server";
-        default = true;
+    # NSC configuration
+    nsc = {
+      # NSC configuration path
+      path = lib.mkOption {
+        type = lib.types.path;
+        default = "/var/lib/nats_server/.local/share/nats/nsc";
+        description = "Path to NSC configuration directory";
       };
-      staging = lib.mkOption {
-        type = lib.types.bool;
-        description = "use staging acmeCA for testing purposes. change this in production enviornments.";
-        default = true;
+
+      # Local credentials path
+      localCredsPath = lib.mkOption {
+        type = lib.types.path;
+        description = "Path for local credentials (signing keys)";
       };
-      logLevel = lib.mkOption {
-        type = lib.types.str;
-        default = "DEBUG";
+
+      # Shared credentials path
+      sharedCredsPath = lib.mkOption {
+        type = lib.types.path;
+        default = "/var/lib/nats_server/shared-creds";
+        description = "Path for shared JWT files";
+      };
+
+      # Resolver configuration path
+      resolverPath = lib.mkOption {
+        type = lib.types.path;
+        default = "/var/lib/nats_server/main-resolver.conf";
+        description = "Path to the NATS resolver configuration file";
       };
     };
 
-    extraAttrs = lib.mkOption {
-      description = "extra attributes passed to `services.nats`";
-      default = { };
+    # NATS Server configuration file
+    configFile = lib.mkOption {
+      type = lib.types.path;
+      default = pkgs.writeText "nats-server.conf" ''
+        # NATS Server configuration
+        port: ${builtins.toString cfg.server.port}
+        http_port: 8222
+        server_name: nats-server
+        
+        # JWT authentication
+        operator: ${cfg.nsc.sharedCredsPath}/HOLO.jwt
+        resolver: ${cfg.nsc.resolverPath}
+        system_account: SYS
+        
+        # Logging
+        logtime: true
+        debug: false
+        trace: false
+        
+        # Clustering
+        cluster {
+          port: 6222
+          listen: 0.0.0.0:6222
+        }
+      '';
+      description = "NATS Server configuration file";
     };
   };
 
   config = lib.mkIf cfg.enable {
-    networking.firewall.allowedTCPPorts =
-      # need port 80 to receive well-known ACME requests
-      lib.optional cfg.caddy.enable 80
-      ++ lib.optional (cfg.websocket.openFirewall || cfg.caddy.enable) cfg.websocket.externalPort;
+    # Create nats server user
+    users.users.nats-server = {
+      isSystemUser = true;
+      home = "/var/lib/nats_server";
+      createHome = true;
+    };
 
-    services.nats = lib.mkMerge [
-      {
-        serverName = lib.mkDefault config.networking.hostName;
-        enable = lib.mkDefault true;
+    # Create necessary directories
+    system.activationScripts.holo-nats-server-dirs = ''
+      mkdir -p ${cfg.nsc.path}
+      mkdir -p /var/lib/nats_server
+      chown -R nats-server:nats-server /var/lib/nats_server
+      chmod -R 700 /var/lib/nats_server
+    '';
 
-        settings = {
-          host = lib.mkDefault cfg.host;
-          port = lib.mkDefault cfg.port;
-          leafnodes.port = lib.mkDefault cfg.leafnodePort;
-          max_payload = 3145728; # 3MiB in bytes
-          jetstream = {
-            domain = lib.mkDefault cfg.jetstream.domain;
-            enabled = lib.mkDefault cfg.jetstream.enabled;
-          };
-          websocket = {
-            inherit (cfg.websocket) port;
+    # NATS Server service
+    systemd.services.nats = {
+      description = "NATS Server";
+      wantedBy = [ "multi-user.target" ];
+      after = [ "network-online.target" ];
+      wants = [ "network-online.target" ];
 
-            # TLS will be terminated by the reverse-proxy
-            no_tls = true;
-          };
-        };
-      }
-      cfg.extraAttrs
-    ];
+      path = [ pkgs.nats-server ];
 
-    services.caddy = lib.mkIf cfg.caddy.enable (
-      {
-        enable = true;
-        globalConfig = ''
-          auto_https disable_redirects
-        '';
-        logFormat = ''
-          level DEBUG
-        '';
+      script = ''
+        # Check if JWT credentials exist before starting NATS
+        if [ ! -f "${cfg.nsc.sharedCredsPath}/HOLO.jwt" ]; then
+          echo "ERROR: NATS JWT credentials not found. Please ensure setup has completed."
+          exit 1
+        fi
+        
+        exec ${pkgs.nats-server}/bin/nats-server -c ${cfg.configFile}
+      '';
 
-        virtualHosts =
-          let
-            maybe_fqdn = builtins.tryEval config.networking.fqdn;
-            domain =
-              if maybe_fqdn.success then
-                maybe_fqdn.value
-              else
-                builtins.trace "WARNING: FQDN is not available, this will most likely lead to an invalid caddy configuration. falling back to hostname ${config.networking.hostName}" config.networking.hostName;
-          in
-          {
-            "https://${domain}:${builtins.toString cfg.websocket.externalPort}".extraConfig = ''
-              tls {
-                issuer acme
-                issuer internal
-              }
-              reverse_proxy http://127.0.0.1:${builtins.toString cfg.websocket.port}
-            '';
-          };
-      }
-      // lib.attrsets.optionalAttrs cfg.caddy.staging {
-        acmeCA = "https://acme-staging-v02.api.letsencrypt.org/directory";
-      }
-    );
+      serviceConfig = {
+        Type = "simple";
+        Restart = "always";
+        RestartSec = "1";
+        
+        # Security settings
+        NoNewPrivileges = true;
+        ProtectSystem = "strict";
+        ProtectHome = true;
+        PrivateTmp = true;
+        PrivateDevices = true;
+        ProtectKernelTunables = true;
+        ProtectKernelModules = true;
+        ProtectControlGroups = true;
+        
+        # File system access
+        ReadWritePaths = [
+          "/var/lib/nats_server"
+          cfg.nsc.sharedCredsPath
+          cfg.nsc.localCredsPath
+          cfg.nsc.path
+        ];
+        
+        User = "nats-server";
+        Group = "nats-server";
+      };
+    };
   };
 }
