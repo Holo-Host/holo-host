@@ -80,7 +80,14 @@ fn parse_ext4() {
 
 #[test]
 fn machine_id() {
+    env_logger::init();
     let inv = HoloInventory::from_host();
+
+    log::debug!("Inventory: {:?}", inv);
+
+    // This test runs as a non-root user, so we shouldn't get any memory information back, but the
+    // inventory should still come back with other stuff.
+    assert_eq!(inv.mem.len(), 0);
 
     let mut machine_cmd = assert_cmd::Command::new("systemd-machine-id-setup");
     let assert = machine_cmd.arg("--print").assert();
@@ -209,6 +216,11 @@ fn smbios_board() {
         None => "".to_string(),
     };
     assert.stdout(format!("{}\n", board_name));
+
+    // Simple check for memory data. We don't know anything about the machine(s) this test will run
+    // on, so it could come back with anything. It's probably worth collecting a few example of
+    // blobs and checking those in as mock structs.
+    assert_ne!(inv.mem.len(), 0);
 }
 
 // dmidecode translates raw values into strings for a lot of these parameters. These tests will
