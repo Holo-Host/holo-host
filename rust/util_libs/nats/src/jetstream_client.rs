@@ -164,6 +164,7 @@ impl JsClient {
             .request_timeout(Some(p.request_timeout.unwrap_or(Duration::from_secs(30))))
             .custom_inbox_prefix(&p.inbox_prefix);
 
+        // TODO: Remove repetition. Merge this pattern and the `Credentials::Password` pattern below.
         if let Some((user, pass)) = p.nats_remote_args.maybe_user_password()? {
             connect_options = connect_options.user_and_password(user, pass);
         }
@@ -322,6 +323,7 @@ impl JsClient {
             &params.description,
             &params.version,
             &params.service_subject,
+            params.maybe_source_js_domain,
         )
         .await?;
 

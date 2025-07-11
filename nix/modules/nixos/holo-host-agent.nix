@@ -91,9 +91,28 @@ in
       };
     };
 
+    containerPrivateNetwork = lib.mkOption {
+      type = lib.types.bool;
+      default = false;
+      description = "Input flag to determine whether to use private networking. When true, containers are isolated with port forwarding. When false, containers share the host network with dynamic port allocation to avoid conflicts.";
+    };
+
   };
 
   config = lib.mkIf cfg.enable {
+    # Add required packages for socat port forwarding when using private networking
+    environment.systemPackages = with pkgs; [
+      git
+      nats-server
+      natscli
+      nsc
+    ] ++ lib.optionals cfg.containerPrivateNetwork [
+      # Additional packages needed for socat port forwarding with private networking
+      socat
+      netcat-gnu
+      iproute2
+    ];
+
     systemd.services.holo-host-agent = {
       enable = true;
 
@@ -115,6 +134,7 @@ in
           RUST_BACKTRACE = cfg.rust.backtrace;
           NATS_LISTEN_PORT = builtins.toString cfg.nats.listenPort;
           NIX_REMOTE = "daemon";
+          IS_CONTAINER_ON_PRIVATE_NETWORK = builtins.toString cfg.containerPrivateNetwork;
         }
         // lib.attrsets.optionalAttrs (cfg.nats.url != null) {
           NATS_URL = cfg.nats.url;

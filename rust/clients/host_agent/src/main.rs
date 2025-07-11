@@ -79,6 +79,7 @@ async fn daemonize(args: &DaemonzeArgs) -> anyhow::Result<()> {
         args.nats_connect_timeout_secs,
         args.leaf_server_listen_host.clone(),
         args.leaf_server_listen_port,
+        Some(args.hub_jetstream_domain.clone()),
     )
     .await?;
     // TODO: would it be a good idea to reuse this client in the workload_manager and elsewhere later on?
@@ -112,9 +113,12 @@ async fn daemonize(args: &DaemonzeArgs) -> anyhow::Result<()> {
         });
     }
 
+    let hub_jetstream_domain = args.hub_jetstream_domain.clone();
     let host_client_workload = Arc::new(tokio::sync::RwLock::new(host_client.clone()));
     spawn(async move {
-        if let Err(e) = hostd::workload::run(host_client_workload, &host_id).await {
+        if let Err(e) =
+            hostd::workload::run(host_client_workload, &host_id, &hub_jetstream_domain).await
+        {
             log::error!("Error running host agent workload service. Err={:?}", e)
         };
     });

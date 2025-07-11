@@ -114,6 +114,7 @@ async fn test_leaf_server_run() {
         NEW_LEAF_CONFIG_PATH,
         local_conn_domain,
         leaf_server_conn_port,
+        Some(3145728), // 3MiB in bytes, matching holo-nats server configuration
         jetstream_config,
         logging_options,
         leaf_node_remotes,

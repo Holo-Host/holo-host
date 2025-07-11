@@ -113,6 +113,14 @@ pub struct DaemonzeArgs {
 
     #[arg(
         long,
+        help = "nats hub jetstream domain name",
+        env = "NATS_HUB_JETSTREAM_DOMAIN_NAME",
+        default_value = "holo"
+    )]
+    pub(crate) hub_jetstream_domain: String,
+
+    #[arg(
+        long,
         env = "NATS_LEAF_SERVER_LISTEN_HOST",
         default_value = "127.0.0.1",
         value_parser = |s: &str| url::Host::<String>::parse(s),

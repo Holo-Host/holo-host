@@ -26,13 +26,19 @@ mod tests {
 
         let api = OrchestratorWorkloadApi::new(&db_client).await?;
         let workload = create_test_workload_default();
+        println!("workload: {:#?}", workload);
         let msg_payload = serde_json::to_vec(&workload).unwrap();
         let msg = Arc::new(NatsMessage::new("WORKLOAD.add", msg_payload).into_message());
         let r = api.add_workload(msg).await?;
+        println!("workload result: {:#?}", r);
 
-        assert!(r.result.status.id.is_some());
-        assert!(matches!(r.result.status.actual, WorkloadState::Reported));
-        assert!(matches!(r.result.status.desired, WorkloadState::Running));
+        if let WorkloadResult::Status(status) = r.result {
+            assert!(status.id.is_some());
+            assert!(matches!(status.actual, WorkloadState::Reported));
+            assert!(matches!(status.desired, WorkloadState::Running));
+        } else {
+            panic!("Expected WorkloadResult::Status, got something else");
+        }
 
         Ok(())
     }
@@ -52,15 +58,20 @@ mod tests {
             .workload_collection
             .insert_one_into(workload.clone())
             .await?;
-        workload._id = Some(workload_id);
+        workload._id = workload_id;
 
         // Then update it
         let msg_payload = serde_json::to_vec(&workload).unwrap();
         let msg = Arc::new(NatsMessage::new("WORKLOAD.update", msg_payload).into_message());
 
         let r = api.update_workload(msg).await?;
-        assert!(matches!(r.result.status.actual, WorkloadState::Updating));
-        assert!(matches!(r.result.status.desired, WorkloadState::Updated));
+
+        if let WorkloadResult::Status(status) = r.result {
+            assert!(matches!(status.actual, WorkloadState::Updated));
+            assert!(matches!(status.desired, WorkloadState::Running));
+        } else {
+            panic!("Expected WorkloadResult::Status, got something else");
+        }
 
         Ok(())
     }
@@ -80,7 +91,7 @@ mod tests {
             .workload_collection
             .insert_one_into(workload.clone())
             .await?;
-        workload._id = Some(workload_id);
+        workload._id = workload_id;
 
         // Then remove it
         let msg_payload = serde_json::to_vec(&workload).expect("Failed to serialize workload id");
@@ -88,8 +99,12 @@ mod tests {
 
         let r = api.delete_workload(msg).await?;
 
-        assert!(matches!(r.result.status.actual, WorkloadState::Deleted));
-        assert!(matches!(r.result.status.desired, WorkloadState::Removed));
+        if let WorkloadResult::Status(status) = r.result {
+            assert!(matches!(status.actual, WorkloadState::Deleted));
+            assert!(matches!(status.desired, WorkloadState::Uninstalled));
+        } else {
+            panic!("Expected WorkloadResult::Status, got something else");
+        }
 
         // Verify workload is marked as deleted
         let deleted_workload = api
@@ -150,7 +165,7 @@ mod tests {
         );
 
         // Test when host meets criteria
-        assert!(api.verify_host_meets_workload_criteria(&host.inventory, &workload));
+        assert!(api._verify_host_meets_workload_criteria(&host.inventory, &workload));
 
         // Test when host drive space doesn't meet disk criteria
         let mut ineligible_host = host.clone();
@@ -161,18 +176,18 @@ mod tests {
             mock_holo_drive.clone(),
             mock_holo_drive,
         ];
-        assert!(!api.verify_host_meets_workload_criteria(&ineligible_host.inventory, &workload));
+        assert!(!api._verify_host_meets_workload_criteria(&ineligible_host.inventory, &workload));
 
         // Test when host cores count doesn't meet cores criteria
         let mut ineligible_host = host.clone();
         ineligible_host.inventory.cpus = gen_mock_processors(14); // Less than workload requirement
-        assert!(!api.verify_host_meets_workload_criteria(&ineligible_host.inventory, &workload));
+        assert!(!api._verify_host_meets_workload_criteria(&ineligible_host.inventory, &workload));
 
         Ok(())
     }
 
     #[tokio::test]
-    async fn test_handle_db_insertion() -> Result<()> {
+    async fn test_manage_workload_on_host() -> Result<()> {
         let mongod = MongodRunner::run().expect("Failed to run Mongodb Runner");
         let db_client = mongod
             .client()
@@ -224,14 +239,24 @@ mod tests {
             .workload_collection
             .insert_one_into(workload.clone())
             .await?;
-        workload._id = Some(workload_id);
+        workload._id = workload_id;
+        workload.status.desired = WorkloadState::Running;
+        workload.status.actual = WorkloadState::Reported;
 
         let msg_payload = serde_json::to_vec(&workload).unwrap();
         let msg = Arc::new(NatsMessage::new("WORKLOAD.insert", msg_payload).into_message());
 
-        let r = api.handle_db_insertion(msg).await?;
-        assert!(matches!(r.result.status.actual, WorkloadState::Assigned));
-        assert_eq!(r.result.status.desired, workload.status.desired);
+        let r = api.manage_workload_on_host(msg).await?;
+
+        if let WorkloadResult::Workload(returned_workload) = r.result {
+            assert!(matches!(
+                returned_workload.status.actual,
+                WorkloadState::Assigned
+            ));
+            assert_eq!(returned_workload.status.desired, workload.status.desired);
+        } else {
+            panic!("Expected WorkloadResult::Workload, got something else");
+        }
 
         // Verify host assignment
         let updated_host = api
@@ -264,18 +289,19 @@ mod tests {
             actual: WorkloadState::Running,
             payload: WorkloadStatePayload::None,
         };
-        let result = WorkloadResult {
-            status: status.clone(),
-            workload: None,
-        };
+        let result = WorkloadResult::Status(status.clone());
 
         let msg_payload = serde_json::to_vec(&result).unwrap();
         let msg = Arc::new(NatsMessage::new("WORKLOAD.status", msg_payload).into_message());
 
         let r = api.handle_status_update(msg).await?;
 
-        assert!(matches!(r.result.status.actual, WorkloadState::Running));
-        assert!(matches!(r.result.status.desired, WorkloadState::Running));
+        if let WorkloadResult::Status(status) = r.result {
+            assert!(matches!(status.actual, WorkloadState::Running));
+            assert!(matches!(status.desired, WorkloadState::Running));
+        } else {
+            panic!("Expected WorkloadResult::Status, got something else");
+        }
 
         // Verify workload status was updated
         let updated_workload = api

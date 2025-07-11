@@ -18,7 +18,7 @@ use tokio::process::{Child, Command};
 use tokio::sync::Mutex;
 use url::Host;
 
-pub const LEAF_SERVER_CONFIG_PATH: &str = "test_leaf_server.conf";
+// pub const LEAF_SERVER_CONFIG_PATH: &str = "test_leaf_server.conf";
 pub const LEAF_SERVER_DEFAULT_LISTEN_PORT: u16 = 4222;
 
 #[derive(Serialize, Debug, Clone)]
@@ -26,6 +26,8 @@ pub struct JetStreamConfig {
     pub store_dir: PathBuf,
     pub max_memory_store: u64,
     pub max_file_store: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub domain: Option<String>,
 }
 
 #[derive(Debug, Serialize, Clone)]
@@ -75,6 +77,7 @@ struct NatsConfig {
     #[serde(serialize_with = "serialize_host")]
     host: Host<String>,
     port: u16,
+    max_payload: Option<u64>,
     jetstream: JetStreamConfig,
     leafnodes: LeafNodes,
     #[serde(flatten)]
@@ -106,6 +109,7 @@ impl LeafServer {
         new_config_path: &str,
         host: Host<String>,
         port: u16,
+        max_payload: Option<u64>,
         jetstream_config: JetStreamConfig,
         logging: LoggingOptions,
         leaf_node_remotes: Vec<LeafNodeRemote>,
@@ -115,6 +119,7 @@ impl LeafServer {
                 server_name: server_name.map(ToString::to_string),
                 host,
                 port,
+                max_payload,
                 jetstream: jetstream_config,
                 logging,
                 leafnodes: LeafNodes {
@@ -210,5 +215,38 @@ impl LeafServer {
             "{}:{}",
             self.nats_config.host, self.nats_config.port
         ))?)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_leaf_server_with_domain() {
+        let config = JetStreamConfig {
+            store_dir: PathBuf::from("/tmp/test"),
+            max_memory_store: 1024 * 1024 * 1024,
+            max_file_store: 1024 * 1024 * 1024,
+            domain: Some("holo".to_string()),
+        };
+
+        let config_json = serde_json::to_string_pretty(&config).unwrap();
+        assert!(config_json.contains("\"domain\": \"holo\""));
+        println!("Generated config: {}", config_json);
+    }
+
+    #[test]
+    fn test_leaf_server_without_domain() {
+        let config = JetStreamConfig {
+            store_dir: PathBuf::from("/tmp/test"),
+            max_memory_store: 1024 * 1024 * 1024,
+            max_file_store: 1024 * 1024 * 1024,
+            domain: None,
+        };
+
+        let config_json = serde_json::to_string_pretty(&config).unwrap();
+        assert!(!config_json.contains("\"domain\""));
+        println!("Generated config: {}", config_json);
     }
 }
