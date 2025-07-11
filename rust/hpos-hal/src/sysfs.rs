@@ -326,9 +326,7 @@ pub fn parse_mem_file(path: &str) -> Result<crate::inventory::HoloMemoryInventor
     let mem = SMBiosMemoryInfo::read(&mut f)?;
     debug!("Parsed memory structure: {:?}", mem);
     Ok(HoloMemoryInventory {
-        // TODO: Size isn't always in kB blocks. If mem.size is 0x7fff, we should use
-        // extended_size. That'll only happen for DIMMs of 32GB+.
-        size_kb: mem.mem_size(),
+        size: mem.mem_size(),
         form_factor: mem.form_factor.to_string(),
         memory_type: mem.memory_type.to_string(),
         memory_speed: mem.speed_mts,
