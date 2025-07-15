@@ -31,6 +31,23 @@ in {
       };
     };
 
+    # WebSocket configuration
+    websocket = {
+      enable = lib.mkOption {
+        type = lib.types.bool;
+        default = false;
+        description = "Enable WebSocket support";
+      };
+
+      port = lib.mkOption {
+        type = lib.types.int;
+        default = 443;
+        description = "WebSocket port";
+      };
+
+
+    };
+
     # NSC configuration
     nsc = {
       # NSC configuration path
@@ -85,17 +102,27 @@ in {
           port: 6222
           listen: 0.0.0.0:6222
         }
+        
+        # WebSocket configuration
+        ${lib.optionalString cfg.websocket.enable ''
+        websocket {
+          port: ${builtins.toString cfg.websocket.port}
+          no_tls: true
+        }
+        ''}
       '';
       description = "NATS Server configuration file";
     };
   };
 
   config = lib.mkIf cfg.enable {
-    # Create nats server user
+    # Create nats server user and group
+    users.groups.nats-server = {};
     users.users.nats-server = {
       isSystemUser = true;
       home = "/var/lib/nats_server";
       createHome = true;
+      group = "nats-server";
     };
 
     # Create necessary directories

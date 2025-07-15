@@ -14,7 +14,7 @@ pkgs.testers.runNixOSTest (
   let
     hubIP = (pkgs.lib.head nodes.hub.networking.interfaces.eth1.ipv4.addresses).address;
     hubJsDomain = "hub";
-    hubNatsUrl = "wss://${nodes.hub.networking.fqdn}:${builtins.toString nodes.hub.holo.nats-server.websocket.externalPort}";
+    hubNatsUrl = "wss://${nodes.hub.networking.fqdn}:${builtins.toString nodes.hub.holo.nats-server.websocket.port}";
 
     mkHost =
       _:
@@ -151,7 +151,14 @@ pkgs.testers.runNixOSTest (
         networking.domain = "local";
 
         # holo.orchestrator.enable = true;
-        holo.nats-server.enable = true;
+        holo.nats-server = {
+          enable = true;
+          websocket = {
+            enable = true;
+            port = 443;
+          };
+          nsc.localCredsPath = "/var/lib/nats/nsc/local";
+        };
         services.nats.settings = {
           accounts = {
             SYS = {
@@ -248,7 +255,7 @@ pkgs.testers.runNixOSTest (
           }
         '';
 
-        natsCmdHub = "${natsCli} -s nats://127.0.0.1:${builtins.toString nodes.hub.holo.nats-server.port}";
+        natsCmdHub = "${natsCli} -s nats://127.0.0.1:${builtins.toString nodes.hub.holo.nats-server.server.port}";
         natsLocalhostUrl = "nats://127.0.0.1:${builtins.toString nodes.host1.holo.host-agent.nats.listenPort}";
         natsCmdHosts = "${natsCli} -s ${natsLocalhostUrl}";
 
@@ -278,14 +285,14 @@ pkgs.testers.runNixOSTest (
           hub.wait_for_open_port(port = ${builtins.toString nodes.hub.holo.nats-server.websocket.port}, timeout = 1)
 
           hub.wait_for_unit("caddy.service")
-          hub.wait_for_open_port(port = ${builtins.toString nodes.hub.holo.nats-server.websocket.externalPort}, timeout = 1)
+          hub.wait_for_open_port(port = ${builtins.toString nodes.hub.holo.nats-server.websocket.port}, timeout = 1)
 
           hub.succeed("${hubTestScript}")
 
         with subtest("start the hosts and ensure they have TCP level connectivity to the hub"):
           host1.start()
 
-          host1.wait_for_open_port(addr = "${nodes.hub.networking.fqdn}", port = ${builtins.toString nodes.hub.holo.nats-server.websocket.externalPort}, timeout = 10)
+          host1.wait_for_open_port(addr = "${nodes.hub.networking.fqdn}", port = ${builtins.toString nodes.hub.holo.nats-server.websocket.port}, timeout = 10)
 
           host1.wait_for_unit('holo-host-agent')
 

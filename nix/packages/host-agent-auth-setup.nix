@@ -11,6 +11,6 @@
 }:
 
 let
-  script = builtins.readFile ../../../scripts/host_agent_auth_setup.sh;
+  script = builtins.readFile ../../scripts/host_agent_auth_setup.sh;
 in
 pkgs.writeScriptBin "host-agent-auth-setup" script 

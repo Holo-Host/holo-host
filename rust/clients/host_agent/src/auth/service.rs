@@ -71,7 +71,7 @@ pub async fn authorize_host(
     let signing_function =
         |p: &[u8]| -> AuthSignResult<String> { 
             host_agent_keys.host_sign(p)
-                .map_err(|e| HostAgentError::crypto_operation_failed("Signing auth guard token", e))
+                .map_err(|e| authentication::types::AuthError::signature_failed(&e.to_string()))
         };
     
     auth_guard_token = auth_guard_token
@@ -113,7 +113,7 @@ pub async fn authorize_host(
         .map_err(|e| HostAgentError::serialization_failed("creating auth JWT payload", e))?;
 
     let signature = host_agent_keys.host_sign(&payload_bytes)
-        .map_err(|e| HostAgentError::crypto_operation_failed("signing auth JWT payload", e))?;
+        .map_err(|e| HostAgentError::service_failed("signing auth JWT payload", &e.to_string()))?;
 
     let mut headers = HeaderMap::new();
     headers.insert(

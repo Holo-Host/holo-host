@@ -490,6 +490,15 @@ impl From<workload::types::WorkloadError> for HostAgentError {
     }
 }
 
+impl From<anyhow::Error> for HostAgentError {
+    fn from(err: anyhow::Error) -> Self {
+        Self::System {
+            operation: "anyhow error".to_string(),
+            source: err,
+        }
+    }
+}
+
 // Error context trait for adding context to results
 pub trait ErrorContext<T> {
     fn with_context(self, context: &str) -> HostAgentResult<T>;
