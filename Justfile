@@ -25,7 +25,7 @@ help:
 holochain-container i:
     #!/usr/bin/env bash
     set -xeE
-    result=$(nix build --no-link --print-out-paths --impure --expr "(builtins.getFlake \"git+file://${PWD}\").packages.\${builtins.currentSystem}.extra-container-holochain.override { index = {{i}}; }")
+    result=$(nix build --no-link --print-out-paths --impure --expr "(builtins.getFlake \"path:.\").packages.\${builtins.currentSystem}.extra-container-holochain.override { index = {{i}}; }")
     "$result"/bin/container destroy
     # no need to keep it around if lair is destroyed with the container
     rm {{state-file}}.{{ i }} || :
@@ -85,16 +85,24 @@ dev-destroy:
     extra-container destroy dev-orch
     extra-container destroy dev-gw
 
-dev-cycle containers="dev-hub dev-host dev-orch dev-gw":
+dev-cycle containers="dev-hub dev-host dev-orch dev-gw" holochain_version="0.5":
     #!/usr/bin/env bash
     set -xeE
-    nix build .\#extra-container-dev
+    nix build --impure --expr "(builtins.getFlake \"path:.\").packages.\${builtins.currentSystem}.extra-container-dev.override { holochainVersion = \"{{holochain_version}}\"; }"
     just dev-destroy
     # ./result/bin/container build
     ./result/bin/container create
     for container in {{containers}}; do
         ./result/bin/container start "$container"
     done
+
+# Test with holochain 0.4
+dev-cycle-v04 containers="dev-hub dev-host dev-orch dev-gw":
+    just dev-cycle {{containers}} "0.4"
+
+# Test with holochain 0.5 (default)
+dev-cycle-v05 containers="dev-hub dev-host dev-orch dev-gw":
+    just dev-cycle {{containers}} "0.5"
 
 host-agent-remote +args="":
     #!/usr/bin/env bash

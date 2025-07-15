@@ -121,7 +121,7 @@ pub async fn get_workload(
     let holochain_manifest = holochain_manifest.unwrap();
 
     HttpResponse::Ok().json(WorkloadDto {
-        id: workload._id.unwrap().to_hex(),
+        id: workload._id.to_hex(),
         properties: WorkloadPropertiesDto {
             instances: Some(workload.min_hosts),
             network_seed: holochain_manifest.network_seed.clone(),

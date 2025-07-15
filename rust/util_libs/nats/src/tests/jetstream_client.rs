@@ -105,6 +105,7 @@ async fn test_add_js_service() -> Result<()> {
         description: "Test Service".to_string(),
         version: "0.0.1".to_string(),
         service_subject: "TEST".to_string(),
+        maybe_source_js_domain: None,
     };
 
     let _ = client.add_js_service(service_params).await.unwrap();
