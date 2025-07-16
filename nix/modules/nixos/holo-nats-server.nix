@@ -45,7 +45,47 @@ in {
         description = "WebSocket port";
       };
 
+      externalPort = lib.mkOption {
+        description = "expected external websocket port";
+        type = lib.types.nullOr lib.types.int;
+        default = 443;
+      };
 
+      openFirewall = lib.mkOption {
+        description = "allow incoming TCP connections to the externalWebsocket port";
+        default = false;
+      };
+    };
+
+    # JetStream configuration
+    jetstream = {
+      domain = lib.mkOption {
+        description = "jetstream domain name";
+        type = lib.types.str;
+        default = "holo";
+      };
+      enabled = lib.mkOption {
+        description = "enable jetstream in nats server";
+        type = lib.types.bool;
+        default = true;
+      };
+    };
+
+    # Caddy configuration for TLS termination
+    caddy = {
+      enable = lib.mkOption {
+        description = "enable caddy reverse-proxy for WebSocket TLS termination";
+        default = true;
+      };
+      staging = lib.mkOption {
+        type = lib.types.bool;
+        description = "use staging acmeCA for testing purposes. change this in production enviornments.";
+        default = true;
+      };
+      logLevel = lib.mkOption {
+        type = lib.types.str;
+        default = "DEBUG";
+      };
     };
 
     # NSC configuration
@@ -103,6 +143,12 @@ in {
           listen: 0.0.0.0:6222
         }
         
+        # JetStream configuration
+        jetstream {
+          domain: ${cfg.jetstream.domain}
+          enabled: ${lib.boolToString cfg.jetstream.enabled}
+        }
+        
         # WebSocket configuration
         ${lib.optionalString cfg.websocket.enable ''
         websocket {
@@ -116,6 +162,12 @@ in {
   };
 
   config = lib.mkIf cfg.enable {
+    # Firewall configuration for Caddy
+    networking.firewall.allowedTCPPorts =
+      # need port 80 to receive well-known ACME requests
+      lib.optional cfg.caddy.enable 80
+      ++ lib.optional (cfg.websocket.openFirewall || cfg.caddy.enable) cfg.websocket.externalPort;
+
     # Create nats server user and group
     users.groups.nats-server = {};
     users.users.nats-server = {
@@ -179,5 +231,40 @@ in {
         Group = "nats-server";
       };
     };
+
+    # Caddy service for TLS termination
+    services.caddy = lib.mkIf cfg.caddy.enable (
+      {
+        enable = true;
+        globalConfig = ''
+          auto_https disable_redirects
+        '';
+        logFormat = ''
+          level ${cfg.caddy.logLevel}
+        '';
+
+        virtualHosts =
+          let
+            maybe_fqdn = builtins.tryEval config.networking.fqdn;
+            domain =
+              if maybe_fqdn.success then
+                maybe_fqdn.value
+              else
+                builtins.trace "WARNING: FQDN is not available, this will most likely lead to an invalid caddy configuration. falling back to hostname ${config.networking.hostName}" config.networking.hostName;
+          in
+          {
+            "https://${domain}:${builtins.toString cfg.websocket.externalPort}".extraConfig = ''
+              tls {
+                issuer acme
+                issuer internal
+              }
+              reverse_proxy http://127.0.0.1:${builtins.toString cfg.websocket.port}
+            '';
+          };
+      }
+      // lib.attrsets.optionalAttrs cfg.caddy.staging {
+        acmeCA = "https://acme-staging-v02.api.letsencrypt.org/directory";
+      }
+    );
   };
 }

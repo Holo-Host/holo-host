@@ -14,7 +14,7 @@ pkgs.testers.runNixOSTest (
   let
     hubIP = (pkgs.lib.head nodes.hub.networking.interfaces.eth1.ipv4.addresses).address;
     hubJsDomain = "hub";
-    hubNatsUrl = "wss://${nodes.hub.networking.fqdn}:${builtins.toString nodes.hub.holo.nats-server.websocket.port}";
+    hubNatsUrl = "wss://${nodes.hub.networking.fqdn}:${builtins.toString nodes.hub.holo.nats-server.websocket.externalPort}";
 
     mkHost =
       _:
@@ -156,6 +156,7 @@ pkgs.testers.runNixOSTest (
           websocket = {
             enable = true;
             port = 443;
+            externalPort = 443;
           };
           nsc.localCredsPath = "/var/lib/nats/nsc/local";
         };
@@ -282,17 +283,17 @@ pkgs.testers.runNixOSTest (
         with subtest("start the hub and run the testscript"):
           hub.start()
           hub.wait_for_unit("nats.service")
-          hub.wait_for_open_port(port = ${builtins.toString nodes.hub.holo.nats-server.websocket.port}, timeout = 1)
+          hub.wait_for_open_port(port = ${builtins.toString nodes.hub.holo.nats-server.websocket.externalPort}, timeout = 1)
 
           hub.wait_for_unit("caddy.service")
-          hub.wait_for_open_port(port = ${builtins.toString nodes.hub.holo.nats-server.websocket.port}, timeout = 1)
+          hub.wait_for_open_port(port = ${builtins.toString nodes.hub.holo.nats-server.websocket.externalPort}, timeout = 1)
 
           hub.succeed("${hubTestScript}")
 
         with subtest("start the hosts and ensure they have TCP level connectivity to the hub"):
           host1.start()
 
-          host1.wait_for_open_port(addr = "${nodes.hub.networking.fqdn}", port = ${builtins.toString nodes.hub.holo.nats-server.websocket.port}, timeout = 10)
+          host1.wait_for_open_port(addr = "${nodes.hub.networking.fqdn}", port = ${builtins.toString nodes.hub.holo.nats-server.websocket.externalPort}, timeout = 10)
 
           host1.wait_for_unit('holo-host-agent')
 

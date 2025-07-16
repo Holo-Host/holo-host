@@ -275,6 +275,12 @@ in
       ];
 
       preStart = ''
+        # Function definition moved to top
+        init_host_auth_guard() {
+          ${cfg.hostAuthScriptPath} ${builtins.toString cfg.nats.nsc.path} ${builtins.toString cfg.nats.nsc.sharedCredsPath}
+          echo "Finished Host Auth Guard Setup"
+        }
+
         echo "Starting Host Auth Setup"
         if [ ! -d ${cfg.nats.nsc.sharedCredsPath} ]; then
           echo "ERROR: Shared creds directory ${cfg.nats.nsc.sharedCredsPath} does not exist!"
@@ -285,13 +291,10 @@ in
         mkdir -p ${cfg.nats.nsc.sysNkeyPath}
         mkdir -p ${cfg.nats.hosterCredsPath}
 
-        init_host_auth_guard() {
-          ${cfg.hostAuthScriptPath} ${builtins.toString cfg.nats.nsc.path} ${builtins.toString cfg.nats.nsc.sharedCredsPath}
-          echo "Finished Host Auth Guard Setup"
-        }
-        init_host_auth_guard()
+        # Call the function
+        init_host_auth_guard
 
-        echo "Finshed Host Auth Setup"
+        echo "Finished Host Auth Setup"
       '';
 
       script =
