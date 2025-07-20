@@ -46,14 +46,14 @@ in {
       };
 
       externalPort = lib.mkOption {
-        description = "expected external websocket port";
         type = lib.types.nullOr lib.types.int;
         default = 443;
+        description = "expected external websocket port";
       };
 
       openFirewall = lib.mkOption {
-        description = "allow incoming TCP connections to the externalWebsocket port";
         default = false;
+        description = "allow incoming TCP connections to the externalWebsocket port";
       };
     };
 
@@ -143,26 +143,26 @@ in {
         ${lib.optionalString cfg.enableJwt ''
         # JWT authentication
         operator: ${cfg.nsc.sharedCredsPath}/HOLO.jwt
-        resolver: ${cfg.nsc.resolverPath}
         system_account: SYS
+        include "${cfg.nsc.resolverPath}"
         ''}
         
         # Logging
         logtime: true
         debug: false
         trace: false
-        
-        # Clustering - disabled for single-node setup
-        # cluster {
-        #   port: 6222
-        #   listen: 0.0.0.0:6222
-        # }
-        
+
         # JetStream configuration
         jetstream {
           domain: ${cfg.jetstream.domain}
           enabled: ${lib.boolToString cfg.jetstream.enabled}
         }
+                
+        # Clustering - disabled for single-node setup
+        # cluster {
+        #   port: 6222
+        #   listen: 0.0.0.0:6222
+        # }
         
         # WebSocket configuration
         ${lib.optionalString cfg.websocket.enable ''
