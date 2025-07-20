@@ -98,5 +98,12 @@
           pkgs = pkgs; 
           system = "x86_64-linux"; 
         };
+      checks.x86_64-linux.holo-distributed-auth = 
+        import ./nix/checks/holo-distributed-auth.nix { 
+          inherit inputs; 
+          flake = blueprintOutputs; 
+          pkgs = pkgs; 
+          system = "x86_64-linux"; 
+        };
     };
 }

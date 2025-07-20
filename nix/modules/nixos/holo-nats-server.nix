@@ -88,6 +88,18 @@ in {
       };
     };
 
+    extraAttrs = lib.mkOption {
+      description = "extra attributes passed to `services.nats`";
+      default = { };
+    };
+
+    # Enable JWT authentication
+    enableJwt = lib.mkOption {
+      type = lib.types.bool;
+      default = false;
+      description = "Enable JWT authentication for NATS server";
+    };
+
     # NSC configuration
     nsc = {
       # NSC configuration path
@@ -100,6 +112,7 @@ in {
       # Local credentials path
       localCredsPath = lib.mkOption {
         type = lib.types.path;
+        default = "/var/lib/nats-server/nsc/local";
         description = "Path for local credentials (signing keys)";
       };
 
@@ -127,21 +140,23 @@ in {
         http_port: 8222
         server_name: nats-server
         
+        ${lib.optionalString cfg.enableJwt ''
         # JWT authentication
         operator: ${cfg.nsc.sharedCredsPath}/HOLO.jwt
         resolver: ${cfg.nsc.resolverPath}
         system_account: SYS
+        ''}
         
         # Logging
         logtime: true
         debug: false
         trace: false
         
-        # Clustering
-        cluster {
-          port: 6222
-          listen: 0.0.0.0:6222
-        }
+        # Clustering - disabled for single-node setup
+        # cluster {
+        #   port: 6222
+        #   listen: 0.0.0.0:6222
+        # }
         
         # JetStream configuration
         jetstream {
@@ -169,7 +184,7 @@ in {
       ++ lib.optional (cfg.websocket.openFirewall || cfg.caddy.enable) cfg.websocket.externalPort;
 
     # Create nats server user and group
-    users.groups.nats-server = {};
+    users.groups.nats-server ={};
     users.users.nats-server = {
       isSystemUser = true;
       home = "/var/lib/nats_server";
@@ -179,7 +194,7 @@ in {
 
     # Create necessary directories
     system.activationScripts.holo-nats-server-dirs = ''
-      mkdir -p ${cfg.nsc.path}
+      ${lib.optionalString cfg.enableJwt "mkdir -p ${cfg.nsc.path}"}
       mkdir -p /var/lib/nats_server
       chown -R nats-server:nats-server /var/lib/nats_server
       chmod -R 700 /var/lib/nats_server
@@ -189,17 +204,25 @@ in {
     systemd.services.nats = {
       description = "NATS Server";
       wantedBy = [ "multi-user.target" ];
-      after = [ "network-online.target" ];
-      wants = [ "network-online.target" ];
+      after = [ "network-online.target" ] ++ lib.optional cfg.enableJwt "holo-nats-auth-setup.service";
+      wants = [ "network-online.target" ] ++ lib.optional cfg.enableJwt "holo-nats-auth-setup.service";
 
       path = [ pkgs.nats-server ];
 
       script = ''
+        ${lib.optionalString cfg.enableJwt ''
         # Check if JWT credentials exist before starting NATS
         if [ ! -f "${cfg.nsc.sharedCredsPath}/HOLO.jwt" ]; then
           echo "ERROR: NATS JWT credentials not found. Please ensure setup has completed."
           exit 1
         fi
+        
+        # Check if resolver configuration exists before starting NATS
+        if [ ! -f "${cfg.nsc.resolverPath}" ]; then
+          echo "ERROR: NATS resolver configuration not found. Please ensure auth setup has completed."
+          exit 1
+        fi
+        ''}
         
         exec ${pkgs.nats-server}/bin/nats-server -c ${cfg.configFile}
       '';
@@ -222,10 +245,10 @@ in {
         # File system access
         ReadWritePaths = [
           "/var/lib/nats_server"
-          cfg.nsc.sharedCredsPath
-          cfg.nsc.localCredsPath
-          cfg.nsc.path
-        ];
+        ] ++ lib.optional cfg.enableJwt cfg.nsc.sharedCredsPath
+          ++ lib.optional cfg.enableJwt cfg.nsc.localCredsPath
+          ++ lib.optional cfg.enableJwt cfg.nsc.path
+          ++ lib.optional cfg.enableJwt (builtins.dirOf cfg.nsc.resolverPath);
         
         User = "nats-server";
         Group = "nats-server";
@@ -250,7 +273,7 @@ in {
               if maybe_fqdn.success then
                 maybe_fqdn.value
               else
-                builtins.trace "WARNING: FQDN is not available, this will most likely lead to an invalid caddy configuration. falling back to hostname ${config.networking.hostName}" config.networking.hostName;
+                builtins.trace "WARNING: FQDN is not available, this will most likely lead to an invalid caddy configuration... Falling back to hostname ${config.networking.hostName}" config.networking.hostName;
           in
           {
             "https://${domain}:${builtins.toString cfg.websocket.externalPort}".extraConfig = ''

@@ -17,7 +17,7 @@ in {
 
     package = lib.mkOption {
       type = lib.types.package;
-      default = inputs.self.packages.${pkgs.stdenv.system}.rust-workspace.individual.nsc-proxy-server;
+      default = inputs.self.packages.${pkgs.stdenv.system}.rust-workspace.individual.nsc_proxy_server;
       description = "Package containing the NSC proxy server";
     };
 
@@ -45,7 +45,7 @@ in {
     nsc = {
       path = lib.mkOption {
         type = lib.types.path;
-        default = "/var/lib/nats_server/.local/share/nats/nsc";
+        default = "/var/lib/nats-server/nsc/local";
         description = "Path to NSC configuration directory";
       };
     };
@@ -60,9 +60,14 @@ in {
   };
 
   config = lib.mkIf cfg.enable {
+    # Create nsc-proxy group
+    users.groups.nsc-proxy = {};
+
     # Create nsc-proxy user
     users.users.nsc-proxy = {
       isSystemUser = true;
+      # Add to nats-server group to access NSC path
+      group = "nats-server";
       home = "/var/lib/nsc-proxy";
       createHome = true;
     };
@@ -78,8 +83,9 @@ in {
     systemd.services.holo-nsc-proxy = {
       description = "NSC Proxy Server for secure remote NSC access";
       wantedBy = [ "multi-user.target" ];
-      after = [ "network-online.target" ];
+      after = [ "network-online.target" "holo-nats-auth-setup.service" ];
       wants = [ "network-online.target" ];
+      requires = [ "holo-nats-auth-setup.service" ];
 
       path = [
         pkgs.nsc
@@ -91,10 +97,17 @@ in {
       };
 
       script = ''
+        set -x
+        echo "PATH: $PATH"
+        echo "NSC version: $(nsc --version || echo 'nsc not found')"
+        
+        echo "NSC_PROXY_SERVER: $(which ${lib.getExe cfg.package})"
+        echo "NSC_PROXY_SERVER version: $(${lib.getExe cfg.package} --version || echo 'nsc_proxy_server not found')"
+
         ${lib.getExe cfg.package} \
           --host ${cfg.server.host} \
           --port ${builtins.toString cfg.server.port} \
-          --auth-key "$(cat ${cfg.auth.keyFile})" \
+          --auth-key "$(cat $CREDENTIALS_DIRECTORY/auth_key)" \
           --nsc-path ${cfg.nsc.path}
       '';
 
@@ -120,10 +133,13 @@ in {
         ReadWritePaths = [
           cfg.nsc.path
           "/var/lib/nsc-proxy"
+          "/var/lib/nats_server"
         ];
         
         # Load authentication key
         LoadCredential = "auth_key:${cfg.auth.keyFile}";
+        StandardOutput = "journal+console";
+        StandardError = "journal+console";
       };
     };
 

@@ -291,7 +291,6 @@ in
         mkdir -p ${cfg.nats.nsc.sysNkeyPath}
         mkdir -p ${cfg.nats.hosterCredsPath}
 
-        # Call the function
         init_host_auth_guard
 
         echo "Finished Host Auth Setup"

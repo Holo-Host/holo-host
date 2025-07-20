@@ -170,9 +170,13 @@ in {
   };
 
   config = lib.mkIf cfg.enable {
+    # Create orchestrator group
+    users.groups.orchestrator = {};
+
     # Create orchestrator user
     users.users.orchestrator = {
       isSystemUser = true;
+      group = "orchestrator";
       home = "/var/lib/orchestrator";
       createHome = true;
     };
@@ -211,8 +215,8 @@ in {
           NSC_PATH = "%d/NSC_PATH";
           ORCHESTRATOR_ROOT_AUTH_NKEY_PATH = "${cfg.nats.nsc.rootAuthNkeyPath}";
           ORCHESTRATOR_SIGNING_AUTH_NKEY_PATH = "${cfg.nats.nsc.signingAuthNkeyPath}";
-          NATS_ADMIN_CREDS_FILE = "admin.creds";
-          NATS_AUTH_CREDS_FILE = "orchestrator_auth.creds";
+          NATS_ADMIN_CREDS_FILE = "%d/NATS_ADMIN_CREDS_FILE";
+          NATS_AUTH_CREDS_FILE = "%d/NATS_AUTH_CREDS_FILE";
         }
         // lib.attrsets.optionalAttrs (cfg.nats.server.passwordFile != null) {
           NATS_PASSWORD_FILE = "%d/NATS_PASSWORD_FILE";
@@ -264,6 +268,10 @@ in {
         ]
         ++ lib.lists.optional cfg.nats.nsc_proxy.enable [
           "NSC_PROXY_AUTH_KEY:${cfg.nats.nsc_proxy.authKeyFile}"
+        ]
+        ++ lib.lists.optional (cfg.nats.nsc.path != null) [
+          "NATS_ADMIN_CREDS_FILE:${cfg.nats.nsc.adminCredsFile}"
+          "NATS_AUTH_CREDS_FILE:${cfg.nats.nsc.authCredsFile}"
         ];
       };
 

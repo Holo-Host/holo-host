@@ -14,6 +14,8 @@ members = [
   "rust/util_libs/nats",
   "rust/util_libs/db",
   "rust/util_libs/mocks",
+  "rust/util_libs/nsc_client",
+  "rust/util_libs/nsc_proxy_server",
   "rust/netdiag",
   "rust/holo-dns",
   "rust/holo-gateway",

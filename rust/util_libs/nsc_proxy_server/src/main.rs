@@ -26,7 +26,7 @@ struct Args {
     port: u16,
 
     /// Authentication key for requests
-    #[arg(long, env = "NSC_PROXY_AUTH_KEY")]
+    #[arg(long)]
     auth_key: String,
 
     /// NSC path
@@ -187,6 +187,7 @@ async fn execute_nsc_command(args: Vec<String>, nsc_path: &str) -> Result<NSCRes
     .context("NSC command timed out")?
     .context("Failed to execute NSC command")?;
 
+    let output = output.unwrap();
     Ok(NSCResponse {
         success: output.status.success(),
         stdout: String::from_utf8_lossy(&output.stdout).to_string(),
@@ -289,9 +290,8 @@ async fn main() -> Result<()> {
     info!("Starting NSC proxy server on {}", addr);
 
     // Start server
-    axum::Server::bind(&addr.parse()?)
-        .serve(app.into_make_service())
-        .await?;
+    let listener = tokio::net::TcpListener::bind(&addr).await?;
+    axum::serve(listener, app).await?;
 
     Ok(())
 } 
