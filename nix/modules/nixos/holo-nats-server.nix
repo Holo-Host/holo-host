@@ -144,8 +144,8 @@ in {
         # JWT authentication
         operator: ${cfg.nsc.sharedCredsPath}/HOLO.jwt
         system_account: SYS
-        include "${cfg.nsc.resolverPath}"
         ''}
+        include "main-resolver.conf"
         
         # Logging
         logtime: true
@@ -198,6 +198,16 @@ in {
       mkdir -p /var/lib/nats_server
       chown -R nats-server:nats-server /var/lib/nats_server
       chmod -R 700 /var/lib/nats_server
+      # Ensure dummy resolver config exists for test
+      if [ ! -f "/var/lib/nats_server/main-resolver.conf" ]; then
+        echo 'resolver: MEMORY' > /var/lib/nats_server/main-resolver.conf
+        chown nats-server:nats-server /var/lib/nats_server/main-resolver.conf
+        chmod 600 /var/lib/nats_server/main-resolver.conf
+      fi
+      # Copy config file from Nix store to /var/lib/nats_server/nats-server.conf
+      cp ${cfg.configFile} /var/lib/nats_server/nats-server.conf
+      chown nats-server:nats-server /var/lib/nats_server/nats-server.conf
+      chmod 600 /var/lib/nats_server/nats-server.conf
     '';
 
     # NATS Server service
@@ -223,8 +233,7 @@ in {
           exit 1
         fi
         ''}
-        
-        exec ${pkgs.nats-server}/bin/nats-server -c ${cfg.configFile}
+        exec ${pkgs.nats-server}/bin/nats-server -c /var/lib/nats_server/nats-server.conf
       '';
 
       serviceConfig = {
