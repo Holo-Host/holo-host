@@ -137,7 +137,7 @@ in {
       AUTH_ACCOUNT_PUBKEY=$(nsc describe account AUTH --field sub | jq -r)
       echo "AUTH_ACCOUNT_PUBKEY: $AUTH_ACCOUNT_PUBKEY"
       
-      # Extract AUTH signing key
+      # Extract AUTH signing key pubkey
       AUTH_SK_ACCOUNT_PUBKEY=$(nsc describe account AUTH --field 'nats.signing_keys[0]' | tr -d '"')
       echo "AUTH_SK_ACCOUNT_PUBKEY: $AUTH_SK_ACCOUNT_PUBKEY"
       # AUTH_SK_ACCOUNT_PUBKEY=$(nsc describe account AUTH --field nats.signing_keys | jq -r '.[0].key')

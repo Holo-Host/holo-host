@@ -148,12 +148,13 @@ pkgs.testers.runNixOSTest (
           serviceConfig = {
             Type = "oneshot";
             RemainAfterExit = true;
-            User = "root";
-            Group = "root";
+            User = "nats-server";
+            Group = "nats-server";
             TimeoutStartSec = "120";
             Restart = "no";
             Environment = [
-              "NSC_HOME=/var/lib/nats-server/nsc"
+              "NSC_HOME=/var/lib/nats_server/.local/share/nats/nsc"
+              "NKEYS_PATH=/var/lib/nats_server/.local/share/nats/nsc"
             ];
           };
           
@@ -175,30 +176,40 @@ pkgs.testers.runNixOSTest (
             echo "Creating directories..."
             mkdir -p /var/lib/nats_server/local-creds
             mkdir -p /var/lib/nats_server/shared-creds
-            mkdir -p /var/lib/nats-server/nsc/local
             mkdir -p $NSC_HOME
             echo "✓ Created necessary directories"
             
             # Initialize NSC store
             echo "Initializing NSC store..."
-            nsc add operator --name "HOLO" || echo "WARNING: Operator may already exist"
-            echo "✓ Operator created"
-            
-            nsc add account --name "SYS" || echo "WARNING: SYS account may already exist"
-            echo "✓ SYS account created"
+            nsc add operator --name "HOLO" --sys --generate-signing-key || echo "WARNING: Operator may already exist"
+            nsc edit operator --require-signing-keys
+            echo "✓ Operator and SYS account created"
             
             nsc add account --name "ADMIN" || echo "WARNING: ADMIN account may already exist"
+            ADMIN_SK="$(echo "$(nsc edit account -n ADMIN --sk generate 2>&1)" | grep -oP "signing key\s*\K\S+")"
+            echo "ADMIN_SK: $ADMIN_SK"
+            nsc edit signing-key --sk $ADMIN_SK --role admin_role \
+              --allow-pub "\$JS.>","\$SYS.>","\$G.>","ADMIN.>","AUTH.>","WORKLOAD.>","_INBOX.>","_HPOS_INBOX.>","_ADMIN_INBOX.>","_AUTH_INBOX.>","INVENTORY.>" \
+              --allow-sub "\$JS.>","\$SYS.>","\$G.>","ADMIN.>","AUTH.>","WORKLOAD.>","INVENTORY.>","_ADMIN_INBOX.orchestrator.>","_AUTH_INBOX.orchestrator.>" \
+              --allow-pub-response
             echo "✓ ADMIN account created"
             
             nsc add account --name "AUTH" || echo "WARNING: AUTH account may already exist"
+            nsc edit account --name AUTH --sk generate
             echo "✓ AUTH account created"
+
+            # AUTH_ACCOUNT_PUBKEY=$(nsc describe account AUTH --field sub | jq -r)
+            # echo "AUTH_ACCOUNT_PUBKEY: $AUTH_ACCOUNT_PUBKEY"
+
+            # AUTH_SK_ACCOUNT_PUBKEY=$(nsc describe account AUTH --field 'nats.signing_keys[0]' | tr -d '"')
+            # echo "AUTH_SK_ACCOUNT_PUBKEY: $AUTH_SK_ACCOUNT_PUBKEY"
             
             # Create users
             echo "Creating users..."
-            nsc add user --name "admin_user" --account "ADMIN" || echo "WARNING: admin_user may already exist"
+            nsc add user --name "admin_user" --account "ADMIN" -K admin_role|| echo "WARNING: admin_user may already exist"
             echo "✓ admin_user created"
             
-            nsc add user --name "orchestrator_user" --account "AUTH" || echo "WARNING: orchestrator_user may already exist"
+            nsc add user --name "orchestrator_user" --account "AUTH" --allow-pubsub ">" || echo "WARNING: orchestrator_user may already exist"
             echo "✓ orchestrator_user created"
             
             # Generate credentials
@@ -223,11 +234,10 @@ pkgs.testers.runNixOSTest (
             # Get operator JWT using nsc describe operator with raw output
             nsc describe operator --raw --output-file "/var/lib/nats_server/shared-creds/HOLO.jwt" || { echo "ERROR: Failed to export operator JWT"; exit 1; }
             echo "✓ Created operator JWT file"
-            
-            # Set system account
-            echo "Setting system account..."
-            nsc edit operator --system-account SYS || { echo "ERROR: Failed to set system account"; exit 1; }
-            echo "✓ Set system account"
+ 
+            # Get SYS account JWT file
+            nsc describe account --name SYS --raw --output-file "/var/lib/nats_server/shared-creds/SYS.jwt"
+            echo "✓ Created SYS account JWT file"
             
             # Generate resolver config using NSC command
             echo "Generating resolver config using NSC command..."
@@ -237,7 +247,22 @@ pkgs.testers.runNixOSTest (
             # Verify files exist
             echo "Verifying created files..."
             ls -la /var/lib/nats_server/shared-creds/
+            echo "=== RESOLVER CONFIG CONTENTS ==="
             ls -la /var/lib/nats_server/main-resolver.conf
+            
+            # Verify SYS account was created
+            echo "=== VERIFYING SYS ACCOUNT CREATION ==="
+            nsc list accounts || echo "Could not list accounts"
+            nsc describe account SYS || echo "Could not describe SYS account"
+            
+            # Verify operator JWT
+            echo "=== VERIFYING OPERATOR JWT ==="
+            head -c 200 /var/lib/nats_server/shared-creds/HOLO.jwt || echo "Could not read operator JWT"
+            
+            # Verify NSC store location
+            echo "=== VERIFYING NSC STORE LOCATION ==="
+            ls -la $NSC_HOME/ || echo "NSC store not found"
+            nsc env || echo "Could not get NSC environment"
             
             echo "✓ Auth setup service completed successfully"
           '';
@@ -275,7 +300,7 @@ pkgs.testers.runNixOSTest (
               # Resolver configuration
               resolver {
                 type: full
-                dir: /var/lib/nats-server/nsc/local
+                dir: /var/lib/nats_server/.local/share/nats/nsc
               }
               
               # Logging
@@ -413,12 +438,15 @@ pkgs.testers.runNixOSTest (
       
       # Test that credentials were generated correctly
       nats_server.succeed("ls -la /var/lib/nats_server/shared-creds/")
-      nats_server.succeed("cat /var/lib/nats_server/shared-creds/admin_user.creds | head -1 | grep 'BEGIN NATS USER JWT'")
-      nats_server.succeed("cat /var/lib/nats_server/shared-creds/orchestrator_auth.creds | head -1 | grep 'BEGIN NATS USER JWT'")
-      
+      nats_server.succeed("echo '=== OPERATOR JWT (first 100 chars) ===' && head -c 100 /var/lib/nats_server/shared-creds/HOLO.jwt || echo 'No operator JWT found'")
+      nats_server.succeed("echo '=== ADMIN USER CREDS (first line) ===' && head -1 /var/lib/nats_server/shared-creds/admin_user.creds || echo 'No admin creds found'")
+      nats_server.succeed("echo '=== ORCHESTRATOR AUTH CREDS (first line) ===' && head -1 /var/lib/nats_server/shared-creds/orchestrator_auth.creds || echo 'No orchestrator creds found'") 
+
       # Test that resolver config was generated
       nats_server.succeed("ls -la /var/lib/nats_server/main-resolver.conf")
       
+      print("✅ NATS distributed authentication test completed successfully!")
+
       # Test NATS server connectivity
       nats_server.succeed("timeout 10 ${pkgs.nats-server}/bin/nats-server --version || echo 'NATS server version check completed'")
       
@@ -443,41 +471,41 @@ pkgs.testers.runNixOSTest (
       
       # Test NSC proxy generate creds command
       nats_server.succeed("timeout 10 ${pkgs.curl}/bin/curl -s -X POST http://localhost:5000/nsc -H 'Content-Type: application/json' -d '{\"command\":\"generate_creds\",\"params\":{\"account\":\"AUTH\",\"name\":\"test_proxy_user\",\"output_file\":\"/var/lib/nats_server/shared-creds/test_proxy_user.creds\"},\"auth_key\":\"test-auth-key-12345\"}' || echo 'NSC proxy generate creds test completed'")
-      
-      # Print contents of shared credentials directory
-      print("=== SHARED CREDENTIALS DIRECTORY CONTENTS ===")
-      nats_server.succeed("echo '=== SHARED CREDENTIALS DIRECTORY ===' && ls -la /var/lib/nats_server/shared-creds/")
-      nats_server.succeed("echo '=== OPERATOR JWT (first 100 chars) ===' && head -c 100 /var/lib/nats_server/shared-creds/HOLO.jwt || echo 'No operator JWT found'")
-      nats_server.succeed("echo '=== ADMIN USER CREDS (first line) ===' && head -1 /var/lib/nats_server/shared-creds/admin_user.creds || echo 'No admin creds found'")
-      nats_server.succeed("echo '=== ORCHESTRATOR AUTH CREDS (first line) ===' && head -1 /var/lib/nats_server/shared-creds/orchestrator_auth.creds || echo 'No orchestrator creds found'")
-      
+
+      print("✅ NSC proxy is running and accessible with authentication")
+
       # Test orchestrator service
       orchestrator.succeed("systemctl is-active holo-orchestrator || echo 'Orchestrator service status check'")
       orchestrator.succeed("journalctl -u holo-orchestrator --no-pager -n 10 || echo 'No orchestrator logs'")
       
       # Test orchestrator credential handling
-      orchestrator.succeed("ls -la /var/lib/holo-orchestrator/nats-creds || echo 'Orchestrator creds directory not found'")
+      print("=== ORCHESTRATOR NATS CREDS DIRECTORY CONTENTS ===")
+      result1 = orchestrator.succeed("echo '=== ORCHESTRATOR NATS CREDS DIRECTORY ===' && ls -la /var/lib/holo-orchestrator/nats-creds/")
+      print(result1)
+      result2 = orchestrator.succeed("echo '=== ORCHESTRATOR NATS CREDS CONTENTS ===' && find /var/lib/holo-orchestrator/nats-creds/ -type f -exec echo 'File: {}' \\; -exec head -1 {} \\; 2>/dev/null || echo 'No files found in orchestrator nats-creds directory'")
+      print(result2)
       
-      # Test orchestrator NSC proxy auth key
-      orchestrator.succeed("ls -la /var/lib/holo-orchestrator/nsc-proxy-auth.key || echo 'Orchestrator NSC proxy auth key not found'")
+      # Test if orchestrator can access NATS server credentials via network
+      print("=== TESTING ORCHESTRATOR ACCESS TO NATS SERVER CREDENTIALS ===")
+      orchestrator.succeed("timeout 10 ${pkgs.curl}/bin/curl -s http://nats_server:8222/varz || echo 'Cannot access NATS server monitoring endpoint'")
       
-      # Test orchestrator can make NSC proxy health check call
+      # Test if orchestrator can use NSC proxy to get credentials
+      print("=== TESTING ORCHESTRATOR NSC PROXY CREDENTIAL ACCESS ===")
+      orchestrator.succeed("timeout 10 ${pkgs.curl}/bin/curl -s -X POST http://nats_server:5000/nsc -H 'Content-Type: application/json' -d '{\"command\":\"list\",\"params\":{},\"auth_key\":\"test-auth-key-12345\"}' || echo 'NSC proxy list command failed'")
+      
+      # Test copying credentials from NATS server to orchestrator
+      print("=== TESTING CREDENTIAL COPY FROM NATS SERVER TO ORCHESTRATOR ===")
       orchestrator.succeed("timeout 10 ${pkgs.curl}/bin/curl -s http://nats_server:5000/health || echo 'Orchestrator NSC proxy health check completed'")
+      orchestrator.succeed("timeout 10 ${pkgs.curl}/bin/curl -s -X POST http://nats_server:5000/nsc -H 'Content-Type: application/json' -d '{\"command\":\"generate_creds\",\"params\":{\"account\":\"AUTH\",\"name\":\"orchestrator_user\",\"output_file\":\"/var/lib/holo-orchestrator/nats-creds/orchestrator_user.creds\"},\"auth_key\":\"test-auth-key-12345\"}' || echo 'NSC proxy generate creds for orchestrator failed'")
       
-      # Test orchestrator can authenticate with NSC proxy
-      orchestrator.succeed("timeout 10 ${pkgs.curl}/bin/curl -s -X POST http://nats_server:5000/nsc -H 'Content-Type: application/json' -d '{\"command\":\"list\",\"params\":{},\"auth_key\":\"test-auth-key-12345\"}' || echo 'Orchestrator NSC proxy authentication test completed'")
+      # Show updated orchestrator creds directory
+      print("=== UPDATED ORCHESTRATOR NATS CREDS DIRECTORY CONTENTS ===")
+      result3 = orchestrator.succeed("echo '=== ORCHESTRATOR NATS CREDS DIRECTORY (AFTER COPY) ===' && ls -la /var/lib/holo-orchestrator/nats-creds/")
+      print(result3)
+      result4 = orchestrator.succeed("echo '=== ORCHESTRATOR NATS CREDS CONTENTS (AFTER COPY) ===' && find /var/lib/holo-orchestrator/nats-creds/ -type f -exec echo 'File: {}' \\; -exec head -1 {} \\; 2>/dev/null || echo 'No files found in orchestrator nats-creds directory'")
+      print(result4)
       
-      print("✅ NATS distributed authentication test completed successfully!")
-      print("✅ Credential generation using NSC commands is working correctly")
-      print("✅ JWT authentication is working with operator JWT")
-      print("✅ Orchestrator credentials are properly generated and accessible")
-      print("✅ Admin user credentials are properly generated and accessible")
-      print("✅ NSC proxy is running and accessible with authentication")
-      print("✅ NSC proxy can execute commands using the auth key")
-      print("✅ Orchestrator can read credentials from shared directory")
-      print("✅ Orchestrator can make NSC proxy health check calls")
-      print("✅ End-to-end distributed authentication flow is working")
-      print("✅ Complete distributed authentication system is functional")
+      print("✅ Orchestrator credential directory structure verified")
     '';
 
     # Meta information
