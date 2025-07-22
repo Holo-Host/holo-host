@@ -261,6 +261,7 @@ in {
         
         User = "nats-server";
         Group = "nats-server";
+        WorkingDirectory = "/var/lib/nats_server";
       };
     };
 
