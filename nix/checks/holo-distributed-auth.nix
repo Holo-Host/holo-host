@@ -8,22 +8,85 @@ pkgs.testers.runNixOSTest (
       orchestrator.wait_for_unit("multi-user.target")
       nats_server.wait_for_unit("holo-nats-auth-setup.service")
       
+      print("=== NATS SERVER SERVICE STATUS ===")
+      status_output = nats_server.succeed("systemctl status nats.service | grep -E 'Active:|Loaded:' || echo 'NATS service not found'")
+      print(status_output)
+      active_output = nats_server.succeed("systemctl is-active nats.service || echo 'NATS service not active'")
+      print(active_output)
+      pgrep_output = nats_server.succeed("pgrep -af nats-server || echo 'NATS server process not found'")
+      print(pgrep_output)
+      
       print("=== NATS SERVER CREDENTIALS ===")
-      nats_server.succeed("ls -la /var/lib/nats_server/shared-creds/")
-      nats_server.succeed("cat /var/lib/nats_server/shared-creds/HOLO.jwt | head -3")
-      nats_server.succeed("ls -la /var/lib/nats_server/main-resolver.conf")
+      ls_creds = nats_server.succeed("ls -la /var/lib/nats_server/shared-creds/")
+      print(ls_creds)
+      head_jwt = nats_server.succeed("cat /var/lib/nats_server/shared-creds/HOLO.jwt | head -3")
+      print(head_jwt)
+      ls_resolver = nats_server.succeed("ls -la /var/lib/nats_server/main-resolver.conf")
+      print(ls_resolver)
       
       print("=== ORCHESTRATOR SERVICE STATUS ===")
-      orchestrator.succeed("systemctl status holo-orchestrator.service || echo 'Service not found'")
-      orchestrator.succeed("systemctl is-active holo-orchestrator.service || echo 'Service not active'")
+      orch_status = orchestrator.succeed("systemctl status holo-orchestrator.service | grep -E 'Active:|Loaded:' || echo 'Service not found'")
+      print(orch_status)
+      orch_active = orchestrator.succeed("systemctl is-active holo-orchestrator.service || echo 'Service not active'")
+      print(orch_active)
+      orch_pgrep = orchestrator.succeed("pgrep -af orchestrator || echo 'Orchestrator process not found'")
+      print(orch_pgrep)
       
       print("=== ORCHESTRATOR CREDENTIALS ===")
-      orchestrator.succeed("ls -la /var/lib/holo-orchestrator/nats-creds/")
-      orchestrator.succeed("ls -la /var/lib/holo-orchestrator/")
+      ls_orch_creds = orchestrator.succeed("ls -la /var/lib/holo-orchestrator/nats-creds/")
+      print(ls_orch_creds)
+      ls_orch = orchestrator.succeed("ls -la /var/lib/holo-orchestrator/")
+      print(ls_orch)
+      
+      print("=== ORCHESTRATOR CREDENTIALS CONTENT TEST ===")
+      orch_auth_creds = orchestrator.succeed("test -f /var/lib/holo-orchestrator/nats-creds/orchestrator_auth.creds && echo '✓ orchestrator_auth.creds exists' || echo '✗ orchestrator_auth.creds missing'")
+      print(orch_auth_creds)
+      orch_admin_creds = orchestrator.succeed("test -f /var/lib/holo-orchestrator/nats-creds/admin.creds && echo '✓ admin.creds exists' || echo '✗ admin.creds missing'")
+      print(orch_admin_creds)
+      orch_nsc_key = orchestrator.succeed("test -f /var/lib/holo-orchestrator/nsc-proxy-auth.key && echo '✓ nsc-proxy-auth.key exists' || echo '✗ nsc-proxy-auth.key missing'")
+      print(orch_nsc_key)
+      orch_cluster_id = orchestrator.succeed("test -f /var/lib/config/mongo/cluster_id.txt && echo '✓ cluster_id.txt exists' || echo '✗ cluster_id.txt missing'")
+      print(orch_cluster_id)
+      orch_password = orchestrator.succeed("test -f /var/lib/config/mongo/password.txt && echo '✓ password.txt exists' || echo '✗ password.txt missing'")
+      print(orch_password)
+      
+      print("=== ORCHESTRATOR CREDENTIALS CONTENT ===")
+      head_orch_auth = orchestrator.succeed("head -3 /var/lib/holo-orchestrator/nats-creds/orchestrator_auth.creds || echo 'File not readable'")
+      print(head_orch_auth)
+      head_orch_admin = orchestrator.succeed("head -3 /var/lib/holo-orchestrator/nats-creds/admin.creds || echo 'File not readable'")
+      print(head_orch_admin)
+      cat_nsc_key = orchestrator.succeed("cat /var/lib/holo-orchestrator/nsc-proxy-auth.key || echo 'File not readable'")
+      print(cat_nsc_key)
       
       print("=== SHARED CREDENTIALS TEST ===")
-      nats_server.succeed("ls -la /tmp/shared/ || echo 'No /tmp/shared directory'")
-      orchestrator.succeed("ls -la /tmp/shared/ || echo 'No /tmp/shared directory'")
+      ls_shared_nats = nats_server.succeed("ls -la /tmp/shared/ || echo 'No /tmp/shared directory'")
+      print(ls_shared_nats)
+      ls_shared_orch = orchestrator.succeed("ls -la /tmp/shared/ || echo 'No /tmp/shared directory'")
+      print(ls_shared_orch)
+      
+      print("=== SHARED CREDENTIALS ON ORCHESTRATOR NODE ===")
+      ls_shared = orchestrator.succeed("ls -l /tmp/shared/")
+      print(ls_shared)
+      shared_auth_creds = orchestrator.succeed("test -s /tmp/shared/orchestrator_auth.creds && echo '✓ /tmp/shared/orchestrator_auth.creds is non-empty' || echo '✗ /tmp/shared/orchestrator_auth.creds is empty or missing'")
+      print(shared_auth_creds)
+      shared_admin_creds = orchestrator.succeed("test -s /tmp/shared/admin.creds && echo '✓ /tmp/shared/admin.creds is non-empty' || echo '✗ /tmp/shared/admin.creds is empty or missing'")
+      print(shared_admin_creds)
+      head_shared_auth = orchestrator.succeed("head -3 /tmp/shared/orchestrator_auth.creds || echo 'File not readable'")
+      print(head_shared_auth)
+      head_shared_admin = orchestrator.succeed("head -3 /tmp/shared/admin.creds || echo 'File not readable'")
+      print(head_shared_admin)
+      
+      print("=== ORCHESTRATOR CREDENTIALS DIR ===")
+      ls_orch_creds_dir = orchestrator.succeed("ls -l /var/lib/holo-orchestrator/nats-creds/")
+      print(ls_orch_creds_dir)
+      orch_creds_nonempty = orchestrator.succeed("test -s /var/lib/holo-orchestrator/nats-creds/orchestrator_auth.creds && echo '✓ orchestrator_auth.creds is non-empty' || echo '✗ orchestrator_auth.creds is empty or missing'")
+      print(orch_creds_nonempty)
+      admin_creds_nonempty = orchestrator.succeed("test -s /var/lib/holo-orchestrator/nats-creds/admin.creds && echo '✓ admin.creds is non-empty' || echo '✗ admin.creds is empty or missing'")
+      print(admin_creds_nonempty)
+      head_orch_creds = orchestrator.succeed("head -3 /var/lib/holo-orchestrator/nats-creds/orchestrator_auth.creds || echo 'File not readable'")
+      print(head_orch_creds)
+      head_admin_creds = orchestrator.succeed("head -3 /var/lib/holo-orchestrator/nats-creds/admin.creds || echo 'File not readable'")
+      print(head_admin_creds)
       
       print("✅ NSC credentials and resolver config generated and provisioned!")
     '';
@@ -117,12 +180,37 @@ pkgs.testers.runNixOSTest (
           after = [ "holo-nats-auth-setup.service" ];
           requires = [ "holo-nats-auth-setup.service" ];
         };
-        # Copy credentials to shared location for orchestrator
-        system.activationScripts.nats-shared-creds-copy = ''
-          mkdir -p /tmp/shared
-          cp /var/lib/nats_server/shared-creds/orchestrator_auth.creds /tmp/shared/orchestrator_auth.creds || echo "Credential file not found"
-          chmod 666 /tmp/shared/orchestrator_auth.creds || true
-        '';
+        # Remove the old activationScript for nats-shared-creds-copy and replace with a systemd oneshot service
+        systemd.services.nats-shared-creds-copy = {
+          description = "Copy NSC credentials to shared directory for orchestrator";
+          after = [ "holo-nats-auth-setup.service" ];
+          requires = [ "holo-nats-auth-setup.service" ];
+          wantedBy = [ "multi-user.target" ];
+          serviceConfig = {
+            Type = "oneshot";
+            RemainAfterExit = true;
+            User = "root";
+            Group = "root";
+          };
+          script = ''
+            set -euxo pipefail
+            echo "Running as: $(id)"
+            echo "Before copy:"
+            ls -l /var/lib/nats_server/shared-creds/ || echo 'No shared-creds dir'
+            ls -ld /var/lib/nats_server/shared-creds/ || echo 'No shared-creds dir'
+            ls -l /tmp/shared/ || echo 'No /tmp/shared dir yet'
+            ls -ld /tmp/shared/ || echo 'No /tmp/shared dir yet'
+            echo 'Fixing permissions on /tmp/shared/'
+            chmod 1777 /tmp/shared || echo 'Failed to chmod /tmp/shared'
+            ls -ld /tmp/shared
+            cp /var/lib/nats_server/shared-creds/orchestrator_auth.creds /tmp/shared/orchestrator_auth.creds
+            cp /var/lib/nats_server/shared-creds/admin_user.creds /tmp/shared/admin.creds
+            chmod 666 /tmp/shared/orchestrator_auth.creds || true
+            chmod 666 /tmp/shared/admin.creds || true
+            echo "After copy:"
+            ls -l /tmp/shared/ || echo 'No /tmp/shared dir after copy'
+          '';
+        };
         environment.systemPackages = with pkgs; [ curl jq openssl natscli ];
       };
       orchestrator = { pkgs, ... }: {
@@ -135,21 +223,46 @@ pkgs.testers.runNixOSTest (
           enable = true;
           package = flake.packages.${pkgs.system}.rust-workspace.individual.orchestrator;
           nats.nsc_proxy.authKeyFile = "/var/lib/holo-orchestrator/nsc-proxy-auth.key";
-          nats.nsc.credsPath = "/var/lib/holo-orchestrator/nats-creds";
+          nats.nsc = {
+            path = "/var/lib/holo-orchestrator/nsc";
+            credsPath = "/var/lib/holo-orchestrator/nats-creds";
+          };
+        };
+        systemd.services.holo-orchestrator = {
+          after = [
+            "network-online.target"
+            "nats-shared-creds-copy.service"
+            "nats.service"
+            "holo-nats-auth-setup.service"
+          ];
+          requires = [
+            "nats-shared-creds-copy.service"
+            "nats.service"
+            "holo-nats-auth-setup.service"
+          ];
         };
         system.activationScripts.orchestrator-creds-copy = ''
           mkdir -p /var/lib/holo-orchestrator/nats-creds
-          # Copy credentials from shared directory
+          mkdir -p /var/lib/config/mongo
+          # Copy only real credentials from shared directory
           if [ -f /tmp/shared/orchestrator_auth.creds ]; then
             cp /tmp/shared/orchestrator_auth.creds /var/lib/holo-orchestrator/nats-creds/orchestrator_auth.creds
-          else
-            echo "orchestrator-auth-creds" > /var/lib/holo-orchestrator/nats-creds/orchestrator_auth.creds
           fi
+          if [ -f /tmp/shared/admin.creds ]; then
+            cp /tmp/shared/admin.creds /var/lib/holo-orchestrator/nats-creds/admin.creds
+          fi
+          # Create required non-NSC test files
           echo "test-auth-key-12345" > /var/lib/holo-orchestrator/nsc-proxy-auth.key
+          echo "test-cluster-id" > /var/lib/config/mongo/cluster_id.txt
+          echo "test-mongo-password" > /var/lib/config/mongo/password.txt
+          # Set proper permissions
           chmod 600 /var/lib/holo-orchestrator/nsc-proxy-auth.key
+          chmod 600 /var/lib/config/mongo/cluster_id.txt
+          chmod 600 /var/lib/config/mongo/password.txt
           chown orchestrator:orchestrator /var/lib/holo-orchestrator/nsc-proxy-auth.key
           chown -R orchestrator:orchestrator /var/lib/holo-orchestrator/nats-creds
-          chmod 600 /var/lib/holo-orchestrator/nats-creds/*
+          chown -R orchestrator:orchestrator /var/lib/config/mongo
+          chmod 600 /var/lib/holo-orchestrator/nats-creds/* || true
         '';
         # Orchestrator service dependencies handled by activation script
         environment.systemPackages = with pkgs; [ curl jq natscli ];
