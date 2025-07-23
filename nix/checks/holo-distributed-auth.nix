@@ -24,20 +24,14 @@ pkgs.testers.runNixOSTest (
       ls_resolver = nats_server.succeed("ls -la /var/lib/nats_server/main-resolver.conf")
       print(ls_resolver)
       
-      print("=== ORCHESTRATOR SERVICE STATUS ===")
-      orch_status = orchestrator.succeed("systemctl status holo-orchestrator.service | grep -E 'Active:|Loaded:' || echo 'Service not found or is inactive'")
-      print(orch_status)
-      orch_active = orchestrator.succeed("systemctl is-active holo-orchestrator.service || echo 'Service not active'")
-      print(orch_active)
-      # Check if the service is enabled but not active, then print last 50 journal lines
-      orch_enabled = orchestrator.succeed("systemctl is-enabled holo-orchestrator.service || echo 'Service not enabled'")
-      if (orch_active.strip() != "active") and (orch_enabled.strip() == "enabled"):
-          print("--- Last 50 lines of holo-orchestrator.service journal ---")
-          orch_journal = orchestrator.succeed("journalctl -u holo-orchestrator.service -n 50 || echo 'No journal output'")
-          print(orch_journal)
-      orch_pgrep = orchestrator.succeed("pgrep -af orchestrator || echo 'Orchestrator process not found'")
-      print(orch_pgrep)
-      
+      print("=== SHARED CREDENTIALS ON NATS-SERVER NODE ===")
+      ls_shared_nats = nats_server.succeed("ls -la /tmp/shared/ || echo 'No /tmp/shared directory'")
+      print(ls_shared_nats)
+
+      print("=== SHARED CREDENTIALS ON ORCHESTRATOR NODE ===")
+      ls_shared_orch = orchestrator.succeed("ls -la /tmp/shared/ || echo 'No /tmp/shared directory'")
+      print(ls_shared_orch)
+
       print("=== ORCHESTRATOR CREDENTIALS ===")
       ls_orch = orchestrator.succeed("ls -la /var/lib/holo-orchestrator/")
       print(ls_orch)
@@ -53,17 +47,113 @@ pkgs.testers.runNixOSTest (
       print(orch_cluster_id)
       orch_password = orchestrator.succeed("test -f /var/lib/config/mongo/password.txt && echo '✓ password.txt exists' || echo '✗ password.txt missing'")
       print(orch_password)
-      
-      print("=== SHARED CREDENTIALS ON NATS-SERVER NODE ===")
-      ls_shared_nats = nats_server.succeed("ls -la /tmp/shared/ || echo 'No /tmp/shared directory'")
-      print(ls_shared_nats)
-      ls_shared_orch = orchestrator.succeed("ls -la /tmp/shared/ || echo 'No /tmp/shared directory'")
-      print(ls_shared_orch)
-      
-      print("=== SHARED CREDENTIALS ON ORCHESTRATOR NODE ===")
-      ls_shared = orchestrator.succeed("ls -l /tmp/shared/")
-      print(ls_shared)
-      
+
+      print("=== DEBUG: main-resolver.conf presence and contents ===")
+      # 1. main-resolver.conf presence and contents
+      print("=== CHECK: main-resolver.conf presence and contents ===")
+      resolver_ls = nats_server.succeed("ls -l /var/lib/nats_server/main-resolver.conf || echo 'main-resolver.conf missing'")
+      print(resolver_ls)
+      resolver_cat = nats_server.succeed("cat /var/lib/nats_server/main-resolver.conf || echo 'main-resolver.conf missing'")
+      print(resolver_cat)
+
+      # 2. HOLO.jwt, SYS.jwt, and all account JWTs in shared-creds, readable by nats-server
+      print("=== CHECK: JWTs in /var/lib/nats_server/shared-creds/ ===")
+      jwt_ls = nats_server.succeed("ls -l /var/lib/nats_server/shared-creds/ || echo 'shared-creds dir missing'")
+      print(jwt_ls)
+      jwt_perms = nats_server.succeed("namei -l /var/lib/nats_server/shared-creds/HOLO.jwt; namei -l /var/lib/nats_server/shared-creds/SYS.jwt || echo 'Could not stat HOLO.jwt or SYS.jwt'")
+      print(jwt_perms)
+      jwt_cat = nats_server.succeed("for f in /var/lib/nats_server/shared-creds/*.jwt; do echo \"=== $f ===\"; head -3 $f || echo \"$f missing\"; done")
+      print(jwt_cat)
+
+      # 3. NATS server start order
+      print("=== CHECK: NATS service start time and config file timestamps ===")
+      nats_conf_ls = nats_server.succeed("ls -l /var/lib/nats_server/nats-server.conf || echo 'nats-server.conf missing'")
+      print(nats_conf_ls)
+      nats_conf_cat = nats_server.succeed("cat /var/lib/nats_server/nats-server.conf || echo 'nats-server.conf missing'")
+      print(nats_conf_cat)
+      nats_conf_time = nats_server.succeed("stat -c '%y' /var/lib/nats_server/nats-server.conf || echo 'nats-server.conf missing'")
+      print(f"nats-server.conf last modified: {nats_conf_time}")
+      resolver_time = nats_server.succeed("stat -c '%y' /var/lib/nats_server/main-resolver.conf || echo 'main-resolver.conf missing'")
+      print(f"main-resolver.conf last modified: {resolver_time}")
+      jwt_dir_time = nats_server.succeed("stat -c '%y' /var/lib/nats_server/shared-creds/ || echo 'shared-creds dir missing'")
+      print(f"shared-creds dir last modified: {jwt_dir_time}")
+      nats_status = nats_server.succeed("systemctl status nats.service | grep -E 'Active:|Loaded:' || echo 'NATS service not found or is inactive'")
+      print(nats_status)
+      nats_ps = nats_server.succeed("ps aux | grep nats-server | grep -v grep")
+      print(nats_ps)
+
+      # 4. nats-server.conf references
+      print("=== CHECK: nats-server.conf resolver and JWT paths ===")
+      nats_conf_grep = nats_server.succeed("grep -E 'resolver|jwt|operator' /var/lib/nats_server/nats-server.conf || echo 'No resolver/jwt/operator lines in nats-server.conf'")
+      print(nats_conf_grep)
+
+      # Orchestrator failure debug
+      print("=== CHECK: holo-orchestrator.service status and last 100 journal lines if failed ===")
+      orch_status = orchestrator.succeed("systemctl status holo-orchestrator.service | grep -E 'Active:|Loaded:' || echo 'Service not found or is inactive'")
+      print(orch_status)
+      orch_active = orchestrator.succeed("systemctl is-active holo-orchestrator.service || echo 'Service not active'")
+      print(orch_active)
+      orch_enabled = orchestrator.succeed("systemctl is-enabled holo-orchestrator.service || echo 'Service not enabled'")
+      print(orch_enabled)
+      if (orch_active.strip() != "active") and (orch_enabled.strip() == "enabled"):
+          print("--- Last 100 lines of holo-orchestrator.service journal ---")
+          orch_journal = orchestrator.succeed("journalctl -u holo-orchestrator.service -n 100 || echo 'No journal output'")
+          print(orch_journal)
+
+      print("=== ORCHESTRATOR CREDS FILE CONTENTS: admin.creds ===")
+      admin_creds_cat = orchestrator.succeed("cat /var/lib/holo-orchestrator/nats-creds/admin.creds || echo 'admin.creds missing'")
+      print(admin_creds_cat)
+      print("=== ORCHESTRATOR CREDS FILE CONTENTS: orchestrator_auth.creds ===")
+      orch_auth_creds_cat = orchestrator.succeed("cat /var/lib/holo-orchestrator/nats-creds/orchestrator_auth.creds || echo 'orchestrator_auth.creds missing'")
+      print(orch_auth_creds_cat)
+      print("=== ORCHESTRATOR NSC PROXY AUTH KEY CONTENTS ===")
+      nsc_proxy_key_cat = orchestrator.succeed("cat /var/lib/holo-orchestrator/nsc-proxy-auth.key || echo 'nsc-proxy-auth.key missing'")
+      print(nsc_proxy_key_cat)
+      print("=== ORCHESTRATOR CLUSTER ID CONTENTS ===")
+      cluster_id_cat = orchestrator.succeed("cat /var/lib/config/mongo/cluster_id.txt || echo 'cluster_id.txt missing'")
+      print(cluster_id_cat)
+      print("=== ORCHESTRATOR MONGO PASSWORD CONTENTS ===")
+      mongo_pw_cat = orchestrator.succeed("cat /var/lib/config/mongo/password.txt || echo 'password.txt missing'")
+      print(mongo_pw_cat)
+
+      # # --- BEGIN: Additional orchestrator tests ---
+      # print("=== NATSCLI PUBLISH TEST: WORKLOAD.> ===")
+      # natscli_admin_creds = "/var/lib/holo-orchestrator/nats-creds/admin.creds"
+      # nats_server_url = "nats://nats-server:4222"
+      # pub_result = orchestrator.succeed(f"nats pub --creds {natscli_admin_creds} --server {nats_server_url} 'WORKLOAD.test' 'test-message'")
+      # print("natscli publish WORKLOAD.> result:", pub_result)
+      # assert 'Published' in pub_result or 'OK' in pub_result, "natscli publish to WORKLOAD.> failed"
+
+      # print("=== NATSCLI PUBLISH TEST: INVENTORY.> ===")
+      # pub_result2 = orchestrator.succeed(f"nats pub --creds {natscli_admin_creds} --server {nats_server_url} 'INVENTORY.test' 'test-message'")
+      # print("natscli publish INVENTORY.> result:", pub_result2)
+      # assert 'Published' in pub_result2 or 'OK' in pub_result2, "natscli publish to INVENTORY.> failed"
+
+      # print("=== NATSCLI SUBSCRIBE TEST: > ===")
+      # # Start a background subscriber, then publish and check output
+      # sub_cmd = f"timeout 3 nats sub --creds {natscli_admin_creds} --server {nats_server_url} '>' > /tmp/nats_sub_output 2>&1 & echo $!"
+      # sub_pid = orchestrator.succeed(sub_cmd).strip()
+      # import time
+      # time.sleep(1)  # Give subscriber time to start
+      # orchestrator.succeed(f"nats pub --creds {natscli_admin_creds} --server {nats_server_url} 'TEST.SUB' 'test-subscribe-test'")
+      # time.sleep(2)
+      # sub_output = orchestrator.succeed("cat /tmp/nats_sub_output")
+      # print("natscli subscribe > output:", sub_output)
+      # assert 'test-subscribe-test' in sub_output, "natscli subscribe to > failed to receive published message"
+
+      # print("=== ORCHESTRATOR NSC PROXY TEST ===")
+      # nsc_proxy_auth_key = orchestrator.succeed("cat /var/lib/holo-orchestrator/nsc-proxy-auth.key").strip()
+      # nsc_proxy_url = "http://nats-server:5000/nsc"
+      # nsc_proxy_payload = '{"command":"describe_user","params":{"account":"ADMIN","name":"admin_user"},"auth_key":"' + nsc_proxy_auth_key + '"}'
+      # nsc_proxy_cmd = (
+      #   "curl -s -X POST --fail --header 'Content-Type: application/json' "
+      #   f"--data '{nsc_proxy_payload}' {nsc_proxy_url}"
+      # )
+      # nsc_proxy_result = orchestrator.succeed(nsc_proxy_cmd)
+      # print("NSC proxy describe_user result:", nsc_proxy_result)
+      # assert 'admin_user' in nsc_proxy_result, "NSC proxy did not return expected user info"
+      # # --- END: Additional orchestrator tests ---
+
       print("✅ NSC credentials and resolver config generated and provisioned!")
     '';
   in
@@ -106,8 +196,6 @@ pkgs.testers.runNixOSTest (
             TimeoutStartSec = "120";
             Restart = "no";
             Environment = [
-              # "NSC_HOME=/var/lib/nats_server/.local/share/nats/nsc"
-              # "NKEYS_PATH=/var/lib/nats_server/.local/share/nats/nsc"
               "XDG_DATA_HOME=/var/lib/nats_server/.data"
               # "XDG_CONFIG_HOME=/var/lib/nats_server/.config"
             ];
@@ -142,12 +230,6 @@ pkgs.testers.runNixOSTest (
             ls -ld /var/lib/nats_server/jwt
             ls -ld $LOCAL_CREDS_DIR
             ls -ld $SHARED_CREDS_DIR
-            
-            # Initialize NSC store before any other NSC commands
-            # echo '=== INITIALIZING NSC STORE ==='
-            # # export NSC_STORE_ROOT=/var/lib/nats_server/.local/share/nats/nsc/stores
-            # nsc env --store /var/lib/nats_server/.local/share/nats/nsc/stores || echo 'nsc env --store failed'
-            # echo '=== INITIALIZING NSC STORE ==='
 
             # Function to extract signing keys (from credential_utils.sh)
             extract_signing_key() {
@@ -168,22 +250,15 @@ pkgs.testers.runNixOSTest (
                 if [[ -f "$local_creds_path/$1_SK.nk" ]]; then
                     echo "$local_creds_path/$1_SK.nk file already exists."
                 else
-                    # local seed_file_path="$nsc_path/keys/keys/${sk:0:1}/${sk:1:2}/$sk.nk"
-
                     local unquoted_sk=$(echo "$sk" | tr -d '"')
                     echo "Looking for signing key: $unquoted_sk"
-
-                    # Print the contents of the keys/keys directory
-                    echo "DEBUG: Listing contents of $nsc_path/keys/keys:"
-                    ls -lR "$nsc_path/keys/keys" || echo "Could not list $nsc_path/keys/keys"
-                    ls -lR "/root/.local/share/nats/nsc/keys/keys" || echo "Could not list /root/.local/share/nats/nsc/keys/keys"
 
                     local first_char=$(echo "$unquoted_sk" | cut -c1)
                     local second_chars=$(echo "$unquoted_sk" | cut -c2-3)
                     local seed_file_path="$nsc_path/keys/keys/$first_char/$second_chars/$unquoted_sk.nk"
                     local unquoted_seed_path=$(echo "$seed_file_path" | tr -d '"')
 
-                    echo "DEBUG: Attempting to copy from $unquoted_seed_path to $local_creds_path/$1_SK.nk"
+                    echo "About to copy from $unquoted_seed_path to $local_creds_path/$1_SK.nk"
                     if [[ -f "$unquoted_seed_path" ]]; then
                         echo "✓ File exists at: $unquoted_seed_path"
                     else
@@ -208,6 +283,10 @@ pkgs.testers.runNixOSTest (
             echo "✓ AUTH and ADMIN accounts created"
             
             # Generate and assign signing key for ADMIN
+            # nsc edit account --name ADMIN \
+            #   --js-streams -1 --js-consumer -1 \
+            #   --js-mem-storage 1G --js-disk-storage 5G \
+            #   --conns -1 --leaf-conns -1
             ADMIN_SK=$(nsc edit account -n ADMIN --sk generate 2>&1 | grep -oP "signing key\s*\K\S+")
             echo "ADMIN_SK: $ADMIN_SK"
             nsc edit signing-key --sk $ADMIN_SK --role admin_role \
@@ -217,6 +296,10 @@ pkgs.testers.runNixOSTest (
             echo "✓ ADMIN account signing key created"
             
             # Generate and assign signing key for AUTH
+            # nsc edit account --name AUTH \
+            #   --js-streams -1 --js-consumer -1 \
+            #   --js-mem-storage 1G --js-disk-storage 5G \
+            #   --conns -1 --leaf-conns -1
             AUTH_SK=$(nsc edit account -n AUTH --sk generate 2>&1 | grep -oP "signing key\s*\K\S+")
             nsc edit signing-key --sk $AUTH_SK --role auth_role --allow-pub ">" --allow-sub ">"
             echo "AUTH_SK: $AUTH_SK"
@@ -269,9 +352,9 @@ pkgs.testers.runNixOSTest (
 
           # # 
           #   echo '=== VERIFY NSC KEYS DIRS AND FILES ==='
-          #   ls -ld /var/lib/nats_server /var/lib/nats_server/.data /var/lib/nats_server/.data/nats /var/lib/nats_server/.data/nats/nsc || echo 'Could not list parent dirs'
-          #   ls -lR /var/lib/nats_server/.data/nats/nsc/stores || echo 'Could not list nsc stores dir'
-          #   ls -lR /var/lib/nats_server/.data/nats/nsc/keys || echo 'Could not list nsc keys dir'
+            ls -ld /var/lib/nats_server /var/lib/nats_server/.data /var/lib/nats_server/.data/nats /var/lib/nats_server/.data/nats/nsc || echo 'Could not list parent dirs'
+            ls -lR /var/lib/nats_server/.data/nats/nsc/stores || echo 'Could not list nsc stores dir'
+            ls -lR /var/lib/nats_server/.data/nats/nsc/keys || echo 'Could not list nsc keys dir'
           #   find /var/lib/nats_server/.data/nats/nsc/keys -type f -name '*.nk' -exec ${pkgs.bash}/bin/bash -c 'echo "=== CONTENTS OF: {} ==="; cat {}' \;
           # # 
    
@@ -302,6 +385,7 @@ pkgs.testers.runNixOSTest (
             echo '=== END LOCAL CREDS DIRECTORY CONTENTS ==='
 
             # Generate resolver config with correct NSC command
+            nsc env -s "$NSC_PATH/stores" -o HOLO
             nsc generate config --nats-resolver --sys-account SYS --force --config-file /var/lib/nats_server/main-resolver.conf
             
             echo '=== BEGIN main-resolver.conf ==='
@@ -353,7 +437,7 @@ pkgs.testers.runNixOSTest (
 
         systemd.services.nats = {
           after = [ "holo-nats-auth-setup.service" ];
-          requires = [ "holo-nats-auth-setup.service" ];
+          wants = [ "holo-nats-auth-setup.service" ];
         };
 
         environment.systemPackages = with pkgs; [ curl jq openssl natscli ];
@@ -385,10 +469,14 @@ pkgs.testers.runNixOSTest (
             "nats-shared-creds-copy.service"
             "nats.service"
           ];
-          requires = [
+          wants = [
             "holo-nats-auth-setup.service"
             "nats-shared-creds-copy.service"
             "nats.service"
+          ];
+          serviceConfig.Environment = [
+            "RUST_LOG=debug"
+            "RUST_BACKTRACE=1"
           ];
         };
 

@@ -150,6 +150,7 @@ in {
       #   AUTH_SK_ACCOUNT_PUBKEY=$(echo "$AUTH_SK_OUTPUT" | jq -r '.[0].key' 2>/dev/null || echo "")
       # fi
 
+#
       # Create HPOS account
       nsc add account --name HPOS
       nsc edit account --name HPOS \
