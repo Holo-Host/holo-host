@@ -6,6 +6,7 @@ use anyhow::Result;
 use bson::{self, doc, oid, DateTime};
 use dotenv::dotenv;
 use hpos_hal::inventory::HoloInventory;
+use hpos_updates::types::HostUpdateRequest;
 use mock_utils::mongodb_runner::MongodRunner;
 
 #[tokio::test]
@@ -46,6 +47,8 @@ async fn test_indexing_and_api() -> Result<()> {
             avg_latency: 10,
             assigned_workloads: vec![oid::ObjectId::new()],
             assigned_hoster: Some(oid::ObjectId::new()),
+            channel: None,
+            status: HostStatus::default(),
         }
     }
 

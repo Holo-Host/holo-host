@@ -143,6 +143,41 @@ pub(crate) async fn run(args: RemoteArgs, command: RemoteCommands) -> anyhow::Re
 
             println!("{response:?}");
         }
+
+        agent_cli::RemoteCommands::HostNixosUpdate { device_id, channel } => {
+            let subject = format!(
+                "{}.{}.{}",
+                HOST_UPDATES_SRV_SUBJ,
+                ORCHESTRATOR_SUBJECT_PREFIX,
+                HostUpdateServiceSubjects::Update.as_ref().to_string()
+            );
+
+            let update_request = HostUpdateRequest {
+                info: "Host NixOS update requested from Remote CLI".to_string(),
+                device_id,
+                channel,
+            };
+
+            log::debug!("publishing to {subject}: {payload}");
+            let timestamp = Utc::now().to_rfc3339();
+
+            if let Ok(response) = nats_client
+                .publish(PublishInfo {
+                    subject,
+                    msg_id: timestamp,
+                    data: update_request.into(),
+                    headers: None,
+                })
+                .await
+            {
+                log::info!(
+                    "Completed request to update the nixos channel on Host.
+                host={device_id},
+                channel={channel},
+                response={response:#?}"
+                );
+            };
+        }
     }
 
     Ok(())

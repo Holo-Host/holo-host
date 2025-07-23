@@ -1,3 +1,4 @@
+pub mod host_api;
 pub mod orchestrator_api;
 pub mod types;
 
@@ -31,9 +32,6 @@ pub const HOST_UPDATES_SRV_SUBJ: &str = "HOST";
 pub const HOST_UPDATES_SRV_VERSION: &str = "0.0.1";
 pub const HOST_UPDATES_SRV_DESC: &str =
     "This service handles the on-command holo-host-agent updates.";
-
-// Service Endpoint Names:
-pub const HOST_UPDATES_SUBJECT: &str = "update";
 
 // Tag to identify host id
 pub const TAG_MAP_PREFIX_DESIGNATED_HOST: &str = "designated_host";
