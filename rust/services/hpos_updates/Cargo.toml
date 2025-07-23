@@ -18,11 +18,13 @@ nats_utils = { workspace = true }
 hpos-hal = { workspace = true }
 env_logger = { workspace = true }
 bson = { version = "2.6.1", features = ["chrono-0_4"] }
+async-trait = "0.1.83"
 mongodb = "3.1"
 base32 = "0.5.1"
 nkeys = "=0.4.4"
 sha2 = "=0.10.8"
 nats-jwt = "0.3.0"
+strum_macros = "0.25"
 data-encoding = "2.7.0"
 jsonwebtoken = "9.3.0"
 bytes = "1.8.0"

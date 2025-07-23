@@ -64,6 +64,15 @@ async fn main() -> Result<(), async_nats::Error> {
         };
     });
 
+    let admin_host_agent_clone = admin_client.clone();
+    let db_host_agent_clone = db_client.clone();
+    spawn(async move {
+        log::info!("Starting host agent service...");
+        if let Err(e) = hpos_updates::run(admin_host_agent_clone, db_host_agent_clone).await {
+            log::error!("Error running host agent service. Err={:?}", e)
+        };
+    });
+
     // Only exit program when explicitly requested
     tokio::signal::ctrl_c().await?;
 
