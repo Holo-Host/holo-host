@@ -1,5 +1,6 @@
 mod admin_client;
 mod extern_api;
+mod hpos_updates;
 mod inventory;
 mod utils;
 mod workloads;
