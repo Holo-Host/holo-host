@@ -10,6 +10,20 @@ use crate::mongodb::traits::{IntoIndexes, MutMetadata};
 /// Collection name for host documents
 pub const HOST_COLLECTION_NAME: &str = "host";
 
+/// Host status enum
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub enum HostStatus {
+    Active(String), // Host is running and accessible
+    Error(String),  // Host is in an error state (e.g. update failed, etc.)
+}
+
+// Default to Active for now
+// TODO: Make handling of default status more robust
+impl Default for HostStatus {
+    fn default() -> Self {
+        HostStatus::Active("Running".to_string())
+    }
+}
 /// Host document schema representing a hosting device in the system
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Host {
@@ -34,6 +48,13 @@ pub struct Host {
     pub assigned_hoster: Option<ObjectId>,
     /// List of workloads running on this host
     pub assigned_workloads: Vec<ObjectId>,
+    /// Channel of the host
+    /// TODO: Make this required in the future -- only optional for backwards compatibility
+    #[serde(default)]
+    pub channel: Option<String>,
+    /// Status of the host
+    #[serde(default)]
+    pub status: HostStatus,
 }
 
 impl Default for Host {
@@ -49,6 +70,8 @@ impl Default for Host {
             assigned_workloads: vec![],
             assigned_hoster: None,
             ip_address: None,
+            channel: None,
+            status: HostStatus::default(),
         }
     }
 }
