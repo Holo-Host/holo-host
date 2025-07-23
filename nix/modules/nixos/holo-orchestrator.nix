@@ -113,7 +113,7 @@ in {
 
         natsServerHost = lib.mkOption {
           type = lib.types.str;
-          default = "nats-server-0.holotest.dev";
+          # default = "nats-server-0.holotest.dev";
           description = "Hostname of the NATS server for public key distribution";
         };
 
@@ -125,7 +125,7 @@ in {
 
         natsServerPubkeyPath = lib.mkOption {
           type = lib.types.str;
-          default = "/var/lib/nats_server/orchestrator_auth_pubkey.txt";
+          # default = "/var/lib/nats_server/orchestrator_auth_pubkey.txt";
           description = "Path on NATS server where public key should be stored";
         };
       };
@@ -137,7 +137,7 @@ in {
           default = null;
         };
         
-        # Credential paths (local path where credentials are extracted)
+        # Credential paths (local path into which the relevant nats-server credentials are extracted)
         credsPath = lib.mkOption {
           type = lib.types.path;
           description = "Local path where NATS credentials are extracted and stored";
@@ -212,9 +212,9 @@ in {
           NATS_USER = cfg.nats.server.user;
         }
         // lib.attrsets.optionalAttrs (cfg.nats.nsc.path != null) {
-          NSC_PATH = "%d/NSC_PATH";
-          ORCHESTRATOR_ROOT_AUTH_NKEY_PATH = "${cfg.nats.nsc.rootAuthNkeyPath}";
-          ORCHESTRATOR_SIGNING_AUTH_NKEY_PATH = "${cfg.nats.nsc.signingAuthNkeyPath}";
+          # NSC_PATH = "%d/NSC_PATH";
+          ORCHESTRATOR_ROOT_AUTH_NKEY_PATH = "%d/ORCHESTRATOR_ROOT_AUTH_NKEY_PATH";
+          ORCHESTRATOR_SIGNING_AUTH_NKEY_PATH = "%d/ORCHESTRATOR_SIGNING_AUTH_NKEY_PATH";
           NATS_ADMIN_CREDS_FILE = "%d/NATS_ADMIN_CREDS_FILE";
           NATS_AUTH_CREDS_FILE = "%d/NATS_AUTH_CREDS_FILE";
         }
@@ -272,6 +272,8 @@ in {
         ++ lib.lists.optional (cfg.nats.nsc.path != null) [
           "NATS_ADMIN_CREDS_FILE:${cfg.nats.nsc.adminCredsFile}"
           "NATS_AUTH_CREDS_FILE:${cfg.nats.nsc.authCredsFile}"
+          "ORCHESTRATOR_ROOT_AUTH_NKEY_PATH:${cfg.nats.nsc.rootAuthNkeyPath}"
+          "ORCHESTRATOR_SIGNING_AUTH_NKEY_PATH:${cfg.nats.nsc.signingAuthNkeyPath}"
         ];
       };
 

@@ -274,7 +274,7 @@ pkgs.testers.runNixOSTest (
             path = "/var/lib/nats-server/nsc/local";
             localCredsPath = "/var/lib/nats_server/local-creds";
             sharedCredsPath = "/var/lib/nats_server/shared-creds";
-            resolverPath = "/var/lib/nats_server/main-resolver.conf";
+            resolverFileName = "main-resolver.conf";
           };
           extraAttrs.settings = {
             # JWT resolver configuration will be set up by auth setup

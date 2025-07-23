@@ -171,7 +171,7 @@ pkgs.testers.runNixOSTest (
             path = "/var/lib/nats-server/nsc/local";
             localCredsPath = "/var/lib/nats-server/nsc/local";
             sharedCredsPath = "/var/lib/nats_server/shared-creds";
-            resolverPath = "/var/lib/nats_server/main-resolver.conf";
+            resolverFileName = "main-resolver.conf";
           };
           # Explicitly enable Caddy for websocket TLS termination, as the test expects caddy.service to be running
           caddy = {

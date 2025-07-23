@@ -8,9 +8,10 @@ let
   # Default configuration values
   natsServerHost = config.holo.nats-server.server.host or "0.0.0.0";
   natsListeningPort = config.holo.nats-server.server.port or 4222;
+  workingDirectory = config.holo.nats-server.workingDirectory or "/var/lib/nats_server";
   localCredsPath = config.holo.nats-server.nsc.localCredsPath or "/var/lib/nats_server/local-creds";
   sharedCredsPath = config.holo.nats-server.nsc.sharedCredsPath or "/var/lib/nats_server/shared-creds";
-  resolverPath = config.holo.nats-server.nsc.resolverPath or "/var/lib/nats_server/main-resolver.conf";
+  resolverPath = "${config.holo.nats-server.workingDirectory}/${config.holo.nats-server.nsc.resolverFileName}" or "/var/lib/nats_server/main-resolver.conf";
   nscPath = config.holo.nats-server.nsc.path or "/var/lib/nats-server/nsc/local";
 in {
   # Create the mock NATS auth setup service
@@ -163,6 +164,7 @@ in {
         --allow-sub "WORKLOAD.{{tag(hostId)}}.>","INVENTORY.{{tag(hostId)}}.>","\$JS.API.>","_HPOS_INBOX.{{tag(hostId)}}.>" \
         --allow-pub-response
 
+# 
       # Setup export/import rules
       echo "=== Setting up export/import rules ==="
       nsc add export --name ADMIN_WORKLOAD_SERVICE --subject "WORKLOAD.>" --account ADMIN
@@ -173,6 +175,7 @@ in {
       echo "=== HPOS Workload Service export added ==="
       # nsc add import --src-account HPOS --name WORKLOAD_SERVICE --remote-subject "WORKLOAD.>" --local-subject "WORKLOAD.>" --account ADMIN
       # echo "=== ADMIN Workload Service import added ==="
+# 
 
       # Create users
       echo "=== Creating users ==="

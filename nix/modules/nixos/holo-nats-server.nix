@@ -16,6 +16,12 @@ in {
       default = true;
     };
 
+    workingDirectory = lib.mkOption {
+      type = lib.types.path;
+      default = "/var/lib/nats_server";
+      description = "Working directory for NATS Server";
+    };
+
     # NATS Server configuration
     server = {
       host = lib.mkOption {
@@ -88,47 +94,48 @@ in {
       };
     };
 
-    extraAttrs = lib.mkOption {
-      description = "extra attributes passed to `services.nats`";
-      default = { };
-    };
-
-    # Enable JWT authentication
-    enableJwt = lib.mkOption {
-      type = lib.types.bool;
-      default = false;
-      description = "Enable JWT authentication for NATS server";
-    };
-
     # NSC configuration
     nsc = {
       # NSC configuration path
       path = lib.mkOption {
         type = lib.types.path;
-        default = "/var/lib/nats_server/.local/share/nats/nsc";
+        default = "${cfg.workingDirectory}/.local/share/nats/nsc";
+        # "/root/.local/share/nats/nsc"
         description = "Path to NSC configuration directory";
       };
 
       # Local credentials path
       localCredsPath = lib.mkOption {
         type = lib.types.path;
-        default = "/var/lib/nats-server/nsc/local";
+        default = "${cfg.workingDirectory}/nsc/local-creds";
         description = "Path for local credentials (signing keys)";
       };
 
       # Shared credentials path
       sharedCredsPath = lib.mkOption {
         type = lib.types.path;
-        default = "/var/lib/nats_server/shared-creds";
+        default = "${cfg.workingDirectory}/shared-creds";
         description = "Path for shared JWT files";
       };
 
       # Resolver configuration path
-      resolverPath = lib.mkOption {
-        type = lib.types.path;
-        default = "/var/lib/nats_server/main-resolver.conf";
+      resolverFileName = lib.mkOption {
+        type = lib.types.str;
+        default = "main-resolver.conf";
         description = "Path to the NATS resolver configuration file";
       };
+    };
+
+    # Enable JWT authentication
+    enableJwt = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = "Enable JWT authentication for NATS server";
+    };
+
+    extraAttrs = lib.mkOption {
+      description = "extra attributes passed to `services.nats`";
+      default = { };
     };
 
     # NATS Server configuration file
@@ -145,7 +152,7 @@ in {
         operator: ${cfg.nsc.sharedCredsPath}/HOLO.jwt
         system_account: SYS
         ''}
-        include "main-resolver.conf"
+        include "${cfg.nsc.resolverFileName}"
         
         # Logging
         logtime: true
@@ -177,6 +184,9 @@ in {
   };
 
   config = lib.mkIf cfg.enable {
+    # Set XDG_DATA_HOME for all services in this module
+    environment.variables.XDG_DATA_HOME = "${cfg.workingDirectory}/.data";
+    
     # Firewall configuration for Caddy
     networking.firewall.allowedTCPPorts =
       # need port 80 to receive well-known ACME requests
@@ -187,7 +197,7 @@ in {
     users.groups.nats-server ={};
     users.users.nats-server = {
       isSystemUser = true;
-      home = "/var/lib/nats_server";
+      home = "${cfg.workingDirectory}";
       createHome = true;
       group = "nats-server";
     };
@@ -195,19 +205,21 @@ in {
     # Create necessary directories
     system.activationScripts.holo-nats-server-dirs = ''
       ${lib.optionalString cfg.enableJwt "mkdir -p ${cfg.nsc.path}"}
-      mkdir -p /var/lib/nats_server
-      chown -R nats-server:nats-server /var/lib/nats_server
-      chmod -R 700 /var/lib/nats_server
-      # Ensure dummy resolver config exists for test
-      if [ ! -f "/var/lib/nats_server/main-resolver.conf" ]; then
-        echo 'resolver: MEMORY' > /var/lib/nats_server/main-resolver.conf
-        chown nats-server:nats-server /var/lib/nats_server/main-resolver.conf
-        chmod 600 /var/lib/nats_server/main-resolver.conf
+      mkdir -p ${cfg.workingDirectory}
+      chown -R nats-server:nats-server ${cfg.workingDirectory}
+      chmod -R 700 ${cfg.workingDirectory}
+
+      # Ensure resolver config exists
+      if [ ! -f "${cfg.workingDirectory}/${cfg.nsc.resolverFileName}" ]; then
+        echo 'resolver: MEMORY' > "${cfg.workingDirectory}/${cfg.nsc.resolverFileName}"
+        chown nats-server:nats-server "${cfg.workingDirectory}/${cfg.nsc.resolverFileName}"
+        chmod 600 "${cfg.workingDirectory}/${cfg.nsc.resolverFileName}"
       fi
-      # Copy config file from Nix store to /var/lib/nats_server/nats-server.conf
-      cp ${cfg.configFile} /var/lib/nats_server/nats-server.conf
-      chown nats-server:nats-server /var/lib/nats_server/nats-server.conf
-      chmod 600 /var/lib/nats_server/nats-server.conf
+
+      # Copy config file from Nix store to "${cfg.workingDirectory}/nats-server.conf"
+      cp ${cfg.configFile} "${cfg.workingDirectory}/nats-server.conf"
+      chown nats-server:nats-server "${cfg.workingDirectory}/nats-server.conf"
+      chmod 600 "${cfg.workingDirectory}/nats-server.conf"
     '';
 
     # NATS Server service
@@ -215,7 +227,7 @@ in {
       description = "NATS Server";
       wantedBy = [ "multi-user.target" ];
       after = [ "network-online.target" ] ++ lib.optional cfg.enableJwt "holo-nats-auth-setup.service";
-      wants = [ "network-online.target" ] ++ lib.optional cfg.enableJwt "holo-nats-auth-setup.service";
+      requires = [ "network-online.target" ] ++ lib.optional cfg.enableJwt "holo-nats-auth-setup.service";
 
       path = [ pkgs.nats-server ];
 
@@ -228,12 +240,12 @@ in {
         fi
         
         # Check if resolver configuration exists before starting NATS
-        if [ ! -f "${cfg.nsc.resolverPath}" ]; then
+        if [ ! -f "${cfg.workingDirectory}/${cfg.nsc.resolverFileName}" ]; then
           echo "ERROR: NATS resolver configuration not found. Please ensure auth setup has completed."
           exit 1
         fi
         ''}
-        exec ${pkgs.nats-server}/bin/nats-server -c /var/lib/nats_server/nats-server.conf
+        exec ${pkgs.nats-server}/bin/nats-server -c ${cfg.workingDirectory}/nats-server.conf
       '';
 
       serviceConfig = {
@@ -253,15 +265,15 @@ in {
         
         # File system access
         ReadWritePaths = [
-          "/var/lib/nats_server"
+          "${cfg.workingDirectory}"
         ] ++ lib.optional cfg.enableJwt cfg.nsc.sharedCredsPath
           ++ lib.optional cfg.enableJwt cfg.nsc.localCredsPath
           ++ lib.optional cfg.enableJwt cfg.nsc.path
-          ++ lib.optional cfg.enableJwt (builtins.dirOf cfg.nsc.resolverPath);
+          ++ lib.optional cfg.enableJwt (builtins.dirOf "${cfg.workingDirectory}/${cfg.nsc.resolverFileName}");
         
         User = "nats-server";
         Group = "nats-server";
-        WorkingDirectory = "/var/lib/nats_server";
+        WorkingDirectory = "${cfg.workingDirectory}";
       };
     };
 

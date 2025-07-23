@@ -45,7 +45,7 @@ in {
     nsc = {
       path = lib.mkOption {
         type = lib.types.path;
-        default = "/var/lib/nats-server/nsc/local";
+        default = "/var/lib/nats_server/.local/share/nats/nsc";
         description = "Path to NSC configuration directory";
       };
     };
