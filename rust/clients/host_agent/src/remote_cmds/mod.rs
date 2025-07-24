@@ -1,8 +1,12 @@
+use crate::hostd::utils::ORCHESTRATOR_SUBJECT_PREFIX;
 use anyhow::Context;
+use chrono::Utc;
 use db_utils::schemas::workload::{
     Workload, WorkloadManifest, WorkloadState, WorkloadStateDiscriminants, WorkloadStatus,
 };
 use futures::StreamExt;
+use hpos_updates::types::{HostUpdateRequest, HostUpdateServiceSubjects};
+use hpos_updates::HPOS_UPDATES_SVC_SUBJ;
 use nats_utils::types::PublishInfo;
 use nats_utils::{jetstream_client::JsClient, types::JsClientBuilder};
 use std::str::FromStr;
@@ -142,6 +146,39 @@ pub(crate) async fn run(args: RemoteArgs, command: RemoteCommands) -> anyhow::Re
             .await?;
 
             println!("{response:?}");
+        }
+
+        // Manaul remote way to request a given host to update its nixos channel
+        agent_cli::RemoteCommands::HposUpdate { device_id, channel } => {
+            let subject = format!(
+                "{}.{}.{}",
+                HPOS_UPDATES_SVC_SUBJ,
+                ORCHESTRATOR_SUBJECT_PREFIX,
+                HostUpdateServiceSubjects::Update.as_ref().to_string()
+            );
+
+            let request_log_msg = format!(
+                "Completed request to update the nixos channel on Host. host={device_id}, channel={channel}"
+            );
+
+            let request_info = HostUpdateRequest { device_id, channel };
+            let payload = serde_json::to_string_pretty(&request_info)
+                .context("Error serializing request_info")?;
+
+            log::debug!("publishing to {subject}: payload={:?}", payload);
+            let timestamp = Utc::now().to_rfc3339();
+
+            if let Ok(response) = nats_client
+                .publish(PublishInfo {
+                    subject,
+                    msg_id: timestamp,
+                    data: payload.into(),
+                    headers: None,
+                })
+                .await
+            {
+                log::info!("{request_log_msg}, response={response:#?}");
+            };
         }
     }
 

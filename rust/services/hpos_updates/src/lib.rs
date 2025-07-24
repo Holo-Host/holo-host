@@ -1,5 +1,7 @@
+pub mod host_api;
 pub mod orchestrator_api;
 pub mod types;
+mod utils;
 
 use anyhow::Result;
 use async_nats::jetstream::ErrorCode;
@@ -15,34 +17,32 @@ use nats_utils::types::ServiceError;
 use serde::{Deserialize, Serialize};
 use std::{fmt::Debug, sync::Arc};
 
-// api_subject.recipient.action
+// Pattern:
+// API_SUBJECT.recipient.action
+//
+// Examples:
 // WORKLOAD.orchestrator.status
 // WORKLOAD.<device_id>.update
 //
-// NB: Blob store subject:
+// RE: Blob store subject:
 // BLOB_STORE.<object_id>.fetch
 //
-// HOST.orchestrator.update
-// HOST.orchestrator.status
-// HOST.<device_id>.update
+// Subjects for HPOS Updates Service:
+// HPOS.orchestrator.update
+// HPOS.orchestrator.status
+// HPOS.<device_id>.update
 
-pub const HOST_UPDATES_SRV_NAME: &str = "HOST";
-pub const HOST_UPDATES_SRV_SUBJ: &str = "HOST";
-pub const HOST_UPDATES_SRV_VERSION: &str = "0.0.1";
-pub const HOST_UPDATES_SRV_DESC: &str =
+pub const HPOS_UPDATES_SVC_NAME: &str = "HPOS_UPDATES_SERVICE";
+pub const HPOS_UPDATES_SVC_SUBJ: &str = "HPOS";
+pub const HPOS_UPDATES_SVC_VERSION: &str = "0.0.1";
+pub const HPOS_UPDATES_SVC_DESC: &str =
     "This service handles the on-command holo-host-agent updates.";
-
-// Service Endpoint Names:
-pub const HOST_UPDATES_SUBJECT: &str = "update";
 
 // Tag to identify host id
 pub const TAG_MAP_PREFIX_DESIGNATED_HOST: &str = "designated_host";
 
-// Tag to identify the orchestrator prefix
-pub const ORCHESTRATOR_SUBJECT_PREFIX: &str = "orchestrator";
-
 #[async_trait]
-pub trait HostUpdatesServiceApi
+pub trait HposUpdatesServiceApi
 where
     Self: std::fmt::Debug + 'static,
 {
