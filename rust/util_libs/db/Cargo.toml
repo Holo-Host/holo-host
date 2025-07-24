@@ -23,7 +23,6 @@ thiserror = { workspace = true }
 dotenv = { workspace = true }
 mongodb = { workspace = true }
 hpos-hal = { workspace = true }
-hpos-updates = { workspace = true }
 nats_utils = { workspace = true }
 clap = { workspace = true }
 chrono = "0.4.0"

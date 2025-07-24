@@ -6,7 +6,6 @@ use anyhow::Result;
 use bson::{self, doc, oid, DateTime};
 use dotenv::dotenv;
 use hpos_hal::inventory::HoloInventory;
-use hpos_updates::types::HostUpdateRequest;
 use mock_utils::mongodb_runner::MongodRunner;
 
 #[tokio::test]

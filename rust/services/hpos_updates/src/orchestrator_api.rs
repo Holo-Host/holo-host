@@ -25,7 +25,7 @@ pub struct OrchestratorHostUpdatesApi {
 impl HostUpdatesServiceApi for OrchestratorHostUpdatesApi {}
 
 impl OrchestratorHostUpdatesApi {
-    pub async fn new(client: &MongoDBClient) -> HostUpdateApiResult<Self> {
+    pub async fn new(client: &MongoDBClient) -> Result<Self> {
         Ok(Self {
             host_collection: Self::init_collection(client, HOST_COLLECTION_NAME).await?,
             _hoster_collection: Self::init_collection(client, HOSTER_COLLECTION_NAME).await?,
