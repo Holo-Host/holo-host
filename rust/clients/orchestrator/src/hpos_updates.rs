@@ -3,7 +3,7 @@ use anyhow::Result;
 use hpos_updates::{
     orchestrator_api::OrchestratorHostUpdatesApi, types::HostUpdateServiceSubjects,
     HOST_UPDATES_SRV_DESC, HOST_UPDATES_SRV_NAME, HOST_UPDATES_SRV_SUBJ, HOST_UPDATES_SRV_VERSION,
-    HOST_UPDATES_SUBJECT, ORCHESTRATOR_SUBJECT_PREFIX, TAG_MAP_PREFIX_DESIGNATED_HOST,
+    ORCHESTRATOR_SUBJECT_PREFIX, TAG_MAP_PREFIX_DESIGNATED_HOST,
 };
 use mongodb::Client as MongoDBClient;
 use nats_utils::{
@@ -37,7 +37,7 @@ pub async fn run(
         .add_consumer(
             ServiceConsumerBuilder::new(
                 HostUpdateServiceSubjects::Update.as_ref().to_string(), // this sets the subject that will invoke the `handle_host_update` fn
-                HOST_UPDATES_SUBJECT,
+                HOST_UPDATES_SRV_SUBJ,
                 generate_service_call!(host_updates_api, handle_host_update),
             )
             .with_subject_prefix(ORCHESTRATOR_SUBJECT_PREFIX.to_string())
@@ -55,7 +55,7 @@ pub async fn run(
         .add_consumer(
             ServiceConsumerBuilder::new(
                 HostUpdateServiceSubjects::Status.as_ref().to_string(), // this sets the subject that will invoke the `handle_host_update` fn (prefixed by orchestrator)
-                HOST_UPDATES_SUBJECT,
+                HOST_UPDATES_SRV_SUBJ,
                 generate_service_call!(host_updates_api, handle_host_update_response),
             )
             .with_subject_prefix(ORCHESTRATOR_SUBJECT_PREFIX.to_string())
