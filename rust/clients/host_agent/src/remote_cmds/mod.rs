@@ -149,7 +149,7 @@ pub(crate) async fn run(args: RemoteArgs, command: RemoteCommands) -> anyhow::Re
         }
 
         // Manaul remote way to request a given host to update its nixos channel
-        agent_cli::RemoteCommands::HostNixosUpdate { device_id, channel } => {
+        agent_cli::RemoteCommands::HposUpdate { device_id, channel } => {
             let subject = format!(
                 "{}.{}.{}",
                 HPOS_UPDATES_SVC_SUBJ,

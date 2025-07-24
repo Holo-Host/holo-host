@@ -211,7 +211,7 @@ pub enum RemoteCommands {
     },
 
     /// Remotely trigger a NixOS update on a specified host.
-    HostNixosUpdate {
+    HposUpdate {
         #[arg(short, long)]
         device_id: String,
         #[arg(short, long, default_value = "towards-allograph")]
