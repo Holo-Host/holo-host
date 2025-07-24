@@ -2950,7 +2950,6 @@ dependencies = [
  "env_logger",
  "futures",
  "hpos-hal",
- "hpos_updates",
  "inventory",
  "jsonwebtoken",
  "log",

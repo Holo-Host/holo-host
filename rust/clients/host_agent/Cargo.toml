@@ -23,7 +23,6 @@ netdiag = { workspace = true }
 hpos-hal = { workspace = true }
 nats_utils = { workspace = true }
 workload = { workspace = true }
-hpos_updates = { workspace = true }
 inventory = { workspace = true }
 db_utils = { workspace = true }
 url = { version = "2", features = ["serde"] }
