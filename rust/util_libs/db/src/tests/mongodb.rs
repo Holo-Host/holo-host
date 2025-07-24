@@ -1,6 +1,6 @@
 use crate::{
     mongodb::{api::MongoDbAPI, collection::MongoCollection},
-    schemas::{self, metadata::Metadata},
+    schemas::{self, host::HostStatus, metadata::Metadata},
 };
 use anyhow::Result;
 use bson::{self, doc, oid, DateTime};

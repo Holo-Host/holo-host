@@ -117,19 +117,20 @@ async fn daemonize(args: &DaemonzeArgs) -> anyhow::Result<()> {
     let host_id_workload = host_id.clone();
     let host_client_workload = Arc::new(tokio::sync::RwLock::new(host_client.clone()));
     spawn(async move {
-        if let Err(e) =
-            hostd::workload::run(host_client_workload, &host_id_workload, &hub_jetstream_domain).await
+        if let Err(e) = hostd::workload::run(
+            host_client_workload,
+            &host_id_workload,
+            &hub_jetstream_domain,
+        )
+        .await
         {
             log::error!("Error running host agent workload service. Err={:?}", e)
         };
     });
 
-    let hpos_updates_hub_jetstream_domain = args.hub_jetstream_domain.clone();
     let host_client_hpos_updates = Arc::new(tokio::sync::RwLock::new(host_client.clone()));
     spawn(async move {
-        if let Err(e) =
-            hostd::hpos_updates::run(host_client_hpos_updates, &host_id, &hpos_updates_hub_jetstream_domain).await
-        {
+        if let Err(e) = hostd::hpos_updates::run(host_client_hpos_updates, &host_id).await {
             log::error!("Error running hpos updates service. Err={:?}", e)
         };
     });

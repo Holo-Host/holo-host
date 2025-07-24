@@ -210,11 +210,11 @@ pub enum RemoteCommands {
         request: HcHttpGwRequest,
     },
 
-    // /// Remotely trigger a NixOS update on a specified host.
-    // HostNixosUpdate {
-    //     #[arg(short, long)]
-    //     device_id: String,
-    //     #[arg(short, long, default_value = "towards-allograph")]
-    //     channel: String,
-    // },
+    /// Remotely trigger a NixOS update on a specified host.
+    HostNixosUpdate {
+        #[arg(short, long)]
+        device_id: String,
+        #[arg(short, long, default_value = "towards-allograph")]
+        channel: String,
+    },
 }
