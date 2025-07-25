@@ -7,6 +7,7 @@ mod get;
 mod get_owner;
 mod list;
 mod update;
+mod upsert;
 
 pub use count::count;
 pub use create::create;
@@ -18,3 +19,4 @@ pub use get::get;
 pub use get_owner::get_owner;
 pub use list::list;
 pub use update::update;
+pub use upsert::upsert;
