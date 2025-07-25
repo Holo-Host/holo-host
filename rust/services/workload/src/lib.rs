@@ -40,8 +40,6 @@ pub const WORKLOAD_SRV_DESC: &str = "This service handles the flow of Workload r
 // TODO(double-check): this was plural but i believe that's a bug because "assigned_host_0" does not start with "assigned_hosts"
 pub const TAG_MAP_PREFIX_ASSIGNED_HOST: &str = "assigned_host";
 
-pub const WORKLOAD_ORCHESTRATOR_SUBJECT_PREFIX: &str = "orchestrator";
-
 #[async_trait]
 pub trait WorkloadServiceApi
 where

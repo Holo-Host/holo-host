@@ -16,7 +16,9 @@ This client is responsible for:
 
 use std::sync::Arc;
 
-use super::utils::{add_workload_consumer, create_callback_subject_to_host};
+use super::utils::{
+    add_workload_consumer, create_callback_subject_to_host, ORCHESTRATOR_SUBJECT_PREFIX,
+};
 use anyhow::Result;
 use mongodb::Client as MongoDBClient;
 use nats_utils::{
@@ -27,8 +29,8 @@ use nats_utils::{
 use std::time::Duration;
 use workload::{
     orchestrator_api::OrchestratorWorkloadApi, types::WorkloadServiceSubjects,
-    TAG_MAP_PREFIX_ASSIGNED_HOST, WORKLOAD_ORCHESTRATOR_SUBJECT_PREFIX, WORKLOAD_SRV_DESC,
-    WORKLOAD_SRV_NAME, WORKLOAD_SRV_SUBJ, WORKLOAD_SRV_VERSION,
+    TAG_MAP_PREFIX_ASSIGNED_HOST, WORKLOAD_SRV_DESC, WORKLOAD_SRV_NAME, WORKLOAD_SRV_SUBJ,
+    WORKLOAD_SRV_VERSION,
 };
 
 pub async fn run(
@@ -122,7 +124,7 @@ pub async fn run(
             WorkloadServiceSubjects::HandleStatusUpdate,
             generate_service_call!(workload_api, handle_status_update),
         )
-        .with_subject_prefix(WORKLOAD_ORCHESTRATOR_SUBJECT_PREFIX.to_string()),
+        .with_subject_prefix(ORCHESTRATOR_SUBJECT_PREFIX.to_string()),
         &workload_service,
     )
     .await?;

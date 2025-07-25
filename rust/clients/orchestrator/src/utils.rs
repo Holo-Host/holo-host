@@ -7,6 +7,9 @@ use serde::Serialize;
 use std::collections::HashMap;
 use std::sync::Arc;
 
+// Tag to identify the orchestrator prefix
+pub const ORCHESTRATOR_SUBJECT_PREFIX: &str = "orchestrator";
+
 pub async fn add_workload_consumer<S, R>(
     service_builder: ServiceConsumerBuilder<S, R>,
     workload_service: &JsStreamService,

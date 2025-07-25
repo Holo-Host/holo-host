@@ -70,6 +70,7 @@ craneLib.buildPackage (
                 (craneLib.fileset.commonCargoSources ../../rust/util_libs/db)
                 (craneLib.fileset.commonCargoSources ../../rust/hpos-hal)
                 (craneLib.fileset.commonCargoSources ../../rust/services/workload)
+                (craneLib.fileset.commonCargoSources ../../rust/services/hpos_updates)
                 (craneLib.fileset.commonCargoSources ../../rust/services/inventory)
                 (craneLib.fileset.commonCargoSources ../../rust/ham)
                 (craneLib.fileset.commonCargoSources ../../rust/netdiag)

@@ -1,5 +1,6 @@
 mod admin_client;
 mod extern_api;
+mod hpos_updates;
 mod inventory;
 mod utils;
 mod workloads;
@@ -60,6 +61,15 @@ async fn main() -> Result<(), async_nats::Error> {
         log::info!("Starting inventory service...");
         if let Err(e) = inventory::run(admin_inventory_clone, db_inventory_clone).await {
             log::error!("Error running inventory service. Err={:?}", e)
+        };
+    });
+
+    let admin_host_agent_clone = admin_client.clone();
+    let db_host_agent_clone = db_client.clone();
+    spawn(async move {
+        log::info!("Starting host agent service...");
+        if let Err(e) = hpos_updates::run(admin_host_agent_clone, db_host_agent_clone).await {
+            log::error!("Error running host agent service. Err={:?}", e)
         };
     });
 
