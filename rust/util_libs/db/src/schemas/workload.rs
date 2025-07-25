@@ -223,6 +223,10 @@ impl std::fmt::Display for HappBinaryFormat {
     }
 }
 
+<<<<<<< HEAD
+=======
+/// Parse into the `HappBinaryFormat` from the clap cli arg (str)
+>>>>>>> main
 #[cfg(feature = "clap")]
 fn parse_happ_binary(
     s: &str,
@@ -236,6 +240,87 @@ fn parse_happ_binary(
     }
 }
 
+<<<<<<< HEAD
+=======
+#[derive(Serialize, Clone, Debug)]
+#[cfg_attr(feature = "clap", derive(clap::Args))]
+pub struct WorkloadManifestHolochainDhtV1 {
+    #[cfg_attr(feature = "clap", arg(long, value_parser = parse_happ_binary))]
+    pub happ_binary: HappBinaryFormat,
+
+    #[cfg_attr(feature = "clap", arg(long, value_delimiter = ','))]
+    pub network_seed: Option<String>,
+
+    #[cfg_attr(feature = "clap", arg(long, value_delimiter = ',', value_parser = parse_key_val::<String, String>))]
+    pub memproof: Option<HashMap<String, String>>,
+
+    #[cfg_attr(feature = "clap", arg(long, value_delimiter = ','))]
+    pub bootstrap_server_url: Option<Url>,
+
+    #[cfg_attr(feature = "clap", arg(long, value_delimiter = ','))]
+    pub signal_server_url: Option<Url>,
+
+    #[cfg_attr(feature = "clap", arg(long, value_delimiter = ','))]
+    pub stun_server_urls: Option<Vec<Url>>,
+
+    #[cfg_attr(feature = "clap", arg(long, value_delimiter = ','))]
+    pub holochain_feature_flags: Option<Vec<String>>,
+
+    #[cfg_attr(feature = "clap", arg(long, value_delimiter = ','))]
+    pub holochain_version: Option<String>,
+
+    #[cfg_attr(feature = "clap", arg(long))]
+    pub http_gw_enable: bool,
+
+    #[cfg_attr(feature = "clap", arg(long))]
+    pub http_gw_allowed_fns: Option<Vec<String>>,
+}
+
+impl<'de> Deserialize<'de> for WorkloadManifestHolochainDhtV1 {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let mut map: HashMap<String, JsonValue> = Deserialize::deserialize(deserializer)?;
+
+        let happ_binary = if let Some(hb) = map.remove("happ_binary") {
+            serde_json::from_value(hb).map_err(de::Error::custom)?
+        } else if let Some(url) = map.remove("happ_binary_url") {
+            let url: Url = serde_json::from_value(url).map_err(de::Error::custom)?;
+            HappBinaryFormat::HappBinaryUrl(url)
+        } else if let Some(hash) = map.remove("happ_binary_hash") {
+            let hash: String = serde_json::from_value(hash).map_err(de::Error::custom)?;
+            HappBinaryFormat::HappBinaryBlake3Hash(hash)
+        } else {
+            return Err(de::Error::missing_field(
+                "happ_binary, happ_binary_url, or happ_binary_hash",
+            ));
+        };
+
+        macro_rules! pop_field {
+            ($field:literal, $ty:ty) => {
+                map.remove($field)
+                    .map(|v| serde_json::from_value::<$ty>(v).map_err(de::Error::custom))
+                    .transpose()?
+            };
+        }
+
+        Ok(WorkloadManifestHolochainDhtV1 {
+            happ_binary,
+            network_seed: pop_field!("network_seed", String),
+            memproof: pop_field!("memproof", HashMap<String, String>),
+            bootstrap_server_url: pop_field!("bootstrap_server_url", Url),
+            signal_server_url: pop_field!("signal_server_url", Url),
+            stun_server_urls: pop_field!("stun_server_urls", Vec<Url>),
+            holochain_feature_flags: pop_field!("holochain_feature_flags", Vec<String>),
+            holochain_version: pop_field!("holochain_version", String),
+            http_gw_enable: pop_field!("http_gw_enable", bool).unwrap_or(false),
+            http_gw_allowed_fns: pop_field!("http_gw_allowed_fns", Vec<String>),
+        })
+    }
+}
+
+>>>>>>> main
 /// Parse a single key-value pair
 fn parse_key_val<T, U>(
     s: &str,
