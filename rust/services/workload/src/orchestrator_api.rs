@@ -307,7 +307,7 @@ impl OrchestratorWorkloadApi {
         match workload.status.actual {
             WorkloadState::Reported => {
                 log::debug!("Detected new workload to assign. Workload={:#?}", workload);
-                self.handle_workload_assignment(workload, WorkloadState::Assigned)
+                self.handle_workload_assignment(workload)
                     .await
             }
             WorkloadState::Updated => {
@@ -348,7 +348,6 @@ impl OrchestratorWorkloadApi {
     async fn handle_workload_assignment(
         &self,
         workload: Workload,
-        target_state: WorkloadState,
     ) -> Result<WorkloadApiResult, ServiceError> {
         log::info!("Orchestrator::handle_workload_assignment");
 
@@ -363,7 +362,7 @@ impl OrchestratorWorkloadApi {
         );
 
         // Assign workload to hosts and create response
-        self.assign_workload_and_create_response(workload, min_eligible_hosts, target_state)
+        self.assign_workload_and_create_response(workload, min_eligible_hosts)
             .await
     }
 
@@ -375,7 +374,7 @@ impl OrchestratorWorkloadApi {
 
         // Fetch current hosts and remove workload from them
         self.remove_workload_from_hosts(workload._id).await?;
-        self.handle_workload_assignment(workload, WorkloadState::Updated)
+        self.handle_workload_assignment(workload)
             .await
     }
 
@@ -609,7 +608,6 @@ impl OrchestratorWorkloadApi {
         &self,
         workload: Workload,
         min_eligible_hosts: Vec<HostIdJSON>,
-        target_state: WorkloadState,
     ) -> Result<WorkloadApiResult, ServiceError> {
         // Assign workload to minimum required number of eligible hosts
         let min_eligible_host_ids: Vec<ObjectId> =
@@ -622,7 +620,7 @@ impl OrchestratorWorkloadApi {
         let new_status = WorkloadStatus {
             id: Some(workload._id),
             desired: WorkloadState::Running,
-            actual: target_state,
+            actual: WorkloadState::Assigned,
             payload: Default::default(),
         };
 
