@@ -574,7 +574,7 @@ impl OrchestratorWorkloadApi {
                 .filter_map(|h| h._id)
                 .collect();
 
-            if error_count == 5 {
+            if error_count >= 5 {
                 let unassigned_host_hashset: HashSet<ObjectId> =
                     unassigned_host_ids.into_iter().collect();
                 let assigned_host_ids: Vec<ObjectId> = hosts_to_assign
@@ -815,6 +815,8 @@ impl OrchestratorWorkloadApi {
 
                     // Store the resume token for potential recovery
                     last_resume_token = Some(change_event.id);
+                    // Reset error count after successful api result
+                    error_count = 0;
                 }
                 Err(e) => {
                     log::error!("Error in workload change stream: {}", e);
