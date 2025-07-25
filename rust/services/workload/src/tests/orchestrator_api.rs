@@ -245,7 +245,7 @@ mod tests {
 
         // Update workload status
         workload.status.desired = WorkloadState::Running;
-        workload.status.min_hosts = 2;
+        workload.min_hosts = 2;
         workload.status.actual = WorkloadState::Updated;
 
         let msg_payload = serde_json::to_vec(&workload).unwrap();
