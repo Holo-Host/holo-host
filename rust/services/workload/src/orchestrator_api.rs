@@ -3,7 +3,7 @@ Current Endpoints & Managed Subjects:
     - `add_workload`: handles the "WORKLOAD.add" subject
     - `update_workload`: handles the "WORKLOAD.update" subject
     - `delete_workload`: handles the "WORKLOAD.delete" subject
-    - `manage_workload_on_host`: handles the "WORKLOAD.insert" subject
+    - `manage_workload_on_host`: handles the "WORKLOAD.insert" subject (e: a manual update of the workload)
     - `handle_status_update`: handles the "WORKLOAD.handle_status_update" subject // published by hosting agent
 */
 
@@ -292,7 +292,12 @@ impl OrchestratorWorkloadApi {
             .workload_collection
             .get_one_from(doc! { "_id": workload._id })
             .await
-            .unwrap_or_default();
+            .map_err(|e| {
+                ServiceError::internal(
+                    e.to_string(),
+                    Some("Error: Failed to update workload.  Reason: Unable to find workload in database.".to_string()),
+                )
+            })?;
 
         match workload.status.desired {
             WorkloadState::Running | WorkloadState::Deleted | WorkloadState::Uninstalled => {
@@ -315,7 +320,10 @@ impl OrchestratorWorkloadApi {
         match workload.status.actual {
             WorkloadState::Reported => {
                 log::debug!("Detected new workload to assign. Workload={:#?}", workload);
-                self.handle_workload_assignment(workload, 0).await
+                // No additional hosts to add for a new workload
+                let num_additional_hosts_to_add = 0;
+                self.handle_workload_assignment(workload, num_additional_hosts_to_add)
+                    .await
             }
             WorkloadState::Updated => {
                 log::trace!(
@@ -426,7 +434,8 @@ impl OrchestratorWorkloadApi {
         } else {
             // Fetch current hosts and remove workload from them
             self.remove_workload_from_hosts(workload._id).await?;
-            self.handle_workload_assignment(workload, 0).await
+            self.handle_workload_assignment(workload, num_hosts_to_add)
+                .await
         }
     }
 
