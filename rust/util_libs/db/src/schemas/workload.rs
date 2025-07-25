@@ -137,6 +137,20 @@ impl std::fmt::Display for HappBinaryFormat {
     }
 }
 
+/// Parse into the `HappBinaryFormat` from the clap cli arg (str)
+#[cfg(feature = "clap")]
+fn parse_happ_binary(
+    s: &str,
+) -> Result<HappBinaryFormat, Box<dyn std::error::Error + Send + Sync + 'static>> {
+    if s.starts_with("http://") || s.starts_with("https://") {
+        let url = Url::parse(s)?;
+        Ok(HappBinaryFormat::HappBinaryUrl(url))
+    } else {
+        // assume (for now) that it's a blake3 hash if it's not a valid Url
+        Ok(HappBinaryFormat::HappBinaryBlake3Hash(s.to_string()))
+    }
+}
+
 #[derive(Serialize, Clone, Debug)]
 #[cfg_attr(feature = "clap", derive(clap::Args))]
 pub struct WorkloadManifestHolochainDhtV1 {
@@ -183,8 +197,13 @@ impl<'de> Deserialize<'de> for WorkloadManifestHolochainDhtV1 {
         } else if let Some(url) = map.remove("happ_binary_url") {
             let url: Url = serde_json::from_value(url).map_err(de::Error::custom)?;
             HappBinaryFormat::HappBinaryUrl(url)
+        } else if let Some(hash) = map.remove("happ_binary_hash") {
+            let hash: String = serde_json::from_value(hash).map_err(de::Error::custom)?;
+            HappBinaryFormat::HappBinaryBlake3Hash(hash)
         } else {
-            return Err(de::Error::missing_field("happ_binary or happ_binary_url"));
+            return Err(de::Error::missing_field(
+                "happ_binary, happ_binary_url, or happ_binary_hash",
+            ));
         };
 
         macro_rules! pop_field {
@@ -207,20 +226,6 @@ impl<'de> Deserialize<'de> for WorkloadManifestHolochainDhtV1 {
             http_gw_enable: pop_field!("http_gw_enable", bool).unwrap_or(false),
             http_gw_allowed_fns: pop_field!("http_gw_allowed_fns", Vec<String>),
         })
-    }
-}
-
-/// Parse into the `HappBinaryFormat` from the clap cli arg (str)
-#[cfg(feature = "clap")]
-fn parse_happ_binary(
-    s: &str,
-) -> Result<HappBinaryFormat, Box<dyn std::error::Error + Send + Sync + 'static>> {
-    if s.starts_with("http://") || s.starts_with("https://") {
-        let url = Url::parse(s)?;
-        Ok(HappBinaryFormat::HappBinaryUrl(url))
-    } else {
-        // assume (for now) that it's a blake3 hash if it's not a valid Url
-        Ok(HappBinaryFormat::HappBinaryBlake3Hash(s.to_string()))
     }
 }
 
