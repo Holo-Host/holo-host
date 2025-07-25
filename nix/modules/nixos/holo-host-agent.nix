@@ -119,6 +119,25 @@ in
       iproute2
     ];
 
+    # Generate the supported holochain versions config file
+    environment.etc."${cfg.supportedHolochainVersionsPath}".text = ''
+{
+  "default_version": "0.5",
+  "supported_versions": [
+    "0.3",
+    "0.4",
+    "0.5",
+    "latest"
+  ],
+  "version_mappings": {
+    "0.3": "holonix_0_3",
+    "0.4": "holonix_0_4",
+    "0.5": "holonix_0_5",
+    "latest": "holonix_0_5"
+  }
+}
+'';
+
     systemd.services.holo-host-agent = {
       enable = true;
 
