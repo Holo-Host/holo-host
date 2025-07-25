@@ -97,6 +97,12 @@ in
       description = "Input flag to determine whether to use private networking. When true, containers are isolated with port forwarding. When false, containers share the host network with dynamic port allocation to avoid conflicts.";
     };
 
+    supportedHolochainVersionsPath = lib.mkOption {
+      type = lib.types.str;
+      default = "./supported-holochain-versions.json";
+      description = "Path to the supported Holochain versions config file.";
+    };
+
   };
 
   config = lib.mkIf cfg.enable {
@@ -135,6 +141,7 @@ in
           NATS_LISTEN_PORT = builtins.toString cfg.nats.listenPort;
           NIX_REMOTE = "daemon";
           IS_CONTAINER_ON_PRIVATE_NETWORK = builtins.toString cfg.containerPrivateNetwork;
+          HOLOCHAIN_VERSION_CONFIG_PATH = cfg.supportedHolochainVersionsPath;
         }
         // lib.attrsets.optionalAttrs (cfg.nats.url != null) {
           NATS_URL = cfg.nats.url;
