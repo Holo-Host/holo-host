@@ -65,7 +65,7 @@ pub struct WorkloadStatus {
 }
 
 /// Resource capacity requirements for a workload
-#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
 pub struct Capacity {
     /// Required drive space in GiB
     pub drive: i64,
@@ -82,6 +82,14 @@ pub struct SystemSpecs {
     pub avg_network_speed: i64,
     /// Required uptime as a decimal between 0-1
     pub avg_uptime: f64,
+}
+
+impl PartialEq for SystemSpecs {
+    fn eq(&self, other: &Self) -> bool {
+        self.capacity == other.capacity
+            && self.avg_network_speed == other.avg_network_speed
+            && (self.avg_uptime - other.avg_uptime).abs() < 1e-9
+    }
 }
 
 /// Workload document schema representing a deployable application
@@ -106,7 +114,7 @@ pub struct Workload {
     pub manifest: WorkloadManifest, // (Includes information about everthing needed to deploy workload - ie: binary & env pkg & deps, etc)
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum WorkloadManifest {
     None,
     ExtraContainerPath { extra_container_path: String },
@@ -122,36 +130,7 @@ pub enum WorkloadStatePayload {
     HolochainDhtV1(Bson),
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub enum HappBinaryFormat {
-    HappBinaryUrl(Url),
-    HappBinaryBlake3Hash(String),
-}
-
-impl std::fmt::Display for HappBinaryFormat {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            HappBinaryFormat::HappBinaryUrl(url) => write!(f, "URL: {}", url),
-            HappBinaryFormat::HappBinaryBlake3Hash(hash) => write!(f, "Blake3Hash: {}", hash),
-        }
-    }
-}
-
-/// Parse into the `HappBinaryFormat` from the clap cli arg (str)
-#[cfg(feature = "clap")]
-fn parse_happ_binary(
-    s: &str,
-) -> Result<HappBinaryFormat, Box<dyn std::error::Error + Send + Sync + 'static>> {
-    if s.starts_with("http://") || s.starts_with("https://") {
-        let url = Url::parse(s)?;
-        Ok(HappBinaryFormat::HappBinaryUrl(url))
-    } else {
-        // assume (for now) that it's a blake3 hash if it's not a valid Url
-        Ok(HappBinaryFormat::HappBinaryBlake3Hash(s.to_string()))
-    }
-}
-
-#[derive(Serialize, Clone, Debug)]
+#[derive(Serialize, Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "clap", derive(clap::Args))]
 pub struct WorkloadManifestHolochainDhtV1 {
     #[cfg_attr(feature = "clap", arg(long, value_parser = parse_happ_binary))]
@@ -226,6 +205,34 @@ impl<'de> Deserialize<'de> for WorkloadManifestHolochainDhtV1 {
             http_gw_enable: pop_field!("http_gw_enable", bool).unwrap_or(false),
             http_gw_allowed_fns: pop_field!("http_gw_allowed_fns", Vec<String>),
         })
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+pub enum HappBinaryFormat {
+    HappBinaryUrl(Url),
+    HappBinaryBlake3Hash(String),
+}
+
+impl std::fmt::Display for HappBinaryFormat {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            HappBinaryFormat::HappBinaryUrl(url) => write!(f, "URL: {}", url),
+            HappBinaryFormat::HappBinaryBlake3Hash(hash) => write!(f, "Blake3Hash: {}", hash),
+        }
+    }
+}
+
+#[cfg(feature = "clap")]
+fn parse_happ_binary(
+    s: &str,
+) -> Result<HappBinaryFormat, Box<dyn std::error::Error + Send + Sync + 'static>> {
+    if s.starts_with("http://") || s.starts_with("https://") {
+        let url = Url::parse(s)?;
+        Ok(HappBinaryFormat::HappBinaryUrl(url))
+    } else {
+        // assume (for now) that it's a blake3 hash if it's not a valid Url
+        Ok(HappBinaryFormat::HappBinaryBlake3Hash(s.to_string()))
     }
 }
 
