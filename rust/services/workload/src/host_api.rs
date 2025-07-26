@@ -884,8 +884,9 @@ mod util {
                     "passing the these overrides to holochain: '{override_attrs_stringified}'"
                 );
 
-                let flake_url = std::env::var("HOLO_HOST_FLAKE_URL")
-                    .unwrap_or_else(|_| "github:holo-host/holo-host/db-streaming".to_string());
+                let flake_url = std::env::var("HOLO_HOST_FLAKE_URL").unwrap_or_else(|_| {
+                    "github:holo-host/holo-host/workload-schema-null-value".to_string()
+                });
 
                 let nix_build_args = [
                     "--refresh",
