@@ -239,9 +239,14 @@ mod tests {
             .workload_collection
             .insert_one_into(workload.clone())
             .await?;
+
+        // Add workload id to workload
         workload._id = workload_id;
+
+        // Update workload status
         workload.status.desired = WorkloadState::Running;
-        workload.status.actual = WorkloadState::Reported;
+        workload.min_hosts = 2;
+        workload.status.actual = WorkloadState::Updated;
 
         let msg_payload = serde_json::to_vec(&workload).unwrap();
         let msg = Arc::new(NatsMessage::new("WORKLOAD.insert", msg_payload).into_message());
