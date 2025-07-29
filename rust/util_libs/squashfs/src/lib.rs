@@ -1,27 +1,42 @@
 use backhand::{FilesystemReader, FilesystemWriter, InnerNode, NodeHeader};
-use std::{fs::File, io::Read};
+use std::{fs, path::Path, io::Read};
+
+fn list_files_recursively(path: &Path) -> Vec<String> {
+    let mut files = Vec::new();
+    if let Ok(entries) = fs::read_dir(path) {
+        for entry in entries {
+            if let Ok(entry) = entry {
+                let path = entry.path();
+                if path.is_dir() {
+                    files.extend(list_files_recursively(&path));
+                } else {
+                    files.push(path.to_string_lossy().to_string());
+                }
+            }
+        }
+    }
+    files
+}
 
 /// create squashfs archive using files
-pub fn create_archive(
-    output_path: String,
-    files: Vec<String>,
-    root_dir: String,
-) -> Result<(), std::io::Error> {
+pub fn create_archive(source_dir: String, output_path: String) -> Result<(), std::io::Error> {
+    let files = list_files_recursively(Path::new(&source_dir));
+
     let header = NodeHeader::default();
     let mut writer = FilesystemWriter::default();
     for file in files {
-        let reader = File::open(file.clone())?;
-        let file_path = file.replace(&root_dir, "");
+        let reader = fs::File::open(file.clone())?;
+        let file_path = file.replace(&source_dir, "");
         writer.push_file(reader, file_path, header)?;
     }
-    let mut output = File::create(output_path)?;
+    let mut output = fs::File::create(output_path)?;
     writer.write(&mut output)?;
     Ok(())
 }
 
 pub fn list_files(squashfs_path: String) -> Result<Vec<String>, std::io::Error> {
     let mut files = Vec::new();
-    let reader = File::open(squashfs_path)?;
+    let reader = fs::File::open(squashfs_path)?;
     let buf_reader = std::io::BufReader::new(reader);
     let reader = FilesystemReader::from_reader(buf_reader)?;
     for node in reader.files() {
@@ -34,7 +49,7 @@ pub fn read_file(
     squashfs_path: String,
     file_path: String,
 ) -> Result<Option<Vec<u8>>, std::io::Error> {
-    let mut file = File::open(squashfs_path)?;
+    let mut file = fs::File::open(squashfs_path)?;
     let buf_reader = std::io::BufReader::new(&mut file);
     let reader = FilesystemReader::from_reader(buf_reader)?;
 
