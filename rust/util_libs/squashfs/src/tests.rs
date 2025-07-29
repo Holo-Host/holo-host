@@ -32,8 +32,9 @@ fn test_squashfs() {
     let listed_files = list_files(output_path.clone()).expect("Failed to list files");
 
     // Ensure that the files are listed correctly
-    assert!(listed_files.contains(&file1_path.replace(&directory, "")));
-    assert!(listed_files.contains(&file2_path.replace(&directory, "")));
+    for file in files.clone() {
+        assert!(listed_files.contains(&file.replace(&directory, "")));
+    }
 
     // Read file from the archive
     let file_path = file1_path.replace(&directory, "");
