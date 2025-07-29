@@ -1,4 +1,4 @@
-use actix_web::{get, web, HttpRequest, HttpResponse, Responder};
+use actix_web::{post, web, HttpRequest, HttpResponse, Responder};
 use bson::doc;
 use db_utils::schemas::api_key::{ApiKey, API_KEY_COLLECTION_NAME};
 use utoipa::OpenApi;
@@ -17,7 +17,7 @@ use crate::providers::{
 pub struct OpenApiSpec;
 
 #[utoipa::path(
-    get,
+    post,
     path = "/public/v1/auth/login-with-apikey",
     tag = "Auth",
     summary = "Login with API key",
@@ -29,7 +29,7 @@ pub struct OpenApiSpec;
         (status = 200, body = AuthLoginResponse)
     )
 )]
-#[get("/v1/auth/login-with-apikey")]
+#[post("/v1/auth/login-with-apikey")]
 pub async fn login_with_apikey(
     req: HttpRequest,
     config: web::Data<AppConfig>,
@@ -99,6 +99,12 @@ pub async fn login_with_apikey(
         });
     }
     let result = result.unwrap();
+    if result.expire_at < bson::DateTime::now().to_chrono().timestamp() {
+        return HttpResponse::Unauthorized().json(ErrorResponse {
+            message: "missing or invalid 'api-key'".to_string(),
+        });
+    }
+
     let user_id = result.owner.to_string();
     let version = auth::get_refresh_token_version(db.get_ref().clone(), user_id.clone()).await;
     let permissions = result.permissions.clone();
@@ -109,6 +115,7 @@ pub async fn login_with_apikey(
             permissions: permissions.clone(),
             exp: bson::DateTime::now().to_chrono().timestamp() as usize
                 + config.access_token_expiry.unwrap_or(300) as usize,
+            initials: None,
         },
         refresh_token: RefreshTokenClaims {
             version,

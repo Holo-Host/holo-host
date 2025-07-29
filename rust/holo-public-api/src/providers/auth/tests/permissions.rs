@@ -22,6 +22,7 @@ mod tests {
                         owner: "user_id".to_string(),
                     }],
                     exp: 0, // not used
+                    initials: None,
                 },
                 user_permissions::UserPermission {
                     resource: "resource".to_string(),
@@ -39,6 +40,7 @@ mod tests {
                         owner: "user_id".to_string(),
                     }],
                     exp: 0, // not used
+                    initials: None,
                 },
                 user_permissions::UserPermission {
                     resource: "resource".to_string(),
@@ -60,6 +62,7 @@ mod tests {
                     owner: "self".to_string(),
                 }],
                 exp: 0, // not used
+                initials: None,
             },
             user_permissions::UserPermission {
                 resource: "resource".to_string(),
@@ -77,6 +80,7 @@ mod tests {
                     owner: "user_id2".to_string(),
                 }],
                 exp: 0, // not used
+                initials: None,
             },
             user_permissions::UserPermission {
                 resource: "resource".to_string(),
@@ -94,6 +98,7 @@ mod tests {
                     owner: "all".to_string(),
                 }],
                 exp: 0, // not used
+                initials: None,
             },
             user_permissions::UserPermission {
                 resource: "resource".to_string(),
@@ -114,6 +119,7 @@ mod tests {
                     owner: "user_id".to_string(),
                 }],
                 exp: 0, // not used
+                initials: None,
             },
             user_permissions::UserPermission {
                 resource: "resource".to_string(),
@@ -131,6 +137,7 @@ mod tests {
                     owner: "user_id".to_string(),
                 }],
                 exp: 0, // not used
+                initials: None,
             },
             user_permissions::UserPermission {
                 resource: "resource".to_string(),
@@ -151,6 +158,7 @@ mod tests {
                     owner: "user_id".to_string(),
                 }],
                 exp: 0, // not used
+                initials: None,
             },
             user_permissions::UserPermission {
                 resource: "other_resource".to_string(),
@@ -171,6 +179,7 @@ mod tests {
                     owner: "user_id".to_string(),
                 }],
                 exp: 0, // not used
+                initials: None,
             },
             user_permissions::UserPermission {
                 resource: "resource".to_string(),
@@ -191,6 +200,7 @@ mod tests {
                     owner: "user_id".to_string(),
                 }],
                 exp: 0, // not used
+                initials: None,
             },
             user_permissions::UserPermission {
                 resource: "resource".to_string(),

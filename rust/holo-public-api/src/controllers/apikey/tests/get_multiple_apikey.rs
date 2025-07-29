@@ -59,6 +59,7 @@ mod tests {
                         owner: "self".to_string(),
                     }],
                     exp: (bson::DateTime::now().to_chrono().timestamp() + 60) as usize,
+                    initials: None,
                 }),
                 cache: Some(utils::get_cache(config.clone()).await),
                 db: Some(db.clone()),
