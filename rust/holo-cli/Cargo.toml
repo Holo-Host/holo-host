@@ -1,0 +1,13 @@
+[package]
+name = "holo-cli"
+description = ""
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+clap = { version = "4.0", features = ["derive"] }
+squashfs = { path = "../util_libs/squashfs" }
+
+[[bin]]
+name = "holo"
+path = "src/main.rs"
