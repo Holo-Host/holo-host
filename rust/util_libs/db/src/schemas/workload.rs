@@ -59,3 +59,16 @@ pub struct Workload {
     /// HTTP gateway allowed functions
     pub http_gw_allowed_fns: Option<Vec<String>>,
 }
+
+impl IntoIndexes for Workload {
+    fn into_indices(self) -> anyhow::Result<Vec<(Document, Option<IndexOptions>)>> {
+        let indices = vec![];
+        Ok(indices)
+    }
+}
+
+impl MutMetadata for Workload {
+    fn mut_metadata(&mut self) -> &mut Metadata {
+        &mut self.metadata
+    }
+}
