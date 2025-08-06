@@ -10,6 +10,7 @@ members = [
   "rust/clients/orchestrator",
   "rust/services/inventory",
   "rust/services/workload",
+  "rust/services/hpos_updates",
   "rust/util_libs/nats",
   "rust/util_libs/db",
   "rust/util_libs/mocks",
@@ -50,6 +51,7 @@ nats_utils = { path = "rust/util_libs/nats" }
 db_utils = { path = "rust/util_libs/db" }
 orchestrator = { path = "rust/clients/orchestrator" }
 host_agent = { path = "rust/clients/host_agent" }
+hpos_updates = { path = "rust/services/hpos_updates" }
 inventory = { path = "rust/services/inventory" }
 workload = { path = "rust/services/workload" }
 ham = { path = "rust/ham" }
