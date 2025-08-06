@@ -202,12 +202,26 @@ in {
       group = "nats-server";
     };
 
+<<<<<<< HEAD
     # Create necessary directories
     system.activationScripts.holo-nats-server-dirs = ''
       ${lib.optionalString cfg.enableJwt "mkdir -p ${cfg.nsc.path}"}
       mkdir -p ${cfg.workingDirectory}
       chown -R nats-server:nats-server ${cfg.workingDirectory}
       chmod -R 700 ${cfg.workingDirectory}
+=======
+        settings = {
+          host = lib.mkDefault cfg.host;
+          port = lib.mkDefault cfg.port;
+          leafnodes.port = lib.mkDefault cfg.leafnodePort;
+          max_payload = 3145728; # 3MiB in bytes
+          jetstream = {
+            domain = lib.mkDefault cfg.jetstream.domain;
+            enabled = lib.mkDefault cfg.jetstream.enabled;
+          };
+          websocket = {
+            inherit (cfg.websocket) port;
+>>>>>>> main
 
       # Ensure resolver config exists
       if [ ! -f "${cfg.workingDirectory}/${cfg.nsc.resolverFileName}" ]; then

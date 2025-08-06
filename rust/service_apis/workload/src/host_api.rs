@@ -885,7 +885,7 @@ mod util {
                 );
 
                 let flake_url = std::env::var("HOLO_HOST_FLAKE_URL")
-                    .unwrap_or_else(|_| "github:holo-host/holo-host/db-streaming".to_string());
+                    .unwrap_or_else(|_| "github:holo-host/holo-host/main".to_string());
 
                 let nix_build_args = [
                     "--refresh",

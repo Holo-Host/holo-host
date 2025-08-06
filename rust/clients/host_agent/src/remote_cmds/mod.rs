@@ -4,16 +4,16 @@ pub mod types;
 use crate::remote_cmds::types::{RemoteArgs, RemoteCommands};
 use errors::{RemoteError, RemoteResult};
 
-use nats_utils::types::PublishInfo;
-use nats_utils::{jetstream_client::JsClient, types::JsClientBuilder};
 use db_utils::schemas::workload::{
     Workload, WorkloadManifest, WorkloadState, WorkloadStateDiscriminants, WorkloadStatus,
 };
+use nats_utils::types::PublishInfo;
+use nats_utils::{jetstream_client::JsClient, types::JsClientBuilder};
 use workload::types::{WorkloadResult, WorkloadServiceSubjects};
 
 use futures::StreamExt;
-use std::sync::Arc;
 use std::str::FromStr;
+use std::sync::Arc;
 
 pub(crate) async fn run(args: RemoteArgs, command: RemoteCommands) -> RemoteResult<()> {
     let nats_client = {

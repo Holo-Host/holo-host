@@ -3,7 +3,7 @@ Current Endpoints & Managed Subjects:
     - `add_workload`: handles the "WORKLOAD.add" subject
     - `update_workload`: handles the "WORKLOAD.update" subject
     - `delete_workload`: handles the "WORKLOAD.delete" subject
-    - `manage_workload_on_host`: handles the "WORKLOAD.insert" subject
+    - `manage_workload_on_host`: handles the "WORKLOAD.insert" subject (e: a manual update of the workload)
     - `handle_status_update`: handles the "WORKLOAD.handle_status_update" subject // published by hosting agent
 */
 
@@ -34,7 +34,7 @@ use futures::StreamExt;
 use hpos_hal::inventory::HoloInventory;
 use mongodb::{
     bson::Timestamp,
-    options::{FullDocumentType, UpdateModifications},
+    options::{FullDocumentBeforeChangeType, FullDocumentType, UpdateModifications},
     Client as MongoDBClient,
 };
 use nats_utils::types::GetHeaderMap;
@@ -288,9 +288,21 @@ impl OrchestratorWorkloadApi {
         log::debug!("Incoming message for 'WORKLOAD.insert'");
         let workload = Self::convert_msg_to_type::<Workload>(msg)?;
 
+        let workload_before_change = self
+            .workload_collection
+            .get_one_from(doc! { "_id": workload._id })
+            .await
+            .map_err(|e| {
+                ServiceError::internal(
+                    e.to_string(),
+                    Some("Error: Failed to update workload.  Reason: Unable to find workload in database.".to_string()),
+                )
+            })?;
+
         match workload.status.desired {
             WorkloadState::Running | WorkloadState::Deleted | WorkloadState::Uninstalled => {
-                self.handle_workload_change_event(workload).await
+                self.handle_workload_change_event(workload, workload_before_change)
+                    .await
             }
             _ => Err(ServiceError::internal(
                 "Received invalid desired state for host update.".to_string(),
@@ -302,12 +314,15 @@ impl OrchestratorWorkloadApi {
     async fn handle_workload_change_event(
         &self,
         workload: Workload,
+        workload_before_change: Option<Workload>,
     ) -> Result<WorkloadApiResult, ServiceError> {
         // Match on state and handle each case
         match workload.status.actual {
             WorkloadState::Reported => {
                 log::debug!("Detected new workload to assign. Workload={:#?}", workload);
-                self.handle_workload_assignment(workload, WorkloadState::Assigned)
+                // No additional hosts to add for a new workload
+                let num_additional_hosts_to_add = 0;
+                self.handle_workload_assignment(workload, num_additional_hosts_to_add)
                     .await
             }
             WorkloadState::Updated => {
@@ -315,7 +330,8 @@ impl OrchestratorWorkloadApi {
                     "Detected workload updated to handle. Workload={:#?}",
                     workload
                 );
-                self.handle_workload_update(workload).await
+                self.handle_workload_update(workload, workload_before_change)
+                    .await
             }
             WorkloadState::Deleted => {
                 log::trace!(
@@ -348,13 +364,13 @@ impl OrchestratorWorkloadApi {
     async fn handle_workload_assignment(
         &self,
         workload: Workload,
-        target_state: WorkloadState,
+        num_hosts_to_add: i32,
     ) -> Result<WorkloadApiResult, ServiceError> {
         log::info!("Orchestrator::handle_workload_assignment");
 
         // Find minimum number of eligible hosts for the new workload
         let min_eligible_hosts = self
-            .get_min_random_hosts_for_workload(workload.clone())
+            .get_min_random_hosts_for_workload(workload.clone(), num_hosts_to_add)
             .await?;
 
         log::debug!(
@@ -363,20 +379,64 @@ impl OrchestratorWorkloadApi {
         );
 
         // Assign workload to hosts and create response
-        self.assign_workload_and_create_response(workload, min_eligible_hosts, target_state)
+        self.assign_workload_and_create_response(workload, min_eligible_hosts)
             .await
     }
 
     async fn handle_workload_update(
         &self,
         workload: Workload,
+        workload_before_change: Option<Workload>,
     ) -> Result<WorkloadApiResult, ServiceError> {
         log::info!("Orchestrator::handle_workload_update");
 
-        // Fetch current hosts and remove workload from them
-        self.remove_workload_from_hosts(workload._id).await?;
-        self.handle_workload_assignment(workload, WorkloadState::Updated)
-            .await
+        let mut num_hosts_to_add = 0;
+
+        if let Some(workload_before_change) = workload_before_change {
+            log::trace!(
+                "Full document before change is available. workload_before_change={:?}",
+                workload_before_change
+            );
+
+            if workload.manifest == workload_before_change.manifest
+                && workload.system_specs == workload_before_change.system_specs
+            {
+                log::info!(
+                    "Neither the Workload manifest nor the system specs have changed. Skipping reassignment and any update of the workload in hosts. workload={:?}, workload_before_change={:?}",
+                    workload, workload_before_change
+                );
+
+                return Ok(WorkloadApiResult {
+                    result: WorkloadResult::Status(WorkloadStatus {
+                        actual: WorkloadState::Running,
+                        ..workload.status
+                    }),
+                    maybe_response_tags: None,
+                    maybe_headers: None,
+                });
+            }
+
+            if workload.min_hosts > workload_before_change.min_hosts {
+                log::info!(
+                    "The workload min_hosts has increased. Adding hosts. current_min_hosts={:?}, prior_min_hosts={:?}",
+                    workload.min_hosts, workload_before_change.min_hosts
+                );
+                num_hosts_to_add = workload.min_hosts - workload_before_change.min_hosts;
+            }
+        };
+
+        // IMP: We are not handling the host removal case here - ie: whenever the workload min_hosts has decreased.
+        // TODO: Discuss with team how we want to handle the removal case
+        // Should the hosts chosen for removal be randomized, or should we rely on host capacity or other criteria?
+        if num_hosts_to_add > 0 {
+            self.handle_workload_assignment(workload, num_hosts_to_add)
+                .await
+        } else {
+            // Fetch current hosts and remove workload from them
+            self.remove_workload_from_hosts(workload._id).await?;
+            self.handle_workload_assignment(workload, num_hosts_to_add)
+                .await
+        }
     }
 
     // TODO: Only delete/unpair hosts from workload collection upon receiving uninsalled confirmation back frlm hos
@@ -466,8 +526,13 @@ impl OrchestratorWorkloadApi {
     async fn get_min_random_hosts_for_workload(
         &self,
         workload: Workload,
+        num_hosts_to_add: i32,
     ) -> Result<Vec<HostIdJSON>, ServiceError> {
-        let needed_host_count = workload.min_hosts;
+        let needed_host_count = if num_hosts_to_add > 0 {
+            num_hosts_to_add
+        } else {
+            workload.min_hosts
+        };
 
         let pipeline = vec![
             doc! {
@@ -574,7 +639,7 @@ impl OrchestratorWorkloadApi {
                 .filter_map(|h| h._id)
                 .collect();
 
-            if error_count == 5 {
+            if error_count >= 5 {
                 let unassigned_host_hashset: HashSet<ObjectId> =
                     unassigned_host_ids.into_iter().collect();
                 let assigned_host_ids: Vec<ObjectId> = hosts_to_assign
@@ -609,7 +674,6 @@ impl OrchestratorWorkloadApi {
         &self,
         workload: Workload,
         min_eligible_hosts: Vec<HostIdJSON>,
-        target_state: WorkloadState,
     ) -> Result<WorkloadApiResult, ServiceError> {
         // Assign workload to minimum required number of eligible hosts
         let min_eligible_host_ids: Vec<ObjectId> =
@@ -622,7 +686,7 @@ impl OrchestratorWorkloadApi {
         let new_status = WorkloadStatus {
             id: Some(workload._id),
             desired: WorkloadState::Running,
-            actual: target_state,
+            actual: WorkloadState::Assigned,
             payload: Default::default(),
         };
 
@@ -754,6 +818,7 @@ impl OrchestratorWorkloadApi {
         let mut change_stream = collection
             .watch()
             .full_document(FullDocumentType::UpdateLookup)
+            .full_document_before_change(FullDocumentBeforeChangeType::WhenAvailable)
             .start_at_operation_time(Timestamp {
                 time: now,
                 increment: 0,
@@ -788,7 +853,11 @@ impl OrchestratorWorkloadApi {
                     let api_result = match change_event.operation_type {
                         mongodb::change_stream::event::OperationType::Insert
                         | mongodb::change_stream::event::OperationType::Update => {
-                            self.handle_workload_change_event(workload).await
+                            self.handle_workload_change_event(
+                                workload,
+                                change_event.full_document_before_change,
+                            )
+                            .await
                         }
                         _ => continue,
                     };
@@ -803,12 +872,17 @@ impl OrchestratorWorkloadApi {
                                 api_result,
                             )
                             .await;
+
+                            // Reset error count after successful api result
+                            error_count = 0;
                         }
                         Err(e) => {
                             log::error!(
                                 "Error handling workload {:?}: {e:?}",
                                 change_event.operation_type
                             );
+
+                            // Increment error count after failed api result
                             error_count += 1;
                         }
                     }
