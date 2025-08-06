@@ -1,9 +1,7 @@
 pub mod alias;
 pub mod api_key;
 pub mod api_log;
-pub mod developer;
 pub mod host;
-pub mod hoster;
 pub mod jurisdiction;
 pub mod metadata;
 pub mod public_service;

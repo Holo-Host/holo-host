@@ -16,6 +16,10 @@ pub struct Host {
     /// MongoDB ObjectId of the host document
     #[serde(skip_serializing_if = "Option::is_none")]
     pub _id: Option<ObjectId>,
+    /// the user that owns this resource (host)
+    /// Reference to the user that owns this host
+    pub owner: ObjectId,
+
     /// Common metadata fields
     pub metadata: Metadata,
     /// Unique identifier for the device
@@ -30,8 +34,6 @@ pub struct Host {
     pub avg_latency: i64,
     /// IP address of the host
     pub ip_address: Option<String>,
-    /// Reference to the user that owns this host
-    pub assigned_hoster: Option<ObjectId>,
     /// List of workloads running on this host
     pub assigned_workloads: Vec<ObjectId>,
 }
