@@ -2,6 +2,8 @@ use std::collections::HashMap;
 use bson::oid::ObjectId;
 use super::metadata::Metadata;
 
+pub const WORKLOAD_COLLECTION_NAME: &str = "workload";
+
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum ExecutionPolicyVisibility {
