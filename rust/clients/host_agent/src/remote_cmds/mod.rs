@@ -55,7 +55,7 @@ pub(crate) async fn run(args: RemoteArgs, command: RemoteCommands) -> anyhow::Re
             };
 
             let workload = Workload {
-                _id: Some(id),
+                _id: id,
                 status,
                 manifest: WorkloadManifest::HolochainDhtV1(manifest),
 
@@ -73,10 +73,7 @@ pub(crate) async fn run(args: RemoteArgs, command: RemoteCommands) -> anyhow::Re
             let payload = if workload_only {
                 serde_json::to_string_pretty(&workload)
             } else {
-                serde_json::to_string_pretty(&WorkloadResult {
-                    status: workload.status.clone(),
-                    workload: Some(workload),
-                })
+                serde_json::to_string_pretty(&WorkloadResult::Workload(workload))
             }
             .context("serializing workload payload")?;
 
@@ -88,8 +85,8 @@ pub(crate) async fn run(args: RemoteArgs, command: RemoteCommands) -> anyhow::Re
                 format!(
                     "WORKLOAD.{host_id}.{}",
                     match state_discriminant {
-                        Installed | Running => WorkloadServiceSubjects::Command,
-                        Uninstalled | Deleted | Removed => WorkloadServiceSubjects::Command,
+                        Running => WorkloadServiceSubjects::Command,
+                        Uninstalled | Deleted => WorkloadServiceSubjects::Command,
                         Updated => WorkloadServiceSubjects::Command,
                         Reported => WorkloadServiceSubjects::Command,
                         unsupported => anyhow::bail!("don't know where to send {unsupported:?}"),

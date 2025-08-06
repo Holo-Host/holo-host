@@ -14,6 +14,9 @@ use std::fs::OpenOptions;
 use std::io;
 use std::io::Read;
 use std::path::Path;
+// Using fork/exec unnecessarily will make the inventory collection too expensive to run as often
+// as we are going to need to. It is almost never necessary.
+use std::process::Command;
 use std::{fs, fs::File};
 use thiserror::Error;
 use thiserror_context::{impl_context, Context};
@@ -74,6 +77,8 @@ pub struct HoloInventory {
     /// Information about CPUs present. All CPUs are generally the same in the x86_64 case, but may
     /// be different on other architectures, such as aarch64.
     pub cpus: Vec<HoloProcessorInventory>,
+    /// Inventory of memory DIMM devices
+    pub mem: Vec<HoloMemoryInventory>,
     /// An inventory of USB devices specifically. May overlap with other sections (eg, USB storage
     /// devices).
     pub usb: Vec<HoloUsbInventory>,
@@ -130,6 +135,10 @@ pub struct HoloSystemInventory {
     pub kernel_version: String,
     /// OpenSSH Host public keys.
     pub ssh_host_keys: Vec<SSHPubKey>,
+    /// Distribution release string
+    pub distribution_release: String,
+    /// Package manager version/release string
+    pub package_mgr_release: String,
 }
 
 /// A data structure representing an OpenSSH public key. When stored, each key is a single line of
@@ -511,9 +520,12 @@ impl HoloInventory {
                 machine_id: systemd_machine_id(),
                 kernel_version: linux_kernel_build(),
                 ssh_host_keys: ssh_host_keys(),
+                distribution_release: get_distro_release(),
+                package_mgr_release: get_package_mgr_release(),
             },
             drives: HoloDriveInventory::from_host(),
             cpus: HoloProcessorInventory::from_host(),
+            mem: HoloMemoryInventory::from_host(),
             nics: HoloNicInventory::from_host(),
             usb: HoloUsbInventory::from_host(),
             platform: None,
@@ -797,6 +809,48 @@ impl HoloProcessorInventory {
     }
 }
 
+/// A struct representing a memory object
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Default, Clone)]
+pub struct HoloMemoryInventory {
+    pub size: u64,
+    pub form_factor: String,
+    pub memory_type: String,
+    pub memory_speed: u16,
+}
+
+impl HoloMemoryInventory {
+    const SMBIOS_MEMORY_PATH_GLOB: &str = "/sys/firmware/dmi/entries/17-*/raw";
+
+    pub fn from_host() -> Vec<HoloMemoryInventory> {
+        let mut ret: Vec<HoloMemoryInventory> = vec![];
+
+        info!("Checking memory glob: {}", Self::SMBIOS_MEMORY_PATH_GLOB);
+
+        match glob(Self::SMBIOS_MEMORY_PATH_GLOB) {
+            Ok(mem_devs) => {
+                for mem_dev in mem_devs {
+                    debug!("Mem dev: {:?}", mem_dev);
+                    match mem_dev {
+                        Ok(mem) => {
+                            let Ok(res) = sysfs::parse_mem_file(mem.to_string_lossy().as_ref())
+                            else {
+                                continue;
+                            };
+                            ret.push(res);
+                        }
+                        Err(e) => {
+                            info!("Failed to parse mem dev: {}", e);
+                        }
+                    }
+                }
+            }
+            Err(e) => info!("Memory glob failed with: {}", e),
+        }
+
+        ret
+    }
+}
+
 /// This is the glob patch to match all OpenSSH host _public_ keys. We never touch the private key.
 const SSHD_HOST_KEY_GLOB: &str = "/etc/ssh/ssh_host_*_key.pub";
 
@@ -825,7 +879,7 @@ fn ssh_host_keys() -> Vec<SSHPubKey> {
 }
 
 /// Path to machine-id file, as specified in the FreeDesktop standards.
-const MACHINE_ID_PATH: &str = "/etc/machine-id";
+pub const MACHINE_ID_PATH: &str = "/etc/machine-id";
 
 fn systemd_machine_id() -> String {
     match fs::read_to_string(MACHINE_ID_PATH).and_then(|content| {
@@ -859,4 +913,68 @@ fn linux_kernel_build() -> String {
     };
 
     ret
+}
+
+const NIXOS_VERSION_WRAPPER: &str = "/run/current-system/sw/bin/nixos-version";
+/// Get operating system distribution release string
+fn get_distro_release() -> String {
+    // See if we're running on NixOS and handle that case.
+    if Path::new(NIXOS_VERSION_WRAPPER).exists() {
+        // This is utterly heinous. Unlike any LSB-compliant Linux distribution, where we can
+        // simply read a file to get the version string, NixOS makes us fork/exec symlinks to
+        // wrapper scripts to shell scripts that have the release string hard-coded in them. The
+        // inventory is supposed to be lightweight and we go to reasonable lengths to avoid this
+        // collection just being a shell script written in Rust. Calling fork/exec like this is
+        // only ever done as a last resort.
+        let output = Command::new(NIXOS_VERSION_WRAPPER).output();
+        match output {
+            Ok(output) => match output.status.success() {
+                true => {
+                    return String::from_utf8_lossy(&output.stdout)
+                        .strip_suffix("\n")
+                        .unwrap_or_default()
+                        .to_string()
+                }
+                false => return "Unknown NixOS release".to_string(),
+            },
+            Err(e) => {
+                info!("Failed to execute nixos-version: {}", e);
+                return "Unknown NixOS release".to_string();
+            }
+        }
+    }
+
+    // We'll add support for other distributions later for the sake of completeness. But this will
+    // suffice for now.
+    "Undetected".to_string()
+}
+
+const NIX_VERSION_WRAPPER: &str = "/run/current-system/sw/bin/nix";
+/// Get primary package manager release string.
+fn get_package_mgr_release() -> String {
+    // See if we're running on NixOS and handle that case.
+    if Path::new(NIX_VERSION_WRAPPER).exists() {
+        // See above comment around the heinous nature of having to fork/exec wrappers to retrieve
+        // a version string.
+        let output = Command::new(NIX_VERSION_WRAPPER).arg("--version").output();
+        match output {
+            Ok(output) => match output.status.success() {
+                true => {
+                    return String::from_utf8_lossy(&output.stdout)
+                        .strip_suffix("\n")
+                        .unwrap_or_default()
+                        .to_string()
+                }
+                false => return "Unknown Nix release".to_string(),
+            },
+            Err(e) => {
+                info!("Failed to execute nix --version: {}", e);
+                return "Unknown Nix release".to_string();
+            }
+        }
+    }
+
+    // We'll add support for other distributions later for the sake of completeness. But this will
+    // suffice for now.
+    "Undetected".to_string()
 }

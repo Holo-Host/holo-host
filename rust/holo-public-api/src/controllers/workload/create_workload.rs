@@ -3,7 +3,7 @@ use bson::oid::ObjectId;
 use db_utils::schemas::{
     self,
     developer::DEVELOPER_COLLECTION_NAME,
-    workload::{WorkloadManifestHolochainDhtV1, WORKLOAD_COLLECTION_NAME},
+    workload::{HappBinaryFormat, WorkloadManifestHolochainDhtV1, WORKLOAD_COLLECTION_NAME},
 };
 use url::Url;
 use utoipa::OpenApi;
@@ -97,7 +97,7 @@ pub async fn create_workload(
         db.as_ref().clone(),
         WORKLOAD_COLLECTION_NAME.to_string(),
         schemas::workload::Workload {
-            _id: None,
+            _id: ObjectId::new(),
             metadata: schemas::metadata::Metadata::default(),
             assigned_developer: developer._id.unwrap(),
             assigned_hosts: vec![],
@@ -119,7 +119,9 @@ pub async fn create_workload(
             },
             manifest: schemas::workload::WorkloadManifest::HolochainDhtV1(Box::new(
                 WorkloadManifestHolochainDhtV1 {
-                    happ_binary_url: payload.template.blake3_hash.clone(),
+                    happ_binary: HappBinaryFormat::HappBinaryBlake3Hash(
+                        payload.template.blake3_hash.clone(),
+                    ),
                     stun_server_urls: payload.template.stun_server_urls.map(|urls| {
                         urls.iter()
                             .map(|url| Url::parse(url).unwrap())

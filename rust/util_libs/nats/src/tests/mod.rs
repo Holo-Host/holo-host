@@ -5,7 +5,7 @@ pub mod jetstream_service;
 #[cfg(feature = "tests_integration_nats")]
 pub mod leaf_server;
 
-use crate::types::{CreateResponse, CreateTag, EndpointTraits};
+use crate::types::{EndpointTraits, GetHeaderMap, GetResponse, GetSubjectTags};
 use mock_utils::service_test_response::TestResponse;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -14,15 +14,21 @@ use std::collections::HashMap;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LocalTestResponse(pub TestResponse);
 
-impl CreateTag for LocalTestResponse {
-    fn get_tags(&self) -> HashMap<String, String> {
+impl GetSubjectTags for LocalTestResponse {
+    fn get_subject_tags(&self) -> HashMap<String, String> {
         HashMap::new()
     }
 }
 
-impl CreateResponse for LocalTestResponse {
+impl GetResponse for LocalTestResponse {
     fn get_response(&self) -> bytes::Bytes {
         serde_json::to_vec(&self.0).unwrap().into()
+    }
+}
+
+impl GetHeaderMap for LocalTestResponse {
+    fn get_header_map(&self) -> Option<async_nats::HeaderMap> {
+        None
     }
 }
 

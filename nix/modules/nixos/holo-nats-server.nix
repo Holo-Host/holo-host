@@ -33,6 +33,19 @@ in
       default = 7422;
     };
 
+    jetstream = {
+      domain = lib.mkOption {
+        description = "jetstream domain name";
+        type = lib.types.str;
+        default = "holo";
+      };
+      enabled = lib.mkOption {
+        description = "enable jetstream in nats server";
+        type = lib.types.bool;
+        default = true;
+      };
+    };
+
     websocket = {
       port = lib.mkOption {
         description = "websocket listen port";
@@ -90,6 +103,11 @@ in
           host = lib.mkDefault cfg.host;
           port = lib.mkDefault cfg.port;
           leafnodes.port = lib.mkDefault cfg.leafnodePort;
+          max_payload = 3145728; # 3MiB in bytes
+          jetstream = {
+            domain = lib.mkDefault cfg.jetstream.domain;
+            enabled = lib.mkDefault cfg.jetstream.enabled;
+          };
           websocket = {
             inherit (cfg.websocket) port;
 
