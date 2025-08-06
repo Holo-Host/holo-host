@@ -885,7 +885,7 @@ mod util {
                 );
 
                 let flake_url = std::env::var("HOLO_HOST_FLAKE_URL").unwrap_or_else(|_| {
-                    "github:holo-host/holo-host/workload-schema-null-value".to_string()
+                    "github:holo-host/holo-host/main".to_string()
                 });
 
                 let nix_build_args = [
