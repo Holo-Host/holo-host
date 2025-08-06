@@ -41,4 +41,6 @@ mock_utils = { workspace = true }
 ctor = "0.2"
 
 [features]
+default = ["clap"]
+clap = []
 tests_integration_mongodb = []

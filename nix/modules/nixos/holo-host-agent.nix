@@ -97,6 +97,12 @@ in
       description = "Input flag to determine whether to use private networking. When true, containers are isolated with port forwarding. When false, containers share the host network with dynamic port allocation to avoid conflicts.";
     };
 
+    supportedHolochainVersionsPath = lib.mkOption {
+      type = lib.types.str;
+      default = "./supported-holochain-versions.json";
+      description = "Path to the supported Holochain versions config file.";
+    };
+
   };
 
   config = lib.mkIf cfg.enable {
@@ -112,6 +118,25 @@ in
       netcat-gnu
       iproute2
     ];
+
+    # Generate the supported holochain versions config file
+    environment.etc."${cfg.supportedHolochainVersionsPath}".text = ''
+{
+  "default_version": "0.5",
+  "supported_versions": [
+    "0.3",
+    "0.4",
+    "0.5",
+    "latest"
+  ],
+  "version_mappings": {
+    "0.3": "holonix_0_3",
+    "0.4": "holonix_0_4",
+    "0.5": "holonix_0_5",
+    "latest": "holonix_0_5"
+  }
+}
+'';
 
     systemd.services.holo-host-agent = {
       enable = true;
@@ -135,6 +160,7 @@ in
           NATS_LISTEN_PORT = builtins.toString cfg.nats.listenPort;
           NIX_REMOTE = "daemon";
           IS_CONTAINER_ON_PRIVATE_NETWORK = builtins.toString cfg.containerPrivateNetwork;
+          HOLOCHAIN_VERSION_CONFIG_PATH = cfg.supportedHolochainVersionsPath;
         }
         // lib.attrsets.optionalAttrs (cfg.nats.url != null) {
           NATS_URL = cfg.nats.url;
