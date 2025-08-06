@@ -216,9 +216,13 @@ impl<'de> Deserialize<'de> for WorkloadManifestHolochainDhtV1 {
 
         macro_rules! pop_field {
             ($field:literal, $ty:ty) => {
-                map.remove($field)
-                    .map(|v| serde_json::from_value::<$ty>(v).map_err(de::Error::custom))
-                    .transpose()?
+                map.remove($field).and_then(|v| {
+                    if v.is_null() {
+                        None
+                    } else {
+                        serde_json::from_value::<$ty>(v).ok()
+                    }
+                })
             };
         }
 
