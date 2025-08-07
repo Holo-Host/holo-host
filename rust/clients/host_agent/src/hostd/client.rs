@@ -16,10 +16,8 @@ use nats_utils::{
 };
 use std::time::Duration;
 
-use crate::local_cmds::host::errors::{HostAgentError, HostAgentResult};
-use crate::local_cmds::host::types::agent_client::{
-    HostClient, HostClientConfig, TypeSpecificArgs,
-};
+use crate::local_cmds::host::errors::HostAgentResult;
+use crate::local_cmds::host::types::agent_client::{ClientType, HostClient, HostClientConfig};
 use async_trait::async_trait;
 
 const HOST_AGENT_CLIENT_NAME: &str = "Host Agent";
@@ -35,14 +33,7 @@ impl HostClient for HostAgentClient {
     type Output = Self;
 
     async fn start(config: &HostClientConfig) -> HostAgentResult<Self::Output> {
-        let client_args = match &config.type_args {
-            TypeSpecificArgs::HostAgent(host_args) => host_args,
-            _ => {
-                return Err(HostAgentError::validation(
-                    "Invalid client type for host agent client",
-                ))
-            }
-        };
+        let ClientType::HostAgent(client_args) = &config.type_args;
 
         let nats_url = &client_args.nats_url;
         let device_id_lowercase = config.device_id.to_lowercase();

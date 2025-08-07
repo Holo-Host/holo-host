@@ -1,7 +1,7 @@
 use crate::local_cmds::support::errors::SupportError;
 use crate::remote_cmds::errors::RemoteError;
 use async_nats::client::DrainError;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 /// Main application error type that handles all possible errors
@@ -186,10 +186,10 @@ impl HostAgentError {
     }
 
     // File operation errors with context
-    pub fn file_operation_failed(operation: &str, path: &PathBuf, reason: &str) -> Self {
+    pub fn file_operation_failed(operation: &str, path: &Path, reason: &str) -> Self {
         Self::FileOperation {
             operation: operation.to_string(),
-            path: path.clone(),
+            path: path.to_path_buf(),
             reason: reason.to_string(),
         }
     }
