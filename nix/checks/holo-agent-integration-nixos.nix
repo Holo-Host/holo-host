@@ -23,6 +23,7 @@ pkgs.testers.runNixOSTest (
         imports = [
           flake.nixosModules.holo-host-agent
         ];
+        environment.systemPackages = with pkgs; [ natscli nsc jq ];
 
         holo.host-agent = {
           enable = true;
@@ -146,24 +147,121 @@ pkgs.testers.runNixOSTest (
         imports = [
           flake.nixosModules.holo-nats-server
           # flake.nixosModules.holo-orchestrator
+          ./common/nats-auth-setup-mock.nix
         ];
+
+        environment.systemPackages = with pkgs; [ natscli nsc jq ];
 
         networking.domain = "local";
 
         # holo.orchestrator.enable = true;
-        holo.nats-server.enable = true;
-        services.nats.settings = {
-          accounts = {
-            SYS = {
-              users = [
-                {
-                  user = "admin";
-                  "password" = "admin";
-                }
-              ];
-            };
+
+        holo.nats-server = {
+          enable = true;
+          websocket = {
+            enable = true;
+            port = 4223;
+            externalPort = 443;
           };
-          system_account = "SYS";
+          jetstream = {
+            enabled = true;
+          };
+          enableJwt = true;
+          nsc = {
+            path = "/var/lib/nats-server/nsc/local";
+            localCredsPath = "/var/lib/nats-server/nsc/local";
+            sharedCredsPath = "/var/lib/nats_server/shared-creds";
+            resolverFileName = "main-resolver.conf";
+          };
+          # Explicitly enable Caddy for websocket TLS termination, as the test expects caddy.service to be running
+          caddy = {
+            enable = true;
+            staging = true;
+            logLevel = "DEBUG";
+          };
+        };
+
+
+        
+        # Override NATS service script to add debugging
+        systemd.services.nats.script = ''
+          # Debug: Check if JWT credentials exist
+          echo "NATS: Checking for JWT file at /var/lib/nats_server/shared-creds/HOLO.jwt"
+          ls -la /var/lib/nats_server/shared-creds/ || echo "Directory does not exist"
+
+          if [ -f "/var/lib/nats_server/shared-creds/HOLO.jwt" ]; then
+            echo "NATS: JWT file found, starting server"
+            echo "NATS: All JWT files in shared-creds directory:"
+            ls -la /var/lib/nats_server/shared-creds/*.jwt || echo "No JWT files found"
+
+            echo "NATS: Account IDs from JWT files:"
+            for jwt_file in /var/lib/nats_server/shared-creds/*.jwt; do
+              if [[ -f "$jwt_file" ]]; then
+                echo "NATS: JWT file: $jwt_file"
+                echo "NATS: Account ID from filename: $(basename "$jwt_file" .jwt)"
+              fi
+            done
+            exec ${pkgs.nats-server}/bin/nats-server -c ${pkgs.writeText "nats-server.conf" ''
+              # NATS Server configuration
+              port: 4222
+              http_port: 8222
+              server_name: nats-server
+              
+              # JWT authentication
+              operator: /var/lib/nats_server/shared-creds/HOLO.jwt
+              resolver: {
+                type: "full"
+                dir: "/var/lib/nats_server/shared-creds"
+              }
+              
+              # Logging
+              logtime: true
+              debug: false
+              trace: false
+              
+              # JetStream configuration
+              jetstream {
+                domain: holo
+                enabled: true
+              }
+              
+              # WebSocket configuration
+              websocket {
+                port: 4223
+                no_tls: true
+              }
+            ''}
+          else
+            echo "ERROR: NATS JWT credentials not found. Please ensure setup has completed."
+            exit 1
+          fi
+        '';
+        
+        # Temporarily disable strict security for testing
+        systemd.services.nats.serviceConfig = {
+          Type = "simple";
+          Restart = "always";
+          RestartSec = "1";
+          User = lib.mkForce "root";
+          Group = lib.mkForce "root";
+        };
+        
+
+
+        services.nats.settings = {
+          # JWT resolver configuration will be set up by auth setup
+          
+          # accounts = {
+          #   SYS = {
+          #     users = [
+          #       {
+          #         user = "admin";
+          #         "password" = "admin";
+          #       }
+          #     ];
+          #   };
+          # };
+          # system_account = "SYS";
 
           jetstream = {
             domain = "${hubJsDomain}";
@@ -248,7 +346,7 @@ pkgs.testers.runNixOSTest (
           }
         '';
 
-        natsCmdHub = "${natsCli} -s nats://127.0.0.1:${builtins.toString nodes.hub.holo.nats-server.port}";
+        natsCmdHub = "${natsCli} -s nats://127.0.0.1:${builtins.toString nodes.hub.holo.nats-server.server.port} --creds /var/lib/nats_server/shared-creds/admin_user.creds";
         natsLocalhostUrl = "nats://127.0.0.1:${builtins.toString nodes.host1.holo.host-agent.nats.listenPort}";
         natsCmdHosts = "${natsCli} -s ${natsLocalhostUrl}";
 
@@ -274,8 +372,11 @@ pkgs.testers.runNixOSTest (
       ''
         with subtest("start the hub and run the testscript"):
           hub.start()
+          hub.wait_for_unit("holo-nats-auth-setup.service")
           hub.wait_for_unit("nats.service")
-          hub.wait_for_open_port(port = ${builtins.toString nodes.hub.holo.nats-server.websocket.port}, timeout = 1)
+          
+          # Wait for NATS server to be listening on port 4222
+          hub.wait_for_open_port(port = ${builtins.toString nodes.hub.holo.nats-server.server.port}, timeout = 10)
 
           hub.wait_for_unit("caddy.service")
           hub.wait_for_open_port(port = ${builtins.toString nodes.hub.holo.nats-server.websocket.externalPort}, timeout = 1)

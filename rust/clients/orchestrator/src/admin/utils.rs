@@ -1,11 +1,11 @@
 use anyhow::Result;
-use std::sync::Arc;
-use std::collections::HashMap;
 use nats_utils::{
     jetstream_service::JsStreamService,
     types::{EndpointTraits, ResponseSubjectsGenerator, ServiceConsumerBuilder},
 };
 use serde::Serialize;
+use std::collections::HashMap;
+use std::sync::Arc;
 
 // TODO(decide): either create a service that handles these or refactor error handling altogether
 pub const WORKLOAD_ERROR_INBOX_SUBJECT: &str = "WORKLOAD.ERROR.INBOX";
@@ -42,7 +42,6 @@ pub fn create_callback_subject_to_host(
             .collect()
     })
 }
-
 
 pub async fn add_workload_consumer<S, R>(
     service_builder: ServiceConsumerBuilder<S, R>,

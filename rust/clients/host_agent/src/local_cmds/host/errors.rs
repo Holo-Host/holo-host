@@ -16,6 +16,10 @@ pub enum HostAgentError {
     #[error("Configuration validation failed: {reason}")]
     Validation { reason: String },
 
+    // Authentication errors with detailed context
+    #[error("Authentication failed for device {device_id}: {reason}")]
+    Authentication { device_id: String, reason: String },
+
     #[error("Credential validation failed: {details}")]
     CredentialValidation { details: String },
 
@@ -139,6 +143,21 @@ impl HostAgentError {
     pub fn config(message: &str) -> Self {
         Self::Config {
             message: message.to_string(),
+        }
+    }
+
+    // Authentication errors with context
+    pub fn auth_failed(device_id: &str, reason: &str) -> Self {
+        Self::Authentication {
+            device_id: device_id.to_string(),
+            reason: reason.to_string(),
+        }
+    }
+
+    pub fn auth_failed_simple(reason: &str) -> Self {
+        Self::Authentication {
+            device_id: "unknown".to_string(),
+            reason: reason.to_string(),
         }
     }
 
@@ -288,6 +307,10 @@ impl HostAgentError {
             Self::Validation { reason } => Self::Validation {
                 reason: format!("{}: {}", context, reason),
             },
+            Self::Authentication { device_id, reason } => Self::Authentication {
+                device_id,
+                reason: format!("{}: {}", context, reason),
+            },
             _ => self,
         }
     }
@@ -302,6 +325,24 @@ impl HostAgentError {
                 | Self::Timeout { .. }
                 | Self::Io { .. }
         )
+    }
+}
+
+// Conversion to authentication crate's AuthError for signature operations
+impl From<HostAgentError> for authentication::types::AuthError {
+    fn from(err: HostAgentError) -> Self {
+        match err {
+            HostAgentError::Authentication { reason, .. } => {
+                authentication::types::AuthError::auth_failed(&reason)
+            }
+            HostAgentError::Config { message } => {
+                authentication::types::AuthError::config_error(&message)
+            }
+            HostAgentError::Crypto { source, .. } => {
+                authentication::types::AuthError::signature_failed(&source.to_string())
+            }
+            _ => authentication::types::AuthError::signature_failed(&err.to_string()),
+        }
     }
 }
 
@@ -379,6 +420,23 @@ impl From<async_nats::SubscribeError> for HostAgentError {
             endpoint: "NATS subscription".to_string(),
             reason: err.to_string(),
         })
+    }
+}
+
+impl From<async_nats::RequestError> for HostAgentError {
+    fn from(err: async_nats::RequestError) -> Self {
+        match err.kind() {
+            async_nats::RequestErrorKind::TimedOut => {
+                Self::timeout("authentication request", Duration::from_secs(30))
+            }
+            _ => Self::auth_failed_simple(&format!("Authentication request failed: {}", err)),
+        }
+    }
+}
+
+impl From<async_nats::PublishError> for HostAgentError {
+    fn from(err: async_nats::PublishError) -> Self {
+        Self::auth_failed_simple(&format!("Failed to publish message: {}", err))
     }
 }
 

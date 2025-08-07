@@ -67,6 +67,9 @@ in
                 (craneLib.fileset.commonCargoSources ../../rust/hpos-hal)
                 (craneLib.fileset.commonCargoSources ../../rust/service_apis/workload)
                 (craneLib.fileset.commonCargoSources ../../rust/service_apis/inventory)
+                (craneLib.fileset.commonCargoSources ../../rust/service_apis/authentication)
+                (craneLib.fileset.commonCargoSources ../../rust/util_libs/nsc_client)
+                (craneLib.fileset.commonCargoSources ../../rust/util_libs/nsc_proxy_server)
                 (craneLib.fileset.commonCargoSources ../../rust/ham)
                 (craneLib.fileset.commonCargoSources ../../rust/netdiag)
               ]
@@ -156,6 +159,24 @@ in
               pname = "holo-gateway";
               cargoExtraArgs = "-p holo-gateway";
               cargoArtifacts = mkCargoArtifacts src;
+            }
+          );
+
+        nsc_proxy_server =
+          let
+            src = fileSetForCrate [
+              (craneLib.fileset.commonCargoSources ../../rust/util_libs/nsc_proxy_server)
+            ];
+          in
+          craneLib.buildPackage (
+            individualCrateArgs
+            // {
+              inherit src;
+
+              pname = "nsc_proxy_server";
+              cargoExtraArgs = "-p nsc_proxy_server";
+              cargoArtifacts = mkCargoArtifacts src;
+              meta.mainProgram = "nsc_proxy_server";
             }
           );
       };

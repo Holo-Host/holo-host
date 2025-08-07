@@ -6,6 +6,7 @@ use std::sync::Arc;
 use tokio::sync::{broadcast, RwLock};
 use tokio::task::JoinSet;
 
+use crate::auth::keys::Keys;
 use crate::hostd::client::HostAgentClient;
 use crate::local_cmds::host::errors::{HostAgentError, HostAgentResult};
 use crate::local_cmds::host::types::agent_cli::DaemonzeArgs;
@@ -17,6 +18,7 @@ use nats_utils::types::DeServerAddr;
 
 pub async fn run(
     device_id: &str,
+    host_agent_keys: &Keys,
     nats_url: &DeServerAddr,
     args: &DaemonzeArgs,
     mut shutdown_rx: broadcast::Receiver<()>,
@@ -26,6 +28,7 @@ pub async fn run(
     // Create Host Client Config and start main Host Agent Client
     let host_client_config = HostClientConfig::new(
         device_id,
+        host_agent_keys.clone(),
         ClientType::HostAgent(HostDArgs {
             nats_url: nats_url.clone(),
         }),
@@ -107,6 +110,7 @@ pub async fn run(
     log::info!("Hostd client stopped");
     let host_agent_client = HostAgentClient {
         client: hostd_client,
+        _creds_path: host_client_config.nats_creds_path,
     };
     host_agent_client.stop().await?;
 

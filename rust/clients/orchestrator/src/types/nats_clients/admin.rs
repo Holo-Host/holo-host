@@ -1,8 +1,9 @@
 use anyhow::Result;
 use nats_utils::{
     jetstream_client::{get_event_listeners, with_event_listeners, JsClient},
-    types::JsClientBuilder,
+    types::{Credentials, JsClientBuilder},
 };
+use std::path::PathBuf;
 use std::time::Duration;
 use std::vec;
 
@@ -14,6 +15,7 @@ const ORCHESTRATOR_ADMIN_CLIENT_INBOX_PREFIX: &str = "_ADMIN_INBOX.orchestrator"
 
 pub struct AdminClient {
     pub client: nats_utils::jetstream_client::JsClient,
+    _creds_path: PathBuf,
 }
 
 impl OrchestratorClient for AdminClient {
@@ -21,6 +23,10 @@ impl OrchestratorClient for AdminClient {
 
     async fn start(config: &OrchestratorConfig) -> Result<Self, OrchestratorError> {
         log::info!("Starting orchestrator admin client...");
+        log::info!("admin_creds_path : {:?}", config.admin_creds_path);
+        let creds_path = config.admin_creds_path.clone();
+        let credentials = Some(creds_path.clone()).map(|p| vec![Credentials::Path(p)]);
+        // .filter(|c| !c.is_empty());
 
         let nats_url = config.nats_remote_args.nats_url.clone();
         log::info!("admin nats_url : {nats_url:?}");
@@ -29,7 +35,7 @@ impl OrchestratorClient for AdminClient {
             nats_remote_args: config.nats_remote_args.clone(),
             name: ORCHESTRATOR_ADMIN_CLIENT_NAME.to_string(),
             inbox_prefix: ORCHESTRATOR_ADMIN_CLIENT_INBOX_PREFIX.to_string(),
-            credentials: Default::default(),
+            credentials,
             request_timeout: Some(Duration::from_secs(29)),
             ping_interval: Some(Duration::from_secs(10)),
             listeners: vec![with_event_listeners(get_event_listeners())],
@@ -40,6 +46,7 @@ impl OrchestratorClient for AdminClient {
         log::debug!("Orchestrator admin client is ready");
         Ok(Self {
             client: admin_client,
+            _creds_path: creds_path,
         })
     }
 

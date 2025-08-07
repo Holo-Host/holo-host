@@ -99,7 +99,7 @@
 
           # holo.orchestrator.enable = true;
           holo.nats-server.enable = true;
-          holo.nats-server.host = "0.0.0.0";
+          holo.nats-server.server.host = "0.0.0.0";
           services.nats.settings = {
             # TODO: re-enable this and replicate the same account structure on the host-agent side.
             accounts = {
@@ -257,10 +257,13 @@
           holo.orchestrator = {
             enable = true;
             logLevel = "trace";
-            nats.hub.url = "wss://dev-hub:${builtins.toString config.containers.dev-hub.config.holo.nats-server.websocket.externalPort}";
-            nats.hub.tlsInsecure = true;
-            nats.hub.user = "orchestrator";
-            nats.hub.passwordFile = builtins.toFile "nats.pw" "yooveihuQuai4ziphiel4F";
+            package = flake.packages.${pkgs.system}.rust-workspace.individual.orchestrator;
+            nats.server.url = "wss://dev-hub:${builtins.toString config.containers.dev-hub.config.holo.nats-server.websocket.externalPort}";
+            nats.server.tlsInsecure = true;
+            nats.server.user = "orchestrator";
+            nats.server.passwordFile = builtins.toFile "nats.pw" "yooveihuQuai4ziphiel4F";
+            nats.nsc_proxy.authKeyFile = builtins.toFile "nsc-proxy-auth.key" "test-nsc-proxy-auth-key";
+            nats.nsc.credsPath = "/var/lib/holo-orchestrator/nats-creds";
             mongo = {
               passwordFile = builtins.toFile "mongodb.password" "test";
               clusterIdFile = builtins.toFile "mongodb.clusterId" "test";

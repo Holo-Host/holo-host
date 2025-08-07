@@ -1,4 +1,5 @@
 pub mod admin;
+pub mod auth;
 
 use crate::{errors::OrchestratorError, types::config::OrchestratorConfig};
 

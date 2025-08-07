@@ -72,7 +72,7 @@ pub async fn run(
     admin_client
         .close()
         .await
-        .map_err(|e| OrchestratorError::Shutdown(format!("Failed to drain admin client: {}", e)))?;
+        .map_err(|e| OrchestratorError::Shutdown(format!("Failed to drain auth client: {}", e)))?;
 
     Ok(())
 }

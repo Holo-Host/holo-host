@@ -2,7 +2,7 @@ pub mod errors;
 pub mod types;
 pub(crate) mod utils;
 
-use crate::hostd;
+use crate::{auth, hostd};
 use errors::{HostAgentError, HostAgentResult};
 use types::{
     self as agent_cli_types,
@@ -49,13 +49,46 @@ pub async fn init_host_d(args: &DaemonzeArgs) -> HostAgentResult<()> {
         ));
     }
 
-    // TODO: Run agent auth
+    // Load host agent keys
+    let mut host_agent_keys = auth::keys::Keys::try_from_storage(
+        &args.nats_leafnode_client_creds_path,
+        &args.nats_leafnode_client_sys_creds_path,
+    )
+    .or_else(|storage_err| {
+        log::warn!("Failed to load keys from storage: {}", storage_err);
+        log::info!("Attempting to create new keys...");
+        auth::keys::Keys::new()
+    })?;
+
+    // Determine host keys type and attempt to authenticate host & hoster
+    // if the user cred file is set to the auth_guard user
+    if let auth::keys::AuthCredType::Guard(_) = host_agent_keys.creds {
+        log::info!(
+            "Starting authentication validation loop for device: {}",
+            device_id
+        );
+        // This loop will run the authentication handshake with the orchestrator auth service.
+        // If successful, it will store the newly auth'd keys and exit out of the loop.
+        // If unsuccessful, it will reattempt authentication every 24hrs (up to 5 times)
+        // and report the unauth'd inventory call, allowing time for the auth to be investigated/resolved.
+        // If the auth service is not available, it will also report the unauth'd inventory call.
+        host_agent_keys = auth::run(
+            &device_id,
+            host_agent_keys,
+            &args.hub_url,
+            shutdown_tx.subscribe(),
+        )
+        .await?;
+        log::info!("Successfully completed authentication validation loop");
+    }
+
+    log::debug!("Authenticated Host Agent Keys: {:#?}", host_agent_keys);
 
     // Once authenticated, start leaf server
     let leaf_server = hostd::leaf_server_generator::run(
         &device_id,
         &args.nats_leafnode_server_name,
-        &None,
+        &host_agent_keys.get_host_creds_path().cloned(),
         &args.store_dir,
         &args.hub_url,
         args.hub_tls_insecure,
@@ -79,6 +112,7 @@ pub async fn init_host_d(args: &DaemonzeArgs) -> HostAgentResult<()> {
         async move {
             hostd::services::run(
                 &device_id,
+                &host_agent_keys,
                 &leaf_server_addr,
                 &args,
                 shutdown_tx.subscribe(),

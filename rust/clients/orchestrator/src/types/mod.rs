@@ -1,8 +1,8 @@
 pub mod config;
 pub mod nats_clients;
 
-use crate::admin;
-use crate::types::nats_clients::{admin::AdminClient, OrchestratorClient};
+use crate::types::nats_clients::{admin::AdminClient, auth::AuthClient, OrchestratorClient};
+use crate::{admin, auth};
 use crate::{errors::OrchestratorError, types::config::OrchestratorConfig, Args};
 
 use anyhow::Result;
@@ -13,6 +13,7 @@ pub struct Orchestrator {
     _config: OrchestratorConfig,
     services: JoinSet<Result<(), OrchestratorError>>,
     shutdown_tx: broadcast::Sender<()>,
+    auth_client: AuthClient,
     admin_client: AdminClient,
 }
 
@@ -27,7 +28,13 @@ impl Orchestrator {
         let (shutdown_tx, _) = broadcast::channel(1);
         let mut services = JoinSet::new();
 
-        // TODO: Setup auth client and its service
+        // Setup auth client and its service
+        let auth_client = AuthClient::start(&config).await?;
+        services.spawn(auth::run(
+            auth_client.client.clone(),
+            db_client.clone(),
+            shutdown_tx.subscribe(),
+        ));
 
         // Setup admin client and its services
         let admin_client = AdminClient::start(&config).await?;
@@ -41,6 +48,7 @@ impl Orchestrator {
             services,
             shutdown_tx,
             _config: config,
+            auth_client,
             admin_client,
         })
     }
@@ -78,7 +86,10 @@ impl Orchestrator {
         }
 
         // Stop the clients gracefully
-        log::info!("Stopping Orchestrator clients...");
+        log::info!("Stopping clients...");
+        if let Err(e) = self.auth_client.stop().await {
+            log::warn!("Failed to stop auth client: {}", e);
+        }
         if let Err(e) = self.admin_client.stop().await {
             log::warn!("Failed to stop admin client: {}", e);
         }

@@ -1,3 +1,4 @@
+mod auth;
 mod hostd;
 pub mod local_cmds;
 pub mod remote_cmds;

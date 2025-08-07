@@ -1,7 +1,7 @@
 use super::jetstream_client::JsClient;
 use anyhow::{Context, Result};
 use async_nats::jetstream::{consumer::PullConsumer, ErrorCode};
-use async_nats::{HeaderMap, Message, ServerAddr};
+use async_nats::{AuthError, HeaderMap, Message, ServerAddr};
 use async_trait::async_trait;
 use bytes::Bytes;
 use educe::Educe;
@@ -328,6 +328,12 @@ pub enum ServiceError {
         operation: Option<String>,
     },
 
+    #[error("Authentication error: {source}")]
+    Authentication {
+        source: AuthError,
+        subject: Option<String>,
+    },
+
     #[error("NATS error: {message}")]
     NATS {
         message: String,
@@ -369,6 +375,14 @@ impl ServiceError {
         }
     }
 
+    /// Creates a new Authentication error with subject
+    pub fn auth(error: AuthError, subject: Option<String>) -> Self {
+        Self::Authentication {
+            source: error,
+            subject,
+        }
+    }
+
     /// Creates a new NATS error with optional subject
     pub fn nats(message: impl Into<String>, subject: Option<String>) -> Self {
         Self::NATS {
@@ -395,6 +409,11 @@ impl ServiceError {
         matches!(self, Self::Database { .. })
     }
 
+    /// Returns true if this is a Authentication error
+    pub fn is_auth(&self) -> bool {
+        matches!(self, Self::Authentication { .. })
+    }
+
     /// Returns true if this is a NATS error
     pub fn is_nats(&self) -> bool {
         matches!(self, Self::NATS { .. })
@@ -410,6 +429,7 @@ impl ServiceError {
         match self {
             Self::Request { message, .. } => message.clone(),
             Self::Database { source, .. } => source.to_string(),
+            Self::Authentication { source, .. } => source.to_string(),
             Self::NATS { message, .. } => message.clone(),
             Self::Internal { message, .. } => message.clone(),
             Self::Workload { message, .. } => message.clone(),
@@ -424,6 +444,16 @@ impl From<mongodb::error::Error> for ServiceError {
             source: error,
             collection: None,
             operation: None,
+        }
+    }
+}
+
+// Manual implementation of From instead of using #[from] for AuthError
+impl From<AuthError> for ServiceError {
+    fn from(error: AuthError) -> Self {
+        Self::Authentication {
+            source: error,
+            subject: None,
         }
     }
 }

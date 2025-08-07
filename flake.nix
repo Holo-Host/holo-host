@@ -91,5 +91,19 @@
           pkgs = pkgs; 
           system = "x86_64-linux"; 
         };
+      checks.x86_64-linux.holo-nsc-proxy = 
+        import ./nix/checks/holo-nsc-proxy.nix { 
+          inherit inputs; 
+          flake = blueprintOutputs; 
+          pkgs = pkgs; 
+          system = "x86_64-linux"; 
+        };
+      checks.x86_64-linux.holo-distributed-auth = 
+        import ./nix/checks/holo-distributed-auth.nix { 
+          inherit inputs; 
+          flake = blueprintOutputs; 
+          pkgs = pkgs; 
+          system = "x86_64-linux"; 
+        };
     };
 }

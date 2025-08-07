@@ -1,4 +1,5 @@
 mod admin;
+mod auth;
 mod errors;
 mod types;
 
