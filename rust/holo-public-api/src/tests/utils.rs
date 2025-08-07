@@ -105,6 +105,7 @@ pub fn get_app_config() -> AppConfig {
         rate_limit_max_requests: None,
         rate_limit_window: None,
         access_token_expiry: None,
+        postmark_api_key: None,
     }
 }
 
@@ -126,6 +127,7 @@ pub fn create_credentials(secret: &str, user_id: bson::oid::ObjectId) -> (String
             sub: user_id.to_string(),
             exp: 0,
             permissions: vec![],
+            initials: None,
         },
         secret,
     )

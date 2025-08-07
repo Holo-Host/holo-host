@@ -1,0 +1,47 @@
+on:
+  workflow_call:
+    inputs:
+      project:
+        required: true
+        type: string
+        description: Node package to build and deploy (assumes path is ui/{project})
+      environment:
+        required: true
+        type: string
+        description: Environment to deploy to, this maps to github environments
+      buildArgs:
+        required: false
+        default: ""
+        type: string
+        description: Docker arguments to pass when building the container
+    secrets:
+      DIGITAL_OCEAN_TOKEN:
+        required: true
+env:
+  RUST_VERSION: 1.85.0
+
+jobs:
+  deploy:
+    name: Deploy to ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Build Docker Image
+        working-directory: ui/${{ inputs.project }}
+        run: |
+          docker build ${{ inputs.buildArgs }} \
+          -t registry.digitalocean.com/holo-host/${{ inputs.project }}:${{ inputs.environment }} .
+
+      - name: Install Doctl
+        uses: digitalocean/action-doctl@v2
+        with:
+          token: ${{ secrets.DIGITAL_OCEAN_TOKEN }}
+
+      - name: Log in to DO Container Registry
+        run: doctl registry login --expiry-seconds 600
+
+      - name: Push Docker Image to DO Container Registry
+        run: docker push registry.digitalocean.com/holo-host/${{ inputs.project }}:${{ inputs.environment }}

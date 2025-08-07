@@ -1,0 +1,30 @@
+on:
+  workflow_call:
+    inputs:
+      project:
+        required: true
+        type: string
+        description: The name of the project to build and test.
+
+env:
+  NODE_VERSION: 23.11.0
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Set up Node
+        uses: actions/setup-node@v3
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install Dependencies
+        working-directory: ui/${{  inputs.project }}
+        run: npm install
+
+      - name: Build Project
+        working-directory: ui/${{  inputs.project }}
+        run: npm run build

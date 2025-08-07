@@ -42,6 +42,7 @@ mod tests {
                 sub: bson::oid::ObjectId::new().to_string(),
                 exp: 1000000000000,
                 permissions: vec![],
+                initials: None,
             },
             app_config.jwt_secret.as_ref(),
         )
@@ -92,6 +93,7 @@ mod tests {
                 sub: bson::oid::ObjectId::new().to_string(),
                 exp: 0,
                 permissions: vec![],
+                initials: None,
             },
             app_config.jwt_secret.as_ref(),
         )
@@ -115,6 +117,7 @@ mod tests {
                 sub: "invalid_user_id".to_string(),
                 exp: 1000000000000,
                 permissions: vec![],
+                initials: None,
             },
             app_config.jwt_secret.as_ref(),
         )

@@ -77,3 +77,22 @@ jobs:
       DIGITAL_OCEAN_TOKEN: ${{ secrets.DIGITAL_OCEAN_TOKEN }}
       SSH_KEY: ${{ secrets.SSH_KEY }}
       SSH_USERNAME: ${{ secrets.SSH_USERNAME }}
+
+  # cloud console
+  CLOUD_CONSOLE:
+    name: cloud-console
+    uses: ./.github/workflows/reuseable_ui_ci.yml
+    with:
+      project: cloud-console
+
+  CLOUD_CONSOLE_DEPLOY_DEV:
+    name: cloud-console Dev
+    needs: CLOUD_CONSOLE
+    uses: ./.github/workflows/reuseable_ui_deploy.yml
+    if: github.ref == 'refs/heads/main'
+    with:
+      project: cloud-console
+      environment: dev
+      buildArgs: --build-arg VITE_API_HOST=https://api.dev.holo.host
+    secrets:
+      DIGITAL_OCEAN_TOKEN: ${{ secrets.DIGITAL_OCEAN_TOKEN }}
