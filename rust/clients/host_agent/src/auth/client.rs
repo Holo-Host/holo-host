@@ -17,7 +17,7 @@ This client is responsible for:
 
 use std::{path::PathBuf, time::Duration};
 
-use crate::local_cmds::host::errors::{HostAgentError, HostAgentResult, ErrorContext};
+use crate::local_cmds::host::errors::{ErrorContext, HostAgentError, HostAgentResult};
 use crate::local_cmds::host::types::agent_client::{
     HostClient, HostClientConfig, TypeSpecificArgs,
 };
@@ -83,9 +83,9 @@ impl HostClient for AuthClient {
     }
 
     async fn stop(&self) -> HostAgentResult<()> {
-        self.client.drain()
-            .await
-            .map_err(|e| HostAgentError::service_failed("draining auth client connection", &e.to_string()))?;
+        self.client.drain().await.map_err(|e| {
+            HostAgentError::service_failed("draining auth client connection", &e.to_string())
+        })?;
         Ok(())
     }
 }

@@ -240,7 +240,13 @@ pub async fn add_user_keys_to_resolver(
     // Add sys user if provided
     if let Some(sys_pubkey) = maybe_sys_pubkey {
         let sys_response = nsc_client
-            .add_user("SYS", &format!("sys_user_{}", host_pubkey), sys_pubkey, None, None)
+            .add_user(
+                "SYS",
+                &format!("sys_user_{}", host_pubkey),
+                sys_pubkey,
+                None,
+                None,
+            )
             .await
             .map_err(|e| ServiceError::internal(format!("Failed to add sys user: {}", e), None))?;
 

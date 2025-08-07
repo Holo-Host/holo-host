@@ -1,14 +1,14 @@
-mod types;
-mod errors;
-mod auth;
 mod admin;
+mod auth;
+mod errors;
+mod types;
 
 use clap::Parser;
 use dotenv::dotenv;
+use errors::OrchestratorError;
 use nats_utils::jetstream_client::tls_skip_verifier::early_in_process_install_crypto_provider;
 use nats_utils::types::NatsRemoteArgs;
 use types::Orchestrator;
-use errors::OrchestratorError;
 
 // Re-export the Args struct from main.rs
 #[derive(clap::Parser)]
@@ -16,7 +16,6 @@ pub struct Args {
     #[clap(flatten)]
     pub nats_remote_args: NatsRemoteArgs,
 }
-
 
 #[tokio::main]
 async fn main() -> Result<(), OrchestratorError> {

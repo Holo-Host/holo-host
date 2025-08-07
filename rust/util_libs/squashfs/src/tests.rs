@@ -22,8 +22,7 @@ fn test_squashfs() {
     let output_path = "/tmp/test_archive.squashfs".to_string();
 
     // Create archive
-    create_archive(directory.to_string(), output_path.clone())
-        .expect("Failed to create archive");
+    create_archive(directory.to_string(), output_path.clone()).expect("Failed to create archive");
 
     // Check if the output file exists
     assert!(fs::metadata(output_path.clone()).is_ok());

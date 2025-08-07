@@ -1,7 +1,7 @@
 use crate::local_cmds::support::errors::SupportError;
 use crate::remote_cmds::errors::RemoteError;
 use async_nats::client::DrainError;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 /// Main application error type that handles all possible errors
@@ -24,7 +24,11 @@ pub enum HostAgentError {
     CredentialValidation { details: String },
 
     #[error("Network connection failed: {url}")]
-    NetworkError { url: String, #[source] source: Box<dyn std::error::Error + Send + Sync> },
+    NetworkError {
+        url: String,
+        #[source]
+        source: Box<dyn std::error::Error + Send + Sync>,
+    },
 
     // Service operation errors with context
     #[error("Service operation failed: {operation} - {reason}")]
@@ -38,42 +42,81 @@ pub enum HostAgentError {
     SystemInfo { component: String },
 
     #[error("System operation failed: {operation}")]
-    System { operation: String, #[source] source: anyhow::Error },
+    System {
+        operation: String,
+        #[source]
+        source: anyhow::Error,
+    },
 
     // File and I/O errors with context
     #[error("File operation failed: {operation} on {path}: {reason}")]
-    FileOperation { operation: String, path: PathBuf, reason: String },
+    FileOperation {
+        operation: String,
+        path: PathBuf,
+        reason: String,
+    },
 
     #[error("I/O operation failed: {operation}")]
-    Io { operation: String, #[source] source: std::io::Error },
+    Io {
+        operation: String,
+        #[source]
+        source: std::io::Error,
+    },
 
     // NATS-specific errors with context
     #[error("NATS connection failed: {endpoint}")]
-    NatsConnection { endpoint: String, #[source] source: async_nats::Error },
+    NatsConnection {
+        endpoint: String,
+        #[source]
+        source: async_nats::Error,
+    },
 
     #[error("NATS request failed: {operation}")]
-    NatsRequest { operation: String, #[source] source: async_nats::RequestError },
+    NatsRequest {
+        operation: String,
+        #[source]
+        source: async_nats::RequestError,
+    },
 
     #[error("NATS publish failed: {subject}")]
-    NatsPublish { subject: String, #[source] source: async_nats::PublishError },
+    NatsPublish {
+        subject: String,
+        #[source]
+        source: async_nats::PublishError,
+    },
 
     // Cryptographic and security errors
     #[error("Cryptographic operation failed: {operation}")]
-    Crypto { operation: String, #[source] source: nkeys::error::Error },
+    Crypto {
+        operation: String,
+        #[source]
+        source: nkeys::error::Error,
+    },
 
     #[error("Signature verification failed: {details}")]
     SignatureVerification { details: String },
 
     // Timeout and timing errors
     #[error("Operation timed out: {operation} after {duration:?}")]
-    Timeout { operation: String, duration: Duration },
+    Timeout {
+        operation: String,
+        duration: Duration,
+    },
 
     // Serialization and parsing errors
     #[error("Serialization failed: {operation}")]
-    Serialization { operation: String, #[source] source: serde_json::Error },
+    Serialization {
+        operation: String,
+        #[source]
+        source: serde_json::Error,
+    },
 
     #[error("JSON parsing failed: {context}")]
-    JsonParsing { context: String, #[source] source: serde_json::Error },
+    JsonParsing {
+        context: String,
+        #[source]
+        source: serde_json::Error,
+    },
 
     // Support and remote operation errors
     #[error("Support operation failed: {0}")]
@@ -84,7 +127,11 @@ pub enum HostAgentError {
 
     // Workload-specific errors
     #[error("Workload operation failed: {operation}")]
-    Workload { operation: String, #[source] source: workload::types::WorkloadError },
+    Workload {
+        operation: String,
+        #[source]
+        source: workload::types::WorkloadError,
+    },
 
     // Generic error for unexpected cases
     #[error("Unexpected error: {message}")]
@@ -158,10 +205,10 @@ impl HostAgentError {
     }
 
     // File operation errors with context
-    pub fn file_operation_failed(operation: &str, path: &PathBuf, reason: &str) -> Self {
+    pub fn file_operation_failed(operation: &str, path: &Path, reason: &str) -> Self {
         Self::FileOperation {
             operation: operation.to_string(),
-            path: path.clone(),
+            path: path.to_path_buf(),
             reason: reason.to_string(),
         }
     }
@@ -226,7 +273,10 @@ impl HostAgentError {
     }
 
     // Workload errors with context
-    pub fn workload_operation_failed(operation: &str, source: workload::types::WorkloadError) -> Self {
+    pub fn workload_operation_failed(
+        operation: &str,
+        source: workload::types::WorkloadError,
+    ) -> Self {
         Self::Workload {
             operation: operation.to_string(),
             source,

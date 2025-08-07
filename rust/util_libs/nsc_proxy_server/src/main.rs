@@ -109,6 +109,7 @@ impl AllowedCommand {
         }
     }
 
+    #[allow(dead_code)]
     fn get_optional_params(&self) -> Vec<&'static str> {
         match self {
             AllowedCommand::AddUser => vec!["role", "tag"],
@@ -143,7 +144,11 @@ fn validate_request(request: &NSCRequest) -> Result<AllowedCommand> {
 }
 
 fn build_nsc_command(command: &AllowedCommand, params: &NSCParams) -> Vec<String> {
-    let mut args = command.get_args().iter().map(|s| s.to_string()).collect::<Vec<_>>();
+    let mut args = command
+        .get_args()
+        .iter()
+        .map(|s| s.to_string())
+        .collect::<Vec<_>>();
 
     // Add required parameters
     if let Some(account) = &params.account {
@@ -225,15 +230,17 @@ async fn nsc_proxy_handler(
     let nsc_args = build_nsc_command(&command, &request.params);
 
     // Execute command
-    let result = execute_nsc_command(nsc_args, &state.nsc_path).await.map_err(|e| {
-        error!("Failed to execute NSC command: {}", e);
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            JsonResponse(ErrorResponse {
-                error: format!("Failed to execute NSC command: {}", e),
-            }),
-        )
-    })?;
+    let result = execute_nsc_command(nsc_args, &state.nsc_path)
+        .await
+        .map_err(|e| {
+            error!("Failed to execute NSC command: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                JsonResponse(ErrorResponse {
+                    error: format!("Failed to execute NSC command: {}", e),
+                }),
+            )
+        })?;
 
     Ok(JsonResponse(result))
 }
@@ -254,7 +261,10 @@ async fn main() -> Result<()> {
 
     // Validate NSC path
     if !std::path::Path::new(&args.nsc_path).exists() {
-        return Err(anyhow::anyhow!("NSC path does not exist: {}", args.nsc_path));
+        return Err(anyhow::anyhow!(
+            "NSC path does not exist: {}",
+            args.nsc_path
+        ));
     }
 
     // Check if NSC is available
@@ -294,4 +304,4 @@ async fn main() -> Result<()> {
     axum::serve(listener, app).await?;
 
     Ok(())
-} 
+}

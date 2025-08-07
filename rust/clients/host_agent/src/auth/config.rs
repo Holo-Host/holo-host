@@ -69,7 +69,10 @@ async fn from_config() -> HostAgentResult<(SigningKey, String)> {
     if !Path::new(&password_file_path).exists() {
         return Err(HostAgentError::service_failed(
             "Device seed password file access",
-            &format!("Device seed password file does not exist: {}", password_file_path),
+            &format!(
+                "Device seed password file does not exist: {}",
+                password_file_path
+            ),
         ));
     }
 

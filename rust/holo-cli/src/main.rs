@@ -19,6 +19,8 @@ enum Commands {
 fn main() {
     let args = Args::parse();
     match args.command {
-        Commands::StaticContent { subcommand } => static_content::handle_static_content_command(subcommand)
+        Commands::StaticContent { subcommand } => {
+            static_content::handle_static_content_command(subcommand)
+        }
     }
 }

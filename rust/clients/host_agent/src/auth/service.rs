@@ -27,11 +27,14 @@
 ///
 use crate::{
     auth::{client::AuthClient, config::HosterInfo, keys::Keys},
-    local_cmds::host::errors::{HostAgentError, HostAgentResult, ErrorContext},
+    local_cmds::host::errors::{HostAgentError, HostAgentResult},
     local_cmds::host::types::agent_client::{
         ClientType, HostAuthArgs, HostClient, HostClientConfig,
     },
 };
+
+#[allow(unused_imports)]
+use crate::local_cmds::host::errors::ErrorContext;
 
 use async_nats::{HeaderMap, HeaderName, HeaderValue, RequestErrorKind};
 use authentication::{
@@ -68,32 +71,31 @@ pub async fn authorize_host(
     );
 
     // Sign Auth Guard payload and add into this token
-    let signing_function =
-        |p: &[u8]| -> AuthSignResult<String> { 
-            host_agent_keys.host_sign(p)
-                .map_err(|e| authentication::types::AuthError::signature_failed(&e.to_string()))
-        };
-    
+    let signing_function = |p: &[u8]| -> AuthSignResult<String> {
+        host_agent_keys
+            .host_sign(p)
+            .map_err(|e| authentication::types::AuthError::signature_failed(&e.to_string()))
+    };
+
     auth_guard_token = auth_guard_token
         .try_add_signature(signing_function)
-        .map_err(|e| HostAgentError::auth_failed(
-            device_id,
-            &format!("Signature creation failed: {}", e)
-        ))?;
+        .map_err(|e| {
+            HostAgentError::auth_failed(device_id, &format!("Signature creation failed: {}", e))
+        })?;
 
     // Create Host Client Config and start Host Auth Client
     let host_auth_args = HostAuthArgs {
         hub_url: hub_url.to_string(),
         auth_guard_token,
     };
-    
+
     let host_client_config = HostClientConfig::new(
         device_id,
         host_agent_keys.clone(),
         ClientType::HostAuth(host_auth_args),
     )
     .with_context("creating host client configuration")?;
-    
+
     let AuthClient {
         client: auth_guard_client,
         ..
@@ -108,11 +110,12 @@ pub async fn authorize_host(
         maybe_sys_pubkey: host_agent_keys.local_sys_pubkey.clone(), // Will be set from keys if available
         nonce: TextNonce::new().to_string(),
     };
-    
+
     let payload_bytes = serde_json::to_vec(&payload)
         .map_err(|e| HostAgentError::serialization_failed("creating auth JWT payload", e))?;
 
-    let signature = host_agent_keys.host_sign(&payload_bytes)
+    let signature = host_agent_keys
+        .host_sign(&payload_bytes)
         .map_err(|e| HostAgentError::service_failed("signing auth JWT payload", &e.to_string()))?;
 
     let mut headers = HeaderMap::new();
@@ -149,8 +152,9 @@ pub async fn authorize_host(
                 let unauthenticated_user_inventory_subject =
                     format!("INVENTORY.{}.unauthenticated", host_agent_keys.host_pubkey);
                 let diagnostics = HoloInventory::from_host();
-                let inventory_bytes = serde_json::to_vec(&diagnostics)
-                    .map_err(|e| HostAgentError::serialization_failed("serializing inventory data", e))?;
+                let inventory_bytes = serde_json::to_vec(&diagnostics).map_err(|e| {
+                    HostAgentError::serialization_failed("serializing inventory data", e)
+                })?;
 
                 match auth_guard_client
                     .publish(
@@ -167,7 +171,10 @@ pub async fn authorize_host(
                         log::error!("Host Agent Auth Service: Failed to publish inventory after timeout: {}", publish_err);
                         return Err(HostAgentError::auth_failed(
                             device_id,
-                            &format!("Authentication timed out and inventory publish failed: {}", publish_err)
+                            &format!(
+                                "Authentication timed out and inventory publish failed: {}",
+                                publish_err
+                            ),
                         ));
                     }
                 }
@@ -202,19 +209,19 @@ pub async fn authorize_host(
         AuthState::Forbidden => {
             return Err(HostAgentError::auth_failed(
                 device_id,
-                "Host authentication denied by server"
+                "Host authentication denied by server",
             ));
         }
         AuthState::Unauthenticated => {
             return Err(HostAgentError::auth_failed(
                 device_id,
-                "Host authentication is still unauthenticated - try again later"
+                "Host authentication is still unauthenticated - try again later",
             ));
         }
         AuthState::Error(msg) => {
             return Err(HostAgentError::auth_failed(
                 device_id,
-                &format!("Host authentication error: {}", msg)
+                &format!("Host authentication error: {}", msg),
             ));
         }
     };
