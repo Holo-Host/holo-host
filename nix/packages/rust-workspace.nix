@@ -65,8 +65,8 @@ in
                 (craneLib.fileset.commonCargoSources ../../rust/util_libs/nats)
                 (craneLib.fileset.commonCargoSources ../../rust/util_libs/db)
                 (craneLib.fileset.commonCargoSources ../../rust/hpos-hal)
-                (craneLib.fileset.commonCargoSources ../../rust/service_api/workload)
-                (craneLib.fileset.commonCargoSources ../../rust/service_api/inventory)
+                (craneLib.fileset.commonCargoSources ../../rust/service_apis/workload)
+                (craneLib.fileset.commonCargoSources ../../rust/service_apis/inventory)
                 (craneLib.fileset.commonCargoSources ../../rust/ham)
                 (craneLib.fileset.commonCargoSources ../../rust/netdiag)
               ]

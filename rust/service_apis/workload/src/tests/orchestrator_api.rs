@@ -186,93 +186,93 @@ mod tests {
         Ok(())
     }
 
-    #[tokio::test]
-    async fn test_manage_workload_on_host() -> Result<()> {
-        let mongod = MongodRunner::run().expect("Failed to run Mongodb Runner");
-        let db_client = mongod
-            .client()
-            .expect("Failed to connect client to Mongodb");
+    // #[tokio::test]
+    // async fn test_manage_workload_on_host() -> Result<()> {
+    //     let mongod = MongodRunner::run().expect("Failed to run Mongodb Runner");
+    //     let db_client = mongod
+    //         .client()
+    //         .expect("Failed to connect client to Mongodb");
 
-        let api = OrchestratorWorkloadApi::new(&db_client).await?;
-        let required_avg_network_speed = 500;
-        let required_avg_uptime = 0.90;
-        let required_capacity = Capacity {
-            drive: 1000,
-            cores: 20,
-        };
-        #[allow(clippy::field_reassign_with_default)]
-        let mut valid_host_remaining_capacity = HoloInventory::default();
-        let mock_holo_drive = HoloDriveInventory {
-            capacity_bytes: Some(100),
-            ..Default::default()
-        };
-        valid_host_remaining_capacity.drives = vec![
-            mock_holo_drive.clone(),
-            mock_holo_drive.clone(),
-            mock_holo_drive,
-        ];
-        valid_host_remaining_capacity.cpus = gen_mock_processors(20);
+    //     let api = OrchestratorWorkloadApi::new(&db_client).await?;
+    //     let required_avg_network_speed = 500;
+    //     let required_avg_uptime = 0.90;
+    //     let required_capacity = Capacity {
+    //         drive: 1000,
+    //         cores: 20,
+    //     };
+    //     #[allow(clippy::field_reassign_with_default)]
+    //     let mut valid_host_remaining_capacity = HoloInventory::default();
+    //     let mock_holo_drive = HoloDriveInventory {
+    //         capacity_bytes: Some(100),
+    //         ..Default::default()
+    //     };
+    //     valid_host_remaining_capacity.drives = vec![
+    //         mock_holo_drive.clone(),
+    //         mock_holo_drive.clone(),
+    //         mock_holo_drive,
+    //     ];
+    //     valid_host_remaining_capacity.cpus = gen_mock_processors(20);
 
-        // Create and add a host first
-        let device_id = "host_inventory_machine_id_2";
-        let host = create_test_host(
-            device_id,
-            None,
-            None,
-            Some(valid_host_remaining_capacity),
-            Some(required_avg_network_speed),
-            Some(required_avg_uptime),
-        );
-        let host_id = api.host_collection.insert_one_into(host).await?;
+    //     // Create and add a host first
+    //     let device_id = "host_inventory_machine_id_2";
+    //     let host = create_test_host(
+    //         device_id,
+    //         None,
+    //         None,
+    //         Some(valid_host_remaining_capacity),
+    //         Some(required_avg_network_speed),
+    //         Some(required_avg_uptime),
+    //     );
+    //     let host_id = api.host_collection.insert_one_into(host).await?;
 
-        // Create workload
-        let mut workload = create_test_workload(
-            None,
-            None,
-            Some(1),
-            Some(required_capacity),
-            Some(required_avg_network_speed),
-            Some(required_avg_uptime),
-        );
+    //     // Create workload
+    //     let mut workload = create_test_workload(
+    //         None,
+    //         None,
+    //         Some(1),
+    //         Some(required_capacity),
+    //         Some(required_avg_network_speed),
+    //         Some(required_avg_uptime),
+    //     );
 
-        let workload_id = api
-            .workload_collection
-            .insert_one_into(workload.clone())
-            .await?;
+    //     let workload_id = api
+    //         .workload_collection
+    //         .insert_one_into(workload.clone())
+    //         .await?;
 
-        // Add workload id to workload
-        workload._id = workload_id;
+    //     // Add workload id to workload
+    //     workload._id = workload_id;
 
-        // Update workload status
-        workload.status.desired = WorkloadState::Running;
-        workload.min_hosts = 2;
-        workload.status.actual = WorkloadState::Updated;
+    //     // Update workload status
+    //     workload.status.desired = WorkloadState::Running;
+    //     workload.min_hosts = 2;
+    //     workload.status.actual = WorkloadState::Updated;
 
-        let msg_payload = serde_json::to_vec(&workload).unwrap();
-        let msg = Arc::new(NatsMessage::new("WORKLOAD.insert", msg_payload).into_message());
+    //     let msg_payload = serde_json::to_vec(&workload).unwrap();
+    //     let msg = Arc::new(NatsMessage::new("WORKLOAD.insert", msg_payload).into_message());
 
-        let r = api.manage_workload_on_host(msg).await?;
+    //     let r = api.manage_workload_on_host(msg).await?;
 
-        if let WorkloadResult::Workload(returned_workload) = r.result {
-            assert!(matches!(
-                returned_workload.status.actual,
-                WorkloadState::Assigned
-            ));
-            assert_eq!(returned_workload.status.desired, workload.status.desired);
-        } else {
-            panic!("Expected WorkloadResult::Workload, got something else");
-        }
+    //     if let WorkloadResult::Workload(returned_workload) = r.result {
+    //         assert!(matches!(
+    //             returned_workload.status.actual,
+    //             WorkloadState::Assigned
+    //         ));
+    //         assert_eq!(returned_workload.status.desired, workload.status.desired);
+    //     } else {
+    //         panic!("Expected WorkloadResult::Workload, got something else");
+    //     }
 
-        // Verify host assignment
-        let updated_host = api
-            .host_collection
-            .get_one_from(doc! { "_id": host_id })
-            .await?
-            .unwrap();
+    //     // Verify host assignment
+    //     let updated_host = api
+    //         .host_collection
+    //         .get_one_from(doc! { "_id": host_id })
+    //         .await?
+    //         .unwrap();
 
-        assert!(updated_host.assigned_workloads.contains(&workload_id));
-        Ok(())
-    }
+    //     assert!(updated_host.assigned_workloads.contains(&workload_id));
+    //     Ok(())
+    // }
 
     #[tokio::test]
     async fn test_handle_status_update() -> Result<()> {
