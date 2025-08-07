@@ -57,11 +57,6 @@ pub struct User {
     pub roles: Vec<UserRole>,
     // this is used to invalidate all refresh tokens by incrementing the version by 1
     pub refresh_token_version: i32,
-
-    // legacy fields
-    pub developer: Option<RoleInfo>,
-    pub hoster: Option<RoleInfo>,
-    pub jurisdiction: String,
 }
 
 impl IntoIndexes for User {
@@ -72,25 +67,6 @@ impl IntoIndexes for User {
     /// - public_key.pubkey
     fn into_indices(self) -> Result<Vec<(Document, Option<IndexOptions>)>> {
         let mut indices = vec![];
-
-        // add developer index
-        let developer_index_doc = doc! { "developer": 1 };
-        let developer_index_opts = Some(
-            IndexOptions::builder()
-                .name(Some("developer_index".to_string()))
-                .build(),
-        );
-        indices.push((developer_index_doc, developer_index_opts));
-
-        // add host index
-        let host_index_doc = doc! { "hoster": 1 };
-        let host_index_opts = Some(
-            IndexOptions::builder()
-                .name(Some("hoster_index".to_string()))
-                .build(),
-        );
-        indices.push((host_index_doc, host_index_opts));
-
         Ok(indices)
     }
 }

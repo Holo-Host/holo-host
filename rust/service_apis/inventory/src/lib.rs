@@ -107,7 +107,8 @@ impl InventoryServiceApi {
         inventory: &HoloInventory,
     ) -> Result<Host, ServiceError> {
         // Create a default Host instance to extract default values
-        let default_host = Host::default();
+        let host_id = ObjectId::new();
+        let default_host = Host::new(host_id);
         let filter = doc! { "device_id": host_device_id };
         let update = doc! {
             "$set": {
