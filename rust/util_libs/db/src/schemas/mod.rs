@@ -1,10 +1,10 @@
 pub mod alias;
 pub mod api_key;
 pub mod api_log;
-pub mod developer;
 pub mod host;
-pub mod hoster;
+pub mod job;
 pub mod jurisdiction;
+pub mod manifest;
 pub mod metadata;
 pub mod public_service;
 pub mod user;
