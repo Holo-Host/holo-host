@@ -112,7 +112,7 @@ pub async fn run(
                     };
 
                     if inventory_changed {
-                    let authenticated_user_inventory_subject =
+                    let user_inventory_subject =
                         format!("INVENTORY.{device_id_lowercase}.{INVENTORY_UPDATE_SUBJECT}");
 
                         // Try to publish inventory
@@ -124,7 +124,7 @@ pub async fn run(
                     }
                     .and_then(|payload_bytes| async {
                         Ok(PublishInfo {
-                            subject: authenticated_user_inventory_subject.clone(),
+                            subject: user_inventory_subject.clone(),
                             msg_id: chrono::Utc::now().to_string(),
                             data: payload_bytes,
                             headers: None,
@@ -139,7 +139,7 @@ pub async fn run(
                         .await;
 
                         if let Err(e) = publish_result {
-                        log::error!("error publishing latest inventory on {authenticated_user_inventory_subject}: {e}\n. will retry in {retry_in:#?}");
+                        log::error!("error publishing latest inventory on {user_inventory_subject}: {e}\n. will retry in {retry_in:#?}");
                             // Sleep for retry delay with shutdown handling
                             tokio::select! {
                                 _ = sleep(retry_in) => {

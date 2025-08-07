@@ -12,9 +12,9 @@ This client is responsible for subscribing the host agent to workload stream end
 
 use nats_utils::{
     jetstream_client::{get_event_listeners, with_event_listeners, JsClient},
-    types::{Credentials, JsClientBuilder, NatsRemoteArgs},
+    types::{JsClientBuilder, NatsRemoteArgs},
 };
-use std::{path::PathBuf, time::Duration};
+use std::time::Duration;
 
 use crate::local_cmds::host::errors::{HostAgentError, HostAgentResult};
 use crate::local_cmds::host::types::agent_client::{
@@ -28,7 +28,6 @@ const HOST_AGENT_INBOX_PREFIX: &str = "_HPOS_INBOX";
 #[derive(Debug)]
 pub struct HostAgentClient {
     pub client: JsClient,
-    pub _creds_path: PathBuf,
 }
 
 #[async_trait]
@@ -47,10 +46,8 @@ impl HostClient for HostAgentClient {
 
         let nats_url = &client_args.nats_url;
         let device_id_lowercase = config.device_id.to_lowercase();
-        let host_creds = Some(vec![Credentials::Path(config.nats_creds_path.clone())]);
 
         log::debug!("nats url : {nats_url:?}");
-        log::debug!("host creds path : {:?}", config.nats_creds_path);
         log::debug!("device id : {}", config.device_id);
 
         let host_client = JsClient::new(JsClientBuilder {
@@ -60,7 +57,7 @@ impl HostClient for HostAgentClient {
             },
             name: HOST_AGENT_CLIENT_NAME.to_string(),
             inbox_prefix: format!("{HOST_AGENT_INBOX_PREFIX}.{device_id_lowercase}"),
-            credentials: host_creds,
+            credentials: Default::default(),
             ping_interval: Some(Duration::from_secs(10)),
             request_timeout: Some(Duration::from_secs(29)),
             listeners: vec![with_event_listeners(get_event_listeners())],
@@ -69,7 +66,6 @@ impl HostClient for HostAgentClient {
 
         Ok(Self {
             client: host_client,
-            _creds_path: config.nats_creds_path.clone(),
         })
     }
 

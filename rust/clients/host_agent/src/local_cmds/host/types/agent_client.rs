@@ -14,13 +14,8 @@ pub trait HostClient {
 
 #[derive(Clone, Debug)]
 pub enum ClientType {
-    HostAuth(HostAuthArgs),
     HostAgent(HostDArgs),
-}
-
-#[derive(Clone, Debug)]
-pub struct HostAuthArgs {
-    pub hub_url: String,
+    // HostAuth(..),
 }
 
 #[derive(Clone, Debug)]
@@ -30,7 +25,6 @@ pub struct HostDArgs {
 
 #[derive(Clone, Debug)]
 pub struct HostClientConfig {
-    pub nats_creds_path: PathBuf,
     pub device_id: String,
     pub type_args: TypeSpecificArgs,
 }
@@ -39,4 +33,22 @@ pub struct HostClientConfig {
 pub enum TypeSpecificArgs {
     HostAgent(HostDArgs),
     // HostAuth(..),
+}
+
+impl HostClientConfig {
+    pub fn new(device_id: &str, client_type: ClientType) -> HostAgentResult<Self> {
+        let type_args = match client_type {
+            ClientType::HostAgent(args) => TypeSpecificArgs::HostAgent(args),
+        };
+
+        log::debug!("device_id : {device_id}");
+        log::debug!("type_args : {type_args:?}");
+
+        let host_client_config = Self {
+            device_id: device_id.to_string(),
+            type_args,
+        };
+
+        Ok(host_client_config)
+    }
 }

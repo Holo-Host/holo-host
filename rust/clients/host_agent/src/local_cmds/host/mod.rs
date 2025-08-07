@@ -79,7 +79,6 @@ pub async fn init_host_d(args: &DaemonzeArgs) -> HostAgentResult<()> {
         async move {
             hostd::services::run(
                 &device_id,
-                &host_agent_keys,
                 &leaf_server_addr,
                 &args,
                 shutdown_tx.subscribe(),
