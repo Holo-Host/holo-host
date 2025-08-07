@@ -8,8 +8,8 @@ members = [
   "rust/hpos-hal",
   "rust/clients/host_agent",
   "rust/clients/orchestrator",
-  "rust/services/inventory",
-  "rust/services/workload",
+  "rust/service_apis/inventory",
+  "rust/service_apis/workload",
   "rust/util_libs/nats",
   "rust/util_libs/db",
   "rust/util_libs/mocks",
@@ -50,8 +50,8 @@ nats_utils = { path = "rust/util_libs/nats" }
 db_utils = { path = "rust/util_libs/db" }
 orchestrator = { path = "rust/clients/orchestrator" }
 host_agent = { path = "rust/clients/host_agent" }
-inventory = { path = "rust/services/inventory" }
-workload = { path = "rust/services/workload" }
+inventory = { path = "rust/service_apis/inventory" }
+workload = { path = "rust/service_apis/workload" }
 ham = { path = "rust/ham" }
 bytes = "1.10.1"
 

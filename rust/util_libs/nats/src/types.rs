@@ -1,7 +1,6 @@
 use super::jetstream_client::JsClient;
 use anyhow::{Context, Result};
-use async_nats::jetstream::consumer::PullConsumer;
-use async_nats::jetstream::ErrorCode;
+use async_nats::jetstream::{consumer::PullConsumer, ErrorCode};
 use async_nats::{HeaderMap, Message, ServerAddr};
 use async_trait::async_trait;
 use bytes::Bytes;
@@ -248,8 +247,9 @@ pub struct JsClientBuilder {
 #[derive(Clone, Debug, Educe)]
 #[educe(Deref)]
 pub struct DeServerAddr(pub ServerAddr);
-impl DeServerAddr {
-    pub(crate) fn as_ref(&self) -> &ServerAddr {
+
+impl AsRef<ServerAddr> for DeServerAddr {
+    fn as_ref(&self) -> &ServerAddr {
         &self.0
     }
 }
@@ -265,6 +265,12 @@ impl FromStr for DeServerAddr {
 impl From<&ServerAddr> for DeServerAddr {
     fn from(value: &ServerAddr) -> Self {
         Self(value.clone())
+    }
+}
+
+impl From<ServerAddr> for DeServerAddr {
+    fn from(value: ServerAddr) -> Self {
+        Self(value)
     }
 }
 
@@ -411,7 +417,7 @@ impl ServiceError {
     }
 }
 
-// Manual implementation of From instead of using #[from]
+// Manual implementation of From instead of using #[from] for mongodb::error::Error
 impl From<mongodb::error::Error> for ServiceError {
     fn from(error: mongodb::error::Error) -> Self {
         Self::Database {
@@ -458,7 +464,7 @@ pub struct NatsRemoteArgs {
     pub nats_user: Option<String>,
 
     #[clap(long, env = "NATS_URL")]
-    #[educe(Default( expression = DeServerAddr(ServerAddr::from_str(NATS_URL_DEFAULT).expect("default url parses"))))]
+    #[educe(Default( expression = DeServerAddr(ServerAddr::from_str(NATS_URL_DEFAULT).expect("default nats url to parse"))))]
     pub nats_url: DeServerAddr,
     #[clap(
         long,

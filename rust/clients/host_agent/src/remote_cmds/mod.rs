@@ -1,38 +1,46 @@
-use anyhow::Context;
+pub mod errors;
+pub mod types;
+
+use crate::remote_cmds::types::{RemoteArgs, RemoteCommands};
+use errors::{RemoteError, RemoteResult};
+
 use db_utils::schemas::workload::{
     Workload, WorkloadManifest, WorkloadState, WorkloadStateDiscriminants, WorkloadStatus,
 };
-use futures::StreamExt;
 use nats_utils::types::PublishInfo;
 use nats_utils::{jetstream_client::JsClient, types::JsClientBuilder};
-use std::str::FromStr;
-use std::sync::Arc;
 use workload::types::{WorkloadResult, WorkloadServiceSubjects};
 
-use crate::agent_cli::{self, RemoteArgs, RemoteCommands};
+use futures::StreamExt;
+use std::str::FromStr;
+use std::sync::Arc;
 
-pub(crate) async fn run(args: RemoteArgs, command: RemoteCommands) -> anyhow::Result<()> {
+pub(crate) async fn run(args: RemoteArgs, command: RemoteCommands) -> RemoteResult<()> {
     let nats_client = {
         let nats_url = args.nats_remote_args.nats_url.clone();
         JsClient::new(JsClientBuilder {
             nats_remote_args: args.nats_remote_args,
-
             ..Default::default()
         })
         .await
-        .map_err(|e| anyhow::anyhow!("connecting to NATS via {nats_url:?}: {e:?}"))
+        .map_err(|e| {
+            RemoteError::operation_failed(
+                "NATS connection",
+                &format!("connecting to NATS via {:?}: {:?}", nats_url, e),
+            )
+        })
     }?;
 
     match command {
-        agent_cli::RemoteCommands::Ping {} => {
+        RemoteCommands::Ping {} => {
             let check = nats_client
                 .check_connection()
                 .await
-                .map_err(|e| anyhow::anyhow!(e.to_string()))?;
+                .map_err(|e| RemoteError::operation_failed("connection check", &e.to_string()))?;
 
             log::info!("Connection check result: {check}");
         }
-        agent_cli::RemoteCommands::HolochainDhtV1Workload {
+        RemoteCommands::HolochainDhtV1Workload {
             workload_id_override,
             host_id,
             desired_status,
@@ -44,12 +52,23 @@ pub(crate) async fn run(args: RemoteArgs, command: RemoteCommands) -> anyhow::Re
             let id: bson::oid::ObjectId = workload_id_override.unwrap_or_default();
 
             let state_discriminant = WorkloadStateDiscriminants::from_str(&desired_status)
-                .map_err(|e| anyhow::anyhow!("failed to parse {desired_status}: {e}"))?;
+                .map_err(|e| {
+                    RemoteError::operation_failed(
+                        "parse workload status",
+                        &format!("failed to parse '{}': {}", desired_status, e),
+                    )
+                })?;
 
             let status = WorkloadStatus {
                 id: Some(id),
-                desired: WorkloadState::from_repr(state_discriminant as usize)
-                    .ok_or_else(|| anyhow::anyhow!("failed to parse {desired_status}"))?,
+                desired: WorkloadState::from_repr(state_discriminant as usize).ok_or_else(
+                    || {
+                        RemoteError::operation_failed(
+                            "workload state parsing",
+                            &format!("failed to parse workload state '{}'", desired_status),
+                        )
+                    },
+                )?,
                 actual: WorkloadState::Unknown("most uncertain".to_string()),
                 payload: Default::default(),
             };
@@ -58,30 +77,24 @@ pub(crate) async fn run(args: RemoteArgs, command: RemoteCommands) -> anyhow::Re
                 _id: id,
                 status,
                 manifest: WorkloadManifest::HolochainDhtV1(manifest),
-
                 metadata: Default::default(),
                 assigned_developer: Default::default(),
                 version: Default::default(),
                 min_hosts: 1,
                 assigned_hosts: Default::default(),
-
-                ..Default::default() // ---
-                                     // these don't have defaults on their own
-                                     // system_specs: Default::default(),
+                ..Default::default()
             };
 
             let payload = if workload_only {
                 serde_json::to_string_pretty(&workload)
             } else {
                 serde_json::to_string_pretty(&WorkloadResult::Workload(workload))
-            }
-            .context("serializing workload payload")?;
+            }?;
 
             let subject = if let Some(subject) = subject_override {
                 subject
             } else if let Some(host_id) = host_id {
                 use WorkloadStateDiscriminants::*;
-
                 format!(
                     "WORKLOAD.{host_id}.{}",
                     match state_discriminant {
@@ -89,7 +102,11 @@ pub(crate) async fn run(args: RemoteArgs, command: RemoteCommands) -> anyhow::Re
                         Uninstalled | Deleted => WorkloadServiceSubjects::Command,
                         Updated => WorkloadServiceSubjects::Command,
                         Reported => WorkloadServiceSubjects::Command,
-                        unsupported => anyhow::bail!("don't know where to send {unsupported:?}"),
+                        unsupported =>
+                            return Err(RemoteError::operation_failed(
+                                "workload routing",
+                                &format!("don't know where to send {:?}", unsupported)
+                            )),
                     }
                 )
             } else {
@@ -125,7 +142,9 @@ pub(crate) async fn run(args: RemoteArgs, command: RemoteCommands) -> anyhow::Re
             if !args.dont_wait {
                 // Only exit program when explicitly requested
                 log::info!("waiting until ctrl+c is pressed.");
-                tokio::signal::ctrl_c().await?;
+                tokio::signal::ctrl_c().await.map_err(|e| {
+                    RemoteError::operation_failed("signal handling", &e.to_string())
+                })?;
             }
         }
 
@@ -133,7 +152,7 @@ pub(crate) async fn run(args: RemoteArgs, command: RemoteCommands) -> anyhow::Re
         // 1. start subscribing on a subject that's used to receive async replies subsequently
         // 2. send a message to the host-agent to request data from the local hc-http-gw instance
         // 3. wait for the first message on the reply subject
-        agent_cli::RemoteCommands::HcHttpGwReq { request } => {
+        RemoteCommands::HcHttpGwReq { request } => {
             let response = nats_utils::types::hc_http_gw_nats_request(
                 Arc::new(nats_client),
                 request,
