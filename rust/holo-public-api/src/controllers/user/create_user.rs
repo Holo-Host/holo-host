@@ -2,9 +2,7 @@ use actix_web::{post, web, HttpMessage, HttpRequest, HttpResponse, Responder};
 use bson::oid::ObjectId;
 use db_utils::schemas::{
     self,
-    developer::{Developer, DEVELOPER_COLLECTION_NAME},
-    hoster::Hoster,
-    user::{RoleInfo, User, UserRole, USER_COLLECTION_NAME},
+    user::{User, UserPubKey, UserRole, USER_COLLECTION_NAME},
     user_permissions::{PermissionAction, UserPermission},
 };
 use serde::{Deserialize, Serialize};
@@ -132,79 +130,30 @@ pub async fn create_user(
         });
     }
 
-    let user_id = ObjectId::new();
-
-    let mut developer_role: Option<RoleInfo> = None;
-    let mut hoster_role: Option<RoleInfo> = None;
-    for pubkey_obj in payload.public_keys.iter() {
-        match pubkey_obj.role {
-            PublicKeyRoleInfo::Developer => {
-                let result = match providers::crud::create::<Developer>(
-                    db.get_ref().clone(),
-                    DEVELOPER_COLLECTION_NAME.to_string(),
-                    Developer {
-                        _id: None,
-                        metadata: db_utils::schemas::metadata::Metadata::default(),
-                        user_id,
-                        active_workloads: vec![],
-                    },
-                )
-                .await
-                {
-                    Ok(result) => result,
-                    Err(error) => {
-                        tracing::error!("{:?}", error);
-                        return HttpResponse::InternalServerError().json(ErrorResponse {
-                            message: "internal server error".to_string(),
-                        });
-                    }
-                };
-                developer_role = Some(RoleInfo {
-                    collection_id: result,
-                    pubkey: pubkey_obj.public_key.clone(),
-                });
-            }
-            PublicKeyRoleInfo::Hoster => {
-                let result = match providers::crud::create::<Hoster>(
-                    db.get_ref().clone(),
-                    USER_COLLECTION_NAME.to_string(),
-                    Hoster {
-                        _id: None,
-                        metadata: db_utils::schemas::metadata::Metadata::default(),
-                        user_id,
-                        assigned_hosts: vec![],
-                    },
-                )
-                .await
-                {
-                    Ok(result) => result,
-                    Err(error) => {
-                        tracing::error!("{:?}", error);
-                        return HttpResponse::InternalServerError().json(ErrorResponse {
-                            message: "internal server error".to_string(),
-                        });
-                    }
-                };
-                hoster_role = Some(RoleInfo {
-                    collection_id: result,
-                    pubkey: pubkey_obj.public_key.clone(),
-                });
-            }
-        }
-    }
-
     let result = match providers::crud::create::<User>(
         db.get_ref().clone(),
         USER_COLLECTION_NAME.to_string(),
         User {
-            _id: Some(user_id),
+            _id: Some(ObjectId::new()),
             metadata: db_utils::schemas::metadata::Metadata::default(),
             permissions: payload.permissions.clone(),
             roles: payload.roles.clone(),
             refresh_token_version: 0,
-            developer: developer_role,
-            hoster: hoster_role,
-            jurisdiction: "".to_string(),
+            public_keys: payload
+                .public_keys
+                .iter()
+                .map(|pub_key| UserPubKey {
+                    pubkey: pub_key.public_key.clone(),
+                    is_developer: match pub_key.role {
+                        PublicKeyRoleInfo::Developer => true,
+                        PublicKeyRoleInfo::Hoster => false,
+                    },
+                    is_hoster: match pub_key.role {
+                        PublicKeyRoleInfo::Developer => false,
+                        PublicKeyRoleInfo::Hoster => true,
+                    },
+                })
+                .collect(),
         },
     )
     .await
@@ -223,7 +172,7 @@ pub async fn create_user(
         schemas::user_info::UserInfo {
             _id: None,
             metadata: db_utils::schemas::metadata::Metadata::default(),
-            user_id: result,
+            owner: result,
             email: payload.user_info.email.clone(),
             given_names: payload.user_info.given_names.clone(),
             family_name: payload.user_info.family_name.clone(),
