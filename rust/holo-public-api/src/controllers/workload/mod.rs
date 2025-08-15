@@ -16,7 +16,6 @@ pub fn setup_private_controllers(cfg: &mut web::ServiceConfig) {
 pub fn setup_docs(internal: bool) -> utoipa::openapi::OpenApi {
     let mut openapi = utoipa::openapi::OpenApi::default();
     if internal {
-        openapi.merge(workload_dto::OpenApiSpec::openapi());
         openapi.merge(create_workload::OpenApiSpec::openapi());
         openapi.merge(get_workload::OpenApiSpec::openapi());
         openapi.merge(delete_workload::OpenApiSpec::openapi());

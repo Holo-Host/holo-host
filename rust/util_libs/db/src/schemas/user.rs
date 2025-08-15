@@ -38,9 +38,10 @@ pub enum UserRole {
 
 /// Information about a user's role (hoster or developer) in the system
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct RoleInfo {
-    pub collection_id: ObjectId,
+pub struct UserPubKey {
     pub pubkey: PubKey,
+    pub is_developer: bool,
+    pub is_hoster: bool,
 }
 
 /// User document schema representing a user in the system
@@ -57,6 +58,8 @@ pub struct User {
     pub roles: Vec<UserRole>,
     // this is used to invalidate all refresh tokens by incrementing the version by 1
     pub refresh_token_version: i32,
+    // a list of public keys
+    pub public_keys: Vec<UserPubKey>,
 }
 
 impl IntoIndexes for User {
@@ -66,7 +69,7 @@ impl IntoIndexes for User {
     /// - public_key.role
     /// - public_key.pubkey
     fn into_indices(self) -> Result<Vec<(Document, Option<IndexOptions>)>> {
-        let mut indices = vec![];
+        let indices = vec![];
         Ok(indices)
     }
 }

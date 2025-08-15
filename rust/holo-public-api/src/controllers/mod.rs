@@ -1,10 +1,11 @@
+pub mod general; // used for testing middleware
 use actix_web::web;
 mod apikey;
 mod auth;
 mod blob;
-pub mod general; // used for testing middleware
 mod user;
 mod workload;
+mod manifest;
 
 pub fn setup_public_controllers(cfg: &mut web::ServiceConfig) {
     general::setup_public_controllers(cfg);

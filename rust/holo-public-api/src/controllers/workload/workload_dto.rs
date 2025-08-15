@@ -2,67 +2,74 @@ use db_utils::schemas;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-#[derive(utoipa::OpenApi)]
-#[openapi(components(schemas(CreateWorkloadDto, WorkloadTemplateDto, WorkloadPropertiesDto)))]
-pub struct OpenApiSpec;
-
 #[derive(Serialize, Deserialize, Debug, Clone, utoipa::ToSchema)]
-pub struct WorkloadTemplateDto {
-    #[schema(value_type = String, example = "template_id")]
-    pub blake3_hash: String,
-
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[schema(value_type = Option<Vec<String>>, example = json!(vec!["https://stun1.example.com".to_string(), "https://stun2.example.com".to_string()]))]
-    pub stun_server_urls: Option<Vec<String>>,
-
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[schema(value_type = Option<String>, example = "0.0.1")]
-    pub holochain_version: Option<String>,
-
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[schema(value_type = Option<Vec<String>>, example = json!(vec!["feature1", "feature2"]))]
-    pub holochain_feature_flags: Option<Vec<String>>,
+#[serde(rename_all = "snake_case")]
+pub enum ExecutionPolicyVisibilityDto {
+    Public,
+    Private,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, utoipa::ToSchema)]
-pub struct WorkloadPropertiesDto {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[schema(value_type = Option<String>, example = "network_seed_value")]
-    pub network_seed: Option<String>,
-
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[schema(value_type = Option<HashMap<String, String>>, example = json!({"key1": "value1", "key2": "value2"}))]
-    pub memproof: Option<HashMap<String, String>>,
-
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[schema(value_type = Option<String>, example = "https://example.com/bootstrap")]
-    pub bootstrap_server_url: Option<String>,
-
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[schema(value_type = Option<String>, example = "https://example.com/signal")]
-    pub signal_server_url: Option<String>,
-
-    #[schema(value_type = bool, example = false)]
-    pub http_gw_enable: bool,
-
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[schema(value_type = Option<Vec<String>>, example = json!(vec!["function1".to_string(), "function2".to_string()]))]
-    pub http_gw_allowed_fns: Option<Vec<String>>,
-
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[schema(value_type = Option<i32>, example = 1)]
-    pub instances: Option<i32>,
+pub struct ExecutionPolicyDto {
+    pub jurisdictions: Vec<String>,
+    pub regions: Vec<String>,
+    pub instances: i32,
+    pub visibility: ExecutionPolicyVisibilityDto,
+}
+pub fn execution_policy_from_dto(
+    execution_policy_dto: ExecutionPolicyDto,
+) -> schemas::workload::ExecutionPolicy {
+    schemas::workload::ExecutionPolicy {
+        jurisdictions: execution_policy_dto.jurisdictions,
+        instances: execution_policy_dto.instances,
+        regions: execution_policy_dto.regions,
+        visibility: match execution_policy_dto.visibility {
+            ExecutionPolicyVisibilityDto::Public => {
+                schemas::workload::ExecutionPolicyVisibility::Public
+            }
+            ExecutionPolicyVisibilityDto::Private => {
+                schemas::workload::ExecutionPolicyVisibility::Private
+            }
+        },
+    }
+}
+pub fn execution_policy_to_dto(
+    execution_policy: schemas::workload::ExecutionPolicy,
+) -> ExecutionPolicyDto {
+    ExecutionPolicyDto {
+        jurisdictions: execution_policy.jurisdictions,
+        instances: execution_policy.instances,
+        regions: execution_policy.regions,
+        visibility: match execution_policy.visibility {
+            schemas::workload::ExecutionPolicyVisibility::Public => {
+                ExecutionPolicyVisibilityDto::Public
+            }
+            schemas::workload::ExecutionPolicyVisibility::Private => {
+                ExecutionPolicyVisibilityDto::Private
+            }
+        },
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, utoipa::ToSchema)]
 pub struct CreateWorkloadDto {
-    pub template: WorkloadTemplateDto,
-    pub properties: WorkloadPropertiesDto,
+    pub execution_policy: ExecutionPolicyDto,
+    pub bootstrap_server_url: Option<String>,
+    pub signal_server_url: Option<String>,
+    pub network_speed: Option<String>,
+    pub memproof: Option<HashMap<String, String>>,
+    pub http_gw_enable: bool,
+    pub http_gw_allowed_fns: Option<Vec<String>>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, utoipa::ToSchema)]
 pub struct WorkloadDto {
     pub id: String,
-    pub properties: WorkloadPropertiesDto,
-    pub status: schemas::workload::WorkloadState,
+    pub execution_policy: ExecutionPolicyDto,
+    pub bootstrap_server_url: Option<String>,
+    pub signal_server_url: Option<String>,
+    pub network_seed: Option<String>,
+    pub memproof: Option<HashMap<String, String>>,
+    pub http_gw_enable: bool,
+    pub http_gw_allowed_fns: Option<Vec<String>>,
 }
