@@ -26,7 +26,7 @@ pub enum JobState {
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default)]
 pub struct Job {
-    pub _id: Option<ObjectId>,
+    pub _id: ObjectId,
     pub metadata: Metadata,
 
     /// the developer that owns the job

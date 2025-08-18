@@ -142,16 +142,9 @@ pub async fn create_user(
             public_keys: payload
                 .public_keys
                 .iter()
-                .map(|pub_key| UserPubKey {
-                    pubkey: pub_key.public_key.clone(),
-                    is_developer: match pub_key.role {
-                        PublicKeyRoleInfo::Developer => true,
-                        PublicKeyRoleInfo::Hoster => false,
-                    },
-                    is_hoster: match pub_key.role {
-                        PublicKeyRoleInfo::Developer => false,
-                        PublicKeyRoleInfo::Hoster => true,
-                    },
+                .map(|pub_key| match pub_key.role {
+                    PublicKeyRoleInfo::Hoster => UserPubKey::Hoster(pub_key.public_key.to_string()),
+                    PublicKeyRoleInfo::Developer => UserPubKey::Developer(pub_key.public_key.to_string()),
                 })
                 .collect(),
         },

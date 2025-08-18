@@ -38,18 +38,16 @@ pub enum UserRole {
 
 /// Information about a user's role (hoster or developer) in the system
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct UserPubKey {
-    pub pubkey: PubKey,
-    pub is_developer: bool,
-    pub is_hoster: bool,
+pub enum UserPubKey {
+    Developer(PubKey),
+    Hoster(PubKey),
 }
 
 /// User document schema representing a user in the system
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct User {
     /// MongoDB ObjectId of the user document
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub _id: Option<ObjectId>,
+    pub _id: ObjectId,
     /// Common metadata fields
     pub metadata: Metadata,
     /// List of permissions the user has been granted

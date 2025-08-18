@@ -14,8 +14,7 @@ pub const HOST_COLLECTION_NAME: &str = "host";
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Host {
     /// MongoDB ObjectId of the host document
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub _id: Option<ObjectId>,
+    pub _id: ObjectId,
     /// Reference to the user that owns this host
     pub owner: ObjectId,
     /// Common metadata fields
@@ -39,7 +38,7 @@ pub struct Host {
 impl Host {
     pub fn new(owner: ObjectId) -> Self {
         Self {
-            _id: None,
+            _id: ObjectId::new(),
             owner,
             metadata: Metadata::default(),
             device_id: Default::default(),

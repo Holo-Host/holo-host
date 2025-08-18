@@ -13,8 +13,7 @@ pub const API_KEY_COLLECTION_NAME: &str = "api_key";
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ApiKey {
     /// MongoDB ObjectId of the host document
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub _id: Option<ObjectId>,
+    pub _id: ObjectId,
     /// Common metadata fields
     pub metadata: Metadata,
 
@@ -34,7 +33,7 @@ pub struct ApiKey {
 impl Default for ApiKey {
     fn default() -> Self {
         Self {
-            _id: None,
+            _id: ObjectId::new(),
             metadata: Metadata::default(),
             owner: ObjectId::new(),
             api_key: String::new(),

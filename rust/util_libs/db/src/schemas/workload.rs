@@ -37,8 +37,7 @@ pub struct ExecutionPolicy {
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct Workload {
     /// MongoDB ObjectId of the user document
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub _id: Option<ObjectId>,
+    pub _id: ObjectId,
     pub metadata: Metadata,
     /// the user that owns this resource (workload)
     pub owner: ObjectId,
