@@ -134,7 +134,7 @@ pub async fn create_user(
         db.get_ref().clone(),
         USER_COLLECTION_NAME.to_string(),
         User {
-            _id: Some(ObjectId::new()),
+            _id: ObjectId::new(),
             metadata: db_utils::schemas::metadata::Metadata::default(),
             permissions: payload.permissions.clone(),
             roles: payload.roles.clone(),
@@ -144,7 +144,9 @@ pub async fn create_user(
                 .iter()
                 .map(|pub_key| match pub_key.role {
                     PublicKeyRoleInfo::Hoster => UserPubKey::Hoster(pub_key.public_key.to_string()),
-                    PublicKeyRoleInfo::Developer => UserPubKey::Developer(pub_key.public_key.to_string()),
+                    PublicKeyRoleInfo::Developer => {
+                        UserPubKey::Developer(pub_key.public_key.to_string())
+                    }
                 })
                 .collect(),
         },
@@ -163,7 +165,7 @@ pub async fn create_user(
         db.get_ref().clone(),
         schemas::user_info::USER_INFO_COLLECTION_NAME.to_string(),
         schemas::user_info::UserInfo {
-            _id: None,
+            _id: ObjectId::new(),
             metadata: db_utils::schemas::metadata::Metadata::default(),
             owner: result,
             email: payload.user_info.email.clone(),

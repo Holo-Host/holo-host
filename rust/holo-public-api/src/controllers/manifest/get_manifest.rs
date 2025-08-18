@@ -100,7 +100,7 @@ pub async fn get_manifest(
     let result = result.unwrap();
 
     HttpResponse::Ok().json(manifest_dto::ManifestDto {
-        id: result._id.unwrap().to_hex(),
+        id: result._id.to_hex(),
         name: result.name,
         tag: result.tag,
         workload_type: manifest_dto::workload_type_to_dto(result.workload_type),

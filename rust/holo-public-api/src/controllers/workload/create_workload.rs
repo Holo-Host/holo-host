@@ -67,7 +67,7 @@ pub async fn create_workload(
         db.as_ref().clone(),
         schemas::workload::WORKLOAD_COLLECTION_NAME.to_string(),
         schemas::workload::Workload {
-            _id: Some(ObjectId::new()),
+            _id: ObjectId::new(),
             metadata: schemas::metadata::Metadata::default(),
             owner: user_id,
             bootstrap_server_url: payload.bootstrap_server_url.clone(),

@@ -67,7 +67,7 @@ pub async fn create_manifest(
         db.as_ref().clone(),
         schemas::manifest::MANIFEST_COLLECTION_NAME.to_string(),
         schemas::manifest::Manifest {
-            _id: Some(ObjectId::new()),
+            _id: ObjectId::new(),
             metadata: schemas::metadata::Metadata::default(),
             owner: user_id,
             name: payload.name.clone(),

@@ -100,7 +100,7 @@ pub async fn get_workload(
     let result = result.unwrap();
 
     HttpResponse::Ok().json(workload_dto::WorkloadDto {
-        id: result._id.unwrap().to_hex(),
+        id: result._id.to_hex(),
         bootstrap_server_url: result.bootstrap_server_url,
         signal_server_url: result.signal_server_url,
         http_gw_enable: result.http_gw_enable,
