@@ -79,7 +79,7 @@ pub async fn get_apikey(
         });
     }
 
-    let oid = api_key_result._id.unwrap().to_hex();
+    let oid = api_key_result._id.to_hex();
     HttpResponse::Ok().json(ApiKeyDto {
         id: oid,
         owner: api_key_result.owner.to_hex(),

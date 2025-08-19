@@ -26,8 +26,7 @@ pub enum PublicServiceType {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct PublicService {
     /// MongoDB ObjectId of the workload document
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub _id: Option<ObjectId>,
+    pub _id: ObjectId,
     /// Schema version.
     pub schema_version: i32,
     /// Service Type
@@ -56,7 +55,7 @@ pub struct ServiceRecord {
 impl Default for PublicService {
     fn default() -> Self {
         Self {
-            _id: None,
+            _id: ObjectId::new(),
             schema_version: SCHEMA_VERSION,
             service_type: PublicServiceType::Default,
             metadata: Metadata {

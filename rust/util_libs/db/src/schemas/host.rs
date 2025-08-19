@@ -14,8 +14,9 @@ pub const HOST_COLLECTION_NAME: &str = "host";
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Host {
     /// MongoDB ObjectId of the host document
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub _id: Option<ObjectId>,
+    pub _id: ObjectId,
+    /// Reference to the user that owns this host
+    pub owner: ObjectId,
     /// Common metadata fields
     pub metadata: Metadata,
     /// Unique identifier for the device
@@ -30,16 +31,15 @@ pub struct Host {
     pub avg_latency: i64,
     /// IP address of the host
     pub ip_address: Option<String>,
-    /// Reference to the user that owns this host
-    pub assigned_hoster: Option<ObjectId>,
     /// List of workloads running on this host
     pub assigned_workloads: Vec<ObjectId>,
 }
 
-impl Default for Host {
-    fn default() -> Self {
+impl Host {
+    pub fn new(owner: ObjectId) -> Self {
         Self {
-            _id: None,
+            _id: ObjectId::new(),
+            owner,
             metadata: Metadata::default(),
             device_id: Default::default(),
             inventory: HoloInventory::default(),
@@ -47,9 +47,15 @@ impl Default for Host {
             avg_network_speed: 100, // Start at decent network speed (mbps)
             avg_latency: 100,       // Start at decent latency time
             assigned_workloads: vec![],
-            assigned_hoster: None,
             ip_address: None,
         }
+    }
+}
+
+impl Default for Host {
+    fn default() -> Self {
+        let new_host_id = ObjectId::new();
+        Host::new(new_host_id)
     }
 }
 

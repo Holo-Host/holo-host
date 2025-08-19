@@ -111,7 +111,7 @@ pub async fn create_api_key(
         db.get_ref().clone(),
         API_KEY_COLLECTION_NAME.to_string(),
         ApiKey {
-            _id: None,
+            _id: ObjectId::new(),
             metadata: db_utils::schemas::metadata::Metadata::default(),
             api_key: api_key_hash,
             owner: owner_oid,

@@ -1,31 +1,31 @@
-use crate::{controllers::workload::workload_dto, providers};
+use crate::{controllers::manifest::manifest_dto, providers};
 use actix_web::{post, web, HttpMessage, HttpRequest, HttpResponse, Responder};
 use bson::oid::ObjectId;
 use db_utils::schemas;
 use utoipa::OpenApi;
 
 #[derive(OpenApi)]
-#[openapi(paths(create_workload))]
+#[openapi(paths(create_manifest))]
 pub struct OpenApiSpec;
 
 #[utoipa::path(
     post,
-    path = "/protected/v1/workload",
-    tag = "Workload",
-    summary = "Create workload",
-    description = "Requires 'workload.Create' permission",
+    path = "/protected/v1/manifest",
+    tag = "Manifest",
+    summary = "Create manifiest",
+    description = "Requires 'manifest.Create' permission",
     security(
         ("Bearer" = [])
     ),
-    request_body = workload_dto::CreateWorkloadDto,
+    request_body = manifest_dto::CreateManifestDto,
     responses(
-        (status = 200, body = workload_dto::WorkloadDto)
+        (status = 200, body = manifest_dto::ManifestDto)
     )
 )]
-#[post("/v1/workload")]
-pub async fn create_workload(
+#[post("/v1/manifest")]
+pub async fn create_manifest(
     req: HttpRequest,
-    payload: web::Json<workload_dto::WorkloadDto>,
+    payload: web::Json<manifest_dto::ManifestDto>,
     db: web::Data<mongodb::Client>,
 ) -> impl Responder {
     let payload = payload.into_inner();
@@ -53,7 +53,7 @@ pub async fn create_workload(
     if !providers::auth::verify_all_permissions(
         claims.clone(),
         vec![schemas::user_permissions::UserPermission {
-            resource: schemas::workload::WORKLOAD_COLLECTION_NAME.to_string(),
+            resource: schemas::manifest::MANIFEST_COLLECTION_NAME.to_string(),
             action: schemas::user_permissions::PermissionAction::Create,
             owner: claims.sub,
         }],
@@ -65,20 +65,14 @@ pub async fn create_workload(
 
     let result = match providers::crud::create(
         db.as_ref().clone(),
-        schemas::workload::WORKLOAD_COLLECTION_NAME.to_string(),
-        schemas::workload::Workload {
+        schemas::manifest::MANIFEST_COLLECTION_NAME.to_string(),
+        schemas::manifest::Manifest {
             _id: ObjectId::new(),
             metadata: schemas::metadata::Metadata::default(),
             owner: user_id,
-            bootstrap_server_url: payload.bootstrap_server_url.clone(),
-            signal_server_url: payload.signal_server_url.clone(),
-            http_gw_enable: payload.http_gw_enable,
-            http_gw_allowed_fns: payload.http_gw_allowed_fns.clone(),
-            memproof: payload.memproof.clone(),
-            network_seed: payload.network_seed.clone(),
-            execution_policy: workload_dto::execution_policy_from_dto(
-                payload.execution_policy.clone(),
-            ),
+            name: payload.name.clone(),
+            tag: payload.tag.clone(),
+            workload_type: manifest_dto::workload_type_from_dto(payload.workload_type.clone()),
         },
     )
     .await
@@ -88,20 +82,16 @@ pub async fn create_workload(
             tracing::error!("{:?}", err);
             return HttpResponse::InternalServerError().json(
                 providers::error_response::ErrorResponse {
-                    message: "failed to create workload".to_string(),
+                    message: "failed to create manifest".to_string(),
                 },
             );
         }
     };
 
-    HttpResponse::Ok().json(workload_dto::WorkloadDto {
+    HttpResponse::Ok().json(manifest_dto::ManifestDto {
         id: result.to_hex(),
-        bootstrap_server_url: payload.bootstrap_server_url,
-        signal_server_url: payload.signal_server_url,
-        http_gw_enable: payload.http_gw_enable,
-        http_gw_allowed_fns: payload.http_gw_allowed_fns,
-        memproof: payload.memproof,
-        network_seed: payload.network_seed,
-        execution_policy: payload.execution_policy,
+        name: payload.name,
+        tag: payload.tag,
+        workload_type: payload.workload_type,
     })
 }

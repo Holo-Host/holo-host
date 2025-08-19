@@ -13,8 +13,7 @@ pub const LOG_COLLECTION_NAME: &str = "api_logs";
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ApiLog {
     /// MongoDB ObjectId of the host document
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub _id: Option<ObjectId>,
+    pub _id: ObjectId,
     /// Common metadata fields
     pub metadata: Metadata,
 
@@ -39,7 +38,7 @@ pub struct ApiLog {
 impl Default for ApiLog {
     fn default() -> Self {
         Self {
-            _id: None,
+            _id: ObjectId::new(),
             metadata: Metadata::default(),
             request_id: bson::uuid::Uuid::new().to_string(),
             path: String::new(),

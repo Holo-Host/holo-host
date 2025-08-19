@@ -107,7 +107,8 @@ impl InventoryServiceApi {
         inventory: &HoloInventory,
     ) -> Result<Host, ServiceError> {
         // Create a default Host instance to extract default values
-        let default_host = Host::default();
+        let host_id = ObjectId::new();
+        let default_host = Host::new(host_id);
         let filter = doc! { "device_id": host_device_id };
         let update = doc! {
             "$set": {
@@ -162,8 +163,10 @@ impl InventoryServiceApi {
             })
             .await?;
 
-        let ineligible_workload_ids: Vec<ObjectId> =
-            ineligible_workloads.into_iter().map(|w| w._id).collect();
+        let ineligible_workload_ids: Vec<ObjectId> = ineligible_workloads
+            .into_iter()
+            .map(|w| w._id)
+            .collect();
 
         if !ineligible_workload_ids.is_empty() {
             log::info!(

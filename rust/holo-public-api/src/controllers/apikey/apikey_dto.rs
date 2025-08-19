@@ -22,7 +22,7 @@ pub struct ApiKeyDto {
 
 pub fn map_api_key_to_dto(api_key: db_utils::schemas::api_key::ApiKey) -> ApiKeyDto {
     ApiKeyDto {
-        id: api_key._id.unwrap().to_hex(),
+        id: api_key._id.to_hex(),
         owner: api_key.owner.to_string(),
         permissions: api_key.permissions.clone(),
         description: api_key.description.clone(),
