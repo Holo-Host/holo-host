@@ -36,6 +36,7 @@ pub struct ExecutionPolicy {
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct Workload {
+    /// MongoDB ObjectId of the user document
     pub _id: ObjectId,
     pub metadata: Metadata,
     /// the user that owns this resource (workload)

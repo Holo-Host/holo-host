@@ -47,8 +47,7 @@ pub fn get_default_workload_name() -> String {
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, Default)]
 pub struct Manifest {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub _id: Option<ObjectId>,
+    pub _id: ObjectId,
     pub metadata: Metadata,
     pub owner: ObjectId,
 

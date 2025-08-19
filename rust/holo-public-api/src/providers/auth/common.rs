@@ -1,14 +1,15 @@
 use actix_web::HttpRequest;
 use db_utils::schemas::{
-    api_key::API_KEY_COLLECTION_NAME, user::USER_COLLECTION_NAME,
-    workload::WORKLOAD_COLLECTION_NAME,
+    api_key::API_KEY_COLLECTION_NAME, manifest::MANIFEST_COLLECTION_NAME,
+    user::USER_COLLECTION_NAME, workload::WORKLOAD_COLLECTION_NAME,
 };
 
 pub const API_KEY_HEADER: &str = "x-api-key";
-pub const ALL_RESOURCES: [&str; 3] = [
+pub const ALL_RESOURCES: [&str; 4] = [
     USER_COLLECTION_NAME,
     WORKLOAD_COLLECTION_NAME,
     API_KEY_COLLECTION_NAME,
+    MANIFEST_COLLECTION_NAME,
 ];
 
 /// This function is used to get the API key from the headers
