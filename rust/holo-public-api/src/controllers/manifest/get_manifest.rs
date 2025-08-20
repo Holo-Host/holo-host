@@ -1,27 +1,27 @@
-use crate::{controllers::workload::workload_dto, providers};
+use crate::{controllers::manifest::manifest_dto, providers};
 use actix_web::{get, web, HttpMessage, HttpRequest, HttpResponse, Responder};
 use db_utils::schemas;
 use utoipa::OpenApi;
 
 #[derive(OpenApi)]
-#[openapi(paths(get_workload))]
+#[openapi(paths(get_manifest))]
 pub struct OpenApiSpec;
 
 #[utoipa::path(
     post,
-    path = "/protected/v1/workload",
-    tag = "Workload",
+    path = "/protected/v1/manifest",
+    tag = "Manifest",
     summary = "Create manifiest",
-    description = "Requires 'workload.Read' permission",
+    description = "Requires 'manifest.Read' permission",
     security(
         ("Bearer" = [])
     ),
     responses(
-        (status = 200, body = workload_dto::WorkloadDto)
+        (status = 200, body = manifest_dto::ManifestDto)
     )
 )]
-#[get("/v1/workload/{id}")]
-pub async fn get_workload(
+#[get("/v1/manifest/{id}")]
+pub async fn get_manifest(
     req: HttpRequest,
     id: web::Path<String>,
     db: web::Data<mongodb::Client>,
@@ -37,9 +37,9 @@ pub async fn get_workload(
     }
     let claims = claims.unwrap();
 
-    let owner = match providers::crud::get_owner::<schemas::workload::Workload>(
+    let owner = match providers::crud::get_owner::<schemas::manifest::Manifest>(
         db.get_ref().clone(),
-        schemas::workload::WORKLOAD_COLLECTION_NAME.to_string(),
+        schemas::manifest::MANIFEST_COLLECTION_NAME.to_string(),
         id.clone(),
     )
     .await
@@ -49,14 +49,14 @@ pub async fn get_workload(
             tracing::error!("{:?}", err);
             return HttpResponse::InternalServerError().json(
                 providers::error_response::ErrorResponse {
-                    message: "failed to get workload".to_string(),
+                    message: "failed to get manifest".to_string(),
                 },
             );
         }
     };
     if owner.is_none() {
         return HttpResponse::NotFound().json(providers::error_response::ErrorResponse {
-            message: "no workload found with the given id".to_string(),
+            message: "no manifest found with the given id".to_string(),
         });
     }
     let owner = owner.unwrap();
@@ -65,7 +65,7 @@ pub async fn get_workload(
     if !providers::auth::verify_all_permissions(
         claims.clone(),
         vec![schemas::user_permissions::UserPermission {
-            resource: schemas::workload::WORKLOAD_COLLECTION_NAME.to_string(),
+            resource: schemas::manifest::MANIFEST_COLLECTION_NAME.to_string(),
             action: schemas::user_permissions::PermissionAction::Read,
             owner,
         }],
@@ -75,9 +75,9 @@ pub async fn get_workload(
         });
     }
 
-    let result = match providers::crud::get::<schemas::workload::Workload>(
+    let result = match providers::crud::get::<schemas::manifest::Manifest>(
         db.as_ref().clone(),
-        schemas::workload::WORKLOAD_COLLECTION_NAME.to_string(),
+        schemas::manifest::MANIFEST_COLLECTION_NAME.to_string(),
         id.clone(),
     )
     .await
@@ -87,26 +87,22 @@ pub async fn get_workload(
             tracing::error!("{:?}", err);
             return HttpResponse::InternalServerError().json(
                 providers::error_response::ErrorResponse {
-                    message: "failed to create workload".to_string(),
+                    message: "failed to create manifest".to_string(),
                 },
             );
         }
     };
     if result.is_none() {
         return HttpResponse::NotFound().json(providers::error_response::ErrorResponse {
-            message: "no workload found with the given id".to_string(),
+            message: "no manifest found with the given id".to_string(),
         });
     }
     let result = result.unwrap();
 
-    HttpResponse::Ok().json(workload_dto::WorkloadDto {
+    HttpResponse::Ok().json(manifest_dto::ManifestDto {
         id: result._id.to_hex(),
-        bootstrap_server_url: result.bootstrap_server_url,
-        signal_server_url: result.signal_server_url,
-        http_gw_enable: result.http_gw_enable,
-        http_gw_allowed_fns: result.http_gw_allowed_fns,
-        memproof: result.memproof,
-        network_seed: result.network_seed,
-        execution_policy: workload_dto::execution_policy_to_dto(result.execution_policy),
+        name: result.name,
+        tag: result.tag,
+        workload_type: manifest_dto::workload_type_to_dto(result.workload_type),
     })
 }

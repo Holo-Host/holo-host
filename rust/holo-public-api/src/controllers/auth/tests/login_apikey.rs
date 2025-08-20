@@ -19,7 +19,7 @@ mod tests {
             db.clone(),
             API_KEY_COLLECTION_NAME.to_string(),
             ApiKey {
-                _id: None,
+                _id: ObjectId::new(),
                 api_key: api_key.clone(),
                 description: "test-api-key".to_string(),
                 expire_at: 10,

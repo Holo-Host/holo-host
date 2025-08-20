@@ -115,7 +115,7 @@ pub async fn login_with_apikey(
             sub: user_id.clone(),
             exp: result.expire_at as usize,
             allow_extending_refresh_token: false,
-            reference_id: Some(result._id.unwrap().to_string()),
+            reference_id: Some(result._id.to_string()),
         },
     });
     if jwt_tokens.is_none() {

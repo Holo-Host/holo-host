@@ -13,8 +13,7 @@ pub const USER_INFO_COLLECTION_NAME: &str = "user_info";
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct UserInfo {
     /// MongoDB ObjectId of the user info document
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub _id: Option<ObjectId>,
+    pub _id: ObjectId,
     /// Common metadata fields
     pub metadata: Metadata,
     /// Reference to the associated user

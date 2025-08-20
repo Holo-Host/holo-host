@@ -43,6 +43,7 @@ pub struct ExecutionPolicy {
 #[derive(Serialize, Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "clap", derive(clap::Args))]
 pub struct Workload {
+    /// MongoDB ObjectId of the user document
     pub _id: ObjectId,
 
     pub metadata: Metadata,

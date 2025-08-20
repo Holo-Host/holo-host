@@ -163,8 +163,10 @@ impl InventoryServiceApi {
             })
             .await?;
 
-        let ineligible_workload_ids: Vec<ObjectId> =
-            ineligible_workloads.into_iter().map(|w| w._id).collect();
+        let ineligible_workload_ids: Vec<ObjectId> = ineligible_workloads
+            .into_iter()
+            .map(|w| w._id)
+            .collect();
 
         if !ineligible_workload_ids.is_empty() {
             log::info!(
