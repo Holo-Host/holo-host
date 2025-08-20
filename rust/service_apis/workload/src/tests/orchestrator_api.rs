@@ -1,11 +1,9 @@
 #[cfg(test)]
 mod tests {
-    use crate::{orchestrator_api::OrchestratorWorkloadApi, types::WorkloadResult};
+    use crate::{orchestrator_api::OrchestratorJobApi, types::JobResult};
     use anyhow::Result;
     use bson::doc;
-    use db_utils::schemas::workload::{
-        Capacity, WorkloadState, WorkloadStatePayload, WorkloadStatus,
-    };
+    use db_utils::schemas::workload::{WorkloadState, WorkloadStatePayload, WorkloadStatus};
     use hpos_hal::inventory::{HoloDriveInventory, HoloInventory};
     use mock_utils::{
         host::{create_test_host, gen_mock_processors},
@@ -24,7 +22,7 @@ mod tests {
             .client()
             .expect("Failed to connect client to Mongodb");
 
-        let api = OrchestratorWorkloadApi::new(&db_client).await?;
+        let api = OrchestratorJobApi::new(&db_client).await?;
         let workload = create_test_workload_default();
         println!("workload: {:#?}", workload);
         let msg_payload = serde_json::to_vec(&workload).unwrap();
@@ -32,12 +30,12 @@ mod tests {
         let r = api.add_workload(msg).await?;
         println!("workload result: {:#?}", r);
 
-        if let WorkloadResult::Status(status) = r.result {
+        if let JobResult::Status(status) = r.result {
             assert!(status.id.is_some());
             assert!(matches!(status.actual, WorkloadState::Reported));
             assert!(matches!(status.desired, WorkloadState::Running));
         } else {
-            panic!("Expected WorkloadResult::Status, got something else");
+            panic!("Expected JobResult::Status, got something else");
         }
 
         Ok(())
@@ -50,7 +48,7 @@ mod tests {
             .client()
             .expect("Failed to connect client to Mongodb");
 
-        let api = OrchestratorWorkloadApi::new(&db_client).await?;
+        let api = OrchestratorJobApi::new(&db_client).await?;
 
         // First add a workload
         let mut workload = create_test_workload_default();
@@ -66,11 +64,11 @@ mod tests {
 
         let r = api.update_workload(msg).await?;
 
-        if let WorkloadResult::Status(status) = r.result {
+        if let JobResult::Status(status) = r.result {
             assert!(matches!(status.actual, WorkloadState::Updated));
             assert!(matches!(status.desired, WorkloadState::Running));
         } else {
-            panic!("Expected WorkloadResult::Status, got something else");
+            panic!("Expected JobResult::Status, got something else");
         }
 
         Ok(())
@@ -83,7 +81,7 @@ mod tests {
             .client()
             .expect("Failed to connect client to Mongodb");
 
-        let api = OrchestratorWorkloadApi::new(&db_client).await?;
+        let api = OrchestratorJobApi::new(&db_client).await?;
 
         // First add a workload
         let mut workload = create_test_workload_default();
@@ -99,11 +97,11 @@ mod tests {
 
         let r = api.delete_workload(msg).await?;
 
-        if let WorkloadResult::Status(status) = r.result {
+        if let JobResult::Status(status) = r.result {
             assert!(matches!(status.actual, WorkloadState::Deleted));
             assert!(matches!(status.desired, WorkloadState::Uninstalled));
         } else {
-            panic!("Expected WorkloadResult::Status, got something else");
+            panic!("Expected JobResult::Status, got something else");
         }
 
         // Verify workload is marked as deleted
@@ -125,7 +123,7 @@ mod tests {
             .client()
             .expect("Failed to connect client to Mongodb");
 
-        let api = OrchestratorWorkloadApi::new(&db_client).await?;
+        let api = OrchestratorJobApi::new(&db_client).await?;
         let required_avg_network_speed = 100;
         let required_avg_uptime = 0.85;
         let required_capacity = Capacity {
@@ -193,7 +191,7 @@ mod tests {
             .client()
             .expect("Failed to connect client to Mongodb");
 
-        let api = OrchestratorWorkloadApi::new(&db_client).await?;
+        let api = OrchestratorJobApi::new(&db_client).await?;
         let required_avg_network_speed = 500;
         let required_avg_uptime = 0.90;
         let required_capacity = Capacity {
@@ -253,14 +251,14 @@ mod tests {
 
         let r = api.manage_workload_on_host(msg).await?;
 
-        if let WorkloadResult::Workload(returned_workload) = r.result {
+        if let JobResult::Workload(returned_workload) = r.result {
             assert!(matches!(
                 returned_workload.status.actual,
                 WorkloadState::Assigned
             ));
             assert_eq!(returned_workload.status.desired, workload.status.desired);
         } else {
-            panic!("Expected WorkloadResult::Workload, got something else");
+            panic!("Expected JobResult::Workload, got something else");
         }
 
         // Verify host assignment
@@ -281,7 +279,7 @@ mod tests {
             .client()
             .expect("Failed to connect client to Mongodb");
 
-        let api = OrchestratorWorkloadApi::new(&db_client).await?;
+        let api = OrchestratorJobApi::new(&db_client).await?;
 
         // Create and add a workload first
         let workload = create_test_workload_default();
@@ -294,18 +292,18 @@ mod tests {
             actual: WorkloadState::Running,
             payload: WorkloadStatePayload::None,
         };
-        let result = WorkloadResult::Status(status.clone());
+        let result = JobResult::Status(status.clone());
 
         let msg_payload = serde_json::to_vec(&result).unwrap();
         let msg = Arc::new(NatsMessage::new("WORKLOAD.status", msg_payload).into_message());
 
         let r = api.handle_status_update(msg).await?;
 
-        if let WorkloadResult::Status(status) = r.result {
+        if let JobResult::Status(status) = r.result {
             assert!(matches!(status.actual, WorkloadState::Running));
             assert!(matches!(status.desired, WorkloadState::Running));
         } else {
-            panic!("Expected WorkloadResult::Status, got something else");
+            panic!("Expected JobResult::Status, got something else");
         }
 
         // Verify workload status was updated

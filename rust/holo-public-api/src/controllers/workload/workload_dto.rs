@@ -1,6 +1,5 @@
 use db_utils::schemas;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
 #[derive(Serialize, Deserialize, Debug, Clone, utoipa::ToSchema)]
 #[serde(rename_all = "snake_case")]
@@ -53,11 +52,9 @@ pub fn execution_policy_to_dto(
 
 #[derive(Serialize, Deserialize, Debug, Clone, utoipa::ToSchema)]
 pub struct CreateWorkloadDto {
+    pub manifest_id: String,
     pub execution_policy: ExecutionPolicyDto,
-    pub bootstrap_server_url: Option<String>,
-    pub signal_server_url: Option<String>,
-    pub network_speed: Option<String>,
-    pub memproof: Option<HashMap<String, String>>,
+    pub network_seed: Option<String>,
     pub http_gw_enable: bool,
     pub http_gw_allowed_fns: Option<Vec<String>>,
 }
@@ -65,11 +62,9 @@ pub struct CreateWorkloadDto {
 #[derive(Serialize, Deserialize, Debug, Clone, utoipa::ToSchema)]
 pub struct WorkloadDto {
     pub id: String,
+    pub manifest_id: String,
     pub execution_policy: ExecutionPolicyDto,
-    pub bootstrap_server_url: Option<String>,
-    pub signal_server_url: Option<String>,
     pub network_seed: Option<String>,
-    pub memproof: Option<HashMap<String, String>>,
     pub http_gw_enable: bool,
     pub http_gw_allowed_fns: Option<Vec<String>>,
 }

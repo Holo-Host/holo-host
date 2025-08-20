@@ -29,7 +29,8 @@ async fn test_indexing_and_api() -> Result<()> {
 
     fn get_mock_host() -> schemas::host::Host {
         schemas::host::Host {
-            _id: Some(oid::ObjectId::new()),
+            _id: oid::ObjectId::new(),
+            owner: oid::ObjectId::new(),
             metadata: Metadata {
                 is_deleted: false,
                 created_at: Some(DateTime::now()),
@@ -45,7 +46,6 @@ async fn test_indexing_and_api() -> Result<()> {
             avg_network_speed: 500,
             avg_latency: 10,
             assigned_workloads: vec![oid::ObjectId::new()],
-            assigned_hoster: Some(oid::ObjectId::new()),
         }
     }
 
@@ -54,7 +54,7 @@ async fn test_indexing_and_api() -> Result<()> {
     let _ = host_api.insert_one_into(host_0.clone()).await?;
 
     // get one (the same) document
-    let filter_one = doc! { "_id":  host_0._id.unwrap() };
+    let filter_one = doc! { "_id":  host_0._id };
     let fetched_host = host_api.get_one_from(filter_one.clone()).await?;
     let mongo_db_host = fetched_host.expect("Failed to fetch host");
     assert_eq!(mongo_db_host._id, host_0._id);
@@ -68,21 +68,14 @@ async fn test_indexing_and_api() -> Result<()> {
     host_api.insert_one_into(host_3.clone()).await?;
 
     // get many docs
-    let ids = vec![
-        host_1._id.unwrap(),
-        host_2._id.unwrap(),
-        host_3._id.unwrap(),
-    ];
+    let ids = vec![host_1._id, host_2._id, host_3._id];
     let filter_many = doc! {
         "_id": { "$in": ids.clone() }
     };
     let fetched_hosts = host_api.get_many_from(filter_many.clone()).await?;
 
     assert_eq!(fetched_hosts.len(), 3);
-    let updated_ids: Vec<oid::ObjectId> = fetched_hosts
-        .into_iter()
-        .map(|h| h._id.unwrap_or_default())
-        .collect();
+    let updated_ids: Vec<oid::ObjectId> = fetched_hosts.into_iter().map(|h| h._id).collect();
     assert!(updated_ids.contains(&ids[0]));
     assert!(updated_ids.contains(&ids[1]));
     assert!(updated_ids.contains(&ids[2]));

@@ -6,22 +6,57 @@ use mongodb::options::IndexOptions;
 
 pub const JOB_COLLECTION_NAME: &str = "job";
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum JobState {
+    Db(DbStates),
+    Host(HostStates),
+    Error(String),
+}
+
+impl Default for JobState {
+    fn default() -> Self {
+        JobState::Db(DbStates::default())
+    }
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum JobChangeRequest {
+    Update,
+    Pause,
+    Stop,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum DbStates {
     #[default]
     /// Job is created in the db, it is not installed on host
     Created,
-    /// Job is pending installation on host
+    /// Job change has been requested in db
+    Requested(JobChangeRequest),
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum HappStorageState {
+    HappInstalled,
+    HappNotFound,
+    Unknown,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum HostStates {
+    /// Job is pending installation (or re-installation after update) on host
     Pending,
-    /// Job has been installed on host
-    Installed,
     /// Job is running
-    Running,
-    /// Job is paused
-    Paused,
-    /// Job is stopped
-    Stopped,
+    Running(HappStorageState),
+    /// Job is paused << follow-up with team
+    Paused(HappStorageState),
+    /// Job is stopped (on host)
+    Stopped(HappStorageState),
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default)]
