@@ -63,7 +63,18 @@ pub async fn create_manifest(
         });
     }
 
-    let result = match providers::crud::create(
+    let manifest_type = match manifest_dto::manifest_type_from_dto(payload.manifest_type.clone()) {
+        Ok(manifest_type) => manifest_type,
+        Err(e) => {
+            return HttpResponse::InternalServerError().json(
+                providers::error_response::ErrorResponse {
+                    message: e.to_string(),
+                },
+            );
+        }
+    };
+
+    match providers::crud::create(
         db.as_ref().clone(),
         schemas::manifest::MANIFEST_COLLECTION_NAME.to_string(),
         schemas::manifest::Manifest {
@@ -72,12 +83,19 @@ pub async fn create_manifest(
             owner: user_id,
             name: payload.name.clone(),
             tag: payload.tag.clone(),
-            workload_type: manifest_dto::workload_type_from_dto(payload.workload_type.clone()),
+            manifest_type,
         },
     )
     .await
     {
-        Ok(result) => result,
+        Ok(result) => {
+            return HttpResponse::Ok().json(manifest_dto::ManifestDto {
+                id: result.to_hex(),
+                name: payload.name,
+                tag: payload.tag,
+                manifest_type: payload.manifest_type,
+            })
+        }
         Err(err) => {
             tracing::error!("{:?}", err);
             return HttpResponse::InternalServerError().json(
@@ -86,12 +104,5 @@ pub async fn create_manifest(
                 },
             );
         }
-    };
-
-    HttpResponse::Ok().json(manifest_dto::ManifestDto {
-        id: result.to_hex(),
-        name: payload.name,
-        tag: payload.tag,
-        workload_type: payload.workload_type,
-    })
+    }
 }

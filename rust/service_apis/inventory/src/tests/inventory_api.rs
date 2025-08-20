@@ -5,7 +5,7 @@ mod tests {
     use bson::doc;
     use bson::oid::ObjectId;
     use db_utils::mongodb::api::MongoDbAPI;
-    use db_utils::schemas::{host::Host, workload::Capacity};
+    use db_utils::schemas::host::Host;
     use mock_utils::{
         host::create_mock_inventory, mongodb_runner::MongodRunner, nats_message::NatsMessage,
         workload::create_test_workload,
@@ -28,17 +28,8 @@ mod tests {
         let host_id = ObjectId::new();
 
         // Create workload with specific requirements
-        let workload = create_test_workload(
-            None,
-            Some(vec![host_id]),
-            Some(1),
-            Some(Capacity {
-                drive: 500,
-                cores: 16,
-            }),
-            Some(100),
-            Some(0.9),
-        );
+        let workload =
+            create_test_workload(None, Some(vec![host_id]), Some(1), Some(100), Some(0.9));
         let workload_id = api
             .workload_collection
             .insert_one_into(workload)

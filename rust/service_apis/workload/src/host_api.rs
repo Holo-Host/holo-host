@@ -4,17 +4,19 @@ Endpoints & Managed Subjects:
     - `fetch_workload_status`: handles the "WORKLOAD.<host_id>.send_status" subject
 */
 
-use crate::types::WorkloadResult;
-
-use super::{types::WorkloadApiResult, WorkloadServiceApi};
+use super::{
+    types::{JobApiResult, JobResult, JobStatus},
+    JobServiceApi,
+};
 use anyhow::{Context, Result};
 use async_nats::{jetstream::kv::Store, Message};
 use bson::oid::ObjectId;
 use core::option::Option::None;
-use db_utils::schemas::workload::{
-    HappBinaryFormat, WorkloadManifest, WorkloadManifestHolochainDhtV1, WorkloadState,
-    WorkloadStateDiscriminants, WorkloadStatePayload, WorkloadStatus,
+use db_utils::schemas::job::{
+    HostStates, JobChangeRequest, JobState, WorkloadManifest, WorkloadManifestHolochainDhtV1,
+    WorkloadStateDiscriminants, WorkloadStatePayload,
 };
+use db_utils::schemas::manifest::HappBinaryFormat;
 use futures::TryFutureExt;
 use ham::{
     exports::{
@@ -30,23 +32,23 @@ use std::path::PathBuf;
 use std::{fmt::Debug, net::Ipv4Addr, path::Path, sync::Arc};
 use url::Url;
 use util::{
-    bash, calculate_http_gw_port, ensure_workload_path, provision_extra_container_closure_path,
-    realize_extra_container_path, EnsureWorkloadPathMode,
+    bash, calculate_http_gw_port, ensure_job_path, provision_extra_container_closure_path,
+    realize_extra_container_path, EnsureJobPathMode,
 };
 
 #[derive(Debug, Clone)]
-pub struct HostWorkloadApi {
+pub struct HostJobApi {
     // this is used as a persistence and communication layer to dynamically create handlers for the HTTP GW subjects
     pub hc_http_gw_storetore: Store,
 }
 
-impl WorkloadServiceApi for HostWorkloadApi {}
+impl JobServiceApi for HostJobApi {}
 
 #[derive(thiserror::Error, Debug)]
 #[error("error processing workload {workload_result:?}: {e}")]
-struct WorkloadResultError {
+struct JobResultError {
     e: anyhow::Error,
-    workload_result: WorkloadResult,
+    workload_result: JobResult,
 }
 
 // TODO: create something that allocates ports and can be queried for a free one.
@@ -121,24 +123,21 @@ fn validate_holochain_version(version: Option<&String>) -> Result<(), String> {
     }
 }
 
-impl HostWorkloadApi {
-    async fn handle_workload_command(
-        &self,
-        workload_result: WorkloadResult,
-    ) -> anyhow::Result<WorkloadStatus> {
-        match workload_result {
-            WorkloadResult::Status(workload_status) => {
-                log::warn!("Received a workload status message (WorkloadResult::Status). This is currently unsupported. Ignoring... ");
-                Ok(workload_status)
+impl HostJobApi {
+    async fn handle_workload_command(&self, job_result: JobResult) -> anyhow::Result<JobStatus> {
+        match job_result {
+            JobResult::Status(job_status) => {
+                log::warn!("Received a job status message (JobResult::Status). This is currently unsupported. Ignoring... ");
+                Ok(job_status)
             }
-            WorkloadResult::Workload(workload) => {
+            JobResult::Job(job) => {
                 // Validate holochain version before attempting to install the holochain conductor and app bundle
                 if let WorkloadManifest::HolochainDhtV1(ref inner) = workload.manifest {
                     if let Err(version_err) =
                         validate_holochain_version(inner.holochain_version.as_ref())
                     {
                         anyhow::bail!(
-                            "Invalid holochain version provided in workload configuration. err={}",
+                            "Invalid holochain version provided in job configuration. err={}",
                             version_err
                         );
                     }
@@ -146,14 +145,11 @@ impl HostWorkloadApi {
 
                 // TODO(correctness): consider status.actual to inform assumptions towards the current state
                 // TODO(backlog,ux): spawn longer-running tasks and report back Pending, and set up a periodic status updates while the spawned task is running
-                let desired_state = &workload.status.desired;
+                let desired_state = &job.desired_state;
                 let (actual_state, workload_state_payload) = match desired_state {
-                    WorkloadState::Running => {
-                        let (workload_path_toplevel, _) = ensure_workload_path(
-                            &workload._id,
-                            None,
-                            EnsureWorkloadPathMode::Create,
-                        )?;
+                    JobState::Host(HostStates::Running(_)) => {
+                        let (workload_path_toplevel, _) =
+                            ensure_job_path(&workload._id, None, EnsureJobPathMode::Create)?;
                         let extra_container_path = realize_extra_container_path(
                             workload._id,
                             workload.manifest.clone(),
@@ -161,12 +157,11 @@ impl HostWorkloadApi {
                         )
                         .await?;
 
-                        let start_or_restart_if_desired =
-                            if let WorkloadState::Running = desired_state {
-                                " --start --restart-changed"
-                            } else {
-                                ""
-                            };
+                        let start_or_restart_if_desired = if let JobState::Running = desired_state {
+                            " --start --restart-changed"
+                        } else {
+                            ""
+                        };
 
                         bash(&format!(
                             "extra-container create {extra_container_path}{start_or_restart_if_desired}",
@@ -174,7 +169,7 @@ impl HostWorkloadApi {
                         .await?;
 
                         let workload_state_payload = match (desired_state, &workload.manifest) {
-                            (WorkloadState::Running, WorkloadManifest::HolochainDhtV1(boxed)) => {
+                            (JobState::Running, WorkloadManifest::HolochainDhtV1(boxed)) => {
                                 let WorkloadManifestHolochainDhtV1 {
                                     happ_binary,
                                     network_seed,
@@ -361,18 +356,16 @@ impl HostWorkloadApi {
 
                         (desired_state, workload_state_payload)
                     }
-                    WorkloadState::Uninstalled | WorkloadState::Deleted => {
-                        let (workload_path_toplevel, path_exists) = ensure_workload_path(
-                            &workload._id,
-                            None,
-                            EnsureWorkloadPathMode::Observe,
-                        )?;
+                    /* JobState::Uninstalled | JobState::Deleted */
+                    JobState::Host(HostStates::Stopped(_)) => {
+                        let (workload_path_toplevel, path_exists) =
+                            ensure_job_path(&job._id, None, EnsureJobPathMode::Observe)?;
 
                         match workload.manifest {
                             WorkloadManifest::HolochainDhtV1(
                                 ref workload_manifest_holochain_dht_v1,
                             ) if workload_manifest_holochain_dht_v1.http_gw_enable => {
-                                let key = workload._id.to_hex();
+                                let key = job._id.to_hex();
                                 if let Some(entry) = self
                                     .hc_http_gw_storetore
                                     .entry(&key)
@@ -391,7 +384,7 @@ impl HostWorkloadApi {
                                     let mut value: HcHttpGwWorkerKvBucketValue =
                                         serde_json::from_slice(&entry.value).context(format!(
                                             "deserializing HcHttpGwWorkerKvBucketValue for {:?}",
-                                            workload._id.to_hex()
+                                            job._id.to_hex()
                                         ))?;
 
                                     value.desired_state = desired_state;
@@ -421,7 +414,8 @@ impl HostWorkloadApi {
                             )?;
 
                             let extra_container_subcmd = match desired_state {
-                                WorkloadState::Deleted => "destroy",
+                                /* JobState::Deleted */
+                                JobState::Host(HostStates::Stopped(_)) => "destroy",
                                 _ => "stop",
                             };
 
@@ -440,19 +434,24 @@ impl HostWorkloadApi {
                         (desired_state, WorkloadStatePayload::None)
                     }
 
-                    WorkloadState::Reported
-                    | WorkloadState::Assigned
-                    | WorkloadState::Updated
-                    | WorkloadState::Pending
-                    | WorkloadState::Error(_)
-                    | WorkloadState::Unknown(_) => {
+                    JobState::Host(HostStates::Paused(_))
+                    | JobState::Host(HostStates::Pending)
+                    | JobState::Db(_)
+                    | JobState::Error(_) => {
                         anyhow::bail!("unsupported desired state {desired_state:?}")
-                    }
+                    } // JobState::DbStates::Created /* JobState::Reported */
+                      // // | JobState::Assigned
+                      // | JobState::DbStates::Requested(JobChangeRequest::Update)
+                      // | JobState::HostStates::Pending
+                      // // | JobState::Unknown(_)
+                      // | JobState::Error(_) => {
+                      //     anyhow::bail!("unsupported desired state {desired_state:?}")
+                      // }
                 };
 
-                Ok(WorkloadStatus {
-                    id: Some(workload._id),
-                    desired: workload.status.desired.clone(),
+                Ok(JobStatus {
+                    id: Some(job._id),
+                    desired: job.desired_state.clone(),
                     actual: actual_state.clone(),
                     payload: workload_state_payload,
                 })
@@ -464,7 +463,7 @@ impl HostWorkloadApi {
         &self,
         msg: Arc<Message>,
         api_options: ApiOptions,
-    ) -> Result<WorkloadApiResult, ServiceError> {
+    ) -> Result<JobApiResult, ServiceError> {
         let msg_subject = msg.subject.clone().into_string();
         let msg_headers = msg.headers.clone();
         log::trace!("Incoming message for '{}'", msg_subject);
@@ -475,12 +474,12 @@ impl HostWorkloadApi {
 
         // TODO: fix -
         // Note: Throwing an actual error in this scope leads to the request silently skipped with no logs entry in the host-agent.
-        let workload_payload = match Self::convert_msg_to_type::<WorkloadResult>(msg) {
+        let workload_payload = match Self::convert_msg_to_type::<JobResult>(msg) {
             Ok(r) => r,
             Err(err) => {
-                return Ok(WorkloadApiResult {
+                return Ok(JobApiResult {
                     maybe_response_tags: None,
-                    result: WorkloadResult::Status(Self::handle_error(
+                    result: JobResult::Status(Self::handle_error(
                         err.into(),
                         msg_subject,
                         msg_headers,
@@ -503,9 +502,9 @@ impl HostWorkloadApi {
             }
         };
 
-        Ok(WorkloadApiResult {
+        Ok(JobApiResult {
             maybe_response_tags: None,
-            result: WorkloadResult::Status(workload_status),
+            result: JobResult::Status(workload_status),
             maybe_headers: Some(header_map),
         })
     }
@@ -513,24 +512,28 @@ impl HostWorkloadApi {
     pub async fn fetch_workload_status(
         &self,
         msg: Arc<Message>,
-    ) -> Result<WorkloadApiResult, ServiceError> {
+    ) -> Result<JobApiResult, ServiceError> {
         let msg_subject = msg.subject.clone().into_string();
         log::trace!("Incoming message for '{}'", msg_subject);
 
-        let workload_payload = Self::convert_msg_to_type::<WorkloadResult>(msg)?;
-        let current_status = match workload_payload {
-            WorkloadResult::Workload(workload) => {
-                // let last_recorded_status = workload.status;
+        let job_result = Self::convert_msg_to_type::<JobResult>(msg)?;
+        let current_job_status = match job_result {
+            JobResult::Job(job) => {
+                // TODO: this is a placeholder for fetching the actual status on the system for this job
+                // we're interested in the actual status on the system for this job
 
-                // TODO: this is a placeholder for fetching the actual status on the system for this workload
-                // we're interested in the actual status on the system for this workload
+                // TODO: look up the status for the given job
 
-                // TODO: look up the status for the given workload
-
-                workload.status
+                JobStatus {
+                    id: Some(job._id),
+                    desired: job.desired_state,
+                    actual: job.current_state,
+                    // TODO:
+                    payload: crate::types::JobResponsePayload::HolochainDhtV1(bson::Bson::Null),
+                }
             }
-            WorkloadResult::Status(status) => {
-                log::warn!("Received a workload status message (WorkloadResult::Status). This is currently unsupported. Ignoring... ");
+            JobResult::Status(status) => {
+                log::warn!("Received a workload status message (JobResult::Status). This is currently unsupported. Ignoring... ");
                 status
             }
         };
@@ -538,8 +541,8 @@ impl HostWorkloadApi {
         // Send updated status:
         // NB: This will send the update to both the requester (if one exists)
         // and will broadcast the update to for any `response_subject` address registred for the endpoint
-        Ok(WorkloadApiResult {
-            result: WorkloadResult::Status(current_status),
+        Ok(JobApiResult {
+            result: JobResult::Status(current_job_status),
             maybe_response_tags: None,
             maybe_headers: None,
         })
@@ -549,31 +552,32 @@ impl HostWorkloadApi {
         err: anyhow::Error,
         msg_subject: String,
         maybe_msg_headers: Option<async_nats::HeaderMap>,
-    ) -> WorkloadStatus {
-        match err.downcast::<WorkloadResultError>() {
-            Ok(WorkloadResultError {
+    ) -> JobStatus {
+        match err.downcast::<JobResultError>() {
+            Ok(JobResultError {
                 e,
                 workload_result: payload,
             }) => match payload {
-                WorkloadResult::Workload(workload) => WorkloadStatus {
-                    id: Some(workload._id),
-                    actual: WorkloadState::Error(e.to_string()),
-                    ..workload.status
+                JobResult::Job(job) => JobStatus {
+                    id: Some(job._id),
+                    desired: job.desired_state,
+                    payload: job.payload,
+                    actual: JobState::Error(e.to_string()),
                 },
-                WorkloadResult::Status(s) => s,
+                JobResult::Status(s) => s,
             },
             Err(e) => {
-                let workload_id = maybe_msg_headers.and_then(|header_map| {
+                let job_id = maybe_msg_headers.and_then(|header_map| {
                     header_map
-                        .get("workload_id")
-                        .and_then(|workload_id| ObjectId::parse_str(workload_id).ok())
+                        .get("job_id")
+                        .and_then(|job_id| ObjectId::parse_str(job_id).ok())
                 });
 
-                WorkloadStatus {
-                    id: workload_id,
-                    desired: WorkloadState::Unknown(Default::default()),
-                    actual: WorkloadState::Error(format!(
-                        "Error handling workload update. request_subject={msg_subject}, err={e:?}"
+                JobStatus {
+                    id: job_id,
+                    desired: JobState::Error("Unknown state".to_string()),
+                    actual: JobState::Error(format!(
+                        "Error handling job update. request_subject={msg_subject}, err={e:?}"
                     )),
                     payload: Default::default(),
                 }
@@ -588,22 +592,25 @@ mod util {
     };
     use anyhow::Context;
     use bson::oid::ObjectId;
-    use db_utils::schemas::workload::{WorkloadManifest, WorkloadManifestHolochainDhtV1};
+    use db_utils::schemas::{
+        job::{JobManifest, WorkloadManifestHolochainDhtV1},
+        manifest::HolochainDhtParameters,
+    };
     use futures::{AsyncBufReadExt, StreamExt};
     use sha2::{Digest, Sha256};
     use std::{path::PathBuf, process::Stdio, str::FromStr};
     use tokio::process::Command;
 
-    /// Calculate the http gw port based on network mode and workload ID
+    /// Calculate the http gw port based on network mode and job ID
     ///
     /// With privateNetwork=true, we can use the standard port inside containers
     /// and let nixos handle port forwarding to avoid conflicts
-    /// With shared network, use dynamic port allocation based on workload ID
+    /// With shared network, use dynamic port allocation based on job ID
     ///
     /// For holochain gateway access from outside the container, we should use the dynamically allocated host port
     /// (This will be the same as the container port when privateNetwork=true with port forwarding)
     pub(crate) fn calculate_http_gw_port(
-        workload_id: &bson::oid::ObjectId,
+        job_id: &bson::oid::ObjectId,
         is_private_network: bool,
     ) -> u16 {
         const HOLOCHAIN_HTTP_GW_PORT_DEFAULT: u16 = 8090;
@@ -612,9 +619,9 @@ mod util {
             // With private networks, use standard port (forwarded to host)
             HOLOCHAIN_HTTP_GW_PORT_DEFAULT
         } else {
-            // With shared network, use dynamic port allocation based on workload ID
-            // Create deterministic port offset from workload id (same as in extra-container-holochain nix package)
-            let hex = workload_id.to_hex();
+            // With shared network, use dynamic port allocation based on job ID
+            // Create deterministic port offset from job id (same as in extra-container-holochain nix package)
+            let hex = job_id.to_hex();
             let mut hasher = Sha256::new();
             hasher.update(hex.as_bytes());
             let hash = hasher.finalize();
@@ -647,16 +654,16 @@ mod util {
         Ok(())
     }
 
-    pub(crate) enum EnsureWorkloadPathMode {
+    pub(crate) enum EnsureJobPathMode {
         Create,
         // Exists,
         Observe,
     }
 
-    pub(crate) fn ensure_workload_path(
+    pub(crate) fn ensure_job_path(
         id: &ObjectId,
         maybe_subdir: Option<&str>,
-        mode: EnsureWorkloadPathMode,
+        mode: EnsureJobPathMode,
     ) -> anyhow::Result<(String, bool)> {
         const WORKLOAD_BASE_PATH: &str = "/var/lib/holo-host-agent/workloads";
 
@@ -673,10 +680,8 @@ mod util {
         };
 
         let path_exists = match mode {
-            EnsureWorkloadPathMode::Create => {
-                std::fs::create_dir_all(&workload_path).map(|()| true)?
-            }
-            EnsureWorkloadPathMode::Observe => std::fs::exists(&workload_path)?,
+            EnsureJobPathMode::Create => std::fs::create_dir_all(&workload_path).map(|()| true)?,
+            EnsureJobPathMode::Observe => std::fs::exists(&workload_path)?,
         };
 
         let path = workload_path.to_str().map(ToString::to_string).ok_or_else(|| anyhow::anyhow!("{workload_path:?} is not a valid string, and we need to use it in string representation"))?;
@@ -687,7 +692,7 @@ mod util {
     // Transform the workload into something that can be executed
     pub(crate) async fn realize_extra_container_path(
         workload_id: ObjectId,
-        manifest: WorkloadManifest,
+        manifest: HolochainDhtParameters,
         workload_path: PathBuf,
     ) -> anyhow::Result<String> {
         log::debug!("transforming {manifest:?} at {workload_path:?}");

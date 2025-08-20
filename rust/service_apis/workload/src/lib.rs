@@ -24,12 +24,12 @@ use async_nats::jetstream::ErrorCode;
 use async_nats::Message;
 use async_trait::async_trait;
 use core::option::Option::None;
-use db_utils::schemas::workload::{WorkloadState, WorkloadStatus};
+use db_utils::schemas::job::JobState;
 use nats_utils::types::ServiceError;
 use serde::Deserialize;
 use std::future::Future;
 use std::{fmt::Debug, sync::Arc};
-use types::{WorkloadApiResult, WorkloadResult};
+use types::{JobApiResult, JobResult, JobStatus};
 
 // TODO: rename SRV -> SVC
 pub const WORKLOAD_SRV_NAME: &str = "WORKLOAD_SERVICE";
@@ -43,7 +43,7 @@ pub const TAG_MAP_PREFIX_ASSIGNED_HOST: &str = "assigned_host";
 pub const WORKLOAD_ORCHESTRATOR_SUBJECT_PREFIX: &str = "orchestrator";
 
 #[async_trait]
-pub trait WorkloadServiceApi
+pub trait JobServiceApi
 where
     Self: std::fmt::Debug + 'static,
 {
@@ -72,27 +72,27 @@ where
         remove desired_ and error_state, and instead fill them in from result that is returned from  cb_fn.
         the assumptions are probably too strong. if we want to limit the values that can be inserted maybe we could find a way to handle that at insertion time. when we process the entry here it's already too late and the unexpected/invalid entry is persisted.
 
-        the refactor can be done in a way where this function turns any Err(err) from the cb_fn into an Ok(WorkloadApiResult) that has sets the actual status to error the given details.
+        the refactor can be done in a way where this function turns any Err(err) from the cb_fn into an Ok(JobApiResult) that has sets the actual status to error the given details.
         by doing this, the cb_fn impls can use the rust native error handling instead of our custom one.
     */
     async fn process_request<T, Fut>(
         &self,
         msg: Arc<Message>,
-        desired_state: WorkloadState,
-        error_state: impl Fn(String) -> WorkloadState + Send + Sync,
+        desired_state: JobState,
+        error_state: impl Fn(String) -> JobState + Send + Sync,
         cb_fn: impl Fn(T) -> Fut + Send + Sync,
-    ) -> Result<WorkloadApiResult, ServiceError>
+    ) -> Result<JobApiResult, ServiceError>
     where
         T: for<'de> Deserialize<'de> + Clone + Send + Sync + Debug + 'static,
-        Fut: Future<Output = Result<WorkloadApiResult, ServiceError>> + Send,
+        Fut: Future<Output = Result<JobApiResult, ServiceError>> + Send,
     {
         // Deserialize payload into the expected type
-        // TODO: we probably don't want to lose this error information. instead, for now, return it in the WorkloadStatus
+        // TODO: we probably don't want to lose this error information. instead, for now, return it in the JobStatus
         let payload: T = match Self::convert_msg_to_type::<T>(msg.clone()) {
             Ok(t) => t,
             Err(e) => {
-                return Ok(WorkloadApiResult {
-                    result: WorkloadResult::Status(WorkloadStatus {
+                return Ok(JobApiResult {
+                    result: JobResult::Status(JobStatus {
                         id: None,
                         desired: desired_state,
                         actual: error_state(format!("error converting message {msg:?}: {e}")),
@@ -117,8 +117,8 @@ where
                 log::error!("{}: {}", err_msg, e);
 
                 // Return response for stream with error state
-                Ok(WorkloadApiResult {
-                    result: WorkloadResult::Status(WorkloadStatus {
+                Ok(JobApiResult {
+                    result: JobResult::Status(JobStatus {
                         id: None,
                         desired: desired_state,
                         actual: error_state(format!("{}: {}", err_msg, e)),

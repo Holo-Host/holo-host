@@ -30,7 +30,7 @@ use std::{collections::HashMap, sync::Arc};
 use tokio::sync::{broadcast, RwLock};
 use url::Url;
 use workload::{
-    host_api::{HcHttpGwWorkerKvBucketValue, HostWorkloadApi},
+    host_api::{HcHttpGwWorkerKvBucketValue, HostJobApi},
     types::{WorkloadError, WorkloadOpResult, WorkloadServiceSubjects},
     WORKLOAD_SRV_DESC, WORKLOAD_SRV_NAME, WORKLOAD_SRV_SUBJ, WORKLOAD_SRV_VERSION,
 };
@@ -72,7 +72,7 @@ pub async fn run(
     .await?;
 
     // Instantiate the Workload API
-    let workload_api = HostWorkloadApi {
+    let workload_api = HostJobApi {
         hc_http_gw_storetore,
     };
 
