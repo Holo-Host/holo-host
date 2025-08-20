@@ -66,7 +66,7 @@ impl IntoIndexes for User {
     /// - public_key.role
     /// - public_key.pubkey
     fn into_indices(self) -> Result<Vec<(Document, Option<IndexOptions>)>> {
-        let mut indices = vec![];
+        let indices = vec![];
         Ok(indices)
     }
 }

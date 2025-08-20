@@ -1,7 +1,9 @@
+use bson::DateTime;
 use serde::{Deserialize, Serialize};
 
 /// Common metadata fields for database documents
-#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "clap", derive(clap::Args))]
 pub struct Metadata {
     /// Flag indicating if the document has been marked as deleted
     pub is_deleted: bool,
@@ -11,4 +13,16 @@ pub struct Metadata {
     pub updated_at: Option<bson::DateTime>,
     /// Timestamp when the document was created
     pub created_at: Option<bson::DateTime>,
+}
+
+impl Default for Metadata {
+    fn default() -> Self {
+        let dt = DateTime::now();
+        Metadata {
+            is_deleted: false,
+            deleted_at: None,
+            updated_at: Some(dt),
+            created_at: Some(dt),
+        }
+    }
 }
