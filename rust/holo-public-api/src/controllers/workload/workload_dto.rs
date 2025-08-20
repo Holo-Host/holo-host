@@ -65,11 +65,12 @@ pub struct CreateWorkloadDto {
 #[derive(Serialize, Deserialize, Debug, Clone, utoipa::ToSchema)]
 pub struct WorkloadDto {
     pub id: String,
+    pub manifest_id: String,
     pub execution_policy: ExecutionPolicyDto,
-    pub bootstrap_server_url: Option<String>,
-    pub signal_server_url: Option<String>,
     pub network_seed: Option<String>,
-    pub memproof: Option<HashMap<String, String>>,
     pub http_gw_enable: bool,
     pub http_gw_allowed_fns: Option<Vec<String>>,
+    // pub bootstrap_server_url: Option<String>,
+    // pub signal_server_url: Option<String>,
+    // pub memproof: Option<HashMap<String, String>>,
 }

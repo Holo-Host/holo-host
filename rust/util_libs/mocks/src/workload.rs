@@ -1,42 +1,41 @@
 #![allow(dead_code)]
 
 use bson::oid::ObjectId;
-use db_utils::schemas::{self, workload::Capacity};
+use db_utils::schemas;
 
 // Helper function to create a test workload
-pub fn create_test_workload_default() -> schemas::workload::Workload {
-    create_test_workload(None, None, None, None, None, None)
+pub fn create_test_workload_default(
+    owner_id: Option<ObjectId>,
+    manifest_id: Option<ObjectId>,
+) -> schemas::workload::Workload {
+    let mock_owner_id = owner_id.unwrap_or_default();
+    let mock_manifest_id = manifest_id.unwrap_or_default();
+    create_test_workload(mock_owner_id, mock_manifest_id, None, None, None, None)
 }
 
 pub fn create_test_workload(
-    assigned_developer: Option<ObjectId>,
-    assigned_hosts: Option<Vec<ObjectId>>,
+    owner: ObjectId, // previously called "assigned_developer"
+    manifest: ObjectId,
     min_hosts: Option<i32>,
-    needed_capacity: Option<Capacity>,
-    avg_network_speed: Option<i64>,
-    avg_uptime: Option<f64>,
+    regions: Option<Vec<String>>,
+    jurisdictions: Option<Vec<String>>,
+    context: Option<schemas::workload::Context>, // assigned_hosts: Option<Vec<ObjectId>>,
 ) -> schemas::workload::Workload {
-    let mut workload = schemas::workload::Workload::default();
-    let id = ObjectId::new();
-    workload._id = id;
-
-    if let Some(assigned_developer) = assigned_developer {
-        workload.assigned_developer = assigned_developer;
-    }
-    if let Some(assigned_hosts) = assigned_hosts {
-        workload.assigned_hosts = assigned_hosts;
-    }
+    let mut workload = schemas::workload::Workload::new(owner, manifest);
     if let Some(min_hosts) = min_hosts {
-        workload.min_hosts = min_hosts;
+        workload.execution_policy.instances = min_hosts;
     }
-    if let Some(needed_capacity) = needed_capacity {
-        workload.system_specs.capacity = needed_capacity;
+    if let Some(jurisdictions) = jurisdictions {
+        workload.execution_policy.jurisdictions = jurisdictions;
     }
-    if let Some(avg_network_speed) = avg_network_speed {
-        workload.system_specs.avg_network_speed = avg_network_speed;
+    if let Some(regions) = regions {
+        workload.execution_policy.regions = regions;
     }
-    if let Some(avg_uptime) = avg_uptime {
-        workload.system_specs.avg_uptime = avg_uptime;
+    if let Some(context) = context {
+        workload.context = context;
     }
+    // if let Some(assigned_hosts) = assigned_hosts {
+    //     workload.assigned_hosts = assigned_hosts;
+    // }
     workload
 }

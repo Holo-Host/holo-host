@@ -3,7 +3,6 @@ use serde::{Deserialize, Serialize};
 
 /// Common metadata fields for database documents
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "clap", derive(clap::Args))]
 pub struct Metadata {
     /// Flag indicating if the document has been marked as deleted
     pub is_deleted: bool,

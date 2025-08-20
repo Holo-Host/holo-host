@@ -13,12 +13,12 @@ pub const HOST_COLLECTION_NAME: &str = "host";
 /// Host document schema representing a hosting device in the system
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Host {
+    /// Common metadata fields
+    pub metadata: Metadata,
     /// MongoDB ObjectId of the host document
     pub _id: ObjectId,
     /// Reference to the user that owns this host
     pub owner: ObjectId,
-    /// Common metadata fields
-    pub metadata: Metadata,
     /// Unique identifier for the device
     pub device_id: String,
     /// Hardware inventory information

@@ -1,7 +1,7 @@
 use crate::{controllers::workload::workload_dto, providers};
 use actix_web::{post, web, HttpMessage, HttpRequest, HttpResponse, Responder};
 use bson::oid::ObjectId;
-use db_utils::schemas;
+use db_utils::schemas::{self, workload::Context};
 use utoipa::OpenApi;
 
 #[derive(OpenApi)]
@@ -49,6 +49,16 @@ pub async fn create_workload(
         }
     };
 
+    let manifest_id = match ObjectId::parse_str(payload.manifest_id.clone()) {
+        Ok(r) => r,
+        Err(e) => {
+            tracing::error!("{:?}", e);
+            return HttpResponse::Forbidden().json(providers::error_response::ErrorResponse {
+                message: "Permission denied".to_string(),
+            });
+        }
+    };
+
     // Verify permissions
     if !providers::auth::verify_all_permissions(
         claims.clone(),
@@ -67,23 +77,26 @@ pub async fn create_workload(
         db.as_ref().clone(),
         schemas::workload::WORKLOAD_COLLECTION_NAME.to_string(),
         schemas::workload::Workload {
-            _id: ObjectId::new(),
             metadata: schemas::metadata::Metadata::default(),
+            _id: ObjectId::new(),
             owner: user_id,
-            bootstrap_server_url: payload.bootstrap_server_url.clone(),
-            signal_server_url: payload.signal_server_url.clone(),
-            http_gw_enable: payload.http_gw_enable,
-            http_gw_allowed_fns: payload.http_gw_allowed_fns.clone(),
-            memproof: payload.memproof.clone(),
-            network_seed: payload.network_seed.clone(),
+            context: Context {
+                http_gw_enable: payload.http_gw_enable,
+                http_gw_allowed_fns: payload.http_gw_allowed_fns.clone(),
+                network_seed: payload.network_seed.clone(),
+            },
+            // bootstrap_server_url: payload.bootstrap_server_url.clone(),
+            // signal_server_url: payload.signal_server_url.clone(),
+            // memproof: payload.memproof.clone(),
             execution_policy: workload_dto::execution_policy_from_dto(
                 payload.execution_policy.clone(),
             ),
+            manifest_id,
         },
     )
     .await
     {
-        Ok(result) => result,
+        Ok(id) => id,
         Err(err) => {
             tracing::error!("{:?}", err);
             return HttpResponse::InternalServerError().json(
@@ -96,12 +109,10 @@ pub async fn create_workload(
 
     HttpResponse::Ok().json(workload_dto::WorkloadDto {
         id: result.to_hex(),
-        bootstrap_server_url: payload.bootstrap_server_url,
-        signal_server_url: payload.signal_server_url,
         http_gw_enable: payload.http_gw_enable,
         http_gw_allowed_fns: payload.http_gw_allowed_fns,
-        memproof: payload.memproof,
         network_seed: payload.network_seed,
         execution_policy: payload.execution_policy,
+        manifest_id: payload.manifest_id,
     })
 }

@@ -7,9 +7,9 @@ Current Endpoints & Managed Subjects:
     - `handle_status_update`: handles the "WORKLOAD.handle_status_update" subject // published by hosting agent
 */
 
-use super::{types::WorkloadApiResult, WorkloadServiceApi};
+use super::{types::JobApiResult, JobServiceApi};
 use crate::{
-    types::{HostIdJSON, WorkloadResult},
+    types::{HostIdJSON, JobResult},
     TAG_MAP_PREFIX_ASSIGNED_HOST,
 };
 use anyhow::Result;
@@ -57,7 +57,7 @@ pub struct OrchestratorWorkloadApi {
     pub user_collection: MongoCollection<User>,
 }
 
-impl WorkloadServiceApi for OrchestratorWorkloadApi {}
+impl JobServiceApi for OrchestratorWorkloadApi {}
 
 impl OrchestratorWorkloadApi {
     pub async fn new(client: &MongoDBClient) -> Result<Self> {
@@ -68,7 +68,7 @@ impl OrchestratorWorkloadApi {
         })
     }
 
-    pub async fn add_workload(&self, msg: Arc<Message>) -> Result<WorkloadApiResult, ServiceError> {
+    pub async fn add_workload(&self, msg: Arc<Message>) -> Result<JobApiResult, ServiceError> {
         log::debug!("Incoming message for 'WORKLOAD.add'");
         self.process_request(
             msg,
@@ -93,8 +93,8 @@ impl OrchestratorWorkloadApi {
 
                 status.id = Some(workload_id);
 
-                Ok(WorkloadApiResult {
-                    result: WorkloadResult::Status(status),
+                Ok(JobApiResult {
+                    result: JobResult::Status(status),
                     maybe_response_tags: None,
                     maybe_headers: None,
                 })
@@ -103,10 +103,7 @@ impl OrchestratorWorkloadApi {
         .await
     }
 
-    pub async fn update_workload(
-        &self,
-        msg: Arc<Message>,
-    ) -> Result<WorkloadApiResult, ServiceError> {
+    pub async fn update_workload(&self, msg: Arc<Message>) -> Result<JobApiResult, ServiceError> {
         log::debug!("Incoming message for {}", &msg.subject);
 
         self.process_request(
@@ -148,8 +145,8 @@ impl OrchestratorWorkloadApi {
 
                 status.id = Some(workload_id);
 
-                Ok(WorkloadApiResult {
-                    result: WorkloadResult::Status(status),
+                Ok(JobApiResult {
+                    result: JobResult::Status(status),
                     maybe_response_tags: None,
                     maybe_headers: None,
                 })
@@ -158,10 +155,7 @@ impl OrchestratorWorkloadApi {
         .await
     }
 
-    pub async fn delete_workload(
-        &self,
-        msg: Arc<Message>,
-    ) -> Result<WorkloadApiResult, ServiceError> {
+    pub async fn delete_workload(&self, msg: Arc<Message>) -> Result<JobApiResult, ServiceError> {
         log::debug!("Incoming message for 'WORKLOAD.delete'");
         self.process_request(
             msg,
@@ -201,8 +195,8 @@ impl OrchestratorWorkloadApi {
 
                 status.id = Some(workload._id);
 
-                Ok(WorkloadApiResult {
-                    result: WorkloadResult::Status(status),
+                Ok(JobApiResult {
+                    result: JobResult::Status(status),
                     maybe_response_tags: None,
                     maybe_headers: None,
                 })
@@ -216,12 +210,12 @@ impl OrchestratorWorkloadApi {
     pub async fn handle_status_update(
         &self,
         msg: Arc<Message>,
-    ) -> Result<WorkloadApiResult, ServiceError> {
+    ) -> Result<JobApiResult, ServiceError> {
         log::debug!("Incoming status update message.");
         let maybe_headers = msg.headers.clone();
 
-        let workload_status = match Self::convert_msg_to_type::<WorkloadResult>(msg)? {
-            WorkloadResult::Status(mut status) => {
+        let workload_status = match Self::convert_msg_to_type::<JobResult>(msg)? {
+            JobResult::Status(mut status) => {
                 if status.id.is_none() {
                     let err_msg = ServiceError::internal(
                         "Received invalid workload update message. err=No workload status id found in message or headers.".to_string(),
@@ -237,7 +231,7 @@ impl OrchestratorWorkloadApi {
                 }
                 status
             }
-            WorkloadResult::Workload(mut workload) => {
+            JobResult::Workload(mut workload) => {
                 if workload.status.id.is_none() {
                     workload.status.id = Some(workload._id);
                 }
@@ -274,8 +268,8 @@ impl OrchestratorWorkloadApi {
             )
             .await?;
 
-        Ok(WorkloadApiResult {
-            result: WorkloadResult::Status(workload_status),
+        Ok(JobApiResult {
+            result: JobResult::Status(workload_status),
             maybe_response_tags: None,
             maybe_headers: None,
         })
@@ -284,7 +278,7 @@ impl OrchestratorWorkloadApi {
     pub async fn manage_workload_on_host(
         &self,
         msg: Arc<Message>,
-    ) -> Result<WorkloadApiResult, ServiceError> {
+    ) -> Result<JobApiResult, ServiceError> {
         log::debug!("Incoming message for 'WORKLOAD.insert'");
         let workload = Self::convert_msg_to_type::<Workload>(msg)?;
 
@@ -315,7 +309,7 @@ impl OrchestratorWorkloadApi {
         &self,
         workload: Workload,
         workload_before_change: Option<Workload>,
-    ) -> Result<WorkloadApiResult, ServiceError> {
+    ) -> Result<JobApiResult, ServiceError> {
         // Match on state and handle each case
         match workload.status.actual {
             WorkloadState::Reported => {
@@ -349,8 +343,8 @@ impl OrchestratorWorkloadApi {
                     WorkloadState::Deleted,
                 ];
                 log::warn!("Received invalid actual state for workload change event. valid_events={:?}, workload={:#?}", valid_events, workload);
-                Ok(WorkloadApiResult {
-                    result: WorkloadResult::Status(WorkloadStatus {
+                Ok(JobApiResult {
+                    result: JobResult::Status(WorkloadStatus {
                         id: Some(workload._id),
                         ..workload.status
                     }),
@@ -365,7 +359,7 @@ impl OrchestratorWorkloadApi {
         &self,
         workload: Workload,
         num_hosts_to_add: i32,
-    ) -> Result<WorkloadApiResult, ServiceError> {
+    ) -> Result<JobApiResult, ServiceError> {
         log::info!("Orchestrator::handle_workload_assignment");
 
         // Find minimum number of eligible hosts for the new workload
@@ -387,7 +381,7 @@ impl OrchestratorWorkloadApi {
         &self,
         workload: Workload,
         workload_before_change: Option<Workload>,
-    ) -> Result<WorkloadApiResult, ServiceError> {
+    ) -> Result<JobApiResult, ServiceError> {
         log::info!("Orchestrator::handle_workload_update");
 
         let mut num_hosts_to_add = 0;
@@ -406,8 +400,8 @@ impl OrchestratorWorkloadApi {
                     workload, workload_before_change
                 );
 
-                return Ok(WorkloadApiResult {
-                    result: WorkloadResult::Status(WorkloadStatus {
+                return Ok(JobApiResult {
+                    result: JobResult::Status(WorkloadStatus {
                         actual: WorkloadState::Running,
                         ..workload.status
                     }),
@@ -443,7 +437,7 @@ impl OrchestratorWorkloadApi {
     async fn handle_workload_deletion(
         &self,
         workload: Workload,
-    ) -> Result<WorkloadApiResult, ServiceError> {
+    ) -> Result<JobApiResult, ServiceError> {
         // Fetch current hosts and remove workload from them
         let hosts = self.fetch_hosts_assigned_to_workload(workload._id).await?;
         self.remove_workload_from_hosts(workload._id).await?;
@@ -485,8 +479,8 @@ impl OrchestratorWorkloadApi {
         header_map.insert("workload_id", workload._id.to_hex());
         log::trace!("Nats header map: {header_map:?}");
 
-        Ok(WorkloadApiResult {
-            result: WorkloadResult::Workload(Workload {
+        Ok(JobApiResult {
+            result: JobResult::Workload(Workload {
                 status: new_status,
                 ..workload
             }),
@@ -674,7 +668,7 @@ impl OrchestratorWorkloadApi {
         &self,
         workload: Workload,
         min_eligible_hosts: Vec<HostIdJSON>,
-    ) -> Result<WorkloadApiResult, ServiceError> {
+    ) -> Result<JobApiResult, ServiceError> {
         // Assign workload to minimum required number of eligible hosts
         let min_eligible_host_ids: Vec<ObjectId> =
             min_eligible_hosts.iter().map(|h| h._id).collect();
@@ -726,8 +720,8 @@ impl OrchestratorWorkloadApi {
         header_map.insert("workload_id", workload._id.to_hex());
         log::trace!("Nats header map: {header_map:?}");
 
-        Ok(WorkloadApiResult {
-            result: WorkloadResult::Workload(Workload {
+        Ok(JobApiResult {
+            result: JobResult::Workload(Workload {
                 status: new_status,
                 ..workload
             }),
@@ -762,7 +756,7 @@ impl OrchestratorWorkloadApi {
         jetstream: Context,
         service_subject: String,
         response_subject_fn: ResponseSubjectsGenerator,
-        workload_api_result: WorkloadApiResult,
+        workload_api_result: JobApiResult,
     ) {
         let response_bytes = workload_api_result.get_response();
         let header_map = workload_api_result.get_header_map();

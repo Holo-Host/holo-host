@@ -1,6 +1,6 @@
 use crate::{controllers::workload::workload_dto, providers};
 use actix_web::{get, web, HttpMessage, HttpRequest, HttpResponse, Responder};
-use db_utils::schemas;
+use db_utils::schemas::{self, workload::Context};
 use utoipa::OpenApi;
 
 #[derive(OpenApi)]
@@ -101,12 +101,13 @@ pub async fn get_workload(
 
     HttpResponse::Ok().json(workload_dto::WorkloadDto {
         id: result._id.to_hex(),
-        bootstrap_server_url: result.bootstrap_server_url,
-        signal_server_url: result.signal_server_url,
-        http_gw_enable: result.http_gw_enable,
-        http_gw_allowed_fns: result.http_gw_allowed_fns,
-        memproof: result.memproof,
-        network_seed: result.network_seed,
+        manifest_id: result.manifest_id.to_hex(),
         execution_policy: workload_dto::execution_policy_to_dto(result.execution_policy),
+        http_gw_enable: result.context.http_gw_enable,
+        http_gw_allowed_fns: result.context.http_gw_allowed_fns,
+        network_seed: result.context.network_seed,
+        // bootstrap_server_url: result.bootstrap_server_url,
+        // signal_server_url: result.signal_server_url,
+        // memproof: result.memproof,
     })
 }
