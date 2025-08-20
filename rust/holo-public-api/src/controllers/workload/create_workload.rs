@@ -25,7 +25,7 @@ pub struct OpenApiSpec;
 #[post("/v1/workload")]
 pub async fn create_workload(
     req: HttpRequest,
-    payload: web::Json<workload_dto::WorkloadDto>,
+    payload: web::Json<workload_dto::CreateWorkloadDto>,
     db: web::Data<mongodb::Client>,
 ) -> impl Responder {
     let payload = payload.into_inner();

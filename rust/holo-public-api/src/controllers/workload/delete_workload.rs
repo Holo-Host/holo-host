@@ -8,8 +8,8 @@ use utoipa::OpenApi;
 pub struct OpenApiSpec;
 
 #[utoipa::path(
-    post,
-    path = "/protected/v1/workload",
+    delete,
+    path = "/protected/v1/workload/{id}",
     tag = "Workload",
     summary = "Delete workload",
     description = "Requires 'workload.Delete' permission",
@@ -87,7 +87,7 @@ pub async fn delete_workload(
             tracing::error!("{:?}", err);
             return HttpResponse::InternalServerError().json(
                 providers::error_response::ErrorResponse {
-                    message: "failed to create workload".to_string(),
+                    message: "failed to delete workload".to_string(),
                 },
             );
         }
