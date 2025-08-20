@@ -37,12 +37,12 @@ use util::{
 };
 
 #[derive(Debug, Clone)]
-pub struct HostWorkloadApi {
+pub struct HostJobApi {
     // this is used as a persistence and communication layer to dynamically create handlers for the HTTP GW subjects
     pub hc_http_gw_storetore: Store,
 }
 
-impl JobServiceApi for HostWorkloadApi {}
+impl JobServiceApi for HostJobApi {}
 
 #[derive(thiserror::Error, Debug)]
 #[error("error processing workload {workload_result:?}: {e}")]
@@ -123,7 +123,7 @@ fn validate_holochain_version(version: Option<&String>) -> Result<(), String> {
     }
 }
 
-impl HostWorkloadApi {
+impl HostJobApi {
     async fn handle_workload_command(&self, job_result: JobResult) -> anyhow::Result<JobStatus> {
         match job_result {
             JobResult::Status(job_status) => {

@@ -25,7 +25,7 @@ use nats_utils::{
     types::{JsServiceBuilder, ServiceConsumerBuilder, ServiceError},
 };
 use workload::{
-    orchestrator_api::OrchestratorWorkloadApi, types::WorkloadServiceSubjects,
+    orchestrator_api::OrchestratorJobApi, types::WorkloadServiceSubjects,
     TAG_MAP_PREFIX_ASSIGNED_HOST, WORKLOAD_ORCHESTRATOR_SUBJECT_PREFIX, WORKLOAD_SRV_DESC,
     WORKLOAD_SRV_NAME, WORKLOAD_SRV_SUBJ, WORKLOAD_SRV_VERSION,
 };
@@ -37,7 +37,7 @@ pub async fn run(
     db_client: MongoDBClient,
 ) -> Result<JsClient, async_nats::Error> {
     // Instantiate the Workload API (requires access to db client)
-    let workload_api = Arc::new(OrchestratorWorkloadApi::new(&db_client).await?);
+    let workload_api = Arc::new(OrchestratorJobApi::new(&db_client).await?);
 
     // Register Workload Streams for Orchestrator to consume and process
     // NB: These subjects are published by external Developer (via external api), the Nats-DB-Connector, or the Hosting Agent

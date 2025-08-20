@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use crate::{orchestrator_api::OrchestratorWorkloadApi, types::JobResult};
+    use crate::{orchestrator_api::OrchestratorJobApi, types::JobResult};
     use anyhow::Result;
     use bson::doc;
     use db_utils::schemas::workload::{WorkloadState, WorkloadStatePayload, WorkloadStatus};
@@ -22,7 +22,7 @@ mod tests {
             .client()
             .expect("Failed to connect client to Mongodb");
 
-        let api = OrchestratorWorkloadApi::new(&db_client).await?;
+        let api = OrchestratorJobApi::new(&db_client).await?;
         let workload = create_test_workload_default();
         println!("workload: {:#?}", workload);
         let msg_payload = serde_json::to_vec(&workload).unwrap();
@@ -48,7 +48,7 @@ mod tests {
             .client()
             .expect("Failed to connect client to Mongodb");
 
-        let api = OrchestratorWorkloadApi::new(&db_client).await?;
+        let api = OrchestratorJobApi::new(&db_client).await?;
 
         // First add a workload
         let mut workload = create_test_workload_default();
@@ -81,7 +81,7 @@ mod tests {
             .client()
             .expect("Failed to connect client to Mongodb");
 
-        let api = OrchestratorWorkloadApi::new(&db_client).await?;
+        let api = OrchestratorJobApi::new(&db_client).await?;
 
         // First add a workload
         let mut workload = create_test_workload_default();
@@ -123,7 +123,7 @@ mod tests {
             .client()
             .expect("Failed to connect client to Mongodb");
 
-        let api = OrchestratorWorkloadApi::new(&db_client).await?;
+        let api = OrchestratorJobApi::new(&db_client).await?;
         let required_avg_network_speed = 100;
         let required_avg_uptime = 0.85;
         let required_capacity = Capacity {
@@ -191,7 +191,7 @@ mod tests {
             .client()
             .expect("Failed to connect client to Mongodb");
 
-        let api = OrchestratorWorkloadApi::new(&db_client).await?;
+        let api = OrchestratorJobApi::new(&db_client).await?;
         let required_avg_network_speed = 500;
         let required_avg_uptime = 0.90;
         let required_capacity = Capacity {
@@ -279,7 +279,7 @@ mod tests {
             .client()
             .expect("Failed to connect client to Mongodb");
 
-        let api = OrchestratorWorkloadApi::new(&db_client).await?;
+        let api = OrchestratorJobApi::new(&db_client).await?;
 
         // Create and add a workload first
         let workload = create_test_workload_default();
